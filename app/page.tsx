@@ -7,6 +7,7 @@ type Comment = {
   id: number;
   text: string;
   username: string | null;
+  user_id: string | null;
 };
 
 type Article = {
@@ -24,11 +25,17 @@ type DbComment = {
   article_id: number;
   text: string;
   username: string | null;
+  user_id: string | null;
 };
 
 type DbLike = {
   id: number;
   article_id: number;
+};
+
+const summaryText = {
+  latest: "Fresh headlines from your live news API, ready for reactions.",
+  trending: "Stories rising fastest from likes, comments, and momentum.",
 };
 
 export default function Home() {
@@ -37,9 +44,13 @@ export default function Home() {
   const [sortMode, setSortMode] = useState<"latest" | "trending">("latest");
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
+      setIsLoading(true);
+
       const { data: userData } = await supabase.auth.getUser();
       setUserId(userData.user?.id ?? null);
 
@@ -56,7 +67,7 @@ export default function Home() {
       }
 
       const newsRes = await fetch("/api/news");
-      const newsData = await newsRes.json();
+      const newsData = (await newsRes.json()) as Omit<Article, "likes" | "comments">[];
 
       const { data: likesData } = await supabase
         .from("likes")
@@ -64,20 +75,20 @@ export default function Home() {
 
       const { data: commentsData } = await supabase
         .from("comments")
-        .select("id, article_id, text, username");
+        .select("id, article_id, text, username, user_id");
 
       const likes = (likesData ?? []) as DbLike[];
       const comments = (commentsData ?? []) as DbComment[];
 
-      const mergedArticles: Article[] = newsData.map((item: Omit<Article, "likes" | "comments">) => {
+      const mergedArticles: Article[] = newsData.map((item) => {
         const articleLikes = likes.filter((like) => like.article_id === item.id).length;
-
         const articleComments = comments
           .filter((comment) => comment.article_id === item.id)
           .map((comment) => ({
             id: comment.id,
             text: comment.text,
             username: comment.username,
+            user_id: comment.user_id,
           }));
 
         return {
@@ -88,6 +99,7 @@ export default function Home() {
       });
 
       setArticles(mergedArticles);
+      setIsLoading(false);
     }
 
     fetchNewsAndEngagement();
@@ -179,6 +191,7 @@ export default function Home() {
                   id: data.id,
                   text: data.text,
                   username: data.username,
+                  user_id: data.user_id,
                 },
               ],
             }
@@ -190,6 +203,87 @@ export default function Home() {
       ...prev,
       [articleId]: "",
     }));
+  };
+
+  const handleDeleteComment = async (articleId: number, commentId: number) => {
+    if (!userId) {
+      alert("Log in to manage comments");
+      return;
+    }
+
+    const targetComment = articles
+      .find((article) => article.id === articleId)
+      ?.comments.find((comment) => comment.id === commentId);
+
+    if (!targetComment || targetComment.user_id !== userId) {
+      alert("You can only delete your own comments");
+      return;
+    }
+
+    setActiveCommentAction(`delete-${commentId}`);
+
+    const { error } = await supabase
+      .from("comments")
+      .delete()
+      .eq("id", commentId)
+      .eq("user_id", userId);
+
+    setActiveCommentAction(null);
+
+    if (error) {
+      console.error("Error deleting comment:", error);
+      alert("Could not delete comment");
+      return;
+    }
+
+    setArticles((prev) =>
+      prev.map((article) =>
+        article.id === articleId
+          ? {
+              ...article,
+              comments: article.comments.filter((comment) => comment.id !== commentId),
+            }
+          : article
+      )
+    );
+  };
+
+  const handleReportComment = async (commentId: number) => {
+    if (!userId) {
+      alert("Log in to report comments");
+      return;
+    }
+
+    const reason = window.prompt("Why are you reporting this comment?");
+
+    if (reason === null) {
+      return;
+    }
+
+    const trimmedReason = reason.trim();
+
+    if (!trimmedReason) {
+      alert("Please enter a reason to report this comment");
+      return;
+    }
+
+    setActiveCommentAction(`report-${commentId}`);
+
+    const { error } = await supabase.from("reports").insert({
+      comment_id: commentId,
+      user_id: userId,
+      reason: trimmedReason,
+    });
+
+    setActiveCommentAction(null);
+
+    if (error) {
+      console.error("Error reporting comment:", error);
+      alert("Could not submit report");
+      return;
+    }
+
+    alert("Report submitted");
   };
 
   const displayedArticles = useMemo(() => {
@@ -207,111 +301,140 @@ export default function Home() {
   }, [articles, sortMode]);
 
   return (
-    <main style={{ maxWidth: "800px", margin: "0 auto" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "16px",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: "32px", fontWeight: "bold" }}>Latest News</h1>
-          <p style={{ marginTop: "8px", color: "#666" }}>
-            News loaded from your API route.
-          </p>
-        </div>
+    <section className="page-shell">
+      <div className="page-hero">
+        <p className="page-eyebrow">Trending Desk</p>
 
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={() => setSortMode("latest")}>Latest</button>
-          <button onClick={() => setSortMode("trending")}>Trending</button>
-        </div>
-      </div>
-
-      <div style={{ marginTop: "24px", display: "grid", gap: "16px" }}>
-        {displayedArticles.map((article) => (
-          <div
-            key={article.id}
-            style={{
-              border: "1px solid #ddd",
-              borderRadius: "12px",
-              padding: "20px",
-              backgroundColor: "white",
-              color: "black",
-            }}
-          >
-            <p style={{ fontSize: "14px", color: "#666", marginBottom: "8px" }}>
-              {article.category} · {article.source} · {article.time}
-            </p>
-
-            <h2
-              style={{
-                fontSize: "22px",
-                fontWeight: "bold",
-                marginBottom: "12px",
-              }}
-            >
-              {article.title}
-            </h2>
-
-            <div style={{ display: "flex", gap: "16px", marginBottom: "16px" }}>
-              <button onClick={() => handleLike(article.id)}>👍 Like</button>
-              <span>{article.likes} likes</span>
-              <span>💬 {article.comments.length} comments</span>
-            </div>
-
-            <div>
-              <h3 style={{ fontSize: "16px", fontWeight: "bold" }}>Comments</h3>
-
-              <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
-                {article.comments.length === 0 ? (
-                  <p style={{ color: "#666" }}>No comments yet.</p>
-                ) : (
-                  article.comments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      style={{
-                        padding: "10px",
-                        border: "1px solid #eee",
-                        borderRadius: "8px",
-                      }}
-                    >
-                      <strong>{comment.username ?? "Unknown"}:</strong>{" "}
-                      {comment.text}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <input
-                  type="text"
-                  placeholder="Write a comment..."
-                  value={commentInputs[article.id] || ""}
-                  onChange={(e) =>
-                    handleCommentInputChange(article.id, e.target.value)
-                  }
-                  style={{
-                    flex: 1,
-                    minWidth: "220px",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    border: "1px solid #ccc",
-                    color: "black",
-                    backgroundColor: "white",
-                  }}
-                />
-
-                <button onClick={() => handleAddComment(article.id)}>
-                  Add Comment
-                </button>
-              </div>
-            </div>
+        <div className="page-title-row">
+          <div>
+            <h2 className="page-title">Top stories, built for phones.</h2>
+            <p className="page-subtitle">{summaryText[sortMode]}</p>
           </div>
-        ))}
+
+          <div className="toolbar">
+            <button
+              className={`toolbar-pill ${
+                sortMode === "latest" ? "toolbar-pill-active" : ""
+              }`}
+              onClick={() => setSortMode("latest")}
+            >
+              Latest
+            </button>
+            <button
+              className={`toolbar-pill ${
+                sortMode === "trending" ? "toolbar-pill-active" : ""
+              }`}
+              onClick={() => setSortMode("trending")}
+            >
+              Trending
+            </button>
+          </div>
+        </div>
       </div>
-    </main>
+
+      {isLoading ? (
+        <div className="loading-state">
+          <strong>Loading headlines</strong>
+          <span>Pulling live news, likes, and comments into one feed.</span>
+        </div>
+      ) : displayedArticles.length === 0 ? (
+        <div className="empty-state">
+          <strong>No stories yet</strong>
+          <span>When your API returns articles, they’ll show up here.</span>
+        </div>
+      ) : (
+        <div className="stack">
+          {displayedArticles.map((article, index) => (
+            <article key={article.id} className="news-card">
+              <div className="news-card-header">
+                <div className="news-meta">
+                  <span className="chip chip-accent">{article.category}</span>
+                  <span>{article.source}</span>
+                  <span>{article.time}</span>
+                </div>
+
+                {index < 3 ? <span className="chip">Top {index + 1}</span> : null}
+              </div>
+
+              <h3 className="article-title">{article.title}</h3>
+
+              <div className="engagement-row">
+                <button className="button button-accent" onClick={() => handleLike(article.id)}>
+                  👍 Like
+                </button>
+                <span className="stat-pill">❤️ {article.likes}</span>
+                <span className="stat-pill">💬 {article.comments.length}</span>
+              </div>
+
+              <div className="stack">
+                <strong>Comments</strong>
+
+                <div className="comment-list">
+                  {article.comments.length === 0 ? (
+                    <div className="empty-state">
+                      <strong>No comments yet</strong>
+                      <span>Start the conversation on this story.</span>
+                    </div>
+                  ) : (
+                    article.comments.map((comment) => (
+                      <div key={comment.id} className="comment-card">
+                        <div className="comment-header">
+                          <strong>{comment.username ?? "Unknown"}</strong>
+                          {comment.user_id === userId ? (
+                            <span className="chip">Your comment</span>
+                          ) : null}
+                        </div>
+                        <div className="comment-body">{comment.text}</div>
+                        <div className="comment-actions">
+                          <button
+                            className="comment-action"
+                            onClick={() => handleReportComment(comment.id)}
+                            disabled={activeCommentAction === `report-${comment.id}`}
+                          >
+                            {activeCommentAction === `report-${comment.id}`
+                              ? "Reporting..."
+                              : "Report"}
+                          </button>
+
+                          {comment.user_id === userId ? (
+                            <button
+                              className="comment-action comment-action-danger"
+                              onClick={() => handleDeleteComment(article.id, comment.id)}
+                              disabled={activeCommentAction === `delete-${comment.id}`}
+                            >
+                              {activeCommentAction === `delete-${comment.id}`
+                                ? "Deleting..."
+                                : "Delete"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="input-row">
+                  <input
+                    className="input"
+                    type="text"
+                    placeholder="Write a comment..."
+                    value={commentInputs[article.id] || ""}
+                    onChange={(e) =>
+                      handleCommentInputChange(article.id, e.target.value)
+                    }
+                  />
+                  <button
+                    className="button button-secondary"
+                    onClick={() => handleAddComment(article.id)}
+                  >
+                    Add Comment
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

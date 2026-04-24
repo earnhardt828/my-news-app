@@ -1,4 +1,4 @@
-import Link from "next/link";
+import BottomNav from "./components/bottom-nav";
 import "./globals.css";
 
 export const metadata = {
@@ -14,16 +14,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <nav style={{ padding: "16px", borderBottom: "1px solid #ddd" }}>
-          <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-            <Link href="/">Trending</Link>
-            <Link href="/my-feed">My Feed</Link>
-            <Link href="/search">Search</Link>
-            <Link href="/profile">Profile</Link>
-          </div>
-        </nav>
+        <div className="app-shell">
+          <header className="topbar">
+            <div className="topbar-inner">
+              <p className="brand-kicker">Morning Brief</p>
+              <h1 className="brand-title">My News App</h1>
+            </div>
+          </header>
 
-        <main style={{ padding: "24px" }}>{children}</main>
+          <main className="app-main">{children}</main>
+
+          <BottomNav />
+        </div>
       </body>
     </html>
   );
