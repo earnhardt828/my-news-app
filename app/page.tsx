@@ -46,6 +46,12 @@ export default function Home() {
   const [username, setUsername] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
+  const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
+  const [reportReason, setReportReason] = useState("");
+  const [reportStatus, setReportStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -248,29 +254,48 @@ export default function Home() {
     );
   };
 
-  const handleReportComment = async (commentId: number) => {
+  const openReportModal = (commentId: number) => {
     if (!userId) {
       alert("Log in to report comments");
       return;
     }
 
-    const reason = window.prompt("Why are you reporting this comment?");
+    setReportingCommentId(commentId);
+    setReportReason("");
+    setReportStatus(null);
+  };
 
-    if (reason === null) {
+  const closeReportModal = () => {
+    if (activeCommentAction?.startsWith("report-")) {
       return;
     }
 
-    const trimmedReason = reason.trim();
+    setReportingCommentId(null);
+    setReportReason("");
+    setReportStatus(null);
+  };
+
+  const handleSubmitReport = async () => {
+    if (!userId || reportingCommentId === null) {
+      alert("Log in to report comments");
+      return;
+    }
+
+    const trimmedReason = reportReason.trim();
 
     if (!trimmedReason) {
-      alert("Please enter a reason to report this comment");
+      setReportStatus({
+        type: "error",
+        text: "Please enter a reason before submitting your report.",
+      });
       return;
     }
 
-    setActiveCommentAction(`report-${commentId}`);
+    setActiveCommentAction(`report-${reportingCommentId}`);
+    setReportStatus(null);
 
     const { error } = await supabase.from("reports").insert({
-      comment_id: commentId,
+      comment_id: reportingCommentId,
       user_id: userId,
       reason: trimmedReason,
     });
@@ -279,11 +304,22 @@ export default function Home() {
 
     if (error) {
       console.error("Error reporting comment:", error);
-      alert("Could not submit report");
+      setReportStatus({
+        type: "error",
+        text: "Could not submit report. Please try again.",
+      });
       return;
     }
 
-    alert("Report submitted");
+    setReportStatus({
+      type: "success",
+      text: "Report submitted successfully.",
+    });
+    setReportReason("");
+    window.setTimeout(() => {
+      setReportingCommentId(null);
+      setReportStatus(null);
+    }, 1200);
   };
 
   const displayedArticles = useMemo(() => {
@@ -388,7 +424,7 @@ export default function Home() {
                         <div className="comment-actions">
                           <button
                             className="comment-action"
-                            onClick={() => handleReportComment(comment.id)}
+                            onClick={() => openReportModal(comment.id)}
                             disabled={activeCommentAction === `report-${comment.id}`}
                           >
                             {activeCommentAction === `report-${comment.id}`
@@ -435,6 +471,58 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      {reportingCommentId !== null ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
+          <div className="modal-card">
+            <div className="stack" style={{ gap: "6px" }}>
+              <h3 id="report-title" className="modal-title">
+                Report comment
+              </h3>
+              <p className="muted" style={{ margin: 0 }}>
+                Tell us why this comment should be reviewed.
+              </p>
+            </div>
+
+            <textarea
+              className="textarea"
+              placeholder="Add a reason for this report..."
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              disabled={activeCommentAction === `report-${reportingCommentId}`}
+            />
+
+            {reportStatus ? (
+              <div
+                className={`status-message ${
+                  reportStatus.type === "success" ? "status-success" : "status-error"
+                }`}
+              >
+                {reportStatus.text}
+              </div>
+            ) : null}
+
+            <div className="modal-actions">
+              <button
+                className="button button-secondary"
+                onClick={closeReportModal}
+                disabled={activeCommentAction === `report-${reportingCommentId}`}
+              >
+                Cancel
+              </button>
+              <button
+                className="button button-accent"
+                onClick={handleSubmitReport}
+                disabled={activeCommentAction === `report-${reportingCommentId}`}
+              >
+                {activeCommentAction === `report-${reportingCommentId}`
+                  ? "Submitting..."
+                  : "Submit Report"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
