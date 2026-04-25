@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+const LAST_UPDATED = "April 24, 2026";
+
 export default function TermsPage() {
   return (
     <section className="page-shell">
@@ -7,32 +9,64 @@ export default function TermsPage() {
         <p className="page-eyebrow">Legal</p>
         <h2 className="page-title">Terms of Use</h2>
         <p className="page-subtitle">
-          A simple placeholder terms page for acceptable use and service rules.
+          These terms set the ground rules for using the app, participating in
+          discussions, and interacting with other users.
         </p>
       </div>
 
       <section className="section-card stack">
         <div className="comment-card">
-          <strong>Using the app</strong>
+          <strong>Last updated</strong>
           <div className="muted" style={{ marginTop: "6px" }}>
-            This placeholder terms section should describe acceptable app use
-            and basic expectations around account access and participation.
+            {LAST_UPDATED}
           </div>
         </div>
 
         <div className="comment-card">
-          <strong>User content and moderation</strong>
+          <strong>User responsibilities</strong>
           <div className="muted" style={{ marginTop: "6px" }}>
-            It should explain ownership of user-submitted content, moderation
-            rights, and how comments, reports, and removals may be handled.
+            You are responsible for maintaining the accuracy of your account
+            information, protecting access to your account, and making sure the
+            content you submit is respectful, lawful, and appropriate for a
+            shared news community.
           </div>
         </div>
 
         <div className="comment-card">
-          <strong>Misuse and abuse</strong>
+          <strong>Prohibited content</strong>
           <div className="muted" style={{ marginTop: "6px" }}>
-            Add clear limits around misuse, abuse, evasion of moderation, and
-            other behavior that harms the service or its users.
+            You may not post harassment, hate speech, spam, scams, illegal
+            content, threats, impersonation, or material that promotes harm or
+            exploitation. Attempts to flood discussions, evade moderation, or
+            abuse reporting tools are also prohibited.
+          </div>
+        </div>
+
+        <div className="comment-card">
+          <strong>Comments, reports, and moderation</strong>
+          <div className="muted" style={{ marginTop: "6px" }}>
+            The app may allow users to comment on content, report safety
+            concerns, and delete their own comments. The service also reserves
+            the right to review, limit, hide, or remove content when needed for
+            safety, moderation, legal compliance, or product integrity.
+          </div>
+        </div>
+
+        <div className="comment-card">
+          <strong>Rights of the service</strong>
+          <div className="muted" style={{ marginTop: "6px" }}>
+            We may suspend features, change functionality, update policies, or
+            take reasonable action against accounts or content that violate the
+            rules or create risk for the service or other users.
+          </div>
+        </div>
+
+        <div className="comment-card">
+          <strong>Future changes</strong>
+          <div className="muted" style={{ marginTop: "6px" }}>
+            These terms may be updated as the app grows, including when mobile
+            distribution, advertising, subscriptions, or additional moderation
+            systems are introduced.
           </div>
         </div>
 
