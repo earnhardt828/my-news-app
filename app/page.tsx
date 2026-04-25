@@ -1,6 +1,8 @@
 "use client";
 
 import AdSlot from "./components/ad-slot";
+import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
@@ -9,6 +11,8 @@ type Comment = {
   text: string;
   username: string | null;
   user_id: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
 };
 
 type Article = {
@@ -19,6 +23,7 @@ type Article = {
   time: string;
   likes: number;
   comments: Comment[];
+  saved: boolean;
 };
 
 type DbComment = {
@@ -27,6 +32,7 @@ type DbComment = {
   text: string;
   username: string | null;
   user_id: string | null;
+  created_at: string | null;
 };
 
 type DbLike = {
@@ -34,10 +40,105 @@ type DbLike = {
   article_id: number;
 };
 
+type DbProfile = {
+  id: string;
+  avatar_url: string | null;
+};
+
+type DbSavedArticle = {
+  article_id: number;
+};
+
 const summaryText = {
   latest: "Fresh headlines from your live news API, ready for reactions.",
   trending: "Stories rising fastest from likes, comments, and momentum.",
 };
+
+function formatRelativeTime(timestamp: string | null) {
+  if (!timestamp) {
+    return "Just now";
+  }
+
+  const createdAt = new Date(timestamp).getTime();
+
+  if (Number.isNaN(createdAt)) {
+    return "Just now";
+  }
+
+  const diffMs = Date.now() - createdAt;
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes === 1) {
+    return "1 minute ago";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} minutes ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours === 1) {
+    return "1 hour ago";
+  }
+
+  if (diffHours < 24) {
+    return `${diffHours} hours ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays === 1) {
+    return "1 day ago";
+  }
+
+  return `${diffDays} days ago`;
+}
+
+function FeedSkeleton() {
+  return (
+    <div className="stack">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="skeleton-card">
+          <div className="skeleton-meta-row">
+            <div className="skeleton-line skeleton-chip" />
+            <div className="skeleton-line skeleton-body-sm" />
+            <div className="skeleton-line skeleton-body-sm" />
+          </div>
+
+          <div className="stack" style={{ gap: "8px" }}>
+            <div className="skeleton-line skeleton-title-lg skeleton-body-lg" />
+            <div className="skeleton-line skeleton-title skeleton-body-md" />
+          </div>
+
+          <div className="skeleton-action-row">
+            <div className="skeleton-line skeleton-button" />
+            <div className="skeleton-line skeleton-button" />
+            <div className="skeleton-line skeleton-stat" />
+            <div className="skeleton-line skeleton-stat" />
+          </div>
+
+          <div className="skeleton-comment-list">
+            {Array.from({ length: 2 }).map((__, commentIndex) => (
+              <div key={commentIndex} className="skeleton-comment-card">
+                <div className="skeleton-comment-row">
+                  <div className="skeleton-circle" />
+                  <div className="skeleton-line skeleton-body-sm" />
+                </div>
+                <div className="skeleton-line skeleton-body-lg" />
+                <div className="skeleton-line skeleton-body-md" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -57,6 +158,7 @@ export default function Home() {
     articleId: number;
     commentId: number;
   } | null>(null);
+  const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -78,7 +180,10 @@ export default function Home() {
       }
 
       const newsRes = await fetch("/api/news");
-      const newsData = (await newsRes.json()) as Omit<Article, "likes" | "comments">[];
+      const newsData = (await newsRes.json()) as Omit<
+        Article,
+        "likes" | "comments" | "saved"
+      >[];
 
       const { data: likesData } = await supabase
         .from("likes")
@@ -86,10 +191,30 @@ export default function Home() {
 
       const { data: commentsData } = await supabase
         .from("comments")
-        .select("id, article_id, text, username, user_id");
+        .select("id, article_id, text, username, user_id, created_at");
+
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, avatar_url");
+
+      const { data: savedArticlesData } = userData.user?.id
+        ? await supabase
+            .from("saved_articles")
+            .select("article_id")
+            .eq("user_id", userData.user.id)
+        : { data: [] as DbSavedArticle[] };
 
       const likes = (likesData ?? []) as DbLike[];
       const comments = (commentsData ?? []) as DbComment[];
+      const profiles = (profilesData ?? []) as DbProfile[];
+      const savedArticleIds = new Set(
+        ((savedArticlesData ?? []) as DbSavedArticle[]).map(
+          (savedArticle) => savedArticle.article_id
+        )
+      );
+      const avatarLookup = new Map(
+        profiles.map((profile) => [profile.id, profile.avatar_url])
+      );
 
       const mergedArticles: Article[] = newsData.map((item) => {
         const articleLikes = likes.filter((like) => like.article_id === item.id).length;
@@ -100,12 +225,17 @@ export default function Home() {
             text: comment.text,
             username: comment.username,
             user_id: comment.user_id,
+            avatar_url: comment.user_id
+              ? avatarLookup.get(comment.user_id) ?? null
+              : null,
+            created_at: comment.created_at,
           }));
 
         return {
           ...item,
           likes: articleLikes,
           comments: articleComments,
+          saved: savedArticleIds.has(item.id),
         };
       });
 
@@ -149,6 +279,66 @@ export default function Home() {
         article.id === articleId
           ? { ...article, likes: article.likes + 1 }
           : article
+      )
+    );
+  };
+
+  const handleToggleSaveArticle = async (article: Article) => {
+    if (!userId) {
+      alert("Log in to save articles");
+      return;
+    }
+
+    setActiveSaveArticleId(article.id);
+
+    if (article.saved) {
+      const { error } = await supabase
+        .from("saved_articles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("article_id", article.id);
+
+      setActiveSaveArticleId(null);
+
+      if (error) {
+        console.error("Error removing saved article:", error);
+        alert("Could not remove saved article");
+        return;
+      }
+
+      setArticles((prev) =>
+        prev.map((currentArticle) =>
+          currentArticle.id === article.id
+            ? { ...currentArticle, saved: false }
+            : currentArticle
+        )
+      );
+
+      return;
+    }
+
+    const { error } = await supabase.from("saved_articles").insert({
+      user_id: userId,
+      article_id: article.id,
+      title: article.title,
+      source: article.source,
+      category: article.category,
+      time: article.time,
+    });
+
+    setActiveSaveArticleId(null);
+
+    if (error) {
+      console.error("Error saving article:", error);
+      alert("Could not save article");
+      return;
+    }
+
+    setArticles((prev) =>
+      prev.map((currentArticle) =>
+        currentArticle.id === article.id
+          ? { ...currentArticle, saved: true }
+          : currentArticle
       )
     );
   };
@@ -203,6 +393,8 @@ export default function Home() {
                   text: data.text,
                   username: data.username,
                   user_id: data.user_id,
+                  avatar_url: null,
+                  created_at: data.created_at,
                 },
               ],
             }
@@ -356,8 +548,8 @@ export default function Home() {
     }
 
     return copied.sort((a, b) => {
-      const scoreA = a.likes + a.comments.length * 2;
-      const scoreB = b.likes + b.comments.length * 2;
+      const scoreA = a.likes + a.comments.length;
+      const scoreB = b.likes + b.comments.length;
       return scoreB - scoreA;
     });
   }, [articles, sortMode]);
@@ -395,10 +587,7 @@ export default function Home() {
       </div>
 
       {isLoading ? (
-        <div className="loading-state">
-          <strong>Loading headlines</strong>
-          <span>Pulling live news, likes, and comments into one feed.</span>
-        </div>
+        <FeedSkeleton />
       ) : displayedArticles.length === 0 ? (
         <div className="empty-state">
           <strong>No stories yet</strong>
@@ -425,6 +614,17 @@ export default function Home() {
                   <button className="button button-accent" onClick={() => handleLike(article.id)}>
                     👍 Like
                   </button>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => handleToggleSaveArticle(article)}
+                    disabled={activeSaveArticleId === article.id}
+                  >
+                    {activeSaveArticleId === article.id
+                      ? "Saving..."
+                      : article.saved
+                        ? "Unsave"
+                        : "Save"}
+                  </button>
                   <span className="stat-pill">❤️ {article.likes}</span>
                   <span className="stat-pill">💬 {article.comments.length}</span>
                 </div>
@@ -442,12 +642,39 @@ export default function Home() {
                       article.comments.map((comment) => (
                         <div key={comment.id} className="comment-card">
                           <div className="comment-header">
-                            <strong>{comment.username ?? "Unknown"}</strong>
+                            {comment.user_id ? (
+                              <Link
+                                href={`/user/${comment.user_id}`}
+                                className="comment-user-link"
+                              >
+                                <span className="comment-user-avatar">
+                                  {comment.avatar_url ? (
+                                    <Image
+                                      src={comment.avatar_url}
+                                      alt={comment.username ?? "User avatar"}
+                                      width={34}
+                                      height={34}
+                                      unoptimized
+                                    />
+                                  ) : (
+                                    (comment.username ?? "U").charAt(0).toUpperCase()
+                                  )}
+                                </span>
+                                <span className="comment-username">
+                                  {comment.username ?? "Unknown"}
+                                </span>
+                              </Link>
+                            ) : (
+                              <strong>{comment.username ?? "Unknown"}</strong>
+                            )}
                             {comment.user_id === userId ? (
                               <span className="chip">Your comment</span>
                             ) : null}
                           </div>
                           <div className="comment-body">{comment.text}</div>
+                          <div className="comment-meta">
+                            {formatRelativeTime(comment.created_at)}
+                          </div>
                           <div className="comment-actions">
                             <button
                               className="comment-action"

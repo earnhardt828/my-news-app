@@ -9,12 +9,44 @@ type FeedArticle = {
   title: string;
   source: string;
   category: string;
+  time: string;
+  saved: boolean;
 };
+
+type SavedArticleRecord = {
+  article_id: number;
+};
+
+function FeedSkeleton() {
+  return (
+    <div className="stack">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="skeleton-card">
+          <div className="skeleton-meta-row">
+            <div className="skeleton-line skeleton-chip" />
+            <div className="skeleton-line skeleton-body-sm" />
+          </div>
+
+          <div className="stack" style={{ gap: "8px" }}>
+            <div className="skeleton-line skeleton-title-lg skeleton-body-lg" />
+            <div className="skeleton-line skeleton-title skeleton-body-md" />
+          </div>
+
+          <div className="skeleton-action-row">
+            <div className="skeleton-line skeleton-button" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function MyFeed() {
   const [articles, setArticles] = useState<FeedArticle[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadFeed() {
@@ -23,11 +55,14 @@ export default function MyFeed() {
       const { data: userData } = await supabase.auth.getUser();
 
       if (!userData.user?.id) {
+        setUserId(null);
         setArticles([]);
         setCategories([]);
         setIsLoading(false);
         return;
       }
+
+      setUserId(userData.user.id);
 
       const { data: profile } = await supabase
         .from("profiles")
@@ -39,19 +74,95 @@ export default function MyFeed() {
       setCategories(userCategories);
 
       const res = await fetch("/api/news");
-      const news = (await res.json()) as FeedArticle[];
+      const news = (await res.json()) as Omit<FeedArticle, "saved">[];
+
+      const { data: savedArticlesData } = await supabase
+        .from("saved_articles")
+        .select("article_id")
+        .eq("user_id", userData.user.id);
+
+      const savedArticleIds = new Set(
+        ((savedArticlesData ?? []) as SavedArticleRecord[]).map(
+          (savedArticle) => savedArticle.article_id
+        )
+      );
 
       const filtered =
         userCategories.length > 0
           ? news.filter((item) => userCategories.includes(item.category))
           : news;
 
-      setArticles(filtered);
+      setArticles(
+        filtered.map((article) => ({
+          ...article,
+          saved: savedArticleIds.has(article.id),
+        }))
+      );
       setIsLoading(false);
     }
 
     loadFeed();
   }, []);
+
+  const handleToggleSaveArticle = async (article: FeedArticle) => {
+    if (!userId) {
+      alert("Log in to save articles");
+      return;
+    }
+
+    setActiveSaveArticleId(article.id);
+
+    if (article.saved) {
+      const { error } = await supabase
+        .from("saved_articles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("article_id", article.id);
+
+      setActiveSaveArticleId(null);
+
+      if (error) {
+        console.error("Error removing saved article:", error);
+        alert("Could not remove saved article");
+        return;
+      }
+
+      setArticles((prev) =>
+        prev.map((currentArticle) =>
+          currentArticle.id === article.id
+            ? { ...currentArticle, saved: false }
+            : currentArticle
+        )
+      );
+
+      return;
+    }
+
+    const { error } = await supabase.from("saved_articles").insert({
+      user_id: userId,
+      article_id: article.id,
+      title: article.title,
+      source: article.source,
+      category: article.category,
+      time: article.time,
+    });
+
+    setActiveSaveArticleId(null);
+
+    if (error) {
+      console.error("Error saving article:", error);
+      alert("Could not save article");
+      return;
+    }
+
+    setArticles((prev) =>
+      prev.map((currentArticle) =>
+        currentArticle.id === article.id
+          ? { ...currentArticle, saved: true }
+          : currentArticle
+      )
+    );
+  };
 
   return (
     <section className="page-shell">
@@ -83,10 +194,7 @@ export default function MyFeed() {
       </div>
 
       {isLoading ? (
-        <div className="loading-state">
-          <strong>Loading your feed</strong>
-          <span>Matching live headlines to the categories you follow.</span>
-        </div>
+        <FeedSkeleton />
       ) : articles.length === 0 ? (
         <div className="empty-state">
           <strong>No articles found</strong>
@@ -105,6 +213,20 @@ export default function MyFeed() {
                 </div>
 
                 <h3 className="article-title">{article.title}</h3>
+
+                <div className="engagement-row">
+                  <button
+                    className="button button-secondary"
+                    onClick={() => handleToggleSaveArticle(article)}
+                    disabled={activeSaveArticleId === article.id}
+                  >
+                    {activeSaveArticleId === article.id
+                      ? "Saving..."
+                      : article.saved
+                        ? "Unsave"
+                        : "Save"}
+                  </button>
+                </div>
               </article>
 
               {(index + 1) % 3 === 0 ? (

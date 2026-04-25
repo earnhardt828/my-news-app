@@ -16,6 +16,16 @@ type MyComment = {
   article_id: number;
   username: string | null;
   user_id: string | null;
+  created_at: string | null;
+};
+
+type SavedArticle = {
+  id: number;
+  article_id: number;
+  title: string;
+  source: string;
+  category: string;
+  time: string;
 };
 
 const CATEGORY_OPTIONS = [
@@ -29,6 +39,51 @@ const CATEGORY_OPTIONS = [
   "World",
 ];
 
+function formatRelativeTime(timestamp: string | null) {
+  if (!timestamp) {
+    return "Just now";
+  }
+
+  const createdAt = new Date(timestamp).getTime();
+
+  if (Number.isNaN(createdAt)) {
+    return "Just now";
+  }
+
+  const diffMs = Date.now() - createdAt;
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes === 1) {
+    return "1 minute ago";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} minutes ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours === 1) {
+    return "1 hour ago";
+  }
+
+  if (diffHours < 24) {
+    return `${diffHours} hours ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays === 1) {
+    return "1 day ago";
+  }
+
+  return `${diffDays} days ago`;
+}
+
 export default function Profile() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,6 +94,7 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [myComments, setMyComments] = useState<MyComment[]>([]);
+  const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
@@ -76,10 +132,17 @@ export default function Profile() {
 
     const { data: comments } = await supabase
       .from("comments")
-      .select("id, text, article_id, username, user_id")
+      .select("id, text, article_id, username, user_id, created_at")
       .eq("user_id", userId);
 
+    const { data: saved } = await supabase
+      .from("saved_articles")
+      .select("id, article_id, title, source, category, time")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
     setMyComments((comments ?? []) as MyComment[]);
+    setSavedArticles((saved ?? []) as SavedArticle[]);
   };
 
   useEffect(() => {
@@ -99,6 +162,7 @@ export default function Profile() {
         setAvatarUrl("");
         setCategories([]);
         setMyComments([]);
+        setSavedArticles([]);
         setIsLoading(false);
         return;
       }
@@ -145,6 +209,7 @@ export default function Profile() {
     setAvatarUrl("");
     setCategories([]);
     setMyComments([]);
+    setSavedArticles([]);
     setMessage("Signed out.");
   };
 
@@ -365,34 +430,69 @@ export default function Profile() {
         <div className="split-grid">
           <section className="section-card stack">
             <div className="profile-hero">
-              <div className="avatar-shell">
-                {avatarUrl ? (
-                  <Image
-                    src={avatarUrl}
-                    alt="Profile"
-                    width={84}
-                    height={84}
-                    unoptimized
-                    style={{
-                      width: "84px",
-                      height: "84px",
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  <span className="avatar-fallback">{initials}</span>
-                )}
-              </div>
+              {currentUser?.id ? (
+                <Link href={`/user/${currentUser.id}`} className="profile-hero">
+                  <div className="avatar-shell">
+                    {avatarUrl ? (
+                      <Image
+                        src={avatarUrl}
+                        alt="Profile"
+                        width={84}
+                        height={84}
+                        unoptimized
+                        style={{
+                          width: "84px",
+                          height: "84px",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <span className="avatar-fallback">{initials}</span>
+                    )}
+                  </div>
 
-              <div className="profile-meta">
-                <h3 className="profile-name">{username || "News Reader"}</h3>
-                <span className="muted">
-                  {currentUser?.email ?? "Not signed in"}
-                </span>
-                <span className="chip">
-                  {categories.length} categories selected
-                </span>
-              </div>
+                  <div className="profile-meta">
+                    <h3 className="profile-name">{username || "News Reader"}</h3>
+                    <span className="muted">
+                      {currentUser?.email ?? "Not signed in"}
+                    </span>
+                    <span className="chip">
+                      {categories.length} categories selected
+                    </span>
+                  </div>
+                </Link>
+              ) : (
+                <>
+                  <div className="avatar-shell">
+                    {avatarUrl ? (
+                      <Image
+                        src={avatarUrl}
+                        alt="Profile"
+                        width={84}
+                        height={84}
+                        unoptimized
+                        style={{
+                          width: "84px",
+                          height: "84px",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <span className="avatar-fallback">{initials}</span>
+                    )}
+                  </div>
+
+                  <div className="profile-meta">
+                    <h3 className="profile-name">{username || "News Reader"}</h3>
+                    <span className="muted">
+                      {currentUser?.email ?? "Not signed in"}
+                    </span>
+                    <span className="chip">
+                      {categories.length} categories selected
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="input-row">
@@ -497,6 +597,35 @@ export default function Profile() {
             <section className="section-card stack">
               <div>
                 <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
+                  Saved
+                </p>
+                <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
+                  Bookmarked articles
+                </h3>
+              </div>
+
+              {savedArticles.length === 0 ? (
+                <div className="empty-state">
+                  <strong>No saved articles yet</strong>
+                  <span>Save articles from the feed and they will appear here.</span>
+                </div>
+              ) : (
+                <div className="comment-list">
+                  {savedArticles.map((article) => (
+                    <div key={article.id} className="comment-card">
+                      <strong>{article.title}</strong>
+                      <div className="comment-meta">
+                        {article.category} · {article.source} · {article.time}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="section-card stack">
+              <div>
+                <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
                   My Comments
                 </p>
                 <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
@@ -519,6 +648,9 @@ export default function Profile() {
                       </div>
                       <div className="muted comment-body">
                         {comment.text}
+                      </div>
+                      <div className="comment-meta">
+                        {formatRelativeTime(comment.created_at)}
                       </div>
                       <div className="comment-actions">
                         <button
