@@ -1,6 +1,6 @@
 "use client";
 
-import AdCard from "./components/ad-card";
+import AdSlot from "./components/ad-slot";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
@@ -497,7 +497,7 @@ export default function Home() {
               </article>
 
               {(index + 1) % 3 === 0 ? (
-                <AdCard
+                <AdSlot
                   title="Sponsored placement"
                   copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
                   cta="Learn more"

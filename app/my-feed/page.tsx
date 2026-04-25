@@ -1,6 +1,6 @@
 "use client";
 
-import AdCard from "../components/ad-card";
+import AdSlot from "../components/ad-slot";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
@@ -108,7 +108,7 @@ export default function MyFeed() {
               </article>
 
               {(index + 1) % 3 === 0 ? (
-                <AdCard
+                <AdSlot
                   title="Sponsored placement"
                   copy="Personalized feed ad placeholder that keeps the layout balanced on mobile."
                   cta="Featured placement"

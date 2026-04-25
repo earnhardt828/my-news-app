@@ -49,9 +49,10 @@ export default function PrivacyPage() {
           <div className="muted" style={{ marginTop: "6px" }}>
             The app currently relies on third-party infrastructure providers,
             including Supabase for authentication, database, and storage, and
-            Vercel for hosting or deployment workflows. In the future, the app
-            may also use advertising or sponsorship providers for sponsored
-            placements and banner inventory.
+            Vercel for hosting or deployment workflows. The app may also use
+            Google AdSense or other third-party advertising partners to display
+            sponsored placements. Those services may use cookies or similar
+            technologies to help deliver, measure, or personalize advertising.
           </div>
         </div>
 
@@ -72,6 +73,17 @@ export default function PrivacyPage() {
             and enforce the rules. If you have questions about your data or a
             privacy concern, use the app’s support or safety contact methods
             when they become available.
+          </div>
+        </div>
+
+        <div className="comment-card">
+          <strong>Advertising, cookies, and partners</strong>
+          <div className="muted" style={{ marginTop: "6px" }}>
+            If advertising is enabled, Google AdSense and future third-party ad
+            partners may place or read cookies and similar technologies to
+            serve ads, understand engagement, and improve ad delivery. Users
+            should review those providers’ policies for more information about
+            how ad-related data may be handled.
           </div>
         </div>
 

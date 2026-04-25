@@ -499,6 +499,13 @@ input {
   font-weight: 800;
 }
 
+.ad-adsense-frame {
+  width: 100%;
+  min-height: 120px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
 .empty-state,
 .loading-state {
   display: grid;
