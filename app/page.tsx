@@ -508,13 +508,6 @@ export default function Home() {
         </div>
       )}
 
-      <AdCard
-        variant="banner"
-        title="Bottom banner slot"
-        copy="Sticky sponsored banner placeholder for mobile layouts."
-        cta="Banner ad"
-      />
-
       {reportingCommentId !== null ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
           <div className="modal-card">

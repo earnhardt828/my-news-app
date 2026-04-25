@@ -119,12 +119,6 @@ export default function MyFeed() {
         </div>
       )}
 
-      <AdCard
-        variant="banner"
-        title="Bottom banner slot"
-        copy="Sticky sponsored banner placeholder that stays aligned with your feed."
-        cta="Banner ad"
-      />
     </section>
   );
 }
