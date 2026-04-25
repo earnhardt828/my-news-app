@@ -57,7 +57,6 @@ export default function RootLayout({
                   />
                 </div>
                 <div className="brand-copy">
-                  <p className="brand-kicker">Mirur</p>
                   <h1 className="brand-title">Mirur</h1>
                 </div>
               </div>
