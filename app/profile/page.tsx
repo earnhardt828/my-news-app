@@ -492,57 +492,127 @@ export default function Profile() {
             </div>
           </section>
 
-          <section className="section-card stack">
-            <div>
-              <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                My Comments
-              </p>
-              <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                Your conversation history
-              </h3>
-            </div>
+          <div className="stack">
+            <section className="section-card stack">
+              <div>
+                <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
+                  My Comments
+                </p>
+                <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
+                  Your conversation history
+                </h3>
+              </div>
 
-            {myComments.length === 0 ? (
-              <div className="empty-state">
-                <strong>No comments yet</strong>
-                <span>Your comments on articles will show up here.</span>
+              {myComments.length === 0 ? (
+                <div className="empty-state">
+                  <strong>No comments yet</strong>
+                  <span>Your comments on articles will show up here.</span>
+                </div>
+              ) : (
+                <div className="comment-list">
+                  {myComments.map((comment) => (
+                    <div key={comment.id} className="comment-card">
+                      <div className="comment-header">
+                        <strong>Article #{comment.article_id}</strong>
+                        <span className="chip">Your comment</span>
+                      </div>
+                      <div className="muted comment-body">
+                        {comment.text}
+                      </div>
+                      <div className="comment-actions">
+                        <button
+                          className="comment-action"
+                          onClick={() => openReportModal(comment.id)}
+                          disabled={activeCommentAction === `report-${comment.id}`}
+                        >
+                          {activeCommentAction === `report-${comment.id}`
+                            ? "Reporting..."
+                            : "Report"}
+                        </button>
+                        <button
+                          className="comment-action comment-action-danger"
+                          onClick={() => openDeleteModal(comment.id)}
+                          disabled={activeCommentAction === `delete-${comment.id}`}
+                        >
+                          {activeCommentAction === `delete-${comment.id}`
+                            ? "Deleting..."
+                            : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="section-card stack">
+              <div>
+                <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
+                  Settings & Legal
+                </p>
+                <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
+                  Privacy, terms, and safety
+                </h3>
               </div>
-            ) : (
+
               <div className="comment-list">
-                {myComments.map((comment) => (
-                  <div key={comment.id} className="comment-card">
-                    <div className="comment-header">
-                      <strong>Article #{comment.article_id}</strong>
-                      <span className="chip">Your comment</span>
-                    </div>
-                    <div className="muted comment-body">
-                      {comment.text}
-                    </div>
-                    <div className="comment-actions">
-                      <button
-                        className="comment-action"
-                        onClick={() => openReportModal(comment.id)}
-                        disabled={activeCommentAction === `report-${comment.id}`}
-                      >
-                        {activeCommentAction === `report-${comment.id}`
-                          ? "Reporting..."
-                          : "Report"}
-                      </button>
-                      <button
-                        className="comment-action comment-action-danger"
-                        onClick={() => openDeleteModal(comment.id)}
-                        disabled={activeCommentAction === `delete-${comment.id}`}
-                      >
-                        {activeCommentAction === `delete-${comment.id}`
-                          ? "Deleting..."
-                          : "Delete"}
-                      </button>
-                    </div>
+                <a href="#privacy-policy" className="comment-card">
+                  <strong>Privacy Policy</strong>
+                  <div className="muted" style={{ marginTop: "6px" }}>
+                    Review how account, comments, and profile data are handled.
                   </div>
-                ))}
+                </a>
+
+                <a href="#terms-of-use" className="comment-card">
+                  <strong>Terms of Use</strong>
+                  <div className="muted" style={{ marginTop: "6px" }}>
+                    See the basic rules for using the app and posting content.
+                  </div>
+                </a>
+
+                <a href="#community-guidelines" className="comment-card">
+                  <strong>Community Guidelines</strong>
+                  <div className="muted" style={{ marginTop: "6px" }}>
+                    Learn what behavior is expected in comments and reports.
+                  </div>
+                </a>
               </div>
-            )}
-          </section>
+
+              <div id="privacy-policy" className="comment-card">
+                <strong>Privacy Policy</strong>
+                <div className="muted" style={{ marginTop: "6px" }}>
+                  This placeholder policy should explain what profile details,
+                  uploaded avatars, comments, likes, and report data are stored,
+                  and how users can request help or account changes.
+                </div>
+              </div>
+
+              <div id="terms-of-use" className="comment-card">
+                <strong>Terms of Use</strong>
+                <div className="muted" style={{ marginTop: "6px" }}>
+                  This placeholder terms section should describe acceptable app
+                  use, ownership of user-submitted content, moderation rights,
+                  and limits around misuse or abuse of the service.
+                </div>
+              </div>
+
+              <div id="community-guidelines" className="comment-card">
+                <strong>Community Guidelines</strong>
+                <div className="muted" style={{ marginTop: "6px" }}>
+                  Keep conversations respectful. Do not post harassment, hate,
+                  spam, threats, impersonation, illegal content, or anything
+                  that puts other users at risk.
+                </div>
+              </div>
+
+              <div className="comment-card">
+                <strong>Report abuse or safety issue</strong>
+                <div className="muted" style={{ marginTop: "6px" }}>
+                  Placeholder contact: safety@mynewsapp.example
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       )}
 
