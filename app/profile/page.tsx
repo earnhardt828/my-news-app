@@ -45,6 +45,7 @@ export default function Profile() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
 
   const loadProfileForUser = async (userId: string) => {
     const { data: profile } = await supabase
@@ -182,6 +183,27 @@ export default function Profile() {
 
     setMyComments((prev) => prev.filter((comment) => comment.id !== commentId));
     setMessage("Comment deleted.");
+  };
+
+  const openDeleteModal = (commentId: number) => {
+    setDeleteCommentId(commentId);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteCommentId && activeCommentAction === `delete-${deleteCommentId}`) {
+      return;
+    }
+
+    setDeleteCommentId(null);
+  };
+
+  const confirmDeleteComment = async () => {
+    if (deleteCommentId === null) {
+      return;
+    }
+
+    await handleDeleteComment(deleteCommentId);
+    setDeleteCommentId(null);
   };
 
   const openReportModal = (commentId: number) => {
@@ -432,7 +454,7 @@ export default function Profile() {
                       </button>
                       <button
                         className="comment-action comment-action-danger"
-                        onClick={() => handleDeleteComment(comment.id)}
+                        onClick={() => openDeleteModal(comment.id)}
                         disabled={activeCommentAction === `delete-${comment.id}`}
                       >
                         {activeCommentAction === `delete-${comment.id}`
@@ -494,6 +516,40 @@ export default function Profile() {
                 {activeCommentAction === `report-${reportingCommentId}`
                   ? "Submitting..."
                   : "Submit Report"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteCommentId !== null ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="profile-delete-title">
+          <div className="modal-card">
+            <div className="stack" style={{ gap: "6px" }}>
+              <h3 id="profile-delete-title" className="modal-title">
+                Delete comment
+              </h3>
+              <p className="muted" style={{ margin: 0 }}>
+                Are you sure you want to delete this comment?
+              </p>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="button button-secondary"
+                onClick={closeDeleteModal}
+                disabled={activeCommentAction === `delete-${deleteCommentId}`}
+              >
+                Cancel
+              </button>
+              <button
+                className="button comment-action-danger"
+                onClick={confirmDeleteComment}
+                disabled={activeCommentAction === `delete-${deleteCommentId}`}
+              >
+                {activeCommentAction === `delete-${deleteCommentId}`
+                  ? "Deleting..."
+                  : "Delete"}
               </button>
             </div>
           </div>

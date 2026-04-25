@@ -414,6 +414,65 @@ input {
   color: #991b1b;
 }
 
+.ad-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px dashed rgba(20, 33, 61, 0.16);
+  background:
+    linear-gradient(135deg, rgba(255, 107, 44, 0.08), rgba(20, 33, 61, 0.04)),
+    var(--surface);
+  box-shadow: 0 16px 36px rgba(20, 33, 61, 0.07);
+}
+
+.ad-card-banner {
+  position: sticky;
+  bottom: calc(92px + env(safe-area-inset-bottom));
+  z-index: 12;
+}
+
+.ad-label {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--accent-strong);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ad-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.ad-copy {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.ad-cta {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(20, 33, 61, 0.08);
+  color: var(--foreground);
+  font-weight: 800;
+}
+
 .empty-state,
 .loading-state {
   display: grid;
@@ -572,5 +631,9 @@ input {
 
   .modal-backdrop {
     align-items: center;
+  }
+
+  .ad-card-banner {
+    bottom: 24px;
   }
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import AdCard from "./components/ad-card";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
@@ -51,6 +52,10 @@ export default function Home() {
   const [reportStatus, setReportStatus] = useState<{
     type: "success" | "error";
     text: string;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    articleId: number;
+    commentId: number;
   } | null>(null);
 
   useEffect(() => {
@@ -254,6 +259,27 @@ export default function Home() {
     );
   };
 
+  const openDeleteModal = (articleId: number, commentId: number) => {
+    setDeleteTarget({ articleId, commentId });
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteTarget && activeCommentAction === `delete-${deleteTarget.commentId}`) {
+      return;
+    }
+
+    setDeleteTarget(null);
+  };
+
+  const confirmDeleteComment = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    await handleDeleteComment(deleteTarget.articleId, deleteTarget.commentId);
+    setDeleteTarget(null);
+  };
+
   const openReportModal = (commentId: number) => {
     if (!userId) {
       alert("Log in to report comments");
@@ -381,96 +407,113 @@ export default function Home() {
       ) : (
         <div className="stack">
           {displayedArticles.map((article, index) => (
-            <article key={article.id} className="news-card">
-              <div className="news-card-header">
-                <div className="news-meta">
-                  <span className="chip chip-accent">{article.category}</span>
-                  <span>{article.source}</span>
-                  <span>{article.time}</span>
+            <div key={article.id} className="stack">
+              <article className="news-card">
+                <div className="news-card-header">
+                  <div className="news-meta">
+                    <span className="chip chip-accent">{article.category}</span>
+                    <span>{article.source}</span>
+                    <span>{article.time}</span>
+                  </div>
+
+                  {index < 3 ? <span className="chip">Top {index + 1}</span> : null}
                 </div>
 
-                {index < 3 ? <span className="chip">Top {index + 1}</span> : null}
-              </div>
+                <h3 className="article-title">{article.title}</h3>
 
-              <h3 className="article-title">{article.title}</h3>
-
-              <div className="engagement-row">
-                <button className="button button-accent" onClick={() => handleLike(article.id)}>
-                  👍 Like
-                </button>
-                <span className="stat-pill">❤️ {article.likes}</span>
-                <span className="stat-pill">💬 {article.comments.length}</span>
-              </div>
-
-              <div className="stack">
-                <strong>Comments</strong>
-
-                <div className="comment-list">
-                  {article.comments.length === 0 ? (
-                    <div className="empty-state">
-                      <strong>No comments yet</strong>
-                      <span>Start the conversation on this story.</span>
-                    </div>
-                  ) : (
-                    article.comments.map((comment) => (
-                      <div key={comment.id} className="comment-card">
-                        <div className="comment-header">
-                          <strong>{comment.username ?? "Unknown"}</strong>
-                          {comment.user_id === userId ? (
-                            <span className="chip">Your comment</span>
-                          ) : null}
-                        </div>
-                        <div className="comment-body">{comment.text}</div>
-                        <div className="comment-actions">
-                          <button
-                            className="comment-action"
-                            onClick={() => openReportModal(comment.id)}
-                            disabled={activeCommentAction === `report-${comment.id}`}
-                          >
-                            {activeCommentAction === `report-${comment.id}`
-                              ? "Reporting..."
-                              : "Report"}
-                          </button>
-
-                          {comment.user_id === userId ? (
-                            <button
-                              className="comment-action comment-action-danger"
-                              onClick={() => handleDeleteComment(article.id, comment.id)}
-                              disabled={activeCommentAction === `delete-${comment.id}`}
-                            >
-                              {activeCommentAction === `delete-${comment.id}`
-                                ? "Deleting..."
-                                : "Delete"}
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="input-row">
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="Write a comment..."
-                    value={commentInputs[article.id] || ""}
-                    onChange={(e) =>
-                      handleCommentInputChange(article.id, e.target.value)
-                    }
-                  />
-                  <button
-                    className="button button-secondary"
-                    onClick={() => handleAddComment(article.id)}
-                  >
-                    Add Comment
+                <div className="engagement-row">
+                  <button className="button button-accent" onClick={() => handleLike(article.id)}>
+                    👍 Like
                   </button>
+                  <span className="stat-pill">❤️ {article.likes}</span>
+                  <span className="stat-pill">💬 {article.comments.length}</span>
                 </div>
-              </div>
-            </article>
+
+                <div className="stack">
+                  <strong>Comments</strong>
+
+                  <div className="comment-list">
+                    {article.comments.length === 0 ? (
+                      <div className="empty-state">
+                        <strong>No comments yet</strong>
+                        <span>Start the conversation on this story.</span>
+                      </div>
+                    ) : (
+                      article.comments.map((comment) => (
+                        <div key={comment.id} className="comment-card">
+                          <div className="comment-header">
+                            <strong>{comment.username ?? "Unknown"}</strong>
+                            {comment.user_id === userId ? (
+                              <span className="chip">Your comment</span>
+                            ) : null}
+                          </div>
+                          <div className="comment-body">{comment.text}</div>
+                          <div className="comment-actions">
+                            <button
+                              className="comment-action"
+                              onClick={() => openReportModal(comment.id)}
+                              disabled={activeCommentAction === `report-${comment.id}`}
+                            >
+                              {activeCommentAction === `report-${comment.id}`
+                                ? "Reporting..."
+                                : "Report"}
+                            </button>
+
+                            {comment.user_id === userId ? (
+                              <button
+                                className="comment-action comment-action-danger"
+                                onClick={() => openDeleteModal(article.id, comment.id)}
+                                disabled={activeCommentAction === `delete-${comment.id}`}
+                              >
+                                {activeCommentAction === `delete-${comment.id}`
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="input-row">
+                    <input
+                      className="input"
+                      type="text"
+                      placeholder="Write a comment..."
+                      value={commentInputs[article.id] || ""}
+                      onChange={(e) =>
+                        handleCommentInputChange(article.id, e.target.value)
+                      }
+                    />
+                    <button
+                      className="button button-secondary"
+                      onClick={() => handleAddComment(article.id)}
+                    >
+                      Add Comment
+                    </button>
+                  </div>
+                </div>
+              </article>
+
+              {(index + 1) % 3 === 0 ? (
+                <AdCard
+                  title="Sponsored placement"
+                  copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
+                  cta="Learn more"
+                />
+              ) : null}
+            </div>
           ))}
         </div>
       )}
+
+      <AdCard
+        variant="banner"
+        title="Bottom banner slot"
+        copy="Sticky sponsored banner placeholder for mobile layouts."
+        cta="Banner ad"
+      />
 
       {reportingCommentId !== null ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
@@ -518,6 +561,40 @@ export default function Home() {
                 {activeCommentAction === `report-${reportingCommentId}`
                   ? "Submitting..."
                   : "Submit Report"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget !== null ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+          <div className="modal-card">
+            <div className="stack" style={{ gap: "6px" }}>
+              <h3 id="delete-title" className="modal-title">
+                Delete comment
+              </h3>
+              <p className="muted" style={{ margin: 0 }}>
+                Are you sure you want to delete this comment?
+              </p>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="button button-secondary"
+                onClick={closeDeleteModal}
+                disabled={activeCommentAction === `delete-${deleteTarget.commentId}`}
+              >
+                Cancel
+              </button>
+              <button
+                className="button comment-action-danger"
+                onClick={confirmDeleteComment}
+                disabled={activeCommentAction === `delete-${deleteTarget.commentId}`}
+              >
+                {activeCommentAction === `delete-${deleteTarget.commentId}`
+                  ? "Deleting..."
+                  : "Delete"}
               </button>
             </div>
           </div>
