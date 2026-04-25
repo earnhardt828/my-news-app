@@ -190,9 +190,12 @@ function FeedSkeleton() {
 export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-  const [sortMode, setSortMode] = useState<"latest" | "trending">("trending");
+  const [sortMode, setSortMode] = useState<"trending" | "my-feed" | "latest">(
+    "trending"
+  );
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
@@ -218,13 +221,15 @@ export default function Home() {
       if (userData.user?.id) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("username")
+          .select("username, categories")
           .eq("id", userData.user.id)
           .maybeSingle();
 
         setUsername(profile?.username ?? null);
+        setCategories(profile?.categories ?? []);
       } else {
         setUsername(null);
+        setCategories([]);
       }
 
       const newsRes = await fetch("/api/news");
@@ -696,8 +701,30 @@ export default function Home() {
   const displayedArticles = useMemo(() => {
     const copied = [...articles];
 
+    if (sortMode === "my-feed") {
+      const filtered =
+        categories.length > 0
+          ? copied.filter((article) => categories.includes(article.category))
+          : copied;
+
+      return filtered.sort((a, b) => {
+        const scoreA = a.likes + a.comments.length;
+        const scoreB = b.likes + b.comments.length;
+        return scoreB - scoreA;
+      });
+    }
+
     if (sortMode === "latest") {
-      return copied.sort((a, b) => b.id - a.id);
+      return copied.sort((a, b) => {
+        const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+        const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+
+        if (timeA === timeB) {
+          return b.id - a.id;
+        }
+
+        return timeB - timeA;
+      });
     }
 
     return copied.sort((a, b) => {
@@ -705,7 +732,7 @@ export default function Home() {
       const scoreB = b.likes + b.comments.length;
       return scoreB - scoreA;
     });
-  }, [articles, sortMode]);
+  }, [articles, categories, sortMode]);
 
   return (
     <section className="page-shell">
@@ -722,6 +749,14 @@ export default function Home() {
             </button>
             <button
               className={`toolbar-pill ${
+                sortMode === "my-feed" ? "toolbar-pill-active" : ""
+              }`}
+              onClick={() => setSortMode("my-feed")}
+            >
+              My Feed
+            </button>
+            <button
+              className={`toolbar-pill ${
                 sortMode === "latest" ? "toolbar-pill-active" : ""
               }`}
               onClick={() => setSortMode("latest")}
@@ -732,12 +767,41 @@ export default function Home() {
         </div>
       </div>
 
+      {sortMode === "my-feed" ? (
+        <div className="section-card stack">
+          <strong>Following</strong>
+          {categories.length === 0 ? (
+            <div className="empty-state">
+              <strong>No categories selected</strong>
+              <span>Go to Profile and pick categories to personalize this feed.</span>
+            </div>
+          ) : (
+            <div className="category-grid">
+              {categories.map((category) => (
+                <span key={category} className="chip chip-accent">
+                  {getCategoryLabel(category)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {isLoading ? (
         <FeedSkeleton />
+      ) : sortMode === "my-feed" && categories.length === 0 ? (
+        <div className="empty-state">
+          <strong>No categories selected</strong>
+          <span>Choose categories in Profile to build your personalized feed.</span>
+        </div>
       ) : displayedArticles.length === 0 ? (
         <div className="empty-state">
-          <strong>No stories yet</strong>
-          <span>When your API returns articles, they’ll show up here.</span>
+          <strong>{sortMode === "my-feed" ? "No articles found" : "No stories yet"}</strong>
+          <span>
+            {sortMode === "my-feed"
+              ? "Try adding more categories or check back when new stories land."
+              : "When your API returns articles, they’ll show up here."}
+          </span>
         </div>
       ) : (
         <div className="stack">
