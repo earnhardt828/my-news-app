@@ -207,7 +207,6 @@ export default function Home() {
   } | null>(null);
   const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
-  const [likesModalArticleId, setLikesModalArticleId] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -708,11 +707,6 @@ export default function Home() {
     });
   }, [articles, sortMode]);
 
-  const likesModalArticle =
-    likesModalArticleId === null
-      ? null
-      : articles.find((article) => article.id === likesModalArticleId) ?? null;
-
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -768,21 +762,19 @@ export default function Home() {
 
                   <div className="news-card-header">
                     <div className="trending-source-row">
-                      <span className="source-avatar" aria-hidden="true">
-                        {article.source.charAt(0).toUpperCase()}
-                      </span>
-                      <div className="trending-meta-stack">
-                        <div className="trending-meta-topline">
-                          <span className="chip chip-accent">
-                            {getCategoryLabel(article.category)}
-                          </span>
-                          <span className="trending-source-name">{article.source}</span>
-                        </div>
-                        <span className="trending-published-date">
-                          {formatPublishedDate(article.publishedAt, article.time)}
+                      <div className="trending-source-brand">
+                        <span className="source-avatar" aria-hidden="true">
+                          {article.source.charAt(0).toUpperCase()}
                         </span>
+                        <span className="trending-source-name">{article.source}</span>
                       </div>
+                      <span className="chip chip-accent">
+                        {getCategoryLabel(article.category)}
+                      </span>
                     </div>
+                    <span className="trending-published-date">
+                      {formatPublishedDate(article.publishedAt, article.time)}
+                    </span>
                   </div>
                 </Link>
 
@@ -796,14 +788,6 @@ export default function Home() {
                   >
                     <span aria-hidden="true">{article.likedByCurrentUser ? "♥" : "♡"}</span>
                     <span>{article.likes}</span>
-                  </button>
-                  <button
-                    className="icon-action-pill"
-                    onClick={() => setLikesModalArticleId(article.id)}
-                    aria-label="View likes"
-                  >
-                    <span aria-hidden="true">👥</span>
-                    <span>Likes</span>
                   </button>
                   <span className="icon-action-pill icon-action-pill-static">
                     <span aria-hidden="true">💬</span>
@@ -944,55 +928,6 @@ export default function Home() {
           ))}
         </div>
       )}
-
-      {likesModalArticle ? (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="likes-title"
-        >
-          <div className="modal-card">
-            <div className="stack" style={{ gap: "6px" }}>
-              <h3 id="likes-title" className="modal-title">
-                Likes
-              </h3>
-              <p className="muted" style={{ margin: 0 }}>
-                {likesModalArticle.title}
-              </p>
-            </div>
-
-            {likesModalArticle.likeUsers.length > 0 ? (
-              <div className="comment-list">
-                {likesModalArticle.likeUsers.map((likeUser, index) => (
-                  <div key={`${likeUser.user_id ?? "unknown"}-${index}`} className="comment-card">
-                    <strong>{likeUser.username ?? "Unknown user"}</strong>
-                    <div className="muted" style={{ marginTop: "6px" }}>
-                      {likeUser.username
-                        ? "Mirur reader who liked this story."
-                        : `Liked by ${likesModalArticle.likes} users`}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <strong>No visible likers yet</strong>
-                <span>Liked by {likesModalArticle.likes} users.</span>
-              </div>
-            )}
-
-            <div className="modal-actions">
-              <button
-                className="button button-secondary"
-                onClick={() => setLikesModalArticleId(null)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {reportingCommentId !== null ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
