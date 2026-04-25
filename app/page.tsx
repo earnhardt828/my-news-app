@@ -1,7 +1,6 @@
 "use client";
 
 import AdSlot from "./components/ad-slot";
-import ArticleReaderButton from "./components/article-reader-button";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -29,8 +28,15 @@ type Article = {
   publishedAt?: string | null;
   content?: string | null;
   likes: number;
+  likeUsers: LikeUser[];
+  likedByCurrentUser: boolean;
   comments: Comment[];
   saved: boolean;
+};
+
+type LikeUser = {
+  user_id: string | null;
+  username: string | null;
 };
 
 type DbComment = {
@@ -45,11 +51,13 @@ type DbComment = {
 type DbLike = {
   id: number;
   article_id: number;
+  user_id: string | null;
 };
 
 type DbProfile = {
   id: string;
   avatar_url: string | null;
+  username: string | null;
 };
 
 type DbSavedArticle = {
@@ -204,6 +212,7 @@ export default function Home() {
   } | null>(null);
   const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
+  const [likesModalArticleId, setLikesModalArticleId] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -227,12 +236,12 @@ export default function Home() {
       const newsRes = await fetch("/api/news");
       const newsData = (await newsRes.json()) as Omit<
         Article,
-        "likes" | "comments" | "saved"
+        "likes" | "likeUsers" | "likedByCurrentUser" | "comments" | "saved"
       >[];
 
       const { data: likesData } = await supabase
         .from("likes")
-        .select("id, article_id");
+        .select("id, article_id, user_id");
 
       const { data: commentsData } = await supabase
         .from("comments")
@@ -240,7 +249,7 @@ export default function Home() {
 
       const { data: profilesData } = await supabase
         .from("profiles")
-        .select("id, avatar_url");
+        .select("id, avatar_url, username");
 
       const { data: savedArticlesData } = userData.user?.id
         ? await supabase
@@ -275,6 +284,14 @@ export default function Home() {
 
       const mergedArticles: Article[] = newsData.map((item) => {
         const articleLikes = likes.filter((like) => like.article_id === item.id).length;
+        const articleLikeUsers = likes
+          .filter((like) => like.article_id === item.id)
+          .map((like) => ({
+            user_id: like.user_id,
+            username: like.user_id
+              ? profiles.find((profile) => profile.id === like.user_id)?.username ?? null
+              : null,
+          }));
         const articleComments = comments
           .filter(
             (comment) =>
@@ -295,6 +312,10 @@ export default function Home() {
         return {
           ...item,
           likes: articleLikes,
+          likeUsers: articleLikeUsers,
+          likedByCurrentUser: articleLikeUsers.some(
+            (likeUser) => likeUser.user_id === userData.user?.id
+          ),
           comments: articleComments,
           saved: savedArticleIds.has(item.id),
         };
@@ -322,7 +343,31 @@ export default function Home() {
       .maybeSingle();
 
     if (existing) {
-      alert("You already liked this");
+      const { error } = await supabase
+        .from("likes")
+        .delete()
+        .eq("id", existing.id)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("Error removing like:", error);
+        return;
+      }
+
+      setArticles((prev) =>
+        prev.map((article) =>
+          article.id === articleId
+            ? {
+                ...article,
+                likes: Math.max(0, article.likes - 1),
+                likeUsers: article.likeUsers.filter(
+                  (likeUser) => likeUser.user_id !== userId
+                ),
+                likedByCurrentUser: false,
+              }
+            : article
+        )
+      );
       return;
     }
 
@@ -339,7 +384,18 @@ export default function Home() {
     setArticles((prev) =>
       prev.map((article) =>
         article.id === articleId
-          ? { ...article, likes: article.likes + 1 }
+          ? {
+              ...article,
+              likes: article.likes + 1,
+              likeUsers: [
+                ...article.likeUsers,
+                {
+                  user_id: userId,
+                  username,
+                },
+              ],
+              likedByCurrentUser: true,
+            }
           : article
       )
     );
@@ -657,6 +713,11 @@ export default function Home() {
     });
   }, [articles, sortMode]);
 
+  const likesModalArticle =
+    likesModalArticleId === null
+      ? null
+      : articles.find((article) => article.id === likesModalArticleId) ?? null;
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -702,6 +763,13 @@ export default function Home() {
             <div key={article.id} className="stack">
               <article className="news-card">
                 <Link href={`/article/${article.id}`} className="article-link">
+                  <div className="trending-title-row">
+                    <h3 className="trending-article-title">{article.title}</h3>
+                    {index < 3 ? (
+                      <span className="chip trending-rank-badge">Top {index + 1}</span>
+                    ) : null}
+                  </div>
+
                   {article.image ? (
                     <img
                       src={article.image}
@@ -727,30 +795,40 @@ export default function Home() {
                         </span>
                       </div>
                     </div>
-
-                    {index < 3 ? <span className="chip">Top {index + 1}</span> : null}
                   </div>
-
-                  <h3 className="trending-article-title">{article.title}</h3>
                 </Link>
 
                 <div className="engagement-row trending-stats-row">
-                  <button className="button button-accent" onClick={() => handleLike(article.id)}>
-                    👍 Like
+                  <button
+                    className={`icon-action-pill ${
+                      article.likedByCurrentUser ? "icon-action-pill-active" : ""
+                    }`}
+                    onClick={() => handleLike(article.id)}
+                    aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
+                  >
+                    <span aria-hidden="true">{article.likedByCurrentUser ? "♥" : "♡"}</span>
+                    <span>{article.likes}</span>
                   </button>
                   <button
-                    className="button button-secondary"
+                    className="icon-action-pill"
+                    onClick={() => setLikesModalArticleId(article.id)}
+                    aria-label="View likes"
+                  >
+                    <span aria-hidden="true">👥</span>
+                    <span>Likes</span>
+                  </button>
+                  <span className="icon-action-pill icon-action-pill-static">
+                    <span aria-hidden="true">💬</span>
+                    <span>{article.comments.length}</span>
+                  </span>
+                  <button
+                    className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
                     onClick={() => handleToggleSaveArticle(article)}
                     disabled={activeSaveArticleId === article.id}
+                    aria-label={article.saved ? "Remove bookmark" : "Save article"}
                   >
-                    {activeSaveArticleId === article.id
-                      ? "Saving..."
-                      : article.saved
-                        ? "Unsave"
-                        : "Save"}
+                    {activeSaveArticleId === article.id ? "…" : article.saved ? "🔖" : "📑"}
                   </button>
-                  <span className="stat-pill">❤️ {article.likes}</span>
-                  <span className="stat-pill">💬 {article.comments.length}</span>
                 </div>
 
                 <div className="stack">
@@ -859,7 +937,6 @@ export default function Home() {
                 </div>
 
                 <div className="trending-card-actions">
-                  <ArticleReaderButton title={article.title} url={article.url} />
                   <ShareButton
                     path={`/article/${article.id}`}
                     title={article.title}
@@ -879,6 +956,55 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      {likesModalArticle ? (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="likes-title"
+        >
+          <div className="modal-card">
+            <div className="stack" style={{ gap: "6px" }}>
+              <h3 id="likes-title" className="modal-title">
+                Likes
+              </h3>
+              <p className="muted" style={{ margin: 0 }}>
+                {likesModalArticle.title}
+              </p>
+            </div>
+
+            {likesModalArticle.likeUsers.length > 0 ? (
+              <div className="comment-list">
+                {likesModalArticle.likeUsers.map((likeUser, index) => (
+                  <div key={`${likeUser.user_id ?? "unknown"}-${index}`} className="comment-card">
+                    <strong>{likeUser.username ?? "Unknown user"}</strong>
+                    <div className="muted" style={{ marginTop: "6px" }}>
+                      {likeUser.username
+                        ? "Mirur reader who liked this story."
+                        : `Liked by ${likesModalArticle.likes} users`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <strong>No visible likers yet</strong>
+                <span>Liked by {likesModalArticle.likes} users.</span>
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button
+                className="button button-secondary"
+                onClick={() => setLikesModalArticleId(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {reportingCommentId !== null ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
