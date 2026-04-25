@@ -8,13 +8,13 @@
   --surface-muted: #eef3f9;
   --border: rgba(20, 33, 61, 0.1);
   --text-soft: #6a768f;
-  --accent: #ff6b2c;
-  --accent-strong: #e14f14;
-  --accent-faint: rgba(255, 107, 44, 0.12);
+  --accent: #eb347d;
+  --accent-strong: #c81f63;
+  --accent-faint: rgba(235, 52, 125, 0.14);
   --shadow-soft: 0 22px 60px rgba(20, 33, 61, 0.1);
-  --body-top: #fffaf5;
+  --body-top: #fff5fa;
   --body-mid: #f4f7fb;
-  --body-bottom: #eef3f9;
+  --body-bottom: #f6edf5;
   --topbar-bg: rgba(244, 247, 251, 0.84);
   --topbar-border: rgba(255, 255, 255, 0.7);
   --card-border-strong: rgba(255, 255, 255, 0.7);
@@ -43,13 +43,13 @@
   --surface-muted: #182235;
   --border: rgba(186, 201, 231, 0.14);
   --text-soft: #99a6c0;
-  --accent: #ff824c;
-  --accent-strong: #ff9a6f;
-  --accent-faint: rgba(255, 130, 76, 0.16);
+  --accent: #eb347d;
+  --accent-strong: #ff7ab0;
+  --accent-faint: rgba(235, 52, 125, 0.18);
   --shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.34);
-  --body-top: #141d31;
+  --body-top: #1a1324;
   --body-mid: #0d1526;
-  --body-bottom: #090f1d;
+  --body-bottom: #120d1a;
   --topbar-bg: rgba(12, 19, 35, 0.84);
   --topbar-border: rgba(186, 201, 231, 0.08);
   --card-border-strong: rgba(186, 201, 231, 0.08);
@@ -89,7 +89,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(255, 107, 44, 0.18), transparent 30%),
+    radial-gradient(circle at top left, rgba(235, 52, 125, 0.18), transparent 30%),
     linear-gradient(180deg, var(--body-top) 0%, var(--body-mid) 34%, var(--body-bottom) 100%);
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -135,12 +135,19 @@ input {
   width: 42px;
   height: 42px;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--foreground) 0%, #2f4a7d 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
   color: white;
   font-size: 1rem;
   font-weight: 900;
   letter-spacing: -0.04em;
-  box-shadow: 0 12px 24px rgba(20, 33, 61, 0.16);
+  box-shadow: 0 12px 24px rgba(235, 52, 125, 0.22);
+  overflow: hidden;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-copy {
@@ -616,7 +623,7 @@ input {
 }
 
 .button-accent {
-  background: linear-gradient(135deg, var(--accent) 0%, #ff874f 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
 }
 
 .input,

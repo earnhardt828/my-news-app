@@ -1,4 +1,5 @@
 import BottomNav from "./components/bottom-nav";
+import Image from "next/image";
 import Script from "next/script";
 import "./globals.css";
 
@@ -45,8 +46,15 @@ export default function RootLayout({
           <header className="topbar">
             <div className="topbar-inner">
               <div className="brand-row">
-                <div className="brand-mark" aria-hidden="true">
-                  M
+                <div className="brand-mark">
+                  <Image
+                    src="/mirur-logo.png"
+                    alt="Mirur logo"
+                    width={42}
+                    height={42}
+                    className="brand-logo"
+                    priority
+                  />
                 </div>
                 <div className="brand-copy">
                   <p className="brand-kicker">Mirur</p>
