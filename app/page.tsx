@@ -65,6 +65,39 @@ const summaryText = {
   trending: "Stories rising fastest from likes, comments, and momentum.",
 };
 
+const categoryLabels: Record<string, string> = {
+  Business: "Business 💼",
+  Tech: "Tech 💻",
+  Sports: "Sports 🏈",
+  Politics: "Politics 🏛️",
+  Health: "Health 🏥",
+  Science: "Science 🔬",
+  Entertainment: "Entertainment 🎬",
+  World: "World 🌍",
+};
+
+function getCategoryLabel(category: string) {
+  return categoryLabels[category] ?? category;
+}
+
+function formatPublishedDate(publishedAt?: string | null, fallback?: string) {
+  if (!publishedAt) {
+    return fallback ? `Published ${fallback}` : "Published recently";
+  }
+
+  const date = new Date(publishedAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return fallback ? `Published ${fallback}` : "Published recently";
+  }
+
+  return `Published ${new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date)}`;
+}
+
 function formatRelativeTime(timestamp: string | null) {
   if (!timestamp) {
     return "Just now";
@@ -678,28 +711,33 @@ export default function Home() {
                   ) : null}
 
                   <div className="news-card-header">
-                    <div className="news-meta">
-                      <span className="chip chip-accent">{article.category}</span>
-                      <span>{article.source}</span>
-                      <span>{article.publishedAt ?? article.time}</span>
+                    <div className="trending-source-row">
+                      <span className="source-avatar" aria-hidden="true">
+                        {article.source.charAt(0).toUpperCase()}
+                      </span>
+                      <div className="trending-meta-stack">
+                        <div className="trending-meta-topline">
+                          <span className="chip chip-accent">
+                            {getCategoryLabel(article.category)}
+                          </span>
+                          <span className="trending-source-name">{article.source}</span>
+                        </div>
+                        <span className="trending-published-date">
+                          {formatPublishedDate(article.publishedAt, article.time)}
+                        </span>
+                      </div>
                     </div>
 
                     {index < 3 ? <span className="chip">Top {index + 1}</span> : null}
                   </div>
 
-                  <h3 className="article-title">{article.title}</h3>
+                  <h3 className="trending-article-title">{article.title}</h3>
                 </Link>
 
-                <div className="engagement-row">
+                <div className="engagement-row trending-stats-row">
                   <button className="button button-accent" onClick={() => handleLike(article.id)}>
                     👍 Like
                   </button>
-                  <ArticleReaderButton title={article.title} url={article.url} />
-                  <ShareButton
-                    path={`/article/${article.id}`}
-                    title={article.title}
-                    url={article.url}
-                  />
                   <button
                     className="button button-secondary"
                     onClick={() => handleToggleSaveArticle(article)}
@@ -818,6 +856,15 @@ export default function Home() {
                       Add Comment
                     </button>
                   </div>
+                </div>
+
+                <div className="trending-card-actions">
+                  <ArticleReaderButton title={article.title} url={article.url} />
+                  <ShareButton
+                    path={`/article/${article.id}`}
+                    title={article.title}
+                    url={article.url}
+                  />
                 </div>
               </article>
 

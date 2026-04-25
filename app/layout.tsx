@@ -1,5 +1,4 @@
 import BottomNav from "./components/bottom-nav";
-import ThemeToggle from "./components/theme-toggle";
 import Script from "next/script";
 import "./globals.css";
 
@@ -58,7 +57,6 @@ export default function RootLayout({
                 <p className="page-subtitle" style={{ marginTop: "6px" }}>
                   Your personalized news feed
                 </p>
-                <ThemeToggle />
               </div>
             </div>
           </header>
