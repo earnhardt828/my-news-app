@@ -1,6 +1,7 @@
 "use client";
 
 import AdSlot from "../components/ad-slot";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
@@ -10,6 +11,11 @@ type FeedArticle = {
   source: string;
   category: string;
   time: string;
+  image?: string | null;
+  description?: string | null;
+  url?: string | null;
+  publishedAt?: string | null;
+  content?: string | null;
   saved: boolean;
 };
 
@@ -205,14 +211,25 @@ export default function MyFeed() {
           {articles.map((article, index) => (
             <div key={article.id} className="stack">
               <article className="news-card">
-                <div className="news-card-header">
-                  <div className="news-meta">
-                    <span className="chip chip-accent">{article.category}</span>
-                    <span>{article.source}</span>
-                  </div>
-                </div>
+                <Link href={`/article/${article.id}`} className="article-link">
+                  {article.image ? (
+                    <img
+                      src={article.image}
+                      alt={article.title}
+                      className="article-image"
+                    />
+                  ) : null}
 
-                <h3 className="article-title">{article.title}</h3>
+                  <div className="news-card-header">
+                    <div className="news-meta">
+                      <span className="chip chip-accent">{article.category}</span>
+                      <span>{article.source}</span>
+                      <span>{article.publishedAt ?? article.time}</span>
+                    </div>
+                  </div>
+
+                  <h3 className="article-title">{article.title}</h3>
+                </Link>
 
                 <div className="engagement-row">
                   <button

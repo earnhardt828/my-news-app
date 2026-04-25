@@ -21,6 +21,11 @@ type Article = {
   source: string;
   category: string;
   time: string;
+  image?: string | null;
+  description?: string | null;
+  url?: string | null;
+  publishedAt?: string | null;
+  content?: string | null;
   likes: number;
   comments: Comment[];
   saved: boolean;
@@ -598,17 +603,27 @@ export default function Home() {
           {displayedArticles.map((article, index) => (
             <div key={article.id} className="stack">
               <article className="news-card">
-                <div className="news-card-header">
-                  <div className="news-meta">
-                    <span className="chip chip-accent">{article.category}</span>
-                    <span>{article.source}</span>
-                    <span>{article.time}</span>
+                <Link href={`/article/${article.id}`} className="article-link">
+                  {article.image ? (
+                    <img
+                      src={article.image}
+                      alt={article.title}
+                      className="article-image"
+                    />
+                  ) : null}
+
+                  <div className="news-card-header">
+                    <div className="news-meta">
+                      <span className="chip chip-accent">{article.category}</span>
+                      <span>{article.source}</span>
+                      <span>{article.publishedAt ?? article.time}</span>
+                    </div>
+
+                    {index < 3 ? <span className="chip">Top {index + 1}</span> : null}
                   </div>
 
-                  {index < 3 ? <span className="chip">Top {index + 1}</span> : null}
-                </div>
-
-                <h3 className="article-title">{article.title}</h3>
+                  <h3 className="article-title">{article.title}</h3>
+                </Link>
 
                 <div className="engagement-row">
                   <button className="button button-accent" onClick={() => handleLike(article.id)}>

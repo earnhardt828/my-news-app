@@ -1,0 +1,293 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "../../../lib/supabase";
+
+type ArticleRecord = {
+  id: number;
+  title: string;
+  source: string;
+  category: string;
+  time: string;
+  image?: string | null;
+  description?: string | null;
+  url?: string | null;
+  publishedAt?: string | null;
+  content?: string | null;
+};
+
+type ArticleComment = {
+  id: number;
+  text: string;
+  username: string | null;
+  user_id: string | null;
+  created_at: string | null;
+  avatar_url: string | null;
+};
+
+type DbComment = {
+  id: number;
+  text: string;
+  username: string | null;
+  user_id: string | null;
+  created_at: string | null;
+};
+
+type DbLike = {
+  id: number;
+  article_id: number;
+};
+
+type DbProfile = {
+  id: string;
+  avatar_url: string | null;
+};
+
+function formatRelativeTime(timestamp: string | null) {
+  if (!timestamp) {
+    return "Just now";
+  }
+
+  const createdAt = new Date(timestamp).getTime();
+
+  if (Number.isNaN(createdAt)) {
+    return "Just now";
+  }
+
+  const diffMs = Date.now() - createdAt;
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes === 1) {
+    return "1 minute ago";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} minutes ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours === 1) {
+    return "1 hour ago";
+  }
+
+  if (diffHours < 24) {
+    return `${diffHours} hours ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays === 1) {
+    return "1 day ago";
+  }
+
+  return `${diffDays} days ago`;
+}
+
+export default function ArticleDetailPage() {
+  const params = useParams<{ id: string }>();
+  const articleId = Number(params.id);
+  const [article, setArticle] = useState<ArticleRecord | null>(null);
+  const [comments, setComments] = useState<ArticleComment[]>([]);
+  const [likesCount, setLikesCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadArticle() {
+      if (!articleId || Number.isNaN(articleId)) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+
+      const [newsRes, likesRes, commentsRes, profilesRes] = await Promise.all([
+        fetch("/api/news"),
+        supabase.from("likes").select("id, article_id").eq("article_id", articleId),
+        supabase
+          .from("comments")
+          .select("id, text, username, user_id, created_at")
+          .eq("article_id", articleId),
+        supabase.from("profiles").select("id, avatar_url"),
+      ]);
+
+      const newsData = (await newsRes.json()) as ArticleRecord[];
+      const targetArticle =
+        newsData.find((item) => item.id === articleId) ?? null;
+
+      const likes = (likesRes.data ?? []) as DbLike[];
+      const rawComments = (commentsRes.data ?? []) as DbComment[];
+      const profiles = (profilesRes.data ?? []) as DbProfile[];
+      const avatarLookup = new Map(
+        profiles.map((profile) => [profile.id, profile.avatar_url])
+      );
+
+      setArticle(targetArticle);
+      setLikesCount(likes.length);
+      setComments(
+        rawComments.map((comment) => ({
+          id: comment.id,
+          text: comment.text,
+          username: comment.username,
+          user_id: comment.user_id,
+          created_at: comment.created_at,
+          avatar_url: comment.user_id
+            ? avatarLookup.get(comment.user_id) ?? null
+            : null,
+        }))
+      );
+      setIsLoading(false);
+    }
+
+    loadArticle();
+  }, [articleId]);
+
+  if (isLoading) {
+    return (
+      <section className="page-shell">
+        <div className="loading-state">
+          <strong>Loading article</strong>
+          <span>Fetching story details, likes, and comments.</span>
+        </div>
+      </section>
+    );
+  }
+
+  if (!article) {
+    return (
+      <section className="page-shell">
+        <div className="empty-state">
+          <strong>Article not found</strong>
+          <span>This story is unavailable or could not be loaded.</span>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="page-shell">
+      <div className="page-hero">
+        <p className="page-eyebrow">Article</p>
+        <h2 className="page-title">{article.title}</h2>
+        <p className="page-subtitle">
+          {article.source} · {article.category} · {article.publishedAt ?? article.time}
+        </p>
+      </div>
+
+      <section className="section-card stack">
+        {article.image ? (
+          <img
+            src={article.image}
+            alt={article.title}
+            className="article-image article-image-lg"
+          />
+        ) : null}
+
+        <div className="news-meta">
+          <span className="chip chip-accent">{article.category}</span>
+          <span>{article.source}</span>
+          <span>{article.publishedAt ?? article.time}</span>
+        </div>
+
+        {article.description ? (
+          <div className="comment-card">
+            <strong>Description</strong>
+            <div className="muted" style={{ marginTop: "6px" }}>
+              {article.description}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="comment-card">
+          <strong>Story</strong>
+          <div className="muted" style={{ marginTop: "6px" }}>
+            {article.content ?? article.description ?? "No additional content available."}
+          </div>
+        </div>
+
+        <div className="engagement-row">
+          <span className="stat-pill">❤️ {likesCount} likes</span>
+          <span className="stat-pill">💬 {comments.length} comments</span>
+        </div>
+
+        {article.url ? (
+          <a
+            href={article.url}
+            target="_blank"
+            rel="noreferrer"
+            className="button button-secondary"
+          >
+            Read original article
+          </a>
+        ) : null}
+
+        <Link href="/" className="button button-secondary">
+          Back to Trending
+        </Link>
+      </section>
+
+      <section className="section-card stack">
+        <div>
+          <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
+            Comments
+          </p>
+          <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
+            Reader discussion
+          </h3>
+        </div>
+
+        {comments.length === 0 ? (
+          <div className="empty-state">
+            <strong>No comments yet</strong>
+            <span>Comments for this article will appear here.</span>
+          </div>
+        ) : (
+          <div className="comment-list">
+            {comments.map((comment) => (
+              <div key={comment.id} className="comment-card">
+                <div className="comment-header">
+                  {comment.user_id ? (
+                    <Link
+                      href={`/user/${comment.user_id}`}
+                      className="comment-user-link"
+                    >
+                      <span className="comment-user-avatar">
+                        {comment.avatar_url ? (
+                          <Image
+                            src={comment.avatar_url}
+                            alt={comment.username ?? "User avatar"}
+                            width={34}
+                            height={34}
+                            unoptimized
+                          />
+                        ) : (
+                          (comment.username ?? "U").charAt(0).toUpperCase()
+                        )}
+                      </span>
+                      <span className="comment-username">
+                        {comment.username ?? "Unknown"}
+                      </span>
+                    </Link>
+                  ) : (
+                    <strong>{comment.username ?? "Unknown"}</strong>
+                  )}
+                </div>
+                <div className="comment-body">{comment.text}</div>
+                <div className="comment-meta">
+                  {formatRelativeTime(comment.created_at)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}

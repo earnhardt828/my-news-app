@@ -1,5 +1,10 @@
 type NewsApiArticle = {
+  content?: string | null;
+  description?: string | null;
+  publishedAt?: string | null;
   title: string;
+  url?: string | null;
+  urlToImage?: string | null;
   source: {
     name: string;
   };
@@ -16,6 +21,16 @@ const CATEGORY_OPTIONS = [
   "World",
 ];
 
+function hashArticleId(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash === 0 ? 1 : hash;
+}
+
 export async function GET() {
   const res = await fetch(
     "https://newsapi.org/v2/top-headlines?country=us&pageSize=10",
@@ -30,11 +45,18 @@ export async function GET() {
   const sourceArticles = data.articles ?? [];
 
   const articles = sourceArticles.map((item, index) => ({
-    id: index + 1,
+    id: hashArticleId(
+      item.url ?? `${item.title}-${item.source?.name ?? "unknown"}-${index}`
+    ),
     title: item.title,
     source: item.source?.name ?? "Unknown",
     category: CATEGORY_OPTIONS[index % CATEGORY_OPTIONS.length],
     time: "Recent",
+    image: item.urlToImage,
+    description: item.description,
+    url: item.url,
+    publishedAt: item.publishedAt,
+    content: item.content,
     likes: Math.floor(Math.random() * 50),
     comments: [],
   }));
