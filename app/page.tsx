@@ -56,6 +56,10 @@ type DbSavedArticle = {
   article_id: number;
 };
 
+type DbBlockedUser = {
+  blocked_user_id: string;
+};
+
 const summaryText = {
   latest: "Fresh headlines from your live news API, ready for reactions.",
   trending: "Stories rising fastest from likes, comments, and momentum.",
@@ -166,6 +170,7 @@ export default function Home() {
     commentId: number;
   } | null>(null);
   const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -211,9 +216,21 @@ export default function Home() {
             .eq("user_id", userData.user.id)
         : { data: [] as DbSavedArticle[] };
 
+      const { data: blockedUsersData } = userData.user?.id
+        ? await supabase
+            .from("blocked_users")
+            .select("blocked_user_id")
+            .eq("blocker_id", userData.user.id)
+        : { data: [] as DbBlockedUser[] };
+
       const likes = (likesData ?? []) as DbLike[];
       const comments = (commentsData ?? []) as DbComment[];
       const profiles = (profilesData ?? []) as DbProfile[];
+      const blockedIds = new Set(
+        ((blockedUsersData ?? []) as DbBlockedUser[]).map(
+          (blockedUser) => blockedUser.blocked_user_id
+        )
+      );
       const savedArticleIds = new Set(
         ((savedArticlesData ?? []) as DbSavedArticle[]).map(
           (savedArticle) => savedArticle.article_id
@@ -226,7 +243,11 @@ export default function Home() {
       const mergedArticles: Article[] = newsData.map((item) => {
         const articleLikes = likes.filter((like) => like.article_id === item.id).length;
         const articleComments = comments
-          .filter((comment) => comment.article_id === item.id)
+          .filter(
+            (comment) =>
+              comment.article_id === item.id &&
+              (!comment.user_id || !blockedIds.has(comment.user_id))
+          )
           .map((comment) => ({
             id: comment.id,
             text: comment.text,
@@ -246,6 +267,7 @@ export default function Home() {
         };
       });
 
+      setBlockedUserIds([...blockedIds]);
       setArticles(mergedArticles);
       setIsLoading(false);
     }
@@ -456,6 +478,47 @@ export default function Home() {
           : article
       )
     );
+  };
+
+  const handleBlockUser = async (blockedUserId: string, blockedUsername?: string | null) => {
+    if (!userId) {
+      alert("Log in to block users");
+      return;
+    }
+
+    if (blockedUserId === userId) {
+      alert("You cannot block your own account");
+      return;
+    }
+
+    if (blockedUserIds.includes(blockedUserId)) {
+      alert("That user is already blocked");
+      return;
+    }
+
+    setActiveCommentAction(`block-${blockedUserId}`);
+
+    const { error } = await supabase.from("blocked_users").insert({
+      blocker_id: userId,
+      blocked_user_id: blockedUserId,
+    });
+
+    setActiveCommentAction(null);
+
+    if (error) {
+      console.error("Error blocking user:", error);
+      alert("Could not block that user");
+      return;
+    }
+
+    setBlockedUserIds((prev) => [...prev, blockedUserId]);
+    setArticles((prev) =>
+      prev.map((article) => ({
+        ...article,
+        comments: article.comments.filter((comment) => comment.user_id !== blockedUserId),
+      }))
+    );
+    alert(`Blocked ${blockedUsername ?? "this user"}. Their comments are now hidden.`);
   };
 
   const openDeleteModal = (articleId: number, commentId: number) => {
@@ -718,6 +781,18 @@ export default function Home() {
                                 {activeCommentAction === `delete-${comment.id}`
                                   ? "Deleting..."
                                   : "Delete"}
+                              </button>
+                            ) : comment.user_id ? (
+                              <button
+                                className="comment-action"
+                                onClick={() =>
+                                  handleBlockUser(comment.user_id!, comment.username)
+                                }
+                                disabled={activeCommentAction === `block-${comment.user_id}`}
+                              >
+                                {activeCommentAction === `block-${comment.user_id}`
+                                  ? "Blocking..."
+                                  : "Block"}
                               </button>
                             ) : null}
                           </div>

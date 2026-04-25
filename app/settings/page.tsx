@@ -10,39 +10,46 @@ type UserState = {
   email: string | null;
 } | null;
 
-const BLOCKED_USERS_STORAGE_KEY = "mirur-blocked-users-placeholder";
+type BlockedUserRecord = {
+  id: number;
+  blocked_user_id: string;
+  created_at: string;
+  username: string | null;
+  avatar_url: string | null;
+};
 
-function getInitialBlockedUsers() {
-  if (typeof window === "undefined") {
-    return [] as string[];
-  }
+type DbBlockedUser = {
+  id: number;
+  blocked_user_id: string;
+  created_at: string;
+};
 
-  const storedBlockedUsers = window.localStorage.getItem(
-    BLOCKED_USERS_STORAGE_KEY
-  );
+type DbProfile = {
+  id: string;
+  username: string | null;
+  avatar_url: string | null;
+};
 
-  if (!storedBlockedUsers) {
-    return [] as string[];
-  }
-
-  try {
-    return JSON.parse(storedBlockedUsers) as string[];
-  } catch (error) {
-    console.error("Could not parse blocked users placeholder state:", error);
-    return [] as string[];
-  }
-}
+type AccountDeletionRequest = {
+  id: number;
+  status: string;
+  created_at: string;
+};
 
 export default function SettingsPage() {
   const [currentUser, setCurrentUser] = useState<UserState>(null);
   const [username, setUsername] = useState("");
   const [contactInfo, setContactInfo] = useState("");
-  const [blockedUsers, setBlockedUsers] = useState<string[]>(getInitialBlockedUsers);
-  const [blockedUserInput, setBlockedUserInput] = useState("");
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserRecord[]>([]);
+  const [deletionRequest, setDeletionRequest] =
+    useState<AccountDeletionRequest | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [activeBlockedUserId, setActiveBlockedUserId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isSubmittingDeletionRequest, setIsSubmittingDeletionRequest] =
+    useState(false);
 
   useEffect(() => {
     async function loadSettings() {
@@ -59,30 +66,73 @@ export default function SettingsPage() {
 
       if (!user?.id) {
         setUsername("");
+        setBlockedUsers([]);
+        setDeletionRequest(null);
         setIsLoading(false);
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username")
-        .eq("id", user.id)
-        .maybeSingle();
+      const [profileResult, blockedUsersResult, deletionRequestResult] =
+        await Promise.all([
+          supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("blocked_users")
+            .select("id, blocked_user_id, created_at")
+            .eq("blocker_id", user.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("account_deletion_requests")
+            .select("id, status, created_at")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+        ]);
 
-      setUsername(profile?.username ?? "");
+      setUsername(profileResult.data?.username ?? "");
+      setDeletionRequest(
+        (deletionRequestResult.data as AccountDeletionRequest | null) ?? null
+      );
+
+      const blockedRecords = (blockedUsersResult.data ?? []) as DbBlockedUser[];
+
+      if (blockedRecords.length === 0) {
+        setBlockedUsers([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const blockedUserIds = blockedRecords.map((blockedUser) => blockedUser.blocked_user_id);
+      const { data: blockedProfilesData } = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url")
+        .in("id", blockedUserIds);
+
+      const blockedProfiles = (blockedProfilesData ?? []) as DbProfile[];
+      const profileLookup = new Map(
+        blockedProfiles.map((profile) => [
+          profile.id,
+          {
+            username: profile.username,
+            avatar_url: profile.avatar_url,
+          },
+        ])
+      );
+
+      setBlockedUsers(
+        blockedRecords.map((blockedUser) => ({
+          ...blockedUser,
+          username: profileLookup.get(blockedUser.blocked_user_id)?.username ?? null,
+          avatar_url: profileLookup.get(blockedUser.blocked_user_id)?.avatar_url ?? null,
+        }))
+      );
       setIsLoading(false);
     }
 
     loadSettings();
   }, []);
-
-  const persistBlockedUsers = (nextBlockedUsers: string[]) => {
-    setBlockedUsers(nextBlockedUsers);
-    window.localStorage.setItem(
-      BLOCKED_USERS_STORAGE_KEY,
-      JSON.stringify(nextBlockedUsers)
-    );
-  };
 
   const handleSaveAccount = async () => {
     if (!currentUser?.id) {
@@ -111,49 +161,81 @@ export default function SettingsPage() {
     }
 
     setMessage(
-      "Username saved. Contact info is shown here as a placeholder until secure email-change support is added."
+      "Username saved. Contact info remains a safe placeholder until secure email-change support is added."
     );
   };
 
   const handleLogOut = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
+    setBlockedUsers([]);
+    setDeletionRequest(null);
     setMessage("Logged out.");
   };
 
-  const handleAddBlockedUser = () => {
-    const nextUser = blockedUserInput.trim();
-
-    if (!nextUser) {
-      setMessage("Enter a username to add to the blocked users placeholder list.");
+  const handleUnblockUser = async (blockedUserId: string) => {
+    if (!currentUser?.id) {
+      setMessage("Log in to manage blocked users.");
       return;
     }
 
-    if (blockedUsers.includes(nextUser)) {
-      setMessage("That user is already in your blocked list.");
+    setActiveBlockedUserId(blockedUserId);
+
+    const { error } = await supabase
+      .from("blocked_users")
+      .delete()
+      .eq("blocker_id", currentUser.id)
+      .eq("blocked_user_id", blockedUserId);
+
+    setActiveBlockedUserId(null);
+
+    if (error) {
+      console.error("Error unblocking user:", error);
+      setMessage("Could not unblock that user.");
       return;
     }
 
-    persistBlockedUsers([...blockedUsers, nextUser]);
-    setBlockedUserInput("");
-    setMessage(
-      "Blocked users placeholder updated locally. Full blocking enforcement will need backend support."
+    setBlockedUsers((prev) =>
+      prev.filter((blockedUser) => blockedUser.blocked_user_id !== blockedUserId)
     );
+    setMessage("Blocked user removed.");
   };
 
-  const handleUnblockUser = (blockedUser: string) => {
-    persistBlockedUsers(
-      blockedUsers.filter((currentBlockedUser) => currentBlockedUser !== blockedUser)
-    );
-    setMessage(
-      "Blocked users placeholder updated locally. Full blocking enforcement will need backend support."
-    );
-  };
+  const handleDeleteAccountRequest = async () => {
+    if (!currentUser?.id) {
+      setMessage("Log in to request account deletion.");
+      setIsDeleteModalOpen(false);
+      return;
+    }
 
-  const handleDeleteAccountRequest = () => {
+    if (deletionRequest) {
+      setMessage("You already have an account deletion request on file.");
+      setIsDeleteModalOpen(false);
+      return;
+    }
+
+    setIsSubmittingDeletionRequest(true);
+
+    const { data, error } = await supabase
+      .from("account_deletion_requests")
+      .insert({
+        user_id: currentUser.id,
+      })
+      .select("id, status, created_at")
+      .single();
+
+    setIsSubmittingDeletionRequest(false);
     setIsDeleteModalOpen(false);
+
+    if (error) {
+      console.error("Error creating account deletion request:", error);
+      setMessage("Could not submit your deletion request. Please try again.");
+      return;
+    }
+
+    setDeletionRequest(data as AccountDeletionRequest);
     setMessage(
-      "Account deletion requires secure backend support or a server-side service role. This button is a safe placeholder for now."
+      "Account deletion request submitted. A backend review flow can process it safely."
     );
   };
 
@@ -171,7 +253,7 @@ export default function SettingsPage() {
       {isLoading ? (
         <div className="loading-state">
           <strong>Loading settings</strong>
-          <span>Fetching your account preferences and saved profile details.</span>
+          <span>Fetching your account preferences and safety settings.</span>
         </div>
       ) : (
         <div className="stack">
@@ -257,42 +339,46 @@ export default function SettingsPage() {
               </h3>
             </div>
 
-            <div className="input-row settings-inline-form">
-              <input
-                className="input"
-                type="text"
-                placeholder="Add a username to block"
-                value={blockedUserInput}
-                onChange={(event) => setBlockedUserInput(event.target.value)}
-              />
-              <button className="button button-secondary" onClick={handleAddBlockedUser}>
-                Add
-              </button>
+            <div className="comment-card">
+              <strong>How blocking works</strong>
+              <div className="muted" style={{ marginTop: "6px" }}>
+                Block people directly from comment actions. Their comments will be
+                hidden from your feed and article pages.
+              </div>
             </div>
 
             {blockedUsers.length === 0 ? (
               <div className="empty-state">
                 <strong>No blocked users yet</strong>
-                <span>
-                  This is a local placeholder UI for future blocking support.
-                </span>
+                <span>Use the Block action on a comment to manage this list.</span>
               </div>
             ) : (
               <div className="comment-list">
                 {blockedUsers.map((blockedUser) => (
-                  <div key={blockedUser} className="comment-card settings-row">
+                  <div key={blockedUser.id} className="comment-card settings-row">
                     <div className="stack" style={{ gap: "4px" }}>
-                      <strong>@{blockedUser}</strong>
+                      <strong>
+                        {blockedUser.username
+                          ? `@${blockedUser.username}`
+                          : blockedUser.blocked_user_id}
+                      </strong>
                       <span className="muted">
-                        Local placeholder only. Full blocking enforcement will
-                        require backend support.
+                        Blocked on{" "}
+                        {new Date(blockedUser.created_at).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
                       </span>
                     </div>
                     <button
                       className="comment-action"
-                      onClick={() => handleUnblockUser(blockedUser)}
+                      onClick={() => handleUnblockUser(blockedUser.blocked_user_id)}
+                      disabled={activeBlockedUserId === blockedUser.blocked_user_id}
                     >
-                      Unblock
+                      {activeBlockedUserId === blockedUser.blocked_user_id
+                        ? "Unblocking..."
+                        : "Unblock"}
                     </button>
                   </div>
                 ))}
@@ -347,16 +433,31 @@ export default function SettingsPage() {
             <div className="comment-card">
               <strong>Delete account</strong>
               <div className="muted" style={{ marginTop: "6px" }}>
-                This requires secure backend support before it should permanently
-                remove auth and profile records.
+                Requests are stored safely for backend review. Permanent auth
+                deletion should still be handled server-side.
               </div>
             </div>
+
+            {deletionRequest ? (
+              <div className="comment-card">
+                <strong>Deletion request on file</strong>
+                <div className="muted" style={{ marginTop: "6px" }}>
+                  Status: {deletionRequest.status} · Requested{" "}
+                  {new Date(deletionRequest.created_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             <button
               className="button comment-action-danger settings-danger-button"
               onClick={() => setIsDeleteModalOpen(true)}
+              disabled={Boolean(deletionRequest)}
             >
-              Delete Account
+              {deletionRequest ? "Request Submitted" : "Request Account Deletion"}
             </button>
           </section>
 
@@ -374,11 +475,11 @@ export default function SettingsPage() {
           <div className="modal-card">
             <div className="stack" style={{ gap: "6px" }}>
               <h3 id="settings-delete-title" className="modal-title">
-                Delete account
+                Request account deletion
               </h3>
               <p className="muted" style={{ margin: 0 }}>
-                Are you sure you want to continue? Permanent account deletion is
-                not enabled yet in the app client.
+                Are you sure you want to submit an account deletion request? This
+                will create a review record in Supabase for follow-up.
               </p>
             </div>
 
@@ -386,14 +487,16 @@ export default function SettingsPage() {
               <button
                 className="button button-secondary"
                 onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isSubmittingDeletionRequest}
               >
                 Cancel
               </button>
               <button
                 className="button comment-action-danger settings-danger-button"
                 onClick={handleDeleteAccountRequest}
+                disabled={isSubmittingDeletionRequest}
               >
-                Delete
+                {isSubmittingDeletionRequest ? "Submitting..." : "Submit Request"}
               </button>
             </div>
           </div>

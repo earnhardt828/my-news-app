@@ -48,6 +48,10 @@ type DbProfile = {
   avatar_url: string | null;
 };
 
+type DbBlockedUser = {
+  blocked_user_id: string;
+};
+
 function formatRelativeTime(timestamp: string | null) {
   if (!timestamp) {
     return "Just now";
@@ -100,6 +104,9 @@ export default function ArticleDetailPage() {
   const [comments, setComments] = useState<ArticleComment[]>([]);
   const [likesCount, setLikesCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
+  const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadArticle() {
@@ -109,6 +116,10 @@ export default function ArticleDetailPage() {
       }
 
       setIsLoading(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const currentUserId = userData.user?.id ?? null;
+      setUserId(currentUserId);
 
       const [newsRes, likesRes, commentsRes, profilesRes] = await Promise.all([
         fetch("/api/news"),
@@ -120,6 +131,13 @@ export default function ArticleDetailPage() {
         supabase.from("profiles").select("id, avatar_url"),
       ]);
 
+      const { data: blockedUsersData } = currentUserId
+        ? await supabase
+            .from("blocked_users")
+            .select("blocked_user_id")
+            .eq("blocker_id", currentUserId)
+        : { data: [] as DbBlockedUser[] };
+
       const newsData = (await newsRes.json()) as ArticleRecord[];
       const targetArticle =
         newsData.find((item) => item.id === articleId) ?? null;
@@ -127,29 +145,77 @@ export default function ArticleDetailPage() {
       const likes = (likesRes.data ?? []) as DbLike[];
       const rawComments = (commentsRes.data ?? []) as DbComment[];
       const profiles = (profilesRes.data ?? []) as DbProfile[];
+      const blockedIds = new Set(
+        ((blockedUsersData ?? []) as DbBlockedUser[]).map(
+          (blockedUser) => blockedUser.blocked_user_id
+        )
+      );
       const avatarLookup = new Map(
         profiles.map((profile) => [profile.id, profile.avatar_url])
       );
 
       setArticle(targetArticle);
       setLikesCount(likes.length);
+      setBlockedUserIds([...blockedIds]);
       setComments(
-        rawComments.map((comment) => ({
-          id: comment.id,
-          text: comment.text,
-          username: comment.username,
-          user_id: comment.user_id,
-          created_at: comment.created_at,
-          avatar_url: comment.user_id
-            ? avatarLookup.get(comment.user_id) ?? null
-            : null,
-        }))
+        rawComments
+          .filter(
+            (comment) => !comment.user_id || !blockedIds.has(comment.user_id)
+          )
+          .map((comment) => ({
+            id: comment.id,
+            text: comment.text,
+            username: comment.username,
+            user_id: comment.user_id,
+            created_at: comment.created_at,
+            avatar_url: comment.user_id
+              ? avatarLookup.get(comment.user_id) ?? null
+              : null,
+          }))
       );
       setIsLoading(false);
     }
 
     loadArticle();
   }, [articleId]);
+
+  const handleBlockUser = async (blockedUserId: string, blockedUsername?: string | null) => {
+    if (!userId) {
+      alert("Log in to block users");
+      return;
+    }
+
+    if (blockedUserId === userId) {
+      alert("You cannot block your own account");
+      return;
+    }
+
+    if (blockedUserIds.includes(blockedUserId)) {
+      alert("That user is already blocked");
+      return;
+    }
+
+    setActiveCommentAction(`block-${blockedUserId}`);
+
+    const { error } = await supabase.from("blocked_users").insert({
+      blocker_id: userId,
+      blocked_user_id: blockedUserId,
+    });
+
+    setActiveCommentAction(null);
+
+    if (error) {
+      console.error("Error blocking user:", error);
+      alert("Could not block that user");
+      return;
+    }
+
+    setBlockedUserIds((prev) => [...prev, blockedUserId]);
+    setComments((prev) =>
+      prev.filter((comment) => comment.user_id !== blockedUserId)
+    );
+    alert(`Blocked ${blockedUsername ?? "this user"}. Their comments are now hidden.`);
+  };
 
   if (isLoading) {
     return (
@@ -279,6 +345,19 @@ export default function ArticleDetailPage() {
                 <div className="comment-meta">
                   {formatRelativeTime(comment.created_at)}
                 </div>
+                {comment.user_id && comment.user_id !== userId ? (
+                  <div className="comment-actions">
+                    <button
+                      className="comment-action"
+                      onClick={() => handleBlockUser(comment.user_id!, comment.username)}
+                      disabled={activeCommentAction === `block-${comment.user_id}`}
+                    >
+                      {activeCommentAction === `block-${comment.user_id}`
+                        ? "Blocking..."
+                        : "Block"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
