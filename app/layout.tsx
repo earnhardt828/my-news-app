@@ -48,10 +48,10 @@ export default function RootLayout({
               <div className="brand-row">
                 <div className="brand-mark">
                   <Image
-                    src="/mirur-logo.png"
+                    src="/mirur-trending-logo.png"
                     alt="Mirur logo"
-                    width={42}
-                    height={42}
+                    width={40}
+                    height={40}
                     className="brand-logo"
                     priority
                   />

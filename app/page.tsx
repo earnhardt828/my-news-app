@@ -717,17 +717,6 @@ export default function Home() {
     <section className="page-shell">
       <div className="page-hero">
         <div className="page-title-row">
-          <div>
-            <Image
-              src="/mirur-trending-logo.png"
-              alt="Mirur"
-              width={280}
-              height={112}
-              className="trending-page-logo"
-              priority
-            />
-          </div>
-
           <div className="toolbar">
             <button
               className={`toolbar-pill ${
