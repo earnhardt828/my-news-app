@@ -196,6 +196,12 @@ input {
   gap: 12px;
 }
 
+.trending-page-logo {
+  display: block;
+  width: min(280px, 72vw);
+  height: auto;
+}
+
 .page-eyebrow {
   margin: 0;
   color: var(--accent-strong);

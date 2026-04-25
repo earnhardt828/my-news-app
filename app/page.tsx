@@ -68,11 +68,6 @@ type DbBlockedUser = {
   blocked_user_id: string;
 };
 
-const summaryText = {
-  latest: "Fresh headlines from your live news API, ready for reactions.",
-  trending: "Stories rising fastest from likes, comments, and momentum.",
-};
-
 const categoryLabels: Record<string, string> = {
   Business: "Business 💼",
   Tech: "Tech 💻",
@@ -195,7 +190,7 @@ function FeedSkeleton() {
 export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-  const [sortMode, setSortMode] = useState<"latest" | "trending">("latest");
+  const [sortMode, setSortMode] = useState<"latest" | "trending">("trending");
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -721,23 +716,19 @@ export default function Home() {
   return (
     <section className="page-shell">
       <div className="page-hero">
-        <p className="page-eyebrow">Trending Desk</p>
-
         <div className="page-title-row">
           <div>
-            <h2 className="page-title">Top stories, built for phones.</h2>
-            <p className="page-subtitle">{summaryText[sortMode]}</p>
+            <Image
+              src="/mirur-trending-logo.png"
+              alt="Mirur"
+              width={280}
+              height={112}
+              className="trending-page-logo"
+              priority
+            />
           </div>
 
           <div className="toolbar">
-            <button
-              className={`toolbar-pill ${
-                sortMode === "latest" ? "toolbar-pill-active" : ""
-              }`}
-              onClick={() => setSortMode("latest")}
-            >
-              Latest
-            </button>
             <button
               className={`toolbar-pill ${
                 sortMode === "trending" ? "toolbar-pill-active" : ""
@@ -745,6 +736,14 @@ export default function Home() {
               onClick={() => setSortMode("trending")}
             >
               Trending
+            </button>
+            <button
+              className={`toolbar-pill ${
+                sortMode === "latest" ? "toolbar-pill-active" : ""
+              }`}
+              onClick={() => setSortMode("latest")}
+            >
+              Latest
             </button>
           </div>
         </div>
