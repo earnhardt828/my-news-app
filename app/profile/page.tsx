@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
@@ -556,53 +557,26 @@ export default function Profile() {
               </div>
 
               <div className="comment-list">
-                <a href="#privacy-policy" className="comment-card">
+                <Link href="/privacy" className="comment-card">
                   <strong>Privacy Policy</strong>
                   <div className="muted" style={{ marginTop: "6px" }}>
                     Review how account, comments, and profile data are handled.
                   </div>
-                </a>
+                </Link>
 
-                <a href="#terms-of-use" className="comment-card">
+                <Link href="/terms" className="comment-card">
                   <strong>Terms of Use</strong>
                   <div className="muted" style={{ marginTop: "6px" }}>
                     See the basic rules for using the app and posting content.
                   </div>
-                </a>
+                </Link>
 
-                <a href="#community-guidelines" className="comment-card">
+                <Link href="/community-guidelines" className="comment-card">
                   <strong>Community Guidelines</strong>
                   <div className="muted" style={{ marginTop: "6px" }}>
                     Learn what behavior is expected in comments and reports.
                   </div>
-                </a>
-              </div>
-
-              <div id="privacy-policy" className="comment-card">
-                <strong>Privacy Policy</strong>
-                <div className="muted" style={{ marginTop: "6px" }}>
-                  This placeholder policy should explain what profile details,
-                  uploaded avatars, comments, likes, and report data are stored,
-                  and how users can request help or account changes.
-                </div>
-              </div>
-
-              <div id="terms-of-use" className="comment-card">
-                <strong>Terms of Use</strong>
-                <div className="muted" style={{ marginTop: "6px" }}>
-                  This placeholder terms section should describe acceptable app
-                  use, ownership of user-submitted content, moderation rights,
-                  and limits around misuse or abuse of the service.
-                </div>
-              </div>
-
-              <div id="community-guidelines" className="comment-card">
-                <strong>Community Guidelines</strong>
-                <div className="muted" style={{ marginTop: "6px" }}>
-                  Keep conversations respectful. Do not post harassment, hate,
-                  spam, threats, impersonation, illegal content, or anything
-                  that puts other users at risk.
-                </div>
+                </Link>
               </div>
 
               <div className="comment-card">
