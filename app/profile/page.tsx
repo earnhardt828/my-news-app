@@ -413,12 +413,21 @@ export default function Profile() {
   return (
     <section className="page-shell">
       <div className="page-hero">
-        <p className="page-eyebrow">Profile Studio</p>
-        <h2 className="page-title">Shape your news identity.</h2>
-        <p className="page-subtitle">
-          Update your username, avatar, and favorite categories while keeping
-          your comments and account details in one place.
-        </p>
+        <div className="page-title-row">
+          <div>
+            <p className="page-eyebrow">Profile Studio</p>
+            <h2 className="page-title">Shape your news identity.</h2>
+            <p className="page-subtitle">
+              Update your username, avatar, and favorite categories while keeping
+              your comments and account details in one place.
+            </p>
+          </div>
+
+          <Link href="/settings" className="icon-button" aria-label="Open settings">
+            <span aria-hidden="true">⚙</span>
+            <span>Settings</span>
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (

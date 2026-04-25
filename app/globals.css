@@ -256,6 +256,20 @@ input {
   color: white;
 }
 
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--button-secondary-bg);
+  color: var(--foreground);
+  font-weight: 800;
+  box-shadow: var(--theme-toggle-shadow);
+}
+
 .stack {
   display: grid;
   gap: 14px;
@@ -966,6 +980,26 @@ input {
   line-height: 1;
 }
 
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-inline-form {
+  align-items: stretch;
+}
+
+.danger-zone-card {
+  border-color: rgba(215, 54, 54, 0.2);
+}
+
+.settings-danger-button {
+  min-height: 46px;
+}
+
 .category-pill-active {
   background: var(--foreground);
   color: white;
@@ -1048,6 +1082,10 @@ input {
   .split-grid {
     grid-template-columns: 1.15fr 0.85fr;
     align-items: start;
+  }
+
+  .settings-inline-form {
+    grid-template-columns: 1fr auto;
   }
 
   .modal-backdrop {
