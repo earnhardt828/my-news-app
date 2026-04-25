@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -36,6 +36,7 @@ export default function Profile() {
   const [message, setMessage] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [myComments, setMyComments] = useState<MyComment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
@@ -46,6 +47,20 @@ export default function Profile() {
     text: string;
   } | null>(null);
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
+
+  const saveProfile = async (nextAvatarUrl?: string) => {
+    if (!currentUser?.id) {
+      return { error: new Error("Log in first.") };
+    }
+
+    return supabase.from("profiles").upsert({
+      id: currentUser.id,
+      email: currentUser.email,
+      username: username.trim() || null,
+      categories,
+      avatar_url: nextAvatarUrl ?? avatarUrl,
+    });
+  };
 
   const loadProfileForUser = async (userId: string) => {
     const { data: profile } = await supabase
@@ -143,20 +158,72 @@ export default function Profile() {
       return;
     }
 
-    const { error } = await supabase.from("profiles").upsert({
-      id: currentUser.id,
-      email: currentUser.email,
-      username: username.trim(),
-      categories,
-      avatar_url: avatarUrl,
-    });
+    const { error } = await saveProfile();
 
     if (error) {
-      setMessage(error.message);
+      setMessage(error.message ?? "Could not save profile.");
       return;
     }
 
     setMessage("Profile saved.");
+  };
+
+  const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!currentUser?.id) {
+      setMessage("Log in before uploading a profile image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setMessage("Please choose an image file.");
+      event.target.value = "";
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    setMessage("");
+
+    const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "-");
+    const filePath = `${currentUser.id}/avatar-${Date.now()}-${safeFilename}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, {
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Error uploading avatar:", uploadError);
+      setIsUploadingAvatar(false);
+      setMessage("Could not upload image. Please try a different file.");
+      event.target.value = "";
+      return;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+    const { error: profileError } = await saveProfile(publicUrl);
+
+    setIsUploadingAvatar(false);
+    event.target.value = "";
+
+    if (profileError) {
+      console.error("Error saving avatar URL:", profileError);
+      setMessage("Image uploaded, but we could not save it to your profile.");
+      return;
+    }
+
+    setAvatarUrl(publicUrl);
+    setMessage("Profile image uploaded.");
   };
 
   const handleDeleteComment = async (commentId: number) => {
@@ -368,11 +435,20 @@ export default function Profile() {
 
               <input
                 className="input"
-                type="text"
-                placeholder="Profile picture URL"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                disabled={isUploadingAvatar}
               />
+            </div>
+
+            <div className="comment-card">
+              <strong>Profile image</strong>
+              <div className="muted" style={{ marginTop: "6px" }}>
+                {isUploadingAvatar
+                  ? "Uploading image..."
+                  : "Choose an image file to upload it to Supabase Storage."}
+              </div>
             </div>
 
             <div className="stack">
