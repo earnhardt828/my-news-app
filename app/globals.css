@@ -69,6 +69,32 @@ input {
   padding: 18px 20px 14px;
 }
 
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--foreground) 0%, #2f4a7d 100%);
+  color: white;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  box-shadow: 0 12px 24px rgba(20, 33, 61, 0.16);
+}
+
+.brand-copy {
+  display: grid;
+  gap: 2px;
+}
+
 .brand-kicker {
   margin: 0;
   font-size: 0.72rem;

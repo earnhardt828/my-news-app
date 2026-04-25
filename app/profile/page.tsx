@@ -582,7 +582,7 @@ export default function Profile() {
               <div className="comment-card">
                 <strong>Report abuse or safety issue</strong>
                 <div className="muted" style={{ marginTop: "6px" }}>
-                  Placeholder contact: safety@mynewsapp.example
+                  Placeholder contact: support@mirur.app
                 </div>
               </div>
             </section>
