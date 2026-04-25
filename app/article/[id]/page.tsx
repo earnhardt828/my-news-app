@@ -1,9 +1,11 @@
 "use client";
 
 import Image from "next/image";
+import ArticleReaderButton from "../../components/article-reader-button";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import ShareButton from "../../components/share-button";
 import { supabase } from "../../../lib/supabase";
 
 type ArticleRecord = {
@@ -173,15 +175,22 @@ export default function ArticleDetailPage() {
 
   return (
     <section className="page-shell">
-      <div className="page-hero">
-        <p className="page-eyebrow">Article</p>
-        <h2 className="page-title">{article.title}</h2>
-        <p className="page-subtitle">
-          {article.source} · {article.category} · {article.publishedAt ?? article.time}
-        </p>
-      </div>
+      <section className="section-card article-detail-hero">
+        <div className="stack" style={{ gap: "10px" }}>
+          <p className="page-eyebrow">Article</p>
+          <div className="article-detail-kicker-row">
+            <span className="chip chip-accent">{article.category}</span>
+            <span className="article-detail-source">{article.source}</span>
+          </div>
+          <h2 className="article-detail-title">{article.title}</h2>
+          <p className="article-detail-byline">
+            Published {article.publishedAt ?? article.time} by {article.source}
+          </p>
+          {article.description ? (
+            <p className="article-detail-lede">{article.description}</p>
+          ) : null}
+        </div>
 
-      <section className="section-card stack">
         {article.image ? (
           <img
             src={article.image}
@@ -190,43 +199,27 @@ export default function ArticleDetailPage() {
           />
         ) : null}
 
-        <div className="news-meta">
-          <span className="chip chip-accent">{article.category}</span>
-          <span>{article.source}</span>
-          <span>{article.publishedAt ?? article.time}</span>
-        </div>
-
-        {article.description ? (
-          <div className="comment-card">
-            <strong>Description</strong>
-            <div className="muted" style={{ marginTop: "6px" }}>
-              {article.description}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="comment-card">
-          <strong>Story</strong>
-          <div className="muted" style={{ marginTop: "6px" }}>
-            {article.content ?? article.description ?? "No additional content available."}
-          </div>
-        </div>
-
-        <div className="engagement-row">
+        <div className="engagement-row article-detail-actions">
           <span className="stat-pill">❤️ {likesCount} likes</span>
           <span className="stat-pill">💬 {comments.length} comments</span>
+          <ArticleReaderButton title={article.title} url={article.url} />
+          <ShareButton
+            path={`/article/${article.id}`}
+            title={article.title}
+            url={article.url}
+          />
         </div>
 
-        {article.url ? (
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noreferrer"
-            className="button button-secondary"
-          >
-            Read original article
-          </a>
-        ) : null}
+        <div className="article-detail-body">
+          <div className="article-detail-section">
+            <p className="article-detail-label">Full story</p>
+            <div className="article-detail-copy">
+              {article.content ??
+                article.description ??
+                "No additional content available."}
+            </div>
+          </div>
+        </div>
 
         <Link href="/" className="button button-secondary">
           Back to Trending
@@ -235,12 +228,15 @@ export default function ArticleDetailPage() {
 
       <section className="section-card stack">
         <div>
-          <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
+          <p className="page-eyebrow article-comments-eyebrow">
             Comments
           </p>
-          <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
+          <h3 className="article-comments-title">
             Reader discussion
           </h3>
+          <p className="article-comments-subtitle">
+            Reactions from the Mirur community on this story.
+          </p>
         </div>
 
         {comments.length === 0 ? (

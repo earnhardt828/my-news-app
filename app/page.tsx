@@ -1,9 +1,11 @@
 "use client";
 
 import AdSlot from "./components/ad-slot";
+import ArticleReaderButton from "./components/article-reader-button";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import ShareButton from "./components/share-button";
 import { supabase } from "../lib/supabase";
 
 type Comment = {
@@ -629,6 +631,12 @@ export default function Home() {
                   <button className="button button-accent" onClick={() => handleLike(article.id)}>
                     👍 Like
                   </button>
+                  <ArticleReaderButton title={article.title} url={article.url} />
+                  <ShareButton
+                    path={`/article/${article.id}`}
+                    title={article.title}
+                    url={article.url}
+                  />
                   <button
                     className="button button-secondary"
                     onClick={() => handleToggleSaveArticle(article)}

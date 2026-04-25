@@ -1,4 +1,5 @@
 import BottomNav from "./components/bottom-nav";
+import ThemeToggle from "./components/theme-toggle";
 import Script from "next/script";
 import "./globals.css";
 
@@ -14,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta
           name="google-adsense-account"
@@ -22,6 +23,19 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+        >{`
+          try {
+            var storedTheme = localStorage.getItem("mirur-theme");
+            var theme = storedTheme === "dark" || storedTheme === "light"
+              ? storedTheme
+              : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.style.colorScheme = theme;
+          } catch (error) {}
+        `}</Script>
         <Script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7337526374337325"
@@ -40,9 +54,12 @@ export default function RootLayout({
                   <h1 className="brand-title">Mirur</h1>
                 </div>
               </div>
-              <p className="page-subtitle" style={{ marginTop: "6px" }}>
-                Your personalized news feed
-              </p>
+              <div className="topbar-meta">
+                <p className="page-subtitle" style={{ marginTop: "6px" }}>
+                  Your personalized news feed
+                </p>
+                <ThemeToggle />
+              </div>
             </div>
           </header>
 

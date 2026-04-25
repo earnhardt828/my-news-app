@@ -1,8 +1,10 @@
 "use client";
 
 import AdSlot from "../components/ad-slot";
+import ArticleReaderButton from "../components/article-reader-button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import ShareButton from "../components/share-button";
 import { supabase } from "../../lib/supabase";
 
 type FeedArticle = {
@@ -232,6 +234,12 @@ export default function MyFeed() {
                 </Link>
 
                 <div className="engagement-row">
+                  <ArticleReaderButton title={article.title} url={article.url} />
+                  <ShareButton
+                    path={`/article/${article.id}`}
+                    title={article.title}
+                    url={article.url}
+                  />
                   <button
                     className="button button-secondary"
                     onClick={() => handleToggleSaveArticle(article)}
