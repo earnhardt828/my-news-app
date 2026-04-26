@@ -1,9 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import ArticleReaderButton from "../../components/article-reader-button";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ShareButton from "../../components/share-button";
 import { supabase } from "../../../lib/supabase";
@@ -100,6 +99,7 @@ function formatRelativeTime(timestamp: string | null) {
 
 export default function ArticleDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const articleId = Number(params.id);
   const [article, setArticle] = useState<ArticleRecord | null>(null);
   const [comments, setComments] = useState<ArticleComment[]>([]);
@@ -364,9 +364,25 @@ export default function ArticleDetailPage() {
     "No additional content available.";
   const storyPreview = rawStory.length > 320 ? rawStory.slice(0, 320).trimEnd() : rawStory;
   const hasMoreStory = rawStory.length > storyPreview.length;
+  const storyEndsTruncated = !isExpanded && hasMoreStory;
+
+  const handleClose = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/");
+  };
 
   return (
     <section className="page-shell">
+      <div className="article-close-bar">
+        <button className="article-close-button" onClick={handleClose} aria-label="Close article">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+
       <section className="section-card article-detail-hero">
         <div className="stack" style={{ gap: "10px" }}>
           <div className="article-detail-kicker-row">
@@ -419,25 +435,30 @@ export default function ArticleDetailPage() {
           <div className="article-detail-section">
             <p className="article-detail-label">Full story</p>
             <div className="article-detail-copy">
-              {isExpanded ? rawStory : storyPreview}
-              {!isExpanded && hasMoreStory ? "..." : null}
+              {isExpanded ? (
+                rawStory
+              ) : (
+                <>
+                  {storyPreview}
+                  {storyEndsTruncated ? "..." : null}{" "}
+                  {storyEndsTruncated ? (
+                    <button
+                      className="article-more-button"
+                      onClick={() => setIsExpanded(true)}
+                    >
+                      More
+                    </button>
+                  ) : null}
+                </>
+              )}
             </div>
-            {hasMoreStory && !isExpanded ? (
-              <button
-                className="article-more-button"
-                onClick={() => setIsExpanded(true)}
-              >
-                more
-              </button>
-            ) : null}
             {article.url ? (
               <div className="article-story-links">
-                <ArticleReaderButton title={article.title} url={article.url} />
                 <a
                   href={article.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="article-source-link"
+                  className="button button-secondary article-original-button"
                 >
                   Original article
                 </a>
@@ -445,25 +466,9 @@ export default function ArticleDetailPage() {
             ) : null}
           </div>
         </div>
-
-        <Link href="/" className="button button-secondary">
-          Back to Trending
-        </Link>
       </section>
 
       <section className="section-card stack">
-        <div>
-          <p className="page-eyebrow article-comments-eyebrow">
-            Comments
-          </p>
-          <h3 className="article-comments-title">
-            Reader discussion
-          </h3>
-          <p className="article-comments-subtitle">
-            Reactions from the Mirur community on this story.
-          </p>
-        </div>
-
         {comments.length === 0 ? (
           <div className="empty-state">
             <strong>No comments yet</strong>
