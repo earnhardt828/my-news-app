@@ -173,7 +173,7 @@ export async function GET() {
     );
 
     const videos = flattenedSearchResults
-      .map((item) => {
+      .map((item): VideoFeedItem | null => {
         const youtubeId = item.id?.videoId;
 
         if (!youtubeId) {
@@ -199,9 +199,9 @@ export async function GET() {
           watchUrl: `https://www.youtube.com/watch?v=${youtubeId}`,
           embedUrl: `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`,
           fallback: false,
-        } satisfies VideoFeedItem;
+        };
       })
-      .filter((video): video is VideoFeedItem => Boolean(video))
+      .filter((video): video is VideoFeedItem => video !== null)
       .sort((a, b) => {
         const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
         const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
