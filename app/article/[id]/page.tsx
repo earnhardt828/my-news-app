@@ -41,6 +41,7 @@ type DbComment = {
 type DbLike = {
   id: number;
   article_id: number;
+  user_id: string | null;
 };
 
 type DbProfile = {
@@ -107,6 +108,9 @@ export default function ArticleDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
+  const [likedByCurrentUser, setLikedByCurrentUser] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     async function loadArticle() {
@@ -123,13 +127,25 @@ export default function ArticleDetailPage() {
 
       const [newsRes, likesRes, commentsRes, profilesRes] = await Promise.all([
         fetch("/api/news"),
-        supabase.from("likes").select("id, article_id").eq("article_id", articleId),
+        supabase
+          .from("likes")
+          .select("id, article_id, user_id")
+          .eq("article_id", articleId),
         supabase
           .from("comments")
           .select("id, text, username, user_id, created_at")
           .eq("article_id", articleId),
         supabase.from("profiles").select("id, avatar_url"),
       ]);
+
+      const { data: savedArticlesData } = currentUserId
+        ? await supabase
+            .from("saved_articles")
+            .select("article_id")
+            .eq("user_id", currentUserId)
+            .eq("article_id", articleId)
+            .maybeSingle()
+        : { data: null as { article_id: number } | null };
 
       const { data: blockedUsersData } = currentUserId
         ? await supabase
@@ -156,6 +172,10 @@ export default function ArticleDetailPage() {
 
       setArticle(targetArticle);
       setLikesCount(likes.length);
+      setLikedByCurrentUser(
+        likes.some((like) => like.user_id && like.user_id === currentUserId)
+      );
+      setIsSaved(Boolean(savedArticlesData));
       setBlockedUserIds([...blockedIds]);
       setComments(
         rawComments
@@ -178,6 +198,105 @@ export default function ArticleDetailPage() {
 
     loadArticle();
   }, [articleId]);
+
+  const handleToggleLike = async () => {
+    if (!userId) {
+      alert("Log in to like posts");
+      return;
+    }
+
+    const { data: existing } = await supabase
+      .from("likes")
+      .select("id")
+      .eq("article_id", articleId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from("likes")
+        .delete()
+        .eq("id", existing.id)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("Error removing like:", error);
+        return;
+      }
+
+      setLikedByCurrentUser(false);
+      setLikesCount((prev) => Math.max(0, prev - 1));
+      return;
+    }
+
+    const { error } = await supabase.from("likes").insert({
+      article_id: articleId,
+      user_id: userId,
+    });
+
+    if (error) {
+      console.error("Error saving like:", error);
+      return;
+    }
+
+    setLikedByCurrentUser(true);
+    setLikesCount((prev) => prev + 1);
+  };
+
+  const handleToggleSave = async () => {
+    if (!userId || !article) {
+      alert("Log in to save articles");
+      return;
+    }
+
+    if (isSaved) {
+      const { error } = await supabase
+        .from("saved_articles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("article_id", article.id);
+
+      if (error) {
+        console.error("Error removing saved article:", error);
+        return;
+      }
+
+      setIsSaved(false);
+      return;
+    }
+
+    const { error } = await supabase.from("saved_articles").insert({
+      user_id: userId,
+      article_id: article.id,
+      title: article.title,
+      source: article.source,
+      category: article.category,
+      time: article.time,
+    });
+
+    if (error) {
+      console.error("Error saving article:", error);
+      return;
+    }
+
+    setIsSaved(true);
+  };
+
+  const formatPublishedTimestamp = (publishedAt?: string | null, fallback?: string) => {
+    const date = publishedAt ? new Date(publishedAt) : null;
+
+    if (!date || Number.isNaN(date.getTime())) {
+      return fallback ?? "Unknown";
+    }
+
+    const month = `${date.getMonth() + 1}`.padStart(2, "0");
+    const day = `${date.getDate()}`.padStart(2, "0");
+    const year = date.getFullYear();
+    const hours = date.getHours();
+    const minutes = `${date.getMinutes()}`.padStart(2, "0");
+
+    return `${month}/${day}/${year} ${hours}:${minutes}`;
+  };
 
   const handleBlockUser = async (blockedUserId: string, blockedUsername?: string | null) => {
     if (!userId) {
@@ -239,22 +358,25 @@ export default function ArticleDetailPage() {
     );
   }
 
+  const rawStory =
+    article.content?.replace(/\s*\[\+\d+\s+chars\]\s*$/i, "").trim() ||
+    article.description?.trim() ||
+    "No additional content available.";
+  const storyPreview = rawStory.length > 320 ? rawStory.slice(0, 320).trimEnd() : rawStory;
+  const hasMoreStory = rawStory.length > storyPreview.length;
+
   return (
     <section className="page-shell">
       <section className="section-card article-detail-hero">
         <div className="stack" style={{ gap: "10px" }}>
-          <p className="page-eyebrow">Article</p>
           <div className="article-detail-kicker-row">
-            <span className="chip chip-accent">{article.category}</span>
             <span className="article-detail-source">{article.source}</span>
+            <span className="chip chip-accent">{article.category}</span>
           </div>
           <h2 className="article-detail-title">{article.title}</h2>
           <p className="article-detail-byline">
-            Published {article.publishedAt ?? article.time} by {article.source}
+            Published: {formatPublishedTimestamp(article.publishedAt, article.time)}
           </p>
-          {article.description ? (
-            <p className="article-detail-lede">{article.description}</p>
-          ) : null}
         </div>
 
         {article.image ? (
@@ -265,25 +387,62 @@ export default function ArticleDetailPage() {
           />
         ) : null}
 
-        <div className="engagement-row article-detail-actions">
-          <span className="stat-pill">❤️ {likesCount} likes</span>
-          <span className="stat-pill">💬 {comments.length} comments</span>
-          <ArticleReaderButton title={article.title} url={article.url} />
+        <div className="engagement-row article-detail-actions trending-stats-row article-detail-stats-row">
+          <button
+            className={`icon-action-pill ${likedByCurrentUser ? "icon-action-pill-active" : ""}`}
+            onClick={handleToggleLike}
+            aria-label={likedByCurrentUser ? "Unlike article" : "Like article"}
+          >
+            <span aria-hidden="true">{likedByCurrentUser ? "♥" : "♡"}</span>
+            <span>{likesCount}</span>
+          </button>
+          <button className="icon-action-pill icon-action-pill-static" aria-label="Comments">
+            <span aria-hidden="true">💬</span>
+            <span>{comments.length}</span>
+          </button>
           <ShareButton
             path={`/article/${article.id}`}
             title={article.title}
             url={article.url}
+            iconOnly
           />
+          <button
+            className={`bookmark-button ${isSaved ? "bookmark-button-active" : ""}`}
+            onClick={handleToggleSave}
+            aria-label={isSaved ? "Remove bookmark" : "Save article"}
+          >
+            {isSaved ? "🔖" : "📑"}
+          </button>
         </div>
 
         <div className="article-detail-body">
           <div className="article-detail-section">
             <p className="article-detail-label">Full story</p>
             <div className="article-detail-copy">
-              {article.content ??
-                article.description ??
-                "No additional content available."}
+              {isExpanded ? rawStory : storyPreview}
+              {!isExpanded && hasMoreStory ? "..." : null}
             </div>
+            {hasMoreStory && !isExpanded ? (
+              <button
+                className="article-more-button"
+                onClick={() => setIsExpanded(true)}
+              >
+                more
+              </button>
+            ) : null}
+            {article.url ? (
+              <div className="article-story-links">
+                <ArticleReaderButton title={article.title} url={article.url} />
+                <a
+                  href={article.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="article-source-link"
+                >
+                  Original article
+                </a>
+              </div>
+            ) : null}
           </div>
         </div>
 
