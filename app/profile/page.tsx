@@ -91,6 +91,7 @@ export default function Profile() {
   const [username, setUsername] = useState("");
   const [currentUser, setCurrentUser] = useState<UserState>(null);
   const [message, setMessage] = useState("");
+  const [signUpNotice, setSignUpNotice] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -238,6 +239,7 @@ export default function Profile() {
 
   const handleSignUp = async () => {
     setMessage("");
+    setSignUpNotice("");
 
     const { data, error } = await supabase.auth.signUp({ email, password });
 
@@ -246,26 +248,19 @@ export default function Profile() {
       return;
     }
 
-    const sessionUser = data.session?.user ?? data.user ?? null;
-
-    if (sessionUser?.id) {
-      setIsLoading(true);
-
-      try {
-        await refreshCurrentUserSession();
-        setMessage("Signed up and logged in.");
-      } finally {
-        setIsLoading(false);
-      }
-
-      return;
+    if (data.session) {
+      await supabase.auth.signOut();
     }
 
-    setMessage("Sign-up successful. Check your email to confirm your account, then log in.");
+    clearProfileState();
+    setCurrentUser(null);
+    setPassword("");
+    setSignUpNotice("Check your email to confirm your account.");
   };
 
   const handleSignIn = async () => {
     setMessage("");
+    setSignUpNotice("");
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -528,6 +523,12 @@ export default function Profile() {
             </div>
 
             {message ? <div className="chip chip-accent">{message}</div> : null}
+            {signUpNotice ? (
+              <div className="status-message status-success">
+                <strong>Check your email to confirm your account.</strong>
+                <span>Didn&apos;t receive it? Try signing up again in a moment to resend the email.</span>
+              </div>
+            ) : null}
           </section>
         </div>
       ) : (
