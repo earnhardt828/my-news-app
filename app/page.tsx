@@ -1113,21 +1113,6 @@ export default function Home() {
                         className="article-image"
                       />
                     ) : null}
-
-                    <div className="trending-source-row">
-                      <div className="trending-source-brand">
-                        <span className="source-avatar" aria-hidden="true">
-                          {article.source.charAt(0).toUpperCase()}
-                        </span>
-                        <span className="trending-source-name">{article.source}</span>
-                      </div>
-                      <span className="chip chip-accent">
-                        {getCategoryLabel(article.category)}
-                      </span>
-                    </div>
-                    <span className="trending-published-date">
-                      {formatPublishedDate(article.publishedAt, article.time)}
-                    </span>
                   </div>
                 </Link>
 
@@ -1153,6 +1138,12 @@ export default function Home() {
                     <span aria-hidden="true">💬</span>
                     <span>{article.comments.length}</span>
                   </button>
+                  <ShareButton
+                    path={`/article/${article.id}`}
+                    title={article.title}
+                    url={article.url}
+                    iconOnly
+                  />
                   <button
                     className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
                     onClick={() => handleToggleSaveArticle(article)}
@@ -1163,12 +1154,21 @@ export default function Home() {
                   </button>
                 </div>
 
-                <div className="trending-card-actions">
-                  <ShareButton
-                    path={`/article/${article.id}`}
-                    title={article.title}
-                    url={article.url}
-                  />
+                <div className="news-card-header">
+                  <div className="trending-source-row">
+                    <div className="trending-source-brand">
+                      <span className="source-avatar" aria-hidden="true">
+                        {article.source.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="trending-source-name">{article.source}</span>
+                    </div>
+                    <span className="chip chip-accent">
+                      {getCategoryLabel(article.category)}
+                    </span>
+                  </div>
+                  <span className="trending-published-date">
+                    {formatPublishedDate(article.publishedAt, article.time)}
+                  </span>
                 </div>
               </article>
 

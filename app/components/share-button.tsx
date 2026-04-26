@@ -6,9 +6,17 @@ type ShareButtonProps = {
   path: string;
   title: string;
   url?: string | null;
+  iconOnly?: boolean;
+  className?: string;
 };
 
-export default function ShareButton({ path, title, url }: ShareButtonProps) {
+export default function ShareButton({
+  path,
+  title,
+  url,
+  iconOnly = false,
+  className = "",
+}: ShareButtonProps) {
   const [status, setStatus] = useState<"idle" | "sharing" | "copied">("idle");
 
   const handleShare = async () => {
@@ -44,9 +52,23 @@ export default function ShareButton({ path, title, url }: ShareButtonProps) {
     }
   };
 
+  const label =
+    status === "sharing" ? "Sharing..." : status === "copied" ? "Copied" : "Share";
+
   return (
-    <button className="button button-secondary" onClick={handleShare}>
-      {status === "sharing" ? "Sharing..." : status === "copied" ? "Copied" : "Share"}
+    <button
+      className={`${iconOnly ? "icon-action-pill icon-action-pill-icon-only" : "button button-secondary"} ${className}`.trim()}
+      onClick={handleShare}
+      aria-label={label}
+    >
+      {iconOnly ? (
+        <>
+          <span aria-hidden="true">{status === "copied" ? "✓" : "↗"}</span>
+          {status === "sharing" || status === "copied" ? <span>{label}</span> : null}
+        </>
+      ) : (
+        label
+      )}
     </button>
   );
 }

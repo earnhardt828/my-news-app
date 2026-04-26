@@ -487,19 +487,9 @@ input {
 }
 
 .trending-stats-row {
+  justify-content: space-between;
+  gap: 8px;
   padding-top: 2px;
-}
-
-.trending-card-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-top: 4px;
-  border-top: 1px solid var(--border);
-}
-
-.trending-card-actions .button {
-  flex: 0 1 auto;
 }
 
 .bookmark-button {
@@ -534,6 +524,13 @@ input {
   background: var(--button-secondary-bg);
   color: var(--foreground);
   font-weight: 800;
+}
+
+.icon-action-pill-icon-only {
+  justify-content: center;
+  width: 46px;
+  min-width: 46px;
+  padding: 0;
 }
 
 .icon-action-pill-active {
