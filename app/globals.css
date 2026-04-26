@@ -513,6 +513,12 @@ input {
   width: fit-content;
 }
 
+.article-continue-button {
+  width: fit-content;
+  color: #eb347d;
+  border-color: color-mix(in srgb, #eb347d 32%, var(--border));
+}
+
 .article-comments-eyebrow {
   margin-bottom: 8px;
 }

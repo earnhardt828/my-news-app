@@ -358,13 +358,30 @@ export default function ArticleDetailPage() {
     );
   }
 
-  const rawStory =
-    article.content?.replace(/\s*\[\+\d+\s+chars\]\s*$/i, "").trim() ||
-    article.description?.trim() ||
-    "No additional content available.";
-  const storyPreview = rawStory.length > 320 ? rawStory.slice(0, 320).trimEnd() : rawStory;
-  const hasMoreStory = rawStory.length > storyPreview.length;
-  const storyEndsTruncated = !isExpanded && hasMoreStory;
+  const rawContent = article.content?.trim() ?? "";
+  const rawDescription = article.description?.trim() ?? "";
+  const hadContentTruncationMarker = /\[\+\d+\s+chars\]\s*$/i.test(rawContent);
+  const cleanedContent = rawContent
+    .replace(/\s*\[\+\d+\s+chars\]\s*$/i, "")
+    .trim();
+  const contentEndsWithEllipsis = /(\.\.\.|…)\s*$/.test(cleanedContent);
+  const descriptionEndsWithEllipsis = /(\.\.\.|…)\s*$/.test(rawDescription);
+  const localFullStory = cleanedContent || rawDescription || "No additional content available.";
+  const previewText =
+    rawDescription ||
+    (hadContentTruncationMarker || contentEndsWithEllipsis
+      ? cleanedContent
+      : localFullStory.length > 320
+        ? `${localFullStory.slice(0, 320).trimEnd()}...`
+        : localFullStory);
+  const hasAdditionalLocalContent =
+    !hadContentTruncationMarker &&
+    !contentEndsWithEllipsis &&
+    localFullStory.length > previewText.length;
+  const shouldLinkOutForMore =
+    !hasAdditionalLocalContent &&
+    Boolean(article.url) &&
+    (hadContentTruncationMarker || contentEndsWithEllipsis || descriptionEndsWithEllipsis);
 
   const handleClose = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -436,12 +453,11 @@ export default function ArticleDetailPage() {
             <p className="article-detail-label">Full story</p>
             <div className="article-detail-copy">
               {isExpanded ? (
-                rawStory
+                localFullStory
               ) : (
                 <>
-                  {storyPreview}
-                  {storyEndsTruncated ? "..." : null}{" "}
-                  {storyEndsTruncated ? (
+                  {previewText}{" "}
+                  {hasAdditionalLocalContent ? (
                     <button
                       className="article-more-button"
                       onClick={() => setIsExpanded(true)}
@@ -452,6 +468,18 @@ export default function ArticleDetailPage() {
                 </>
               )}
             </div>
+            {shouldLinkOutForMore ? (
+              <div className="article-story-links">
+                <a
+                  href={article.url!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="button button-secondary article-continue-button"
+                >
+                  Continue reading on original site
+                </a>
+              </div>
+            ) : null}
             {article.url ? (
               <div className="article-story-links">
                 <a
