@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import VideoFeedCard from "../components/video-feed-card";
+import Image from "next/image";
+import ShareButton from "../components/share-button";
 import {
   buildVideoEmbedUrl,
   initialVideos,
   normalizeVideoFeedItems,
   type VideoApiItem,
+  type VideoItem,
 } from "../../lib/video-feed";
 
 export default function VideosPage() {
-  const [videos, setVideos] = useState(initialVideos);
+  const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
   );
@@ -83,11 +85,10 @@ export default function VideosPage() {
           }
         });
 
-        setAutoplayVideoId(highestRatio >= 0.6 ? nextAutoplayId : null);
+        setAutoplayVideoId(highestRatio >= 0.72 ? nextAutoplayId : null);
       },
       {
-        threshold: [0.2, 0.4, 0.6, 0.8],
-        rootMargin: "0px 0px -12% 0px",
+        threshold: [0.35, 0.5, 0.72, 0.88],
       }
     );
 
@@ -141,44 +142,130 @@ export default function VideosPage() {
   };
 
   return (
-    <section className="page-shell">
-      {statusMessage ? <div className="chip chip-accent">{statusMessage}</div> : null}
+    <section className="reels-shell">
+      {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
 
       {isLoading ? (
-        <div className="stack">
+        <div className="reels-feed">
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="skeleton-card">
-              <div className="video-frame video-card-theme-rose" />
-              <div className="stack" style={{ gap: "8px" }}>
-                <div className="skeleton-line skeleton-title-lg skeleton-body-lg" />
-                <div className="skeleton-line skeleton-body-md" />
-                <div className="skeleton-action-row">
-                  <div className="skeleton-line skeleton-stat" />
-                  <div className="skeleton-line skeleton-stat" />
-                  <div className="skeleton-line skeleton-button" />
-                </div>
-              </div>
+            <div key={index} className="reel-card reel-card-skeleton">
+              <div className="reel-skeleton-surface" />
             </div>
           ))}
         </div>
       ) : (
-        <div className="video-feed">
+        <div className="reels-feed">
           {videos.map((video) => {
             const isAutoplaying = autoplayVideoId === video.id && !video.fallback;
 
             return (
-              <VideoFeedCard
-                key={video.id}
-                video={video}
-                isAutoplaying={isAutoplaying}
-                onToggleLike={handleToggleLike}
-                onToggleSave={handleToggleSave}
-                onOpenComments={setActiveCommentsVideoId}
-                onOpenPlayer={setActiveVideoId}
-                frameRef={(node) => {
-                  videoFrameRefs.current[video.id] = node;
-                }}
-              />
+              <article key={video.id} className="reel-card">
+                <div
+                  ref={(node) => {
+                    videoFrameRefs.current[video.id] = node;
+                  }}
+                  data-video-id={video.id}
+                  className={`reel-media ${video.theme ?? "video-card-theme-rose"}`}
+                >
+                  {isAutoplaying ? (
+                    <iframe
+                      src={buildVideoEmbedUrl(video.youtubeId, true)}
+                      title={video.title}
+                      className="reel-video-frame"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <button
+                      className="reel-media-button"
+                      onClick={() => setActiveVideoId(video.id)}
+                      aria-label={`Play ${video.title}`}
+                    >
+                      {video.thumbnailUrl ? (
+                        <Image
+                          src={video.thumbnailUrl}
+                          alt={video.title}
+                          fill
+                          sizes="100vw"
+                          className="reel-thumbnail"
+                          unoptimized
+                        />
+                      ) : null}
+                      <div className="reel-play-overlay">
+                        <span className="video-play-badge" aria-hidden="true">
+                          ▶
+                        </span>
+                      </div>
+                    </button>
+                  )}
+
+                  <div className="reel-gradient" />
+
+                  <div className="reel-meta">
+                    <span className="reel-creator">{video.creator}</span>
+                    <h2 className="reel-title">{video.title}</h2>
+                    {video.publishedAt ? (
+                      <span className="reel-date">
+                        {new Intl.DateTimeFormat("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        }).format(new Date(video.publishedAt))}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="reel-actions">
+                    <button
+                      className={`reel-action-button ${
+                        video.liked ? "reel-action-button-active" : ""
+                      }`}
+                      onClick={() => handleToggleLike(video.id)}
+                      aria-label={video.liked ? "Unlike video" : "Like video"}
+                    >
+                      <span className="reel-action-icon" aria-hidden="true">
+                        {video.liked ? "♥" : "♡"}
+                      </span>
+                      <span className="reel-action-value">{video.likes}</span>
+                    </button>
+                    <button
+                      className="reel-action-button"
+                      onClick={() => setActiveCommentsVideoId(video.id)}
+                      aria-label="Open video comments"
+                    >
+                      <span className="reel-action-icon" aria-hidden="true">
+                        💬
+                      </span>
+                      <span className="reel-action-value">{video.comments}</span>
+                    </button>
+                    <button
+                      className={`reel-action-button ${
+                        video.saved ? "reel-action-button-active" : ""
+                      }`}
+                      onClick={() => handleToggleSave(video.id)}
+                      aria-label={video.saved ? "Remove bookmark" : "Save video"}
+                    >
+                      <span className="reel-action-icon" aria-hidden="true">
+                        {video.saved ? "🔖" : "📑"}
+                      </span>
+                    </button>
+                    <div className="reel-share-wrap">
+                      <ShareButton
+                        path={`/videos#video-${video.id}`}
+                        title={video.title}
+                        url={
+                          video.watchUrl ||
+                          `https://my-news-app-omega-orpin.vercel.app/videos#video-${video.id}`
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {video.fallback ? (
+                    <span className="reel-fallback-pill">Placeholder video</span>
+                  ) : null}
+                </div>
+              </article>
             );
           })}
         </div>

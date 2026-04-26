@@ -1191,6 +1191,211 @@ input {
   gap: 18px;
 }
 
+.reels-shell {
+  display: grid;
+  gap: 12px;
+  width: calc(100% + 40px);
+  margin: -8px -20px 0;
+}
+
+.reels-status {
+  margin: 0 20px;
+}
+
+.reels-feed {
+  height: calc(100svh - 132px);
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.reels-feed::-webkit-scrollbar {
+  display: none;
+}
+
+.reel-card {
+  position: relative;
+  min-height: calc(100svh - 132px);
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  background: #06080f;
+}
+
+.reel-card-skeleton {
+  overflow: hidden;
+}
+
+.reel-skeleton-surface {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.08), transparent 35%),
+    linear-gradient(180deg, #221525 0%, #0e1628 100%);
+}
+
+.reel-media {
+  position: relative;
+  width: 100%;
+  min-height: inherit;
+  overflow: hidden;
+  background: #000;
+}
+
+.reel-media-button {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.reel-video-frame,
+.reel-thumbnail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.reel-thumbnail {
+  object-fit: cover;
+}
+
+.reel-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(8, 10, 18, 0.1), rgba(8, 10, 18, 0.28));
+}
+
+.reel-gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(4, 6, 12, 0.08) 0%, rgba(4, 6, 12, 0.18) 44%, rgba(4, 6, 12, 0.78) 100%);
+  pointer-events: none;
+}
+
+.reel-meta {
+  position: absolute;
+  left: 18px;
+  right: 92px;
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  color: white;
+}
+
+.reel-creator {
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.92;
+}
+
+.reel-title {
+  margin: 0;
+  font-size: clamp(1.15rem, 4vw, 1.55rem);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.reel-date {
+  font-size: 0.9rem;
+  font-weight: 700;
+  opacity: 0.82;
+}
+
+.reel-actions {
+  position: absolute;
+  right: 16px;
+  bottom: calc(110px + env(safe-area-inset-bottom));
+  z-index: 2;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.reel-action-button {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: white;
+}
+
+.reel-action-button-active .reel-action-icon,
+.reel-action-button-active .reel-action-value {
+  color: #ff8bb9;
+}
+
+.reel-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.reel-action-value {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.reel-share-wrap :is(.button, .button-secondary) {
+  min-height: 48px;
+  width: 48px;
+  padding: 0;
+  border-radius: 999px;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+
+.reel-share-wrap :is(.button, .button-secondary) span:last-child {
+  display: none;
+}
+
+.reel-fallback-pill {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+}
+
 .video-card {
   display: grid;
   gap: 14px;
@@ -1429,6 +1634,21 @@ input {
   .section-card,
   .news-card {
     padding: 22px;
+  }
+
+  .reels-shell {
+    width: 100%;
+    margin: -8px 0 0;
+  }
+
+  .reels-status {
+    margin: 0;
+  }
+
+  .reels-feed,
+  .reel-card {
+    height: calc(100svh - 150px);
+    min-height: calc(100svh - 150px);
   }
 
   .split-grid {
