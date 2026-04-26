@@ -202,17 +202,6 @@ export default function Profile() {
     setMessage("Signed in.");
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-    setUsername("");
-    setAvatarUrl("");
-    setCategories([]);
-    setMyComments([]);
-    setSavedArticles([]);
-    setMessage("Signed out.");
-  };
-
   const handleSaveUsername = async () => {
     if (!currentUser?.id) {
       setMessage("Log in first.");
@@ -409,99 +398,24 @@ export default function Profile() {
   };
 
   const initials = username.trim().charAt(0).toUpperCase() || "N";
+  const isSignedIn = Boolean(currentUser?.id);
+  const currentUserId = currentUser?.id ?? "";
 
   return (
     <section className="page-shell">
-      <div className="page-hero">
-        <div className="page-title-row">
-          <div>
-            <p className="page-eyebrow">Profile Studio</p>
-            <h2 className="page-title">Shape your news identity.</h2>
-            <p className="page-subtitle">
-              Update your username, avatar, and favorite categories while keeping
-              your comments and account details in one place.
-            </p>
-          </div>
-
-          <Link href="/settings" className="icon-button" aria-label="Open settings">
-            <span aria-hidden="true">⚙</span>
-            <span>Settings</span>
-          </Link>
-        </div>
-      </div>
-
       {isLoading ? (
         <div className="loading-state">
           <strong>Loading profile</strong>
           <span>Fetching your account, categories, and comment history.</span>
         </div>
-      ) : (
-        <div className="split-grid">
-          <section className="section-card stack">
-            <div className="profile-hero">
-              {currentUser?.id ? (
-                <Link href={`/user/${currentUser.id}`} className="profile-hero">
-                  <div className="avatar-shell">
-                    {avatarUrl ? (
-                      <Image
-                        src={avatarUrl}
-                        alt="Profile"
-                        width={84}
-                        height={84}
-                        unoptimized
-                        style={{
-                          width: "84px",
-                          height: "84px",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <span className="avatar-fallback">{initials}</span>
-                    )}
-                  </div>
-
-                  <div className="profile-meta">
-                    <h3 className="profile-name">{username || "News Reader"}</h3>
-                    <span className="muted">
-                      {currentUser?.email ?? "Not signed in"}
-                    </span>
-                    <span className="chip">
-                      {categories.length} categories selected
-                    </span>
-                  </div>
-                </Link>
-              ) : (
-                <>
-                  <div className="avatar-shell">
-                    {avatarUrl ? (
-                      <Image
-                        src={avatarUrl}
-                        alt="Profile"
-                        width={84}
-                        height={84}
-                        unoptimized
-                        style={{
-                          width: "84px",
-                          height: "84px",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <span className="avatar-fallback">{initials}</span>
-                    )}
-                  </div>
-
-                  <div className="profile-meta">
-                    <h3 className="profile-name">{username || "News Reader"}</h3>
-                    <span className="muted">
-                      {currentUser?.email ?? "Not signed in"}
-                    </span>
-                    <span className="chip">
-                      {categories.length} categories selected
-                    </span>
-                  </div>
-                </>
-              )}
+      ) : !isSignedIn ? (
+        <div className="profile-auth-shell">
+          <section className="section-card stack profile-auth-card">
+            <div className="stack" style={{ gap: "8px" }}>
+              <h2 className="profile-name">Welcome to Mirur</h2>
+              <p className="muted profile-auth-helper">
+                Create an account to save your profile, comments, and feed.
+              </p>
             </div>
 
             <div className="input-row">
@@ -522,16 +436,48 @@ export default function Profile() {
               />
             </div>
 
-            <div className="toolbar">
-              <button className="button button-secondary" onClick={handleSignUp}>
+            <div className="toolbar profile-auth-actions">
+              <button className="button button-accent" onClick={handleSignUp}>
                 Sign Up
               </button>
-              <button className="button button-accent" onClick={handleSignIn}>
+              <button className="button button-secondary" onClick={handleSignIn}>
                 Log In
               </button>
-              <button className="button button-secondary" onClick={handleSignOut}>
-                Log Out
-              </button>
+            </div>
+
+            {message ? <div className="chip chip-accent">{message}</div> : null}
+          </section>
+        </div>
+      ) : (
+        <div className="split-grid">
+          <section className="section-card stack">
+            <div className="profile-hero">
+              <Link href={`/user/${currentUserId}`} className="profile-hero">
+                <div className="avatar-shell">
+                  {avatarUrl ? (
+                    <Image
+                      src={avatarUrl}
+                      alt="Profile"
+                      width={84}
+                      height={84}
+                      unoptimized
+                      style={{
+                        width: "84px",
+                        height: "84px",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <span className="avatar-fallback">{initials}</span>
+                  )}
+                </div>
+
+                <div className="profile-meta">
+                  <h3 className="profile-name">{username || "News Reader"}</h3>
+                  <span className="muted">{currentUser?.email}</span>
+                  <span className="chip">{categories.length} categories selected</span>
+                </div>
+              </Link>
             </div>
 
             <div className="input-row">
@@ -685,47 +631,6 @@ export default function Profile() {
                   ))}
                 </div>
               )}
-            </section>
-
-            <section className="section-card stack">
-              <div>
-                <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                  Settings & Legal
-                </p>
-                <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                  Privacy, terms, and safety
-                </h3>
-              </div>
-
-              <div className="comment-list">
-                <Link href="/privacy" className="comment-card">
-                  <strong>Privacy Policy</strong>
-                  <div className="muted" style={{ marginTop: "6px" }}>
-                    Review how account, comments, and profile data are handled.
-                  </div>
-                </Link>
-
-                <Link href="/terms" className="comment-card">
-                  <strong>Terms of Use</strong>
-                  <div className="muted" style={{ marginTop: "6px" }}>
-                    See the basic rules for using the app and posting content.
-                  </div>
-                </Link>
-
-                <Link href="/community-guidelines" className="comment-card">
-                  <strong>Community Guidelines</strong>
-                  <div className="muted" style={{ marginTop: "6px" }}>
-                    Learn what behavior is expected in comments and reports.
-                  </div>
-                </Link>
-              </div>
-
-              <div className="comment-card">
-                <strong>Report abuse or safety issue</strong>
-                <div className="muted" style={{ marginTop: "6px" }}>
-                  Placeholder contact: support@mirur.app
-                </div>
-              </div>
             </section>
           </div>
         </div>

@@ -1153,6 +1153,28 @@ input {
   align-items: center;
 }
 
+.profile-auth-shell {
+  padding-top: 4px;
+}
+
+.profile-auth-card {
+  width: min(100%, 560px);
+  margin: 0 auto;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 20px 48px rgba(20, 33, 61, 0.12);
+}
+
+.profile-auth-helper {
+  margin: 0;
+  max-width: 32ch;
+  line-height: 1.55;
+}
+
+.profile-auth-actions .button {
+  flex: 1 1 180px;
+}
+
 .avatar-shell {
   display: inline-flex;
   align-items: center;
@@ -1729,6 +1751,10 @@ input {
   .split-grid {
     grid-template-columns: 1.15fr 0.85fr;
     align-items: start;
+  }
+
+  .profile-auth-shell {
+    padding-top: 12px;
   }
 
   .settings-inline-form {
