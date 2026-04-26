@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ShareButton from "../../components/share-button";
+import SourceBadge from "../../components/source-badge";
 import { supabase } from "../../../lib/supabase";
 
 type ArticleRecord = {
@@ -403,7 +404,10 @@ export default function ArticleDetailPage() {
       <section className="section-card article-detail-hero">
         <div className="stack" style={{ gap: "10px" }}>
           <div className="article-detail-kicker-row">
-            <span className="article-detail-source">{article.source}</span>
+            <span className="article-detail-source-wrap">
+              <SourceBadge sourceName={article.source} />
+              <span className="article-detail-source">{article.source}</span>
+            </span>
             <span className="chip chip-accent">{article.category}</span>
           </div>
           <h2 className="article-detail-title">{article.title}</h2>

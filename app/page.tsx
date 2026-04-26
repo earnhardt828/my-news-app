@@ -1,6 +1,7 @@
 "use client";
 
 import AdSlot from "./components/ad-slot";
+import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
@@ -1109,9 +1110,7 @@ export default function Home() {
                     <div className="news-card-header">
                       <div className="trending-source-row">
                         <div className="trending-source-brand">
-                          <span className="source-avatar" aria-hidden="true">
-                            {article.source.charAt(0).toUpperCase()}
-                          </span>
+                          <SourceBadge sourceName={article.source} />
                           <span className="trending-source-name">{article.source}</span>
                         </div>
                         <span className="chip chip-accent trending-category-pill">
