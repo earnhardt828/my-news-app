@@ -42,11 +42,13 @@ type VideoFeedItem = {
 };
 
 const APPROVED_CHANNELS: ApprovedChannel[] = [
-  { channelId: "UCupvZG-5ko_eiXAupbDfxWw", name: "CNN" },
-  { channelId: "UCeY0bbntWzzVIaj2z3QigXg", name: "NBC News" },
-  { channelId: "UCBi2mrWuNuyYy4gbM6fU18Q", name: "ABC News" },
-  { channelId: "UC8p1vwvWtl6T73JiExfWs1g", name: "CBS News" },
   { channelId: "UC16niRr50-MSBwiO3YDb3RA", name: "BBC News" },
+  { channelId: "UCupvZG-5ko_eiXAupbDfxWw", name: "CNN" },
+  { channelId: "UCXIJgqnII2ZOINSWNOGFThA", name: "Fox News" },
+  { channelId: "UCrp_UI8XtuYfpiqluWLD7Lw", name: "CNBC" },
+  { channelId: "UCUMZ7gohGI9HcU9VNsr2FJQ", name: "Bloomberg" },
+  { channelId: "UChqUTb7kYRX8-EiaN3XFrSQ", name: "Reuters" },
+  { channelId: "UC52X5wxOL_s5yw0dQk7NtgA", name: "Associated Press" },
 ];
 
 const FALLBACK_VIDEOS: VideoFeedItem[] = [
@@ -116,13 +118,13 @@ async function fetchRecentVideosForChannel(
 }
 
 export async function GET() {
-  const apiKey = process.env.YOUTUBE_API_KEY;
+  const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
 
   if (!apiKey) {
     return Response.json({
       videos: FALLBACK_VIDEOS,
       fallback: true,
-      message: "Set YOUTUBE_API_KEY to load real news videos.",
+      message: "Set NEXT_PUBLIC_YOUTUBE_API_KEY to load real news videos.",
     });
   }
 

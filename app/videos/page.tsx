@@ -363,7 +363,8 @@ export default function VideosPage() {
               <div className="empty-state">
                 <strong>Placeholder video</strong>
                 <span>
-                  Add `YOUTUBE_API_KEY` to `.env.local` to load real YouTube embeds.
+                  Add `NEXT_PUBLIC_YOUTUBE_API_KEY` to `.env.local` to load real
+                  YouTube embeds.
                 </span>
               </div>
             )}
