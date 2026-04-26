@@ -1,3 +1,4 @@
+import AppHeader from "./components/app-header";
 import BottomNav from "./components/bottom-nav";
 import Script from "next/script";
 import "./globals.css";
@@ -44,7 +45,7 @@ export default function RootLayout({
         <div className="app-shell">
           <header className="topbar">
             <div className="topbar-inner">
-              <h1 className="brand-title">Mirur</h1>
+              <AppHeader />
             </div>
           </header>
 
