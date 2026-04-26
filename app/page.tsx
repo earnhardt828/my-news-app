@@ -1106,14 +1106,6 @@ export default function Home() {
                       ) : null}
                     </div>
 
-                    {article.image ? (
-                      <img
-                        src={article.image}
-                        alt={article.title}
-                        className="article-image"
-                      />
-                    ) : null}
-
                     <div className="news-card-header">
                       <div className="trending-source-row">
                         <div className="trending-source-brand">
@@ -1130,6 +1122,14 @@ export default function Home() {
                         {formatPublishedDate(article.publishedAt, article.time)}
                       </span>
                     </div>
+
+                    {article.image ? (
+                      <img
+                        src={article.image}
+                        alt={article.title}
+                        className="article-image"
+                      />
+                    ) : null}
                   </div>
                 </Link>
 

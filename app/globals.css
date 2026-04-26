@@ -308,7 +308,7 @@ input {
 
 .news-card-header {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .trending-published-date {
@@ -316,7 +316,7 @@ input {
   font-size: 0.84rem;
   font-weight: 700;
   line-height: 1.4;
-  padding-left: 42px;
+  padding-left: 44px;
 }
 
 .trending-category-pill {
