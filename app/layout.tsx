@@ -1,5 +1,4 @@
 import BottomNav from "./components/bottom-nav";
-import Image from "next/image";
 import Script from "next/script";
 import "./globals.css";
 
@@ -45,26 +44,7 @@ export default function RootLayout({
         <div className="app-shell">
           <header className="topbar">
             <div className="topbar-inner">
-              <div className="brand-row">
-                <div className="brand-mark">
-                  <Image
-                    src="/mirur-trending-logo.png"
-                    alt="Mirur logo"
-                    width={40}
-                    height={40}
-                    className="brand-logo"
-                    priority
-                  />
-                </div>
-                <div className="brand-copy">
-                  <h1 className="brand-title">Mirur</h1>
-                </div>
-              </div>
-              <div className="topbar-meta">
-                <p className="page-subtitle" style={{ marginTop: "6px" }}>
-                  Your personalized news feed
-                </p>
-              </div>
+              <h1 className="brand-title">Mirur</h1>
             </div>
           </header>
 
