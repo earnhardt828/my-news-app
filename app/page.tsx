@@ -1098,14 +1098,6 @@ export default function Home() {
             <div key={article.id} className="stack">
               <article className="news-card">
                 <Link href={`/article/${article.id}`} className="article-link">
-                  {article.image ? (
-                    <img
-                      src={article.image}
-                      alt={article.title}
-                      className="article-image"
-                    />
-                  ) : null}
-
                   <div className="news-card-body">
                     <div className="trending-title-row">
                       <h3 className="trending-article-title">{article.title}</h3>
@@ -1113,6 +1105,14 @@ export default function Home() {
                         <span className="chip trending-rank-badge">Top {index + 1}</span>
                       ) : null}
                     </div>
+
+                    {article.image ? (
+                      <img
+                        src={article.image}
+                        alt={article.title}
+                        className="article-image"
+                      />
+                    ) : null}
 
                     <div className="trending-source-row">
                       <div className="trending-source-brand">
