@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import ShareButton from "../components/share-button";
 
@@ -90,14 +90,65 @@ function formatPublishedDate(publishedAt: string | null) {
   }).format(date);
 }
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) =>
+      String.fromCharCode(parseInt(code, 16))
+    )
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function cleanVideoTitle(title: string | null | undefined) {
+  const fallbackTitle = "Latest news update";
+
+  if (!title) {
+    return fallbackTitle;
+  }
+
+  const decodedTitle = decodeHtmlEntities(title);
+  const normalizedWhitespace = decodedTitle.replace(/\s+/g, " ").trim();
+  const apostropheFixedTitle = normalizedWhitespace
+    .replace(/(\w)\s*39\s*(\w)/g, "$1'$2")
+    .replace(/\b39(?=s\b)/gi, "'")
+    .replace(/\b39\b/g, " ");
+  const cleanedTitle = apostropheFixedTitle
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\W_]+|[\W_]+$/g, "")
+    .trim();
+
+  if (cleanedTitle.length < 6 || !/[A-Za-z]/.test(cleanedTitle)) {
+    return fallbackTitle;
+  }
+
+  return cleanedTitle;
+}
+
+function buildEmbedUrl(youtubeId: string, autoplay: boolean) {
+  const url = new URL(`https://www.youtube-nocookie.com/embed/${youtubeId}`);
+  url.searchParams.set("autoplay", autoplay ? "1" : "0");
+  url.searchParams.set("mute", "1");
+  url.searchParams.set("playsinline", "1");
+  url.searchParams.set("controls", "1");
+  url.searchParams.set("rel", "0");
+  url.searchParams.set("modestbranding", "1");
+  return url.toString();
+}
+
 export default function VideosPage() {
   const [videos, setVideos] = useState(initialVideos);
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
   );
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [autoplayVideoId, setAutoplayVideoId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
+  const videoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     async function loadVideos() {
@@ -125,6 +176,7 @@ export default function VideosPage() {
 
         const nextVideos = (data.videos ?? initialVideos).map((video, index) => ({
           ...video,
+          title: cleanVideoTitle(video.title),
           saved: video.saved ?? false,
           liked: video.liked ?? false,
           theme: video.theme ?? themes[index % themes.length],
@@ -145,6 +197,63 @@ export default function VideosPage() {
 
     loadVideos();
   }, []);
+
+  useEffect(() => {
+    const playableVideos = videos.filter(
+      (video) => !video.fallback && Boolean(video.youtubeId)
+    );
+
+    if (playableVideos.length === 0) {
+      return;
+    }
+
+    const visibilityMap = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const videoId = (entry.target as HTMLDivElement).dataset.videoId;
+
+          if (!videoId) {
+            return;
+          }
+
+          visibilityMap.set(
+            videoId,
+            entry.isIntersecting ? entry.intersectionRatio : 0
+          );
+        });
+
+        let nextAutoplayId: string | null = null;
+        let highestRatio = 0;
+
+        visibilityMap.forEach((ratio, videoId) => {
+          if (ratio > highestRatio) {
+            highestRatio = ratio;
+            nextAutoplayId = videoId;
+          }
+        });
+
+        setAutoplayVideoId(highestRatio >= 0.6 ? nextAutoplayId : null);
+      },
+      {
+        threshold: [0.2, 0.4, 0.6, 0.8],
+        rootMargin: "0px 0px -12% 0px",
+      }
+    );
+
+    playableVideos.forEach((video) => {
+      const node = videoFrameRefs.current[video.id];
+
+      if (!node) {
+        return;
+      }
+
+      visibilityMap.set(video.id, 0);
+      observer.observe(node);
+    });
+
+    return () => observer.disconnect();
+  }, [videos]);
 
   const activeVideo = useMemo(
     () => videos.find((video) => video.id === activeVideoId) ?? null,
@@ -183,15 +292,6 @@ export default function VideosPage() {
 
   return (
     <section className="page-shell">
-      <div className="page-hero">
-        <p className="page-eyebrow">Videos</p>
-        <h2 className="page-title">Vertical updates made for quick scrolls.</h2>
-        <p className="page-subtitle">
-          Recent clips from curated official YouTube news channels, optimized
-          for a mobile-first feed.
-        </p>
-      </div>
-
       {statusMessage ? <div className="chip chip-accent">{statusMessage}</div> : null}
 
       {isLoading ? (
@@ -212,83 +312,111 @@ export default function VideosPage() {
           ))}
         </div>
       ) : (
-      <div className="video-feed">
-        {videos.map((video) => (
-          <article key={video.id} id={`video-${video.id}`} className="video-card">
-            <button
-              className={`video-frame ${video.theme ?? "video-card-theme-rose"}`}
-              onClick={() => setActiveVideoId(video.id)}
-            >
-              {video.thumbnailUrl ? (
-                <Image
-                  src={video.thumbnailUrl}
-                  alt={video.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 420px"
-                  className="video-thumbnail"
-                  unoptimized
-                />
-              ) : null}
-              <div className="video-frame-overlay">
-                <span className="video-play-badge" aria-hidden="true">
-                  ▶
-                </span>
-                <span className="video-live-pill">
-                  {video.fallback ? "Placeholder video" : "Watch video"}
-                </span>
-              </div>
-            </button>
+        <div className="video-feed">
+          {videos.map((video) => {
+            const isAutoplaying = autoplayVideoId === video.id && !video.fallback;
 
-            <div className="stack" style={{ gap: "10px" }}>
-              <div className="video-meta-row">
-                <div className="stack" style={{ gap: "4px" }}>
-                  <h3 className="video-title">{video.title}</h3>
-                  <span className="video-creator">{video.creator}</span>
-                  <span className="video-date">
-                    Published {formatPublishedDate(video.publishedAt)}
-                  </span>
+            return (
+              <article key={video.id} id={`video-${video.id}`} className="video-card">
+                <div className="stack" style={{ gap: "10px" }}>
+                  <div className="video-meta-row">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <h3 className="video-title">{video.title}</h3>
+                      <span className="video-creator">{video.creator}</span>
+                      <span className="video-date">
+                        Published {formatPublishedDate(video.publishedAt)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    ref={(node) => {
+                      videoFrameRefs.current[video.id] = node;
+                    }}
+                    data-video-id={video.id}
+                    className={`video-frame ${video.theme ?? "video-card-theme-rose"} ${
+                      isAutoplaying ? "video-frame-live" : ""
+                    }`}
+                  >
+                    {isAutoplaying ? (
+                      <iframe
+                        src={buildEmbedUrl(video.youtubeId, true)}
+                        title={video.title}
+                        className="video-player-frame"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <button
+                        className="video-frame-button"
+                        onClick={() => setActiveVideoId(video.id)}
+                        aria-label={`Play ${video.title}`}
+                      >
+                        {video.thumbnailUrl ? (
+                          <Image
+                            src={video.thumbnailUrl}
+                            alt={video.title}
+                            fill
+                            sizes="(max-width: 768px) 100vw, 420px"
+                            className="video-thumbnail"
+                            unoptimized
+                          />
+                        ) : null}
+                        <div className="video-frame-overlay">
+                          <span className="video-play-badge" aria-hidden="true">
+                            ▶
+                          </span>
+                          <span className="video-live-pill">
+                            {video.fallback ? "Placeholder video" : "Tap to play"}
+                          </span>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="engagement-row">
+                    <button
+                      className={`icon-action-pill ${
+                        video.liked ? "icon-action-pill-active" : ""
+                      }`}
+                      onClick={() => handleToggleLike(video.id)}
+                      aria-label={video.liked ? "Unlike video" : "Like video"}
+                    >
+                      <span aria-hidden="true">{video.liked ? "♥" : "♡"}</span>
+                      <span>{video.likes}</span>
+                    </button>
+                    <button
+                      className="icon-action-pill"
+                      onClick={() => setActiveCommentsVideoId(video.id)}
+                      aria-label="Open video comments"
+                    >
+                      <span aria-hidden="true">💬</span>
+                      <span>{video.comments}</span>
+                    </button>
+                    <button
+                      className={`bookmark-button ${video.saved ? "bookmark-button-active" : ""}`}
+                      onClick={() => handleToggleSave(video.id)}
+                      aria-label={video.saved ? "Remove bookmark" : "Save video"}
+                    >
+                      {video.saved ? "🔖" : "📑"}
+                    </button>
+                  </div>
+
+                  <div className="trending-card-actions">
+                    <ShareButton
+                      path={`/videos#video-${video.id}`}
+                      title={video.title}
+                      url={
+                        video.watchUrl ||
+                        `https://my-news-app-omega-orpin.vercel.app/videos#video-${video.id}`
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
-
-              <div className="engagement-row">
-                <button
-                  className={`icon-action-pill ${
-                    video.liked ? "icon-action-pill-active" : ""
-                  }`}
-                  onClick={() => handleToggleLike(video.id)}
-                  aria-label={video.liked ? "Unlike video" : "Like video"}
-                >
-                  <span aria-hidden="true">{video.liked ? "♥" : "♡"}</span>
-                  <span>{video.likes}</span>
-                </button>
-                <button
-                  className="icon-action-pill"
-                  onClick={() => setActiveCommentsVideoId(video.id)}
-                  aria-label="Open video comments"
-                >
-                  <span aria-hidden="true">💬</span>
-                  <span>{video.comments}</span>
-                </button>
-                <button
-                  className={`bookmark-button ${video.saved ? "bookmark-button-active" : ""}`}
-                  onClick={() => handleToggleSave(video.id)}
-                  aria-label={video.saved ? "Remove bookmark" : "Save video"}
-                >
-                  {video.saved ? "🔖" : "📑"}
-                </button>
-              </div>
-
-              <div className="trending-card-actions">
-                <ShareButton
-                  path={`/videos#video-${video.id}`}
-                  title={video.title}
-                  url={video.watchUrl || `https://my-news-app-omega-orpin.vercel.app/videos#video-${video.id}`}
-                />
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
+              </article>
+            );
+          })}
+        </div>
       )}
 
       {activeCommentsVideo ? (
@@ -352,7 +480,7 @@ export default function VideosPage() {
             {activeVideo.embedUrl ? (
               <div className="video-player-shell">
                 <iframe
-                  src={activeVideo.embedUrl}
+                  src={buildEmbedUrl(activeVideo.youtubeId, true)}
                   title={activeVideo.title}
                   className="video-player-frame"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

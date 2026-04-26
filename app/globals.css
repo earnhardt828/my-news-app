@@ -1238,6 +1238,20 @@ input {
   padding: 0;
 }
 
+.video-frame-button {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.video-frame-live {
+  background: #000;
+}
+
 .video-thumbnail {
   object-fit: cover;
 }
@@ -1310,10 +1324,11 @@ input {
 
 .video-title {
   margin: 0;
-  font-size: 1.16rem;
-  line-height: 1.25;
-  letter-spacing: -0.025em;
-  font-weight: 850;
+  font-size: 1.02rem;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  text-wrap: balance;
 }
 
 .video-creator {
