@@ -771,6 +771,89 @@ input {
   flex-wrap: wrap;
 }
 
+.bottom-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  background: rgba(20, 33, 61, 0.42);
+  backdrop-filter: blur(10px);
+}
+
+.bottom-sheet {
+  width: min(100%, 760px);
+  max-height: min(82vh, 880px);
+  display: grid;
+  gap: 14px;
+  padding: 12px 18px calc(18px + env(safe-area-inset-bottom));
+  border-radius: 28px 28px 0 0;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  box-shadow: 0 -18px 40px rgba(20, 33, 61, 0.16);
+}
+
+.bottom-sheet-handle {
+  width: 52px;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 16%, transparent);
+  justify-self: center;
+}
+
+.bottom-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bottom-sheet-title {
+  max-width: 42ch;
+}
+
+.bottom-sheet-input-row {
+  grid-template-columns: 1fr auto;
+}
+
+.bottom-sheet-comments {
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.comment-sort-tabs {
+  gap: 8px;
+}
+
+.comment-reaction-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.comment-reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--button-secondary-bg);
+  color: var(--foreground);
+  font-weight: 800;
+}
+
+.comment-reaction-pill-active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--button-secondary-bg));
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
 .reader-modal-card {
   width: min(100%, 880px);
   max-height: min(88vh, 920px);
@@ -1208,6 +1291,14 @@ input {
 
   .modal-backdrop {
     align-items: center;
+  }
+
+  .bottom-sheet-backdrop {
+    align-items: flex-end;
+  }
+
+  .bottom-sheet {
+    max-height: 78vh;
   }
 
   .reader-modal-card {

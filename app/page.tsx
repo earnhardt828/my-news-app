@@ -14,6 +14,9 @@ type Comment = {
   user_id: string | null;
   avatar_url: string | null;
   created_at: string | null;
+  likes: number;
+  dislikes: number;
+  currentUserReaction: "like" | "dislike" | null;
 };
 
 type Article = {
@@ -66,6 +69,13 @@ type DbSavedArticle = {
 
 type DbBlockedUser = {
   blocked_user_id: string;
+};
+
+type DbCommentReaction = {
+  id: number;
+  comment_id: number;
+  user_id: string;
+  reaction_type: "like" | "dislike";
 };
 
 const categoryLabels: Record<string, string> = {
@@ -210,6 +220,12 @@ export default function Home() {
   } | null>(null);
   const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
+  const [activeCommentsArticleId, setActiveCommentsArticleId] = useState<number | null>(
+    null
+  );
+  const [commentSortMode, setCommentSortMode] = useState<
+    "top" | "controversial" | "newest"
+  >("top");
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -246,6 +262,10 @@ export default function Home() {
         .from("comments")
         .select("id, article_id, text, username, user_id, created_at");
 
+      const { data: commentReactionsData } = await supabase
+        .from("comment_reactions")
+        .select("id, comment_id, user_id, reaction_type");
+
       const { data: profilesData } = await supabase
         .from("profiles")
         .select("id, avatar_url, username");
@@ -266,6 +286,7 @@ export default function Home() {
 
       const likes = (likesData ?? []) as DbLike[];
       const comments = (commentsData ?? []) as DbComment[];
+      const commentReactions = (commentReactionsData ?? []) as DbCommentReaction[];
       const profiles = (profilesData ?? []) as DbProfile[];
       const blockedIds = new Set(
         ((blockedUsersData ?? []) as DbBlockedUser[]).map(
@@ -297,16 +318,30 @@ export default function Home() {
               comment.article_id === item.id &&
               (!comment.user_id || !blockedIds.has(comment.user_id))
           )
-          .map((comment) => ({
-            id: comment.id,
-            text: comment.text,
-            username: comment.username,
-            user_id: comment.user_id,
-            avatar_url: comment.user_id
-              ? avatarLookup.get(comment.user_id) ?? null
-              : null,
-            created_at: comment.created_at,
-          }));
+          .map((comment) => {
+            const reactions = commentReactions.filter(
+              (reaction) => reaction.comment_id === comment.id
+            );
+
+            return {
+              id: comment.id,
+              text: comment.text,
+              username: comment.username,
+              user_id: comment.user_id,
+              avatar_url: comment.user_id
+                ? avatarLookup.get(comment.user_id) ?? null
+                : null,
+              created_at: comment.created_at,
+              likes: reactions.filter((reaction) => reaction.reaction_type === "like")
+                .length,
+              dislikes: reactions.filter(
+                (reaction) => reaction.reaction_type === "dislike"
+              ).length,
+              currentUserReaction:
+                reactions.find((reaction) => reaction.user_id === userData.user?.id)
+                  ?.reaction_type ?? null,
+            };
+          });
 
         return {
           ...item,
@@ -512,6 +547,9 @@ export default function Home() {
                   user_id: data.user_id,
                   avatar_url: null,
                   created_at: data.created_at,
+                  likes: 0,
+                  dislikes: 0,
+                  currentUserReaction: null,
                 },
               ],
             }
@@ -607,6 +645,154 @@ export default function Home() {
       }))
     );
     alert(`Blocked ${blockedUsername ?? "this user"}. Their comments are now hidden.`);
+  };
+
+  const handleCommentReaction = async (
+    articleId: number,
+    commentId: number,
+    reactionType: "like" | "dislike"
+  ) => {
+    if (!userId) {
+      alert("Log in to react to comments");
+      return;
+    }
+
+    const targetComment = articles
+      .find((article) => article.id === articleId)
+      ?.comments.find((comment) => comment.id === commentId);
+
+    if (!targetComment) {
+      return;
+    }
+
+    setActiveCommentAction(`reaction-${commentId}`);
+
+    const { data: existingReaction } = await supabase
+      .from("comment_reactions")
+      .select("id, reaction_type")
+      .eq("comment_id", commentId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existingReaction?.reaction_type === reactionType) {
+      const { error } = await supabase
+        .from("comment_reactions")
+        .delete()
+        .eq("id", existingReaction.id)
+        .eq("user_id", userId);
+
+      setActiveCommentAction(null);
+
+      if (error) {
+        console.error("Error removing comment reaction:", error);
+        return;
+      }
+
+      setArticles((prev) =>
+        prev.map((article) =>
+          article.id === articleId
+            ? {
+                ...article,
+                comments: article.comments.map((comment) =>
+                  comment.id === commentId
+                    ? {
+                        ...comment,
+                        likes:
+                          reactionType === "like"
+                            ? Math.max(0, comment.likes - 1)
+                            : comment.likes,
+                        dislikes:
+                          reactionType === "dislike"
+                            ? Math.max(0, comment.dislikes - 1)
+                            : comment.dislikes,
+                        currentUserReaction: null,
+                      }
+                    : comment
+                ),
+              }
+            : article
+        )
+      );
+      return;
+    }
+
+    if (existingReaction) {
+      const { error } = await supabase
+        .from("comment_reactions")
+        .update({ reaction_type: reactionType })
+        .eq("id", existingReaction.id)
+        .eq("user_id", userId);
+
+      setActiveCommentAction(null);
+
+      if (error) {
+        console.error("Error updating comment reaction:", error);
+        return;
+      }
+
+      setArticles((prev) =>
+        prev.map((article) =>
+          article.id === articleId
+            ? {
+                ...article,
+                comments: article.comments.map((comment) =>
+                  comment.id === commentId
+                    ? {
+                        ...comment,
+                        likes:
+                          reactionType === "like"
+                            ? comment.likes + 1
+                            : Math.max(0, comment.likes - 1),
+                        dislikes:
+                          reactionType === "dislike"
+                            ? comment.dislikes + 1
+                            : Math.max(0, comment.dislikes - 1),
+                        currentUserReaction: reactionType,
+                      }
+                    : comment
+                ),
+              }
+            : article
+        )
+      );
+      return;
+    }
+
+    const { error } = await supabase.from("comment_reactions").insert({
+      comment_id: commentId,
+      user_id: userId,
+      reaction_type: reactionType,
+    });
+
+    setActiveCommentAction(null);
+
+    if (error) {
+      console.error("Error creating comment reaction:", error);
+      return;
+    }
+
+    setArticles((prev) =>
+      prev.map((article) =>
+        article.id === articleId
+          ? {
+              ...article,
+              comments: article.comments.map((comment) =>
+                comment.id === commentId
+                  ? {
+                      ...comment,
+                      likes: reactionType === "like" ? comment.likes + 1 : comment.likes,
+                      dislikes:
+                        reactionType === "dislike"
+                          ? comment.dislikes + 1
+                          : comment.dislikes,
+                      currentUserReaction: reactionType,
+                    }
+                  : comment
+              ),
+            }
+          : article
+      )
+    );
   };
 
   const openDeleteModal = (articleId: number, commentId: number) => {
@@ -734,6 +920,48 @@ export default function Home() {
     });
   }, [articles, categories, sortMode]);
 
+  const activeCommentsArticle =
+    activeCommentsArticleId === null
+      ? null
+      : articles.find((article) => article.id === activeCommentsArticleId) ?? null;
+
+  const displayedBottomSheetComments = useMemo(() => {
+    if (!activeCommentsArticle) {
+      return [];
+    }
+
+    const copied = [...activeCommentsArticle.comments];
+
+    if (commentSortMode === "newest") {
+      return copied.sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return timeB - timeA;
+      });
+    }
+
+    if (commentSortMode === "controversial") {
+      return copied.sort((a, b) => {
+        if (b.dislikes === a.dislikes) {
+          return b.likes - a.likes;
+        }
+
+        return b.dislikes - a.dislikes;
+      });
+    }
+
+    return copied.sort((a, b) => {
+      const scoreA = a.likes - a.dislikes;
+      const scoreB = b.likes - b.dislikes;
+
+      if (scoreB === scoreA) {
+        return b.likes - a.likes;
+      }
+
+      return scoreB - scoreA;
+    });
+  }, [activeCommentsArticle, commentSortMode]);
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -853,10 +1081,17 @@ export default function Home() {
                     <span aria-hidden="true">{article.likedByCurrentUser ? "♥" : "♡"}</span>
                     <span>{article.likes}</span>
                   </button>
-                  <span className="icon-action-pill icon-action-pill-static">
+                  <button
+                    className="icon-action-pill"
+                    onClick={() => {
+                      setActiveCommentsArticleId(article.id);
+                      setCommentSortMode("top");
+                    }}
+                    aria-label="Open comments"
+                  >
                     <span aria-hidden="true">💬</span>
                     <span>{article.comments.length}</span>
-                  </span>
+                  </button>
                   <button
                     className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
                     onClick={() => handleToggleSaveArticle(article)}
@@ -865,111 +1100,6 @@ export default function Home() {
                   >
                     {activeSaveArticleId === article.id ? "…" : article.saved ? "🔖" : "📑"}
                   </button>
-                </div>
-
-                <div className="stack">
-                  <strong>Comments</strong>
-
-                  <div className="comment-list">
-                    {article.comments.length === 0 ? (
-                      <div className="empty-state">
-                        <strong>No comments yet</strong>
-                        <span>Start the conversation on this story.</span>
-                      </div>
-                    ) : (
-                      article.comments.map((comment) => (
-                        <div key={comment.id} className="comment-card">
-                          <div className="comment-header">
-                            {comment.user_id ? (
-                              <Link
-                                href={`/user/${comment.user_id}`}
-                                className="comment-user-link"
-                              >
-                                <span className="comment-user-avatar">
-                                  {comment.avatar_url ? (
-                                    <Image
-                                      src={comment.avatar_url}
-                                      alt={comment.username ?? "User avatar"}
-                                      width={34}
-                                      height={34}
-                                      unoptimized
-                                    />
-                                  ) : (
-                                    (comment.username ?? "U").charAt(0).toUpperCase()
-                                  )}
-                                </span>
-                                <span className="comment-username">
-                                  {comment.username ?? "Unknown"}
-                                </span>
-                              </Link>
-                            ) : (
-                              <strong>{comment.username ?? "Unknown"}</strong>
-                            )}
-                            {comment.user_id === userId ? (
-                              <span className="chip">Your comment</span>
-                            ) : null}
-                          </div>
-                          <div className="comment-body">{comment.text}</div>
-                          <div className="comment-meta">
-                            {formatRelativeTime(comment.created_at)}
-                          </div>
-                          <div className="comment-actions">
-                            <button
-                              className="comment-action"
-                              onClick={() => openReportModal(comment.id)}
-                              disabled={activeCommentAction === `report-${comment.id}`}
-                            >
-                              {activeCommentAction === `report-${comment.id}`
-                                ? "Reporting..."
-                                : "Report"}
-                            </button>
-
-                            {comment.user_id === userId ? (
-                              <button
-                                className="comment-action comment-action-danger"
-                                onClick={() => openDeleteModal(article.id, comment.id)}
-                                disabled={activeCommentAction === `delete-${comment.id}`}
-                              >
-                                {activeCommentAction === `delete-${comment.id}`
-                                  ? "Deleting..."
-                                  : "Delete"}
-                              </button>
-                            ) : comment.user_id ? (
-                              <button
-                                className="comment-action"
-                                onClick={() =>
-                                  handleBlockUser(comment.user_id!, comment.username)
-                                }
-                                disabled={activeCommentAction === `block-${comment.user_id}`}
-                              >
-                                {activeCommentAction === `block-${comment.user_id}`
-                                  ? "Blocking..."
-                                  : "Block"}
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="input-row">
-                    <input
-                      className="input"
-                      type="text"
-                      placeholder="Write a comment..."
-                      value={commentInputs[article.id] || ""}
-                      onChange={(e) =>
-                        handleCommentInputChange(article.id, e.target.value)
-                      }
-                    />
-                    <button
-                      className="button button-secondary"
-                      onClick={() => handleAddComment(article.id)}
-                    >
-                      Add Comment
-                    </button>
-                  </div>
                 </div>
 
                 <div className="trending-card-actions">
@@ -992,6 +1122,207 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      {activeCommentsArticle ? (
+        <div
+          className="bottom-sheet-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="comments-sheet-title"
+        >
+          <div className="bottom-sheet">
+            <div className="bottom-sheet-handle" aria-hidden="true" />
+
+            <div className="bottom-sheet-header">
+              <div className="stack" style={{ gap: "6px" }}>
+                <h3 id="comments-sheet-title" className="modal-title">
+                  Comments
+                </h3>
+                <p className="muted bottom-sheet-title">
+                  {activeCommentsArticle.title}
+                </p>
+              </div>
+
+              <button
+                className="button button-secondary"
+                onClick={() => setActiveCommentsArticleId(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="toolbar comment-sort-tabs">
+              <button
+                className={`toolbar-pill ${
+                  commentSortMode === "top" ? "toolbar-pill-active" : ""
+                }`}
+                onClick={() => setCommentSortMode("top")}
+              >
+                Top comments
+              </button>
+              <button
+                className={`toolbar-pill ${
+                  commentSortMode === "controversial" ? "toolbar-pill-active" : ""
+                }`}
+                onClick={() => setCommentSortMode("controversial")}
+              >
+                Controversial
+              </button>
+              <button
+                className={`toolbar-pill ${
+                  commentSortMode === "newest" ? "toolbar-pill-active" : ""
+                }`}
+                onClick={() => setCommentSortMode("newest")}
+              >
+                Newest
+              </button>
+            </div>
+
+            <div className="input-row bottom-sheet-input-row">
+              <input
+                className="input"
+                type="text"
+                placeholder="Write a comment..."
+                value={commentInputs[activeCommentsArticle.id] || ""}
+                onChange={(e) =>
+                  handleCommentInputChange(activeCommentsArticle.id, e.target.value)
+                }
+              />
+              <button
+                className="button button-secondary"
+                onClick={() => handleAddComment(activeCommentsArticle.id)}
+              >
+                Add Comment
+              </button>
+            </div>
+
+            <div className="bottom-sheet-comments">
+              {displayedBottomSheetComments.length === 0 ? (
+                <div className="empty-state">
+                  <strong>No comments yet</strong>
+                  <span>Start the conversation on this story.</span>
+                </div>
+              ) : (
+                <div className="comment-list">
+                  {displayedBottomSheetComments.map((comment) => (
+                    <div key={comment.id} className="comment-card">
+                      <div className="comment-header">
+                        {comment.user_id ? (
+                          <Link
+                            href={`/user/${comment.user_id}`}
+                            className="comment-user-link"
+                          >
+                            <span className="comment-user-avatar">
+                              {comment.avatar_url ? (
+                                <Image
+                                  src={comment.avatar_url}
+                                  alt={comment.username ?? "User avatar"}
+                                  width={34}
+                                  height={34}
+                                  unoptimized
+                                />
+                              ) : (
+                                (comment.username ?? "U").charAt(0).toUpperCase()
+                              )}
+                            </span>
+                            <span className="comment-username">
+                              {comment.username ?? "Unknown"}
+                            </span>
+                          </Link>
+                        ) : (
+                          <strong>{comment.username ?? "Unknown"}</strong>
+                        )}
+                        {comment.user_id === userId ? (
+                          <span className="chip">Your comment</span>
+                        ) : null}
+                      </div>
+                      <div className="comment-body">{comment.text}</div>
+                      <div className="comment-meta">
+                        {formatRelativeTime(comment.created_at)}
+                      </div>
+                      <div className="comment-reaction-row">
+                        <button
+                          className={`comment-reaction-pill ${
+                            comment.currentUserReaction === "like"
+                              ? "comment-reaction-pill-active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            handleCommentReaction(
+                              activeCommentsArticle.id,
+                              comment.id,
+                              "like"
+                            )
+                          }
+                          disabled={activeCommentAction === `reaction-${comment.id}`}
+                        >
+                          <span aria-hidden="true">♥</span>
+                          <span>{comment.likes}</span>
+                        </button>
+                        <button
+                          className={`comment-reaction-pill ${
+                            comment.currentUserReaction === "dislike"
+                              ? "comment-reaction-pill-active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            handleCommentReaction(
+                              activeCommentsArticle.id,
+                              comment.id,
+                              "dislike"
+                            )
+                          }
+                          disabled={activeCommentAction === `reaction-${comment.id}`}
+                        >
+                          <span aria-hidden="true">👎</span>
+                          <span>{comment.dislikes}</span>
+                        </button>
+                      </div>
+                      <div className="comment-actions">
+                        <button
+                          className="comment-action"
+                          onClick={() => openReportModal(comment.id)}
+                          disabled={activeCommentAction === `report-${comment.id}`}
+                        >
+                          {activeCommentAction === `report-${comment.id}`
+                            ? "Reporting..."
+                            : "Report"}
+                        </button>
+
+                        {comment.user_id === userId ? (
+                          <button
+                            className="comment-action comment-action-danger"
+                            onClick={() =>
+                              openDeleteModal(activeCommentsArticle.id, comment.id)
+                            }
+                            disabled={activeCommentAction === `delete-${comment.id}`}
+                          >
+                            {activeCommentAction === `delete-${comment.id}`
+                              ? "Deleting..."
+                              : "Delete"}
+                          </button>
+                        ) : comment.user_id ? (
+                          <button
+                            className="comment-action"
+                            onClick={() =>
+                              handleBlockUser(comment.user_id!, comment.username)
+                            }
+                            disabled={activeCommentAction === `block-${comment.user_id}`}
+                          >
+                            {activeCommentAction === `block-${comment.user_id}`
+                              ? "Blocking..."
+                              : "Block"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {reportingCommentId !== null ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="report-title">
