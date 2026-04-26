@@ -92,6 +92,13 @@ export default function Profile() {
   const [currentUser, setCurrentUser] = useState<UserState>(null);
   const [message, setMessage] = useState("");
   const [signUpNotice, setSignUpNotice] = useState("");
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState("");
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendStatus, setResendStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -185,6 +192,27 @@ export default function Profile() {
   }, [syncSignedInProfile]);
 
   useEffect(() => {
+    if (resendCooldown <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setResendCooldown((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [resendCooldown]);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function loadUser() {
@@ -240,6 +268,7 @@ export default function Profile() {
   const handleSignUp = async () => {
     setMessage("");
     setSignUpNotice("");
+    setResendStatus(null);
 
     const { data, error } = await supabase.auth.signUp({ email, password });
 
@@ -255,12 +284,15 @@ export default function Profile() {
     clearProfileState();
     setCurrentUser(null);
     setPassword("");
+    setPendingConfirmationEmail(email.trim());
+    setResendCooldown(45);
     setSignUpNotice("Check your email to confirm your account.");
   };
 
   const handleSignIn = async () => {
     setMessage("");
     setSignUpNotice("");
+    setResendStatus(null);
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -277,6 +309,40 @@ export default function Profile() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!pendingConfirmationEmail) {
+      setResendStatus({
+        type: "error",
+        text: "Add your email and sign up again so we know where to resend it.",
+      });
+      return;
+    }
+
+    setIsResendingConfirmation(true);
+    setResendStatus(null);
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: pendingConfirmationEmail,
+    });
+
+    setIsResendingConfirmation(false);
+
+    if (error) {
+      setResendStatus({
+        type: "error",
+        text: error.message ?? "Could not resend the confirmation email.",
+      });
+      return;
+    }
+
+    setResendCooldown(45);
+    setResendStatus({
+      type: "success",
+      text: "Confirmation email sent again.",
+    });
   };
 
   const handleSaveUsername = async () => {
@@ -526,7 +592,32 @@ export default function Profile() {
             {signUpNotice ? (
               <div className="status-message status-success">
                 <strong>Check your email to confirm your account.</strong>
-                <span>Didn&apos;t receive it? Try signing up again in a moment to resend the email.</span>
+                <span>Didn&apos;t receive it? Resend email</span>
+                <div className="profile-resend-row">
+                  <button
+                    className="button button-link-accent"
+                    onClick={handleResendConfirmation}
+                    disabled={isResendingConfirmation || resendCooldown > 0}
+                    type="button"
+                  >
+                    {isResendingConfirmation
+                      ? "Sending..."
+                      : resendCooldown > 0
+                        ? `Resend email in ${resendCooldown}s`
+                        : "Resend email"}
+                  </button>
+                </div>
+                {resendStatus ? (
+                  <div
+                    className={`status-message ${
+                      resendStatus.type === "success"
+                        ? "status-success"
+                        : "status-error"
+                    }`}
+                  >
+                    {resendStatus.text}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>

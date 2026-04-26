@@ -678,6 +678,26 @@ input {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
 }
 
+.button-link-accent {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.button-link-accent:hover {
+  transform: none;
+  color: var(--accent-strong);
+}
+
+.button-link-accent:disabled {
+  color: var(--text-soft);
+}
+
 .input,
 .search-input {
   width: 100%;
@@ -1257,6 +1277,12 @@ input {
 
 .profile-auth-actions .button {
   flex: 1 1 180px;
+}
+
+.profile-resend-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 4px;
 }
 
 .avatar-shell {
