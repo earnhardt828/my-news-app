@@ -1254,7 +1254,7 @@ input {
 .profile-hero {
   display: flex;
   gap: 16px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .profile-auth-shell {
@@ -1285,6 +1285,17 @@ input {
   margin-top: 4px;
 }
 
+.avatar-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.avatar-button:hover {
+  transform: none;
+}
+
 .avatar-shell {
   display: inline-flex;
   align-items: center;
@@ -1306,7 +1317,8 @@ input {
 
 .profile-meta {
   display: grid;
-  gap: 4px;
+  gap: 8px;
+  flex: 1;
 }
 
 .profile-name {
@@ -1314,6 +1326,52 @@ input {
   font-size: 1.5rem;
   font-weight: 900;
   letter-spacing: -0.03em;
+}
+
+.profile-name-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  justify-self: flex-start;
+}
+
+.profile-name-button:hover {
+  transform: none;
+}
+
+.profile-name-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-name-input {
+  min-height: 44px;
+  font-weight: 800;
+}
+
+.profile-name-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-inline-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+
+.profile-meta-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.profile-hidden-input-row {
+  display: none;
 }
 
 .muted {

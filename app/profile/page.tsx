@@ -2,7 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ChangeEvent, useCallback, useEffect, useState } from "react";
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabase";
 
@@ -102,6 +109,9 @@ export default function Profile() {
   const [categories, setCategories] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [draftUsername, setDraftUsername] = useState("");
+  const [isSavingInlineUsername, setIsSavingInlineUsername] = useState(false);
   const [myComments, setMyComments] = useState<MyComment[]>([]);
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,9 +123,12 @@ export default function Profile() {
     text: string;
   } | null>(null);
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const clearProfileState = useCallback(() => {
     setUsername("");
+    setDraftUsername("");
+    setIsEditingUsername(false);
     setAvatarUrl("");
     setCategories([]);
     setMyComments([]);
@@ -144,6 +157,7 @@ export default function Profile() {
       .maybeSingle();
 
     setUsername(profile?.username ?? "");
+    setDraftUsername(profile?.username ?? "");
     setAvatarUrl(profile?.avatar_url ?? "");
     setCategories(profile?.categories ?? []);
 
@@ -311,6 +325,90 @@ export default function Profile() {
     }
   };
 
+  const startUsernameEdit = () => {
+    setDraftUsername(username);
+    setIsEditingUsername(true);
+    setMessage("");
+  };
+
+  const cancelUsernameEdit = () => {
+    setDraftUsername(username);
+    setIsEditingUsername(false);
+  };
+
+  const handleInlineUsernameSave = async () => {
+    if (!currentUser?.id) {
+      setMessage("Log in first.");
+      return;
+    }
+
+    const trimmedUsername = draftUsername.trim();
+
+    if (!trimmedUsername) {
+      setMessage("Enter a username.");
+      return;
+    }
+
+    setIsSavingInlineUsername(true);
+
+    const { data: matchingProfiles, error: availabilityError } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("username", trimmedUsername);
+
+    if (availabilityError) {
+      setIsSavingInlineUsername(false);
+      setMessage("Could not check username availability.");
+      return;
+    }
+
+    const isTaken = (matchingProfiles ?? []).some(
+      (profile) => profile.id !== currentUser.id
+    );
+
+    if (isTaken) {
+      setIsSavingInlineUsername(false);
+      setMessage("Username already taken.");
+      return;
+    }
+
+    const previousUsername = username;
+    setUsername(trimmedUsername);
+
+    const { error } = await supabase.from("profiles").upsert({
+      id: currentUser.id,
+      email: currentUser.email,
+      username: trimmedUsername,
+      categories,
+      avatar_url: avatarUrl || null,
+    });
+
+    setIsSavingInlineUsername(false);
+
+    if (error) {
+      setUsername(previousUsername);
+      setDraftUsername(previousUsername);
+      setMessage(error.message ?? "Could not save username.");
+      return;
+    }
+
+    setDraftUsername(trimmedUsername);
+    setIsEditingUsername(false);
+    setMessage("Username updated.");
+  };
+
+  const handleUsernameKeyDown = async (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      await handleInlineUsernameSave();
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelUsernameEdit();
+    }
+  };
+
   const handleResendConfirmation = async () => {
     if (!pendingConfirmationEmail) {
       setResendStatus({
@@ -422,6 +520,10 @@ export default function Profile() {
 
     setAvatarUrl(publicUrl);
     setMessage("Profile image uploaded.");
+  };
+
+  const handleAvatarPickerOpen = () => {
+    avatarInputRef.current?.click();
   };
 
   const handleDeleteComment = async (commentId: number) => {
@@ -626,7 +728,13 @@ export default function Profile() {
         <div className="split-grid">
           <section className="section-card stack">
             <div className="profile-hero">
-              <Link href={`/user/${currentUserId}`} className="profile-hero">
+              <button
+                type="button"
+                className="avatar-button"
+                onClick={handleAvatarPickerOpen}
+                disabled={isUploadingAvatar}
+                aria-label="Change profile image"
+              >
                 <div className="avatar-shell">
                   {avatarUrl ? (
                     <Image
@@ -645,44 +753,57 @@ export default function Profile() {
                     <span className="avatar-fallback">{initials}</span>
                   )}
                 </div>
+              </button>
 
-                <div className="profile-meta">
-                  <h3 className="profile-name">{username || "News Reader"}</h3>
-                  <span className="muted">{currentUser?.email}</span>
+              <div className="profile-meta">
+                {isEditingUsername ? (
+                  <div className="profile-name-editor">
+                    <input
+                      className="input profile-name-input"
+                      type="text"
+                      value={draftUsername}
+                      onChange={(e) => setDraftUsername(e.target.value)}
+                      onKeyDown={handleUsernameKeyDown}
+                      autoFocus
+                      disabled={isSavingInlineUsername}
+                      placeholder="Choose a username"
+                    />
+                    <div className="profile-name-actions">
+                      <button
+                        type="button"
+                        className="button button-secondary profile-inline-button"
+                        onClick={cancelUsernameEdit}
+                        disabled={isSavingInlineUsername}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="profile-name-button"
+                    onClick={startUsernameEdit}
+                  >
+                    <h3 className="profile-name">{username || "News Reader"}</h3>
+                  </button>
+                )}
+                <div className="profile-meta-row">
                   <span className="chip">{categories.length} categories selected</span>
+                  <Link href={`/user/${currentUserId}`} className="chip chip-accent">
+                    View public profile
+                  </Link>
                 </div>
-              </Link>
-            </div>
-
-            <div className="input-row">
-              <input
-                className="input"
-                type="text"
-                placeholder="Choose a username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-
-              <input
-                className="input"
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                disabled={isUploadingAvatar}
-              />
-            </div>
-
-            <div className="comment-card">
-              <strong>Profile image</strong>
-              <div className="muted" style={{ marginTop: "6px" }}>
-                {isUploadingAvatar
-                  ? "Uploading image..."
-                  : "Choose an image file to upload it to Supabase Storage."}
+                {isUploadingAvatar ? (
+                  <span className="muted">Uploading image...</span>
+                ) : (
+                  <span className="muted">Tap your avatar to change your profile photo.</span>
+                )}
               </div>
             </div>
 
             <div className="stack">
-              <strong>Selected categories</strong>
+              <strong>Favorite categories</strong>
               <div className="category-grid">
                 {CATEGORY_OPTIONS.map((cat) => (
                   <button
@@ -704,8 +825,20 @@ export default function Profile() {
               </div>
             </div>
 
+            <div className="input-row profile-hidden-input-row">
+              <input
+                ref={avatarInputRef}
+                className="input"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                disabled={isUploadingAvatar}
+                hidden
+              />
+            </div>
+
             <button className="button button-accent" onClick={handleSaveUsername}>
-              Save Profile
+              Save Profile Changes
             </button>
 
             {message ? <div className="chip chip-accent">{message}</div> : null}
