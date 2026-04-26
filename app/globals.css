@@ -611,6 +611,71 @@ input {
   color: var(--input-placeholder);
 }
 
+.search-shell {
+  gap: 14px;
+}
+
+.search-card {
+  gap: 14px;
+}
+
+.search-input-shell {
+  position: relative;
+  display: block;
+}
+
+.search-input-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-soft);
+  font-size: 1rem;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.search-input-with-icon {
+  padding-left: 44px;
+}
+
+.search-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-trending-list {
+  display: grid;
+  gap: 8px;
+}
+
+.search-trending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--foreground);
+  text-align: left;
+}
+
+.search-trending-label {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.search-trending-icon {
+  color: var(--accent-strong);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 .input-row {
   display: grid;
   gap: 10px;
