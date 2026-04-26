@@ -98,6 +98,40 @@ function formatRelativeTime(timestamp: string | null) {
   return `${diffDays} days ago`;
 }
 
+function buildSummaryPoints(text: string, title: string) {
+  const normalized = text
+    .replace(/\s+/g, " ")
+    .replace(/\[\+\d+\s+chars\]\s*$/i, "")
+    .trim();
+
+  const sentenceMatches = normalized.match(/[^.!?]+[.!?]?/g) ?? [];
+  const cleanedSentences = sentenceMatches
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 35);
+
+  const uniqueSentences: string[] = [];
+
+  cleanedSentences.forEach((sentence) => {
+    const alreadyIncluded = uniqueSentences.some(
+      (existing) => existing.toLowerCase() === sentence.toLowerCase()
+    );
+
+    if (!alreadyIncluded && uniqueSentences.length < 5) {
+      uniqueSentences.push(sentence);
+    }
+  });
+
+  if (uniqueSentences.length >= 3) {
+    return uniqueSentences.slice(0, 5);
+  }
+
+  return [
+    `${title} is the focus of this story.`,
+    normalized || "This article preview is limited in the current news feed.",
+    "Open the original article for the publisher's full reporting and context.",
+  ].slice(0, 3);
+}
+
 export default function ArticleDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -381,6 +415,10 @@ export default function ArticleDetailPage() {
     ? localFullStory.slice(previewText.length).trimStart()
     : "";
   const hasAdditionalLocalContent = remainingStory.length > 0;
+  const summaryPoints = buildSummaryPoints(
+    [rawDescription, cleanedContent].filter(Boolean).join(" "),
+    article.title
+  );
 
   const handleClose = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -470,6 +508,17 @@ export default function ArticleDetailPage() {
                 </>
               ) : null}
             </div>
+          </div>
+
+          <div className="article-detail-section">
+            <p className="article-detail-label">Summary</p>
+            <ul className="article-summary-list">
+              {summaryPoints.map((point) => (
+                <li key={point} className="article-summary-item">
+                  {point}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>

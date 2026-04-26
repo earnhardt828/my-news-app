@@ -507,6 +507,18 @@ input {
   display: inline;
 }
 
+.article-summary-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 10px;
+  color: var(--foreground);
+}
+
+.article-summary-item {
+  line-height: 1.7;
+}
+
 .article-detail-stats-row {
   border-top: 0;
 }
