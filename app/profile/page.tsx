@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -94,7 +93,6 @@ function formatRelativeTime(timestamp: string | null) {
 }
 
 export default function Profile() {
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -126,6 +124,14 @@ export default function Profile() {
   } | null>(null);
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const authFlashMessage =
+    typeof window !== "undefined"
+      ? window.location.hash === "#signed-out"
+        ? "Logged out."
+        : window.location.hash === "#account-deleted"
+          ? "Your account has been deleted."
+          : ""
+      : "";
 
   const clearProfileState = useCallback(() => {
     setUsername("");
@@ -227,17 +233,6 @@ export default function Profile() {
       window.clearInterval(timer);
     };
   }, [resendCooldown]);
-
-  useEffect(() => {
-    const signedOut = searchParams.get("signed_out");
-    const accountDeleted = searchParams.get("account_deleted");
-
-    if (signedOut === "1") {
-      setMessage("Logged out.");
-    } else if (accountDeleted === "1") {
-      setMessage("Your account has been deleted.");
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -703,7 +698,9 @@ export default function Profile() {
               </button>
             </div>
 
-            {message ? <div className="chip chip-accent">{message}</div> : null}
+            {message || authFlashMessage ? (
+              <div className="chip chip-accent">{message || authFlashMessage}</div>
+            ) : null}
             {signUpNotice ? (
               <div className="status-message status-success">
                 <strong>Check your email to confirm your account.</strong>

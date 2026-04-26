@@ -166,7 +166,7 @@ export default function SettingsPage() {
     setBlockedUsers([]);
     setDeleteStatus(null);
     setMessage("Logged out.");
-    router.push("/profile?signed_out=1");
+    router.push("/profile#signed-out");
     router.refresh();
   };
 
@@ -262,7 +262,7 @@ export default function SettingsPage() {
       type: "success",
       text: payload?.message ?? "Your account has been deleted.",
     });
-    router.push("/profile?account_deleted=1");
+    router.push("/profile#account-deleted");
     router.refresh();
   };
 
