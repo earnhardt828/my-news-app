@@ -1,11 +1,19 @@
 "use client";
 
 import AdSlot from "./components/ad-slot";
+import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ShareButton from "./components/share-button";
 import { supabase } from "../lib/supabase";
+import {
+  buildVideoEmbedUrl,
+  initialVideos,
+  normalizeVideoFeedItems,
+  type VideoApiItem,
+  type VideoItem,
+} from "../lib/video-feed";
 
 type Comment = {
   id: number;
@@ -226,6 +234,11 @@ export default function Home() {
   const [commentSortMode, setCommentSortMode] = useState<
     "top" | "controversial" | "newest"
   >("top");
+  const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -361,6 +374,24 @@ export default function Home() {
     }
 
     fetchNewsAndEngagement();
+  }, []);
+
+  useEffect(() => {
+    async function fetchVideos() {
+      try {
+        const response = await fetch("/api/videos");
+        const data = (await response.json()) as {
+          videos?: VideoApiItem[];
+        };
+
+        setVideos(normalizeVideoFeedItems(data.videos));
+      } catch (error) {
+        console.error("Error loading trending videos:", error);
+        setVideos(initialVideos);
+      }
+    }
+
+    fetchVideos();
   }, []);
 
   const handleLike = async (articleId: number) => {
@@ -962,6 +993,36 @@ export default function Home() {
     });
   }, [activeCommentsArticle, commentSortMode]);
 
+  const activeVideo =
+    activeVideoId === null ? null : videos.find((video) => video.id === activeVideoId) ?? null;
+
+  const activeCommentsVideo =
+    activeCommentsVideoId === null
+      ? null
+      : videos.find((video) => video.id === activeCommentsVideoId) ?? null;
+
+  const handleToggleVideoLike = (videoId: string) => {
+    setVideos((prev) =>
+      prev.map((video) =>
+        video.id === videoId
+          ? {
+              ...video,
+              liked: !video.liked,
+              likes: video.liked ? Math.max(0, video.likes - 1) : video.likes + 1,
+            }
+          : video
+      )
+    );
+  };
+
+  const handleToggleVideoSave = (videoId: string) => {
+    setVideos((prev) =>
+      prev.map((video) =>
+        video.id === videoId ? { ...video, saved: !video.saved } : video
+      )
+    );
+  };
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -1116,6 +1177,20 @@ export default function Home() {
                   title="Sponsored placement"
                   copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
                   cta="Learn more"
+                />
+              ) : null}
+
+              {sortMode === "trending" &&
+              (index + 1) % 5 === 0 &&
+              videos.length > 0 ? (
+                <VideoFeedCard
+                  video={videos[Math.floor((index + 1) / 5 - 1) % videos.length]}
+                  onToggleLike={handleToggleVideoLike}
+                  onToggleSave={handleToggleVideoSave}
+                  onOpenComments={setActiveCommentsVideoId}
+                  onOpenPlayer={setActiveVideoId}
+                  label="Video"
+                  className="video-card-inline"
                 />
               ) : null}
             </div>
@@ -1320,6 +1395,84 @@ export default function Home() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeCommentsVideo ? (
+        <div
+          className="bottom-sheet-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="video-comments-title"
+        >
+          <div className="bottom-sheet">
+            <div className="bottom-sheet-handle" aria-hidden="true" />
+            <div className="bottom-sheet-header">
+              <div className="stack" style={{ gap: "6px" }}>
+                <h3 id="video-comments-title" className="modal-title">
+                  Video comments
+                </h3>
+                <p className="muted bottom-sheet-title">{activeCommentsVideo.title}</p>
+              </div>
+              <button
+                className="button button-secondary"
+                onClick={() => setActiveCommentsVideoId(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="empty-state">
+              <strong>Placeholder discussion</strong>
+              <span>
+                This feed uses real YouTube news videos. For now, comments remain
+                a lightweight placeholder instead of syncing YouTube comment threads.
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeVideo ? (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="trending-video-player-title"
+        >
+          <div className="modal-card video-modal-card">
+            <div className="bottom-sheet-header">
+              <div className="stack" style={{ gap: "6px" }}>
+                <h3 id="trending-video-player-title" className="modal-title">
+                  {activeVideo.title}
+                </h3>
+                <p className="muted bottom-sheet-title">{activeVideo.creator}</p>
+              </div>
+              <button
+                className="button button-secondary"
+                onClick={() => setActiveVideoId(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            {activeVideo.embedUrl ? (
+              <div className="video-player-shell">
+                <iframe
+                  src={buildVideoEmbedUrl(activeVideo.youtubeId, true)}
+                  title={activeVideo.title}
+                  className="video-player-frame"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <div className="empty-state">
+                <strong>Placeholder video</strong>
+                <span>Real YouTube videos will appear here when the API is available.</span>
+              </div>
+            )}
           </div>
         </div>
       ) : null}

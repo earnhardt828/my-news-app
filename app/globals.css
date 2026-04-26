@@ -1201,6 +1201,21 @@ input {
   box-shadow: 0 18px 40px rgba(20, 33, 61, 0.08);
 }
 
+.video-card-inline {
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 3%, var(--surface-strong)), var(--surface-strong));
+}
+
+.video-chip {
+  width: fit-content;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .video-frame {
   position: relative;
   aspect-ratio: 9 / 16;
