@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ThemeToggle from "../components/theme-toggle";
 import { supabase } from "../../lib/supabase";
@@ -30,26 +31,23 @@ type DbProfile = {
   avatar_url: string | null;
 };
 
-type AccountDeletionRequest = {
-  id: number;
-  status: string;
-  created_at: string;
-};
-
 export default function SettingsPage() {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<UserState>(null);
   const [username, setUsername] = useState("");
   const [contactInfo, setContactInfo] = useState("");
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserRecord[]>([]);
-  const [deletionRequest, setDeletionRequest] =
-    useState<AccountDeletionRequest | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [activeBlockedUserId, setActiveBlockedUserId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isSubmittingDeletionRequest, setIsSubmittingDeletionRequest] =
-    useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteStatus, setDeleteStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
@@ -67,12 +65,11 @@ export default function SettingsPage() {
       if (!user?.id) {
         setUsername("");
         setBlockedUsers([]);
-        setDeletionRequest(null);
         setIsLoading(false);
         return;
       }
 
-      const [profileResult, blockedUsersResult, deletionRequestResult] =
+      const [profileResult, blockedUsersResult] =
         await Promise.all([
           supabase
             .from("profiles")
@@ -84,17 +81,9 @@ export default function SettingsPage() {
             .select("id, blocked_user_id, created_at")
             .eq("blocker_id", user.id)
             .order("created_at", { ascending: false }),
-          supabase
-            .from("account_deletion_requests")
-            .select("id, status, created_at")
-            .eq("user_id", user.id)
-            .maybeSingle(),
         ]);
 
       setUsername(profileResult.data?.username ?? "");
-      setDeletionRequest(
-        (deletionRequestResult.data as AccountDeletionRequest | null) ?? null
-      );
 
       const blockedRecords = (blockedUsersResult.data ?? []) as DbBlockedUser[];
 
@@ -166,11 +155,19 @@ export default function SettingsPage() {
   };
 
   const handleLogOut = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setMessage(error.message ?? "Could not log out.");
+      return;
+    }
+
     setCurrentUser(null);
     setBlockedUsers([]);
-    setDeletionRequest(null);
+    setDeleteStatus(null);
     setMessage("Logged out.");
+    router.push("/profile?signed_out=1");
+    router.refresh();
   };
 
   const handleUnblockUser = async (blockedUserId: string) => {
@@ -201,42 +198,72 @@ export default function SettingsPage() {
     setMessage("Blocked user removed.");
   };
 
-  const handleDeleteAccountRequest = async () => {
+  const handleDeleteAccount = async () => {
     if (!currentUser?.id) {
-      setMessage("Log in to request account deletion.");
-      setIsDeleteModalOpen(false);
+      setDeleteStatus({
+        type: "error",
+        text: "Log in to delete your account.",
+      });
       return;
     }
 
-    if (deletionRequest) {
-      setMessage("You already have an account deletion request on file.");
-      setIsDeleteModalOpen(false);
+    if (deleteConfirmationText.trim().toLowerCase() !== "delete") {
+      setDeleteStatus({
+        type: "error",
+        text: "Type delete to confirm.",
+      });
       return;
     }
 
-    setIsSubmittingDeletionRequest(true);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-    const { data, error } = await supabase
-      .from("account_deletion_requests")
-      .insert({
-        user_id: currentUser.id,
-      })
-      .select("id, status, created_at")
-      .single();
+    if (!session?.access_token) {
+      setDeleteStatus({
+        type: "error",
+        text: "Log in again before deleting your account.",
+      });
+      return;
+    }
 
-    setIsSubmittingDeletionRequest(false);
+    setIsDeletingAccount(true);
+    setDeleteStatus(null);
+
+    const response = await fetch("/api/account/delete", {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: string; message?: string }
+      | null;
+
+    if (!response.ok) {
+      setIsDeletingAccount(false);
+      setDeleteStatus({
+        type: "error",
+        text:
+          payload?.error ??
+          (response.status === 503
+            ? "Account deletion is not configured yet."
+            : "Could not delete your account right now."),
+      });
+      return;
+    }
+
+    await supabase.auth.signOut();
+    setIsDeletingAccount(false);
     setIsDeleteModalOpen(false);
-
-    if (error) {
-      console.error("Error creating account deletion request:", error);
-      setMessage("Could not submit your deletion request. Please try again.");
-      return;
-    }
-
-    setDeletionRequest(data as AccountDeletionRequest);
-    setMessage(
-      "Account deletion request submitted. A backend review flow can process it safely."
-    );
+    setDeleteConfirmationText("");
+    setDeleteStatus({
+      type: "success",
+      text: payload?.message ?? "Your account has been deleted.",
+    });
+    router.push("/profile?account_deleted=1");
+    router.refresh();
   };
 
   return (
@@ -318,22 +345,15 @@ export default function SettingsPage() {
 
               <button
                 className="settings-list-row settings-list-row-button settings-list-row-danger"
-                onClick={() => setIsDeleteModalOpen(true)}
-                disabled={Boolean(deletionRequest)}
+                onClick={() => {
+                  setDeleteStatus(null);
+                  setDeleteConfirmationText("");
+                  setIsDeleteModalOpen(true);
+                }}
               >
                 <div className="settings-list-copy">
                   <strong>Delete account</strong>
-                  <span>
-                    {deletionRequest
-                      ? `Request submitted ${new Date(
-                          deletionRequest.created_at
-                        ).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}`
-                      : "Submit a safe deletion request for backend review."}
-                  </span>
+                  <span>Permanently remove your Mirur account and related data.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
@@ -468,28 +488,54 @@ export default function SettingsPage() {
           <div className="modal-card">
             <div className="stack" style={{ gap: "6px" }}>
               <h3 id="settings-delete-title" className="modal-title">
-                Request account deletion
+                Delete account
               </h3>
               <p className="muted" style={{ margin: 0 }}>
-                Are you sure you want to submit an account deletion request? This
-                will create a review record in Supabase for follow-up.
+                This permanently deletes your Mirur account. Type <strong>delete</strong> to confirm.
               </p>
             </div>
+
+            <input
+              className="input settings-delete-input"
+              type="text"
+              placeholder="Type delete to confirm"
+              value={deleteConfirmationText}
+              onChange={(event) => setDeleteConfirmationText(event.target.value)}
+              disabled={isDeletingAccount}
+            />
+
+            {deleteStatus ? (
+              <div
+                className={`status-message ${
+                  deleteStatus.type === "success" ? "status-success" : "status-error"
+                }`}
+              >
+                {deleteStatus.text}
+              </div>
+            ) : null}
 
             <div className="modal-actions">
               <button
                 className="button button-secondary"
-                onClick={() => setIsDeleteModalOpen(false)}
-                disabled={isSubmittingDeletionRequest}
+                onClick={() => {
+                  if (isDeletingAccount) {
+                    return;
+                  }
+
+                  setIsDeleteModalOpen(false);
+                  setDeleteConfirmationText("");
+                  setDeleteStatus(null);
+                }}
+                disabled={isDeletingAccount}
               >
                 Cancel
               </button>
               <button
                 className="button comment-action-danger settings-danger-button"
-                onClick={handleDeleteAccountRequest}
-                disabled={isSubmittingDeletionRequest}
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount || deleteConfirmationText.trim().toLowerCase() !== "delete"}
               >
-                {isSubmittingDeletionRequest ? "Submitting..." : "Submit Request"}
+                {isDeletingAccount ? "Deleting..." : "Delete account"}
               </button>
             </div>
           </div>
