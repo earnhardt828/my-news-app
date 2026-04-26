@@ -290,10 +290,10 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--accent-faint), rgba(20, 33, 61, 0.08));
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, white), var(--accent-faint));
   color: var(--accent-strong);
   font-size: 0.82rem;
   font-weight: 900;
@@ -317,6 +317,10 @@ input {
   font-weight: 700;
   line-height: 1.4;
   padding-left: 42px;
+}
+
+.trending-category-pill {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-muted));
 }
 
 .trending-rank-badge {
@@ -487,9 +491,10 @@ input {
 }
 
 .trending-stats-row {
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
-  padding-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
 }
 
 .bookmark-button {
