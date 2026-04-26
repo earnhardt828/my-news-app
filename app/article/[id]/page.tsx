@@ -366,23 +366,21 @@ export default function ArticleDetailPage() {
     .replace(/\s*\[\+\d+\s+chars\]\s*$/i, "")
     .trim();
   const contentEndsWithEllipsis = /(\.\.\.|…)\s*$/.test(cleanedContent);
-  const descriptionEndsWithEllipsis = /(\.\.\.|…)\s*$/.test(rawDescription);
-  const localFullStory = cleanedContent || rawDescription || "No additional content available.";
-  const previewText =
-    rawDescription ||
-    (hadContentTruncationMarker || contentEndsWithEllipsis
-      ? cleanedContent
-      : localFullStory.length > 320
-        ? `${localFullStory.slice(0, 320).trimEnd()}...`
-        : localFullStory);
-  const hasAdditionalLocalContent =
+  const hasReliableFullLocalContent =
+    Boolean(cleanedContent) &&
     !hadContentTruncationMarker &&
-    !contentEndsWithEllipsis &&
-    localFullStory.length > previewText.length;
-  const shouldLinkOutForMore =
-    !hasAdditionalLocalContent &&
-    Boolean(article.url) &&
-    (hadContentTruncationMarker || contentEndsWithEllipsis || descriptionEndsWithEllipsis);
+    !contentEndsWithEllipsis;
+  const localFullStory = hasReliableFullLocalContent
+    ? cleanedContent
+    : rawDescription || cleanedContent || "No additional content available.";
+  const previewText =
+    hasReliableFullLocalContent && localFullStory.length > 320
+      ? localFullStory.slice(0, 320).trimEnd()
+      : localFullStory;
+  const remainingStory = hasReliableFullLocalContent
+    ? localFullStory.slice(previewText.length).trimStart()
+    : "";
+  const hasAdditionalLocalContent = remainingStory.length > 0;
 
   const handleClose = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -456,49 +454,38 @@ export default function ArticleDetailPage() {
           <div className="article-detail-section">
             <p className="article-detail-label">Full story</p>
             <div className="article-detail-copy">
-              {isExpanded ? (
-                localFullStory
-              ) : (
+              {previewText}
+              {isExpanded && hasAdditionalLocalContent ? (
+                <span className="article-detail-copy-continued"> {remainingStory}</span>
+              ) : null}
+              {!isExpanded && hasAdditionalLocalContent ? (
                 <>
-                  {previewText}{" "}
-                  {hasAdditionalLocalContent ? (
-                    <button
-                      className="article-more-button"
-                      onClick={() => setIsExpanded(true)}
-                    >
-                      More
-                    </button>
-                  ) : null}
+                  ...{" "}
+                  <button
+                    className="article-more-button"
+                    onClick={() => setIsExpanded(true)}
+                  >
+                    More
+                  </button>
                 </>
-              )}
+              ) : null}
             </div>
-            {shouldLinkOutForMore ? (
-              <div className="article-story-links">
-                <a
-                  href={article.url!}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="button button-secondary article-continue-button"
-                >
-                  Continue reading on original site
-                </a>
-              </div>
-            ) : null}
-            {article.url ? (
-              <div className="article-story-links">
-                <a
-                  href={article.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="button button-secondary article-original-button"
-                >
-                  Original article
-                </a>
-              </div>
-            ) : null}
           </div>
         </div>
       </section>
+
+      {article.url ? (
+        <div className="article-story-links">
+          <a
+            href={article.url}
+            target="_blank"
+            rel="noreferrer"
+            className="button button-secondary article-original-button"
+          >
+            Original article
+          </a>
+        </div>
+      ) : null}
 
       <section className="section-card stack">
         {comments.length === 0 ? (

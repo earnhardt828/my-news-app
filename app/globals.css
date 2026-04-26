@@ -503,6 +503,10 @@ input {
   text-wrap: pretty;
 }
 
+.article-detail-copy-continued {
+  display: inline;
+}
+
 .article-detail-stats-row {
   border-top: 0;
 }
@@ -532,12 +536,6 @@ input {
 
 .article-original-button {
   width: fit-content;
-}
-
-.article-continue-button {
-  width: fit-content;
-  color: #eb347d;
-  border-color: color-mix(in srgb, #eb347d 32%, var(--border));
 }
 
 .article-comments-eyebrow {
