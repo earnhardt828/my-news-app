@@ -241,224 +241,217 @@ export default function SettingsPage() {
 
   return (
     <section className="page-shell">
-      <div className="page-hero">
-        <p className="page-eyebrow">Settings</p>
-        <h2 className="page-title">Manage your Mirur experience.</h2>
-        <p className="page-subtitle">
-          Review account details, appearance, safety controls, and legal links
-          in one place.
-        </p>
-      </div>
-
       {isLoading ? (
         <div className="loading-state">
           <strong>Loading settings</strong>
           <span>Fetching your account preferences and safety settings.</span>
         </div>
       ) : (
-        <div className="stack">
-          <section className="section-card stack">
-            <div>
-              <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                Account
-              </p>
-              <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                Username and contact details
-              </h3>
-            </div>
-
-            <div className="input-row">
-              <input
-                className="input"
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-              />
-
-              <input
-                className="input"
-                type="email"
-                placeholder="Contact email"
-                value={contactInfo}
-                onChange={(event) => setContactInfo(event.target.value)}
-              />
-            </div>
-
-            <div className="comment-card">
-              <strong>Contact info</strong>
-              <div className="muted" style={{ marginTop: "6px" }}>
-                {currentUser?.email
-                  ? "Your current sign-in email is shown above. Secure email updates can be added later with a dedicated auth flow."
-                  : "Log in to review and eventually update your contact info."}
-              </div>
-            </div>
-
-            <div className="toolbar">
-              <button
-                className="button button-accent"
-                onClick={handleSaveAccount}
-                disabled={isSavingAccount}
-              >
-                {isSavingAccount ? "Saving..." : "Save Account"}
-              </button>
-              <button className="button button-secondary" onClick={handleLogOut}>
-                Log Out
-              </button>
-            </div>
-          </section>
-
-          <section className="section-card stack">
-            <div>
-              <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                Appearance
-              </p>
-              <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                Theme preference
-              </h3>
-            </div>
-
-            <div className="settings-row">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong>Dark mode</strong>
-                <span className="muted">
-                  Saved locally and applied across the entire app.
+        <div className="stack settings-list-shell">
+          <section className="settings-list-section">
+            <p className="settings-section-title">Account</p>
+            <div className="settings-list-card">
+              <div className="settings-list-row settings-list-row-static">
+                <div className="settings-list-copy">
+                  <strong>Change username</strong>
+                  <span>Update how your profile name appears across Mirur.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
                 </span>
               </div>
-              <ThemeToggle />
-            </div>
-          </section>
-
-          <section className="section-card stack">
-            <div>
-              <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                Safety
-              </p>
-              <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                Blocked users
-              </h3>
-            </div>
-
-            <div className="comment-card">
-              <strong>How blocking works</strong>
-              <div className="muted" style={{ marginTop: "6px" }}>
-                Block people directly from comment actions. Their comments will be
-                hidden from your feed and article pages.
+              <div className="settings-inline-fields">
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                />
               </div>
-            </div>
 
-            {blockedUsers.length === 0 ? (
-              <div className="empty-state">
-                <strong>No blocked users yet</strong>
-                <span>Use the Block action on a comment to manage this list.</span>
+              <div className="settings-list-row settings-list-row-static">
+                <div className="settings-list-copy">
+                  <strong>Update contact info</strong>
+                  <span>
+                    {currentUser?.email
+                      ? "Your current sign-in email is shown below."
+                      : "Log in to review your contact info."}
+                  </span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
               </div>
-            ) : (
-              <div className="comment-list">
-                {blockedUsers.map((blockedUser) => (
-                  <div key={blockedUser.id} className="comment-card settings-row">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong>
-                        {blockedUser.username
-                          ? `@${blockedUser.username}`
-                          : blockedUser.blocked_user_id}
-                      </strong>
-                      <span className="muted">
-                        Blocked on{" "}
-                        {new Date(blockedUser.created_at).toLocaleDateString("en-US", {
+              <div className="settings-inline-fields">
+                <input
+                  className="input"
+                  type="email"
+                  placeholder="Contact email"
+                  value={contactInfo}
+                  onChange={(event) => setContactInfo(event.target.value)}
+                />
+                <div className="muted settings-inline-note">
+                  Secure email updates can be added later with a dedicated auth flow.
+                </div>
+              </div>
+
+              <div className="settings-inline-actions">
+                <button
+                  className="button button-accent"
+                  onClick={handleSaveAccount}
+                  disabled={isSavingAccount}
+                >
+                  {isSavingAccount ? "Saving..." : "Save Account"}
+                </button>
+              </div>
+
+              <button className="settings-list-row settings-list-row-button" onClick={handleLogOut}>
+                <div className="settings-list-copy">
+                  <strong>Log out</strong>
+                  <span>Sign out of your Mirur account on this device.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+
+              <button
+                className="settings-list-row settings-list-row-button settings-list-row-danger"
+                onClick={() => setIsDeleteModalOpen(true)}
+                disabled={Boolean(deletionRequest)}
+              >
+                <div className="settings-list-copy">
+                  <strong>Delete account</strong>
+                  <span>
+                    {deletionRequest
+                      ? `Request submitted ${new Date(
+                          deletionRequest.created_at
+                        ).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
-                        })}
-                      </span>
+                        })}`
+                      : "Submit a safe deletion request for backend review."}
+                  </span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-list-section">
+            <p className="settings-section-title">Appearance</p>
+            <div className="settings-list-card">
+              <div className="settings-list-row settings-list-row-toggle">
+                <div className="settings-list-copy">
+                  <strong>Dark mode</strong>
+                  <span>Saved locally and applied across the entire app.</span>
+                </div>
+                <ThemeToggle />
+              </div>
+            </div>
+          </section>
+
+          <section className="settings-list-section">
+            <p className="settings-section-title">Safety</p>
+            <div className="settings-list-card">
+              <div className="settings-list-row settings-list-row-static">
+                <div className="settings-list-copy">
+                  <strong>Blocked users</strong>
+                  <span>
+                    {blockedUsers.length === 0
+                      ? "No blocked users yet. Use Block on comments to manage this list."
+                      : `${blockedUsers.length} blocked account${
+                          blockedUsers.length === 1 ? "" : "s"
+                        }`}
+                  </span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </div>
+
+              {blockedUsers.length > 0 ? (
+                <div className="settings-sublist">
+                  {blockedUsers.map((blockedUser) => (
+                    <div key={blockedUser.id} className="settings-subrow">
+                      <div className="settings-list-copy">
+                        <strong>
+                          {blockedUser.username
+                            ? `@${blockedUser.username}`
+                            : blockedUser.blocked_user_id}
+                        </strong>
+                        <span>
+                          Blocked on{" "}
+                          {new Date(blockedUser.created_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                      <button
+                        className="comment-action"
+                        onClick={() => handleUnblockUser(blockedUser.blocked_user_id)}
+                        disabled={activeBlockedUserId === blockedUser.blocked_user_id}
+                      >
+                        {activeBlockedUserId === blockedUser.blocked_user_id
+                          ? "Unblocking..."
+                          : "Unblock"}
+                      </button>
                     </div>
-                    <button
-                      className="comment-action"
-                      onClick={() => handleUnblockUser(blockedUser.blocked_user_id)}
-                      disabled={activeBlockedUserId === blockedUser.blocked_user_id}
-                    >
-                      {activeBlockedUserId === blockedUser.blocked_user_id
-                        ? "Unblocking..."
-                        : "Unblock"}
-                    </button>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="settings-list-row settings-list-row-static">
+                <div className="settings-list-copy">
+                  <strong>Report abuse or safety issue</strong>
+                  <span>Reach out at support@mirur.app for urgent safety concerns.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
               </div>
-            )}
-          </section>
-
-          <section className="section-card stack">
-            <div>
-              <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                Legal
-              </p>
-              <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                Policies and guidelines
-              </h3>
-            </div>
-
-            <div className="comment-list">
-              <Link href="/privacy" className="comment-card">
-                <strong>Privacy Policy</strong>
-                <div className="muted" style={{ marginTop: "6px" }}>
-                  Review how account, comments, and profile data are handled.
-                </div>
-              </Link>
-
-              <Link href="/terms" className="comment-card">
-                <strong>Terms of Use</strong>
-                <div className="muted" style={{ marginTop: "6px" }}>
-                  See the basic rules for using the app and posting content.
-                </div>
-              </Link>
-
-              <Link href="/community-guidelines" className="comment-card">
-                <strong>Community Guidelines</strong>
-                <div className="muted" style={{ marginTop: "6px" }}>
-                  Learn what behavior is expected in comments and reports.
-                </div>
-              </Link>
             </div>
           </section>
 
-          <section className="section-card stack danger-zone-card">
-            <div>
-              <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                Danger Zone
-              </p>
-              <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                Account deletion
-              </h3>
-            </div>
-
-            <div className="comment-card">
-              <strong>Delete account</strong>
-              <div className="muted" style={{ marginTop: "6px" }}>
-                Requests are stored safely for backend review. Permanent auth
-                deletion should still be handled server-side.
-              </div>
-            </div>
-
-            {deletionRequest ? (
-              <div className="comment-card">
-                <strong>Deletion request on file</strong>
-                <div className="muted" style={{ marginTop: "6px" }}>
-                  Status: {deletionRequest.status} · Requested{" "}
-                  {new Date(deletionRequest.created_at).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
+          <section className="settings-list-section">
+            <p className="settings-section-title">Legal</p>
+            <div className="settings-list-card">
+              <Link href="/privacy" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>Privacy Policy</strong>
+                  <span>Review how account, comments, and profile data are handled.</span>
                 </div>
-              </div>
-            ) : null}
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
 
-            <button
-              className="button comment-action-danger settings-danger-button"
-              onClick={() => setIsDeleteModalOpen(true)}
-              disabled={Boolean(deletionRequest)}
-            >
-              {deletionRequest ? "Request Submitted" : "Request Account Deletion"}
-            </button>
+              <Link href="/terms" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>Terms of Use</strong>
+                  <span>See the basic rules for using the app and posting content.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
+
+              <Link href="/community-guidelines" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>Community Guidelines</strong>
+                  <span>Learn what behavior is expected in comments and reports.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
+            </div>
           </section>
 
           {message ? <div className="chip chip-accent">{message}</div> : null}
