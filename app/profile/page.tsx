@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -105,6 +106,14 @@ export default function Profile() {
   } | null>(null);
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
 
+  const clearProfileState = useCallback(() => {
+    setUsername("");
+    setAvatarUrl("");
+    setCategories([]);
+    setMyComments([]);
+    setSavedArticles([]);
+  }, []);
+
   const saveProfile = async (nextAvatarUrl?: string) => {
     if (!currentUser?.id) {
       return { error: new Error("Log in first.") };
@@ -119,7 +128,7 @@ export default function Profile() {
     });
   };
 
-  const loadProfileForUser = async (userId: string) => {
+  const loadProfileForUser = useCallback(async (userId: string) => {
     const { data: profile } = await supabase
       .from("profiles")
       .select("username, categories, avatar_url")
@@ -143,43 +152,121 @@ export default function Profile() {
 
     setMyComments((comments ?? []) as MyComment[]);
     setSavedArticles((saved ?? []) as SavedArticle[]);
-  };
+  }, []);
+
+  const syncSignedInProfile = useCallback(async (user: User | null) => {
+    if (!user?.id) {
+      setCurrentUser(null);
+      clearProfileState();
+      return false;
+    }
+
+    setCurrentUser({
+      id: user.id,
+      email: user.email ?? null,
+    });
+
+    await loadProfileForUser(user.id);
+    return true;
+  }, [clearProfileState, loadProfileForUser]);
+
+  const refreshCurrentUserSession = useCallback(async () => {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      throw error;
+    }
+
+    return syncSignedInProfile(user);
+  }, [syncSignedInProfile]);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadUser() {
       setIsLoading(true);
 
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      setCurrentUser({
-        id: user?.id ?? null,
-        email: user?.email ?? null,
-      });
+        if (!isMounted) {
+          return;
+        }
 
-      if (!user?.id) {
-        setUsername("");
-        setAvatarUrl("");
-        setCategories([]);
-        setMyComments([]);
-        setSavedArticles([]);
-        setIsLoading(false);
-        return;
+        await syncSignedInProfile(user);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-
-      await loadProfileForUser(user.id);
-      setIsLoading(false);
     }
 
     loadUser();
-  }, []);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const authUser = session?.user ?? null;
+
+      void (async () => {
+        if (!isMounted) {
+          return;
+        }
+
+        setIsLoading(true);
+
+        try {
+          await syncSignedInProfile(authUser);
+        } finally {
+          if (isMounted) {
+            setIsLoading(false);
+          }
+        }
+      })();
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [syncSignedInProfile]);
 
   const handleSignUp = async () => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    setMessage(error ? error.message : "Sign-up successful.");
+    setMessage("");
+
+    const { data, error } = await supabase.auth.signUp({ email, password });
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    const sessionUser = data.session?.user ?? data.user ?? null;
+
+    if (sessionUser?.id) {
+      setIsLoading(true);
+
+      try {
+        await refreshCurrentUserSession();
+        setMessage("Signed up and logged in.");
+      } finally {
+        setIsLoading(false);
+      }
+
+      return;
+    }
+
+    setMessage("Sign-up successful. Check your email to confirm your account, then log in.");
   };
 
   const handleSignIn = async () => {
+    setMessage("");
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
@@ -187,19 +274,14 @@ export default function Profile() {
       return;
     }
 
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
+    setIsLoading(true);
 
-    setCurrentUser({
-      id: user?.id ?? null,
-      email: user?.email ?? null,
-    });
-
-    if (user?.id) {
-      await loadProfileForUser(user.id);
+    try {
+      await refreshCurrentUserSession();
+      setMessage("Signed in.");
+    } finally {
+      setIsLoading(false);
     }
-
-    setMessage("Signed in.");
   };
 
   const handleSaveUsername = async () => {
