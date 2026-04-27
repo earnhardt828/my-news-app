@@ -98,6 +98,17 @@ const categoryLabels: Record<string, string> = {
   World: "World 🌍",
 };
 
+const CATEGORY_OPTIONS = [
+  "Business",
+  "Tech",
+  "Sports",
+  "Politics",
+  "Health",
+  "Science",
+  "Entertainment",
+  "World",
+];
+
 function getCategoryLabel(category: string) {
   return categoryLabels[category] ?? category;
 }
@@ -240,6 +251,13 @@ export default function Home() {
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
   );
+  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
+  const [categorySheetStatus, setCategorySheetStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [isSavingCategories, setIsSavingCategories] = useState(false);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -1024,35 +1042,109 @@ export default function Home() {
     );
   };
 
+  const openCategorySheet = () => {
+    setCategoryDraft(categories);
+    setCategorySheetStatus(
+      userId
+        ? null
+        : {
+            type: "error",
+            text: "Log in to customize categories.",
+          }
+    );
+    setIsCategorySheetOpen(true);
+  };
+
+  const handleToggleCategoryDraft = (category: string) => {
+    setCategoryDraft((prev) =>
+      prev.includes(category)
+        ? prev.filter((current) => current !== category)
+        : [...prev, category]
+    );
+  };
+
+  const handleSaveCategories = async () => {
+    if (!userId) {
+      setCategorySheetStatus({
+        type: "error",
+        text: "Log in to customize categories.",
+      });
+      return;
+    }
+
+    setIsSavingCategories(true);
+    setCategorySheetStatus(null);
+
+    const { error } = await supabase.from("profiles").upsert({
+      id: userId,
+      username,
+      categories: categoryDraft,
+    });
+
+    setIsSavingCategories(false);
+
+    if (error) {
+      console.error("Error saving categories:", error);
+      setCategorySheetStatus({
+        type: "error",
+        text: "Could not save categories right now.",
+      });
+      return;
+    }
+
+    setCategories(categoryDraft);
+    setCategorySheetStatus({
+      type: "success",
+      text: "Categories updated.",
+    });
+    window.setTimeout(() => {
+      setIsCategorySheetOpen(false);
+      setCategorySheetStatus(null);
+    }, 900);
+  };
+
   return (
     <section className="page-shell">
       <div className="page-hero">
         <div className="page-title-row">
-          <div className="toolbar">
+          <div className="trending-controls-row">
             <button
-              className={`toolbar-pill ${
-                sortMode === "trending" ? "toolbar-pill-active" : ""
-              }`}
-              onClick={() => setSortMode("trending")}
+              type="button"
+              className="category-launch-button"
+              onClick={openCategorySheet}
+              aria-label="Customize categories"
             >
-              Trending
+              +
             </button>
-            <button
-              className={`toolbar-pill ${
-                sortMode === "my-feed" ? "toolbar-pill-active" : ""
-              }`}
-              onClick={() => setSortMode("my-feed")}
-            >
-              My Feed
-            </button>
-            <button
-              className={`toolbar-pill ${
-                sortMode === "latest" ? "toolbar-pill-active" : ""
-              }`}
-              onClick={() => setSortMode("latest")}
-            >
-              Latest
-            </button>
+
+            <div className="trending-tabs-wrap">
+              <div className="toolbar toolbar-centered">
+                <button
+                  className={`toolbar-pill ${
+                    sortMode === "trending" ? "toolbar-pill-active" : ""
+                  }`}
+                  onClick={() => setSortMode("trending")}
+                >
+                  Trending
+                </button>
+                <button
+                  className={`toolbar-pill ${
+                    sortMode === "my-feed" ? "toolbar-pill-active" : ""
+                  }`}
+                  onClick={() => setSortMode("my-feed")}
+                >
+                  My Feed
+                </button>
+                <button
+                  className={`toolbar-pill ${
+                    sortMode === "latest" ? "toolbar-pill-active" : ""
+                  }`}
+                  onClick={() => setSortMode("latest")}
+                >
+                  Latest
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1100,26 +1192,29 @@ export default function Home() {
               <article className="news-card">
                 <Link href={`/article/${article.id}`} className="article-link">
                   <div className="news-card-body">
-                    <div className="trending-title-row">
-                      <h3 className="trending-article-title">{article.title}</h3>
+                    <div className="trending-source-row">
+                      <div className="trending-source-brand">
+                        <SourceBadge sourceName={article.source} />
+                        <span className="trending-source-name">{article.source}</span>
+                      </div>
                       {index < 3 ? (
                         <span className="chip trending-rank-badge">Top {index + 1}</span>
                       ) : null}
                     </div>
 
+                    <div className="trending-title-row">
+                      <h3 className="trending-article-title">{article.title}</h3>
+                    </div>
+
                     <div className="news-card-header">
-                      <div className="trending-source-row">
-                        <div className="trending-source-brand">
-                          <SourceBadge sourceName={article.source} />
-                          <span className="trending-source-name">{article.source}</span>
-                        </div>
+                      <div className="trending-meta-row">
+                        <span className="trending-published-date">
+                          {formatPublishedDate(article.publishedAt, article.time)}
+                        </span>
                         <span className="chip chip-accent trending-category-pill">
                           {getCategoryLabel(article.category)}
                         </span>
                       </div>
-                      <span className="trending-published-date">
-                        {formatPublishedDate(article.publishedAt, article.time)}
-                      </span>
                     </div>
 
                     {article.image ? (
@@ -1196,6 +1291,88 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      {isCategorySheetOpen ? (
+        <div
+          className="bottom-sheet-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="category-sheet-title"
+        >
+          <div className="bottom-sheet">
+            <div className="bottom-sheet-handle" aria-hidden="true" />
+            <div className="bottom-sheet-header">
+              <div className="stack" style={{ gap: "6px" }}>
+                <h3 id="category-sheet-title" className="modal-title">
+                  Customize feed
+                </h3>
+                <p className="muted bottom-sheet-title">
+                  Choose categories to shape your Reflekt feed.
+                </p>
+              </div>
+              <button
+                className="button button-secondary"
+                onClick={() => {
+                  if (isSavingCategories) {
+                    return;
+                  }
+
+                  setIsCategorySheetOpen(false);
+                  setCategorySheetStatus(null);
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="category-sheet-grid">
+              {CATEGORY_OPTIONS.map((category) => (
+                <button
+                  key={category}
+                  className={`category-pill ${
+                    categoryDraft.includes(category) ? "category-pill-active" : ""
+                  }`}
+                  onClick={() => handleToggleCategoryDraft(category)}
+                >
+                  {getCategoryLabel(category)}
+                </button>
+              ))}
+            </div>
+
+            {categorySheetStatus ? (
+              <div
+                className={`status-message ${
+                  categorySheetStatus.type === "success"
+                    ? "status-success"
+                    : "status-error"
+                }`}
+              >
+                {categorySheetStatus.text}
+              </div>
+            ) : null}
+
+            <div className="modal-actions">
+              <button
+                className="button button-secondary"
+                onClick={() => {
+                  setCategoryDraft(categories);
+                  setCategorySheetStatus(null);
+                }}
+                disabled={isSavingCategories}
+              >
+                Reset
+              </button>
+              <button
+                className="button button-accent"
+                onClick={handleSaveCategories}
+                disabled={isSavingCategories || !userId}
+              >
+                {isSavingCategories ? "Saving..." : "Save categories"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {activeCommentsArticle ? (
         <div
