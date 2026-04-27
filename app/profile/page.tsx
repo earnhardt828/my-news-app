@@ -668,8 +668,8 @@ export default function Profile() {
               <Image
                 src="/reflekt-logo.png"
                 alt="Reflekt"
-                width={76}
-                height={76}
+                width={96}
+                height={96}
                 className="profile-auth-logo"
                 priority
               />

@@ -9,8 +9,8 @@ export default function AppHeader() {
       <Image
         src="/reflekt-logo.png"
         alt="Reflekt"
-        width={168}
-        height={32}
+        width={280}
+        height={56}
         className="brand-logo"
         priority
       />
