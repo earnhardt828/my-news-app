@@ -53,7 +53,7 @@ export default function UserProfilePage() {
     loadUserProfile();
   }, [userId]);
 
-  const displayName = profile?.username || "Mirur user";
+  const displayName = profile?.username || "Reflekt user";
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
@@ -62,7 +62,7 @@ export default function UserProfilePage() {
         <p className="page-eyebrow">User Profile</p>
         <h2 className="page-title">{displayName}</h2>
         <p className="page-subtitle">
-          Explore this user&apos;s profile and recent comments across Mirur.
+          Explore this user&apos;s profile and recent comments across Reflekt.
         </p>
       </div>
 
@@ -96,7 +96,7 @@ export default function UserProfilePage() {
 
               <div className="profile-meta">
                 <h3 className="profile-name">{displayName}</h3>
-                <span className="muted">Public Mirur profile</span>
+                <span className="muted">Public Reflekt profile</span>
                 <span className="chip">{comments.length} comments</span>
               </div>
             </div>

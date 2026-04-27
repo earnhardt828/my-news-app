@@ -281,7 +281,7 @@ export default function SettingsPage() {
               <div className="settings-list-row settings-list-row-static">
                 <div className="settings-list-copy">
                   <strong>Change username</strong>
-                  <span>Update how your profile name appears across Mirur.</span>
+                  <span>Update how your profile name appears across Reflekt.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
@@ -336,7 +336,7 @@ export default function SettingsPage() {
               <button className="settings-list-row settings-list-row-button" onClick={handleLogOut}>
                 <div className="settings-list-copy">
                   <strong>Log out</strong>
-                  <span>Sign out of your Mirur account on this device.</span>
+                  <span>Sign out of your Reflekt account on this device.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
@@ -353,7 +353,7 @@ export default function SettingsPage() {
               >
                 <div className="settings-list-copy">
                   <strong>Delete account</strong>
-                  <span>Permanently remove your Mirur account and related data.</span>
+                  <span>Permanently remove your Reflekt account and related data.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
@@ -430,7 +430,7 @@ export default function SettingsPage() {
               <div className="settings-list-row settings-list-row-static">
                 <div className="settings-list-copy">
                   <strong>Report abuse or safety issue</strong>
-                  <span>Reach out at support@mirur.app for urgent safety concerns.</span>
+                  <span>Reach out at support@reflekt.app for urgent safety concerns.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
@@ -491,7 +491,7 @@ export default function SettingsPage() {
                 Delete account
               </h3>
               <p className="muted" style={{ margin: 0 }}>
-                This permanently deletes your Mirur account. Type <strong>delete</strong> to confirm.
+                This permanently deletes your Reflekt account. Type <strong>delete</strong> to confirm.
               </p>
             </div>
 

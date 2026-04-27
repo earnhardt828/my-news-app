@@ -88,7 +88,7 @@ export default function ArticleReaderButton({
                 <div className="reader-loading-state">
                   <strong>Loading article</strong>
                   <span>
-                    Pulling the publisher page into Mirur. Some sites may limit
+                    Pulling the publisher page into Reflekt. Some sites may limit
                     embedded previews.
                   </span>
                 </div>

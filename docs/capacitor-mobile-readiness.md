@@ -2,7 +2,7 @@
 
 ## Current status
 
-Mirur can be prepared for a Capacitor wrapper, but the current Next.js app is
+Reflekt can be prepared for a Capacitor wrapper, but the current Next.js app is
 not compatible with a full static export yet.
 
 ## Why static export is blocked right now
@@ -24,7 +24,7 @@ Use Capacitor as a thin native wrapper around the deployed web app on Vercel.
 Recommended path:
 
 1. Keep the current Next.js web deployment as-is.
-2. Deploy Mirur to Vercel.
+2. Deploy Reflekt to Vercel.
 3. For the mobile wrapper, point Capacitor at the deployed HTTPS URL during
    native setup instead of relying on a local `out/` export.
 
@@ -42,7 +42,7 @@ This repo now includes:
 
 - Capacitor packages in `package.json`
 - `capacitor.config.ts` with:
-  - `appName: "Mirur"`
+  - `appName: "Reflekt"`
   - `appId: "app.mirur.news"`
   - `webDir: "out"`
   - `server.url: "https://my-news-app-omega-orpin.vercel.app"`

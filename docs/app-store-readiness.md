@@ -1,6 +1,6 @@
 # App Store Readiness Checklist
 
-This checklist is a practical guide for getting Mirur closer to App Store submission readiness without changing the current web app functionality.
+This checklist is a practical guide for getting Reflekt closer to App Store submission readiness without changing the current web app functionality.
 
 ## Apple Developer Account
 
@@ -58,7 +58,7 @@ This checklist is a practical guide for getting Mirur closer to App Store submis
 
 ## App Icon
 
-- [x] Basic Mirur icon exists
+- [x] Basic Reflekt icon exists
 - [ ] Produce App Store-ready icon sizes and export set
 - [ ] Confirm icon meets Apple branding and resolution requirements
 

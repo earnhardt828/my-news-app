@@ -4,7 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 
 export const metadata = {
-  title: "Mirur",
+  title: "Reflekt",
   description:
     "A personalized social news feed with comments, profiles, and trending stories",
 };
@@ -28,7 +28,7 @@ export default function RootLayout({
           strategy="beforeInteractive"
         >{`
           try {
-            var storedTheme = localStorage.getItem("mirur-theme");
+            var storedTheme = localStorage.getItem("reflekt-theme") || localStorage.getItem("mirur-theme");
             var theme = storedTheme === "dark" || storedTheme === "light"
               ? storedTheme
               : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");

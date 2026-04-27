@@ -665,7 +665,14 @@ export default function Profile() {
         <div className="profile-auth-shell">
           <section className="section-card stack profile-auth-card">
             <div className="stack" style={{ gap: "8px" }}>
-              <h2 className="profile-name">Welcome to Mirur</h2>
+              <Image
+                src="/reflekt-logo.png"
+                alt="Reflekt"
+                width={180}
+                height={40}
+                className="profile-auth-logo"
+                priority
+              />
               <p className="muted profile-auth-helper">
                 Create an account to save your profile, comments, and feed.
               </p>

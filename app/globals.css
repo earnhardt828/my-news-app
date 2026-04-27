@@ -8,13 +8,13 @@
   --surface-muted: #eef3f9;
   --border: rgba(20, 33, 61, 0.1);
   --text-soft: #6a768f;
-  --accent: #eb347d;
-  --accent-strong: #c81f63;
-  --accent-faint: rgba(235, 52, 125, 0.14);
+  --accent: #34d0eb;
+  --accent-strong: #109fbe;
+  --accent-faint: rgba(52, 208, 235, 0.16);
   --shadow-soft: 0 22px 60px rgba(20, 33, 61, 0.1);
-  --body-top: #fff5fa;
+  --body-top: #f2fdff;
   --body-mid: #f4f7fb;
-  --body-bottom: #f6edf5;
+  --body-bottom: #eefaff;
   --topbar-bg: rgba(244, 247, 251, 0.84);
   --topbar-border: rgba(255, 255, 255, 0.7);
   --nav-bg: rgba(255, 255, 255, 0.94);
@@ -22,8 +22,8 @@
   --nav-shadow: 0 18px 42px rgba(20, 33, 61, 0.12);
   --nav-link-color: #7f8aa1;
   --nav-link-hover-bg: rgba(20, 33, 61, 0.05);
-  --nav-link-active-bg: rgba(235, 52, 125, 0.12);
-  --nav-link-active-text: #eb347d;
+  --nav-link-active-bg: rgba(52, 208, 235, 0.14);
+  --nav-link-active-text: #109fbe;
   --card-border-strong: rgba(255, 255, 255, 0.7);
   --button-secondary-bg: #ffffff;
   --input-bg: rgba(255, 255, 255, 0.92);
@@ -50,13 +50,13 @@
   --surface-muted: #182235;
   --border: rgba(186, 201, 231, 0.14);
   --text-soft: #99a6c0;
-  --accent: #eb347d;
-  --accent-strong: #ff7ab0;
-  --accent-faint: rgba(235, 52, 125, 0.18);
+  --accent: #34d0eb;
+  --accent-strong: #7feaf7;
+  --accent-faint: rgba(52, 208, 235, 0.22);
   --shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.34);
-  --body-top: #1a1324;
+  --body-top: #081d24;
   --body-mid: #0d1526;
-  --body-bottom: #120d1a;
+  --body-bottom: #0a1520;
   --topbar-bg: rgba(12, 19, 35, 0.84);
   --topbar-border: rgba(186, 201, 231, 0.08);
   --nav-bg: rgba(18, 26, 43, 0.96);
@@ -64,8 +64,8 @@
   --nav-shadow: 0 22px 50px rgba(0, 0, 0, 0.34);
   --nav-link-color: #99a6c0;
   --nav-link-hover-bg: rgba(186, 201, 231, 0.08);
-  --nav-link-active-bg: rgba(235, 52, 125, 0.18);
-  --nav-link-active-text: #ff7ab0;
+  --nav-link-active-bg: rgba(52, 208, 235, 0.2);
+  --nav-link-active-text: #7feaf7;
   --card-border-strong: rgba(186, 201, 231, 0.08);
   --button-secondary-bg: #182235;
   --input-bg: rgba(24, 34, 53, 0.92);
@@ -103,7 +103,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(235, 52, 125, 0.18), transparent 30%),
+    radial-gradient(circle at top left, rgba(52, 208, 235, 0.18), transparent 30%),
     linear-gradient(180deg, var(--body-top) 0%, var(--body-mid) 34%, var(--body-bottom) 100%);
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -133,16 +133,27 @@ input {
 .topbar-inner {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: calc(28px + env(safe-area-inset-top)) 20px 16px;
-  text-align: left;
+  padding: calc(22px + env(safe-area-inset-top)) 20px 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-.brand-title {
-  margin: 0;
-  font-size: 1.35rem;
-  line-height: 1.1;
-  font-weight: 850;
-  letter-spacing: -0.03em;
+.brand-logo-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--card-border-strong);
+  box-shadow: 0 14px 34px rgba(20, 33, 61, 0.08);
+}
+
+.brand-logo {
+  width: min(220px, 58vw);
+  height: auto;
+  display: block;
 }
 
 .app-main {
@@ -528,7 +539,7 @@ input {
   border: 0;
   padding: 0;
   background: transparent;
-  color: #eb347d;
+  color: var(--accent);
   font-size: inherit;
   font-weight: 800;
   line-height: inherit;
@@ -1275,6 +1286,16 @@ input {
   line-height: 1.55;
 }
 
+.profile-auth-logo {
+  width: min(180px, 46vw);
+  height: auto;
+  display: block;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 34px rgba(20, 33, 61, 0.08);
+}
+
 .profile-auth-actions .button {
   flex: 1 1 180px;
 }
@@ -1846,7 +1867,7 @@ input {
 .video-card-theme-sunset {
   background:
     radial-gradient(circle at 50% 24%, rgba(255, 255, 255, 0.16), transparent 24%),
-    linear-gradient(180deg, #ff8a5b 0%, #eb347d 100%);
+    linear-gradient(180deg, #7de8f8 0%, #34d0eb 100%);
 }
 
 .video-frame-overlay {

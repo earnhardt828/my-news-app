@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "mirur-theme";
+const STORAGE_KEY = "reflekt-theme";
 
 type ThemeMode = "light" | "dark";
 
@@ -16,7 +16,9 @@ function getInitialTheme(): ThemeMode {
     return "light";
   }
 
-  const storedTheme = window.localStorage.getItem(STORAGE_KEY);
+  const storedTheme =
+    window.localStorage.getItem(STORAGE_KEY) ??
+    window.localStorage.getItem("mirur-theme");
 
   if (storedTheme === "dark" || storedTheme === "light") {
     return storedTheme;
