@@ -5,7 +5,7 @@ import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ShareButton from "./components/share-button";
 import { supabase } from "../lib/supabase";
 import {
@@ -1042,7 +1042,7 @@ export default function Home() {
     );
   };
 
-  const openCategorySheet = () => {
+  const openCategorySheet = useCallback(() => {
     setCategoryDraft(categories);
     setCategorySheetStatus(
       userId
@@ -1050,10 +1050,22 @@ export default function Home() {
         : {
             type: "error",
             text: "Log in to customize categories.",
-          }
+        }
     );
     setIsCategorySheetOpen(true);
-  };
+  }, [categories, userId]);
+
+  useEffect(() => {
+    const handleOpenCategories = () => {
+      openCategorySheet();
+    };
+
+    window.addEventListener("reflekt:open-categories", handleOpenCategories);
+
+    return () => {
+      window.removeEventListener("reflekt:open-categories", handleOpenCategories);
+    };
+  }, [openCategorySheet]);
 
   const handleToggleCategoryDraft = (category: string) => {
     setCategoryDraft((prev) =>
@@ -1107,43 +1119,32 @@ export default function Home() {
     <section className="page-shell">
       <div className="page-hero">
         <div className="page-title-row">
-          <div className="trending-controls-row">
-            <button
-              type="button"
-              className="category-launch-button"
-              onClick={openCategorySheet}
-              aria-label="Customize categories"
-            >
-              +
-            </button>
-
-            <div className="trending-tabs-wrap">
-              <div className="toolbar toolbar-centered">
-                <button
-                  className={`toolbar-pill ${
-                    sortMode === "trending" ? "toolbar-pill-active" : ""
-                  }`}
-                  onClick={() => setSortMode("trending")}
-                >
-                  Trending
-                </button>
-                <button
-                  className={`toolbar-pill ${
-                    sortMode === "my-feed" ? "toolbar-pill-active" : ""
-                  }`}
-                  onClick={() => setSortMode("my-feed")}
-                >
-                  My Feed
-                </button>
-                <button
-                  className={`toolbar-pill ${
-                    sortMode === "latest" ? "toolbar-pill-active" : ""
-                  }`}
-                  onClick={() => setSortMode("latest")}
-                >
-                  Latest
-                </button>
-              </div>
+          <div className="trending-tabs-wrap">
+            <div className="toolbar toolbar-centered">
+              <button
+                className={`toolbar-pill ${
+                  sortMode === "trending" ? "toolbar-pill-active" : ""
+                }`}
+                onClick={() => setSortMode("trending")}
+              >
+                Trending
+              </button>
+              <button
+                className={`toolbar-pill ${
+                  sortMode === "my-feed" ? "toolbar-pill-active" : ""
+                }`}
+                onClick={() => setSortMode("my-feed")}
+              >
+                My Feed
+              </button>
+              <button
+                className={`toolbar-pill ${
+                  sortMode === "latest" ? "toolbar-pill-active" : ""
+                }`}
+                onClick={() => setSortMode("latest")}
+              >
+                Latest
+              </button>
             </div>
           </div>
         </div>

@@ -61,16 +61,27 @@ export default function AppHeader() {
 
   return (
     <div className="app-header-logo-wrap">
-      <Link href="/" className="brand-logo-link" aria-label="Reflekt home">
+      <Link href="/" className="brand-mark-link" aria-label="Trending home">
         <Image
-          src="/reflekt-logo.png"
+          src="/trending-r-logo.png"
           alt="Reflekt"
-          width={280}
+          width={56}
           height={56}
-          className="brand-logo"
+          className="brand-mark-logo"
           priority
         />
       </Link>
+
+      <button
+        type="button"
+        className="category-launch-button"
+        aria-label="Customize categories"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent("reflekt:open-categories"));
+        }}
+      >
+        +
+      </button>
     </div>
   );
 }

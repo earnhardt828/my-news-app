@@ -149,8 +149,28 @@ input {
 .app-header-logo-wrap {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   width: 100%;
+}
+
+.brand-mark-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--card-border-strong);
+  box-shadow: 0 14px 34px rgba(20, 33, 61, 0.08);
+}
+
+.brand-mark-logo {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
 }
 
 .brand-logo-link {
@@ -318,16 +338,10 @@ input {
   min-width: 0;
 }
 
-.trending-controls-row {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 12px;
-}
-
 .trending-tabs-wrap {
   display: flex;
   justify-content: center;
+  width: 100%;
 }
 
 .category-launch-button {
@@ -447,7 +461,7 @@ input {
 
 .trending-article-title {
   margin: 0;
-  font-size: clamp(1.16rem, 4.6vw, 1.42rem);
+  font-size: clamp(1.2rem, 4.8vw, 1.48rem);
   line-height: 1.22;
   letter-spacing: -0.025em;
   font-weight: 850;
