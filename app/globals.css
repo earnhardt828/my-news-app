@@ -1468,6 +1468,60 @@ input {
   align-items: center;
 }
 
+.profile-section-label {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.profile-bio-block {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-bio-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.profile-bio-button:hover {
+  transform: none;
+}
+
+.profile-bio-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-bio-input {
+  min-height: 104px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.profile-bio-text {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.profile-bio-placeholder {
+  color: var(--text-soft);
+}
+
+.profile-divider {
+  height: 1px;
+  width: 100%;
+  background: var(--border);
+}
+
 .profile-hidden-input-row {
   display: none;
 }
@@ -1486,9 +1540,9 @@ input {
   min-height: 38px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--button-secondary-bg);
-  color: var(--foreground);
+  border: 1px solid rgba(17, 17, 17, 0.12);
+  background: #ffffff;
+  color: #111111;
   font-weight: 700;
 }
 
@@ -1655,9 +1709,9 @@ input {
 }
 
 .category-pill-active {
-  background: var(--foreground);
-  color: white;
-  border-color: var(--foreground);
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
 }
 
 .category-sheet-grid {

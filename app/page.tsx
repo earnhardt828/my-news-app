@@ -7,6 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ShareButton from "./components/share-button";
+import { isCommentAllowed } from "../lib/moderation";
 import { supabase } from "../lib/supabase";
 import {
   buildVideoEmbedUrl,
@@ -576,6 +577,11 @@ export default function Home() {
 
     if (!username) {
       alert("Set a username on your Profile page first");
+      return;
+    }
+
+    if (!isCommentAllowed(text)) {
+      alert("Please edit your comment before posting.");
       return;
     }
 

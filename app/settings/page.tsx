@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ThemeToggle from "../components/theme-toggle";
+import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -134,7 +135,33 @@ export default function SettingsPage() {
       return;
     }
 
+    if (!isUsernameAllowed(username.trim())) {
+      setMessage("That username is not available. Please choose another.");
+      return;
+    }
+
     setIsSavingAccount(true);
+
+    const { data: matchingProfiles, error: availabilityError } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("username", username.trim());
+
+    if (availabilityError) {
+      setIsSavingAccount(false);
+      setMessage("Could not check username availability.");
+      return;
+    }
+
+    const isTaken = (matchingProfiles ?? []).some(
+      (profile) => profile.id !== currentUser.id
+    );
+
+    if (isTaken) {
+      setIsSavingAccount(false);
+      setMessage("Username already taken.");
+      return;
+    }
 
     const { error } = await supabase.from("profiles").upsert({
       id: currentUser.id,

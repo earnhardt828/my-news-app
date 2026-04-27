@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import type { User } from "@supabase/supabase-js";
+import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -108,10 +109,14 @@ export default function Profile() {
   } | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [bio, setBio] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [draftUsername, setDraftUsername] = useState("");
   const [isSavingInlineUsername, setIsSavingInlineUsername] = useState(false);
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [draftBio, setDraftBio] = useState("");
+  const [isSavingBio, setIsSavingBio] = useState(false);
   const [myComments, setMyComments] = useState<MyComment[]>([]);
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -138,6 +143,9 @@ export default function Profile() {
     setDraftUsername("");
     setIsEditingUsername(false);
     setAvatarUrl("");
+    setBio("");
+    setDraftBio("");
+    setIsEditingBio(false);
     setCategories([]);
     setMyComments([]);
     setSavedArticles([]);
@@ -152,6 +160,7 @@ export default function Profile() {
       id: currentUser.id,
       email: currentUser.email,
       username: username.trim() || null,
+      bio: bio.trim() || null,
       categories,
       avatar_url: nextAvatarUrl ?? avatarUrl,
     });
@@ -160,12 +169,14 @@ export default function Profile() {
   const loadProfileForUser = useCallback(async (userId: string) => {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("username, categories, avatar_url")
+      .select("username, bio, categories, avatar_url")
       .eq("id", userId)
       .maybeSingle();
 
     setUsername(profile?.username ?? "");
     setDraftUsername(profile?.username ?? "");
+    setBio(profile?.bio ?? "");
+    setDraftBio(profile?.bio ?? "");
     setAvatarUrl(profile?.avatar_url ?? "");
     setCategories(profile?.categories ?? []);
 
@@ -357,6 +368,11 @@ export default function Profile() {
       return;
     }
 
+    if (!isUsernameAllowed(trimmedUsername)) {
+      setMessage("That username is not available. Please choose another.");
+      return;
+    }
+
     setIsSavingInlineUsername(true);
 
     const { data: matchingProfiles, error: availabilityError } = await supabase
@@ -470,6 +486,51 @@ export default function Profile() {
     }
 
     setMessage("Profile saved.");
+  };
+
+  const startBioEdit = () => {
+    setDraftBio(bio);
+    setIsEditingBio(true);
+    setMessage("");
+  };
+
+  const cancelBioEdit = () => {
+    setDraftBio(bio);
+    setIsEditingBio(false);
+  };
+
+  const handleBioSave = async () => {
+    if (!currentUser?.id) {
+      setMessage("Log in first.");
+      return;
+    }
+
+    setIsSavingBio(true);
+
+    const nextBio = draftBio.trim();
+    const previousBio = bio;
+    setBio(nextBio);
+
+    const { error } = await supabase.from("profiles").upsert({
+      id: currentUser.id,
+      email: currentUser.email,
+      username: username.trim() || null,
+      bio: nextBio || null,
+      categories,
+      avatar_url: avatarUrl || null,
+    });
+
+    setIsSavingBio(false);
+
+    if (error) {
+      setBio(previousBio);
+      setDraftBio(previousBio);
+      setMessage(error.message ?? "Could not save bio.");
+      return;
+    }
+
+    setIsEditingBio(false);
+    setMessage("Bio updated.");
   };
 
   const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -813,14 +874,59 @@ export default function Profile() {
                 </div>
                 {isUploadingAvatar ? (
                   <span className="muted">Uploading image...</span>
-                ) : (
-                  <span className="muted">Tap your avatar to change your profile photo.</span>
-                )}
+                ) : null}
               </div>
             </div>
 
             <div className="stack">
-              <strong>Favorite categories</strong>
+              <div className="profile-bio-block">
+                <span className="profile-section-label">Bio</span>
+                {isEditingBio ? (
+                  <div className="profile-bio-editor">
+                    <textarea
+                      className="input profile-bio-input"
+                      value={draftBio}
+                      onChange={(event) => setDraftBio(event.target.value)}
+                      rows={3}
+                      maxLength={220}
+                      disabled={isSavingBio}
+                      placeholder="Add a short bio"
+                    />
+                    <div className="profile-name-actions">
+                      <button
+                        type="button"
+                        className="button button-secondary profile-inline-button"
+                        onClick={cancelBioEdit}
+                        disabled={isSavingBio}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-accent profile-inline-button"
+                        onClick={handleBioSave}
+                        disabled={isSavingBio}
+                      >
+                        {isSavingBio ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="profile-bio-button"
+                    onClick={startBioEdit}
+                  >
+                    <p className={`profile-bio-text ${bio ? "" : "profile-bio-placeholder"}`}>
+                      {bio || "Add a short bio"}
+                    </p>
+                  </button>
+                )}
+              </div>
+
+              <div className="profile-divider" />
+
+              <strong>Favorite Categories</strong>
               <div className="category-grid">
                 {CATEGORY_OPTIONS.map((cat) => (
                   <button
@@ -855,21 +961,10 @@ export default function Profile() {
             </div>
 
             <button className="button button-accent" onClick={handleSaveUsername}>
-              Save Profile Changes
+              Save Favorite Categories
             </button>
 
             {message ? <div className="chip chip-accent">{message}</div> : null}
-
-            <div className="profile-grid">
-              <div className="comment-card">
-                <strong>Current user</strong>
-                <div className="muted">{currentUser?.email ?? "Not signed in"}</div>
-              </div>
-              <div className="comment-card">
-                <strong>Username</strong>
-                <div className="muted">{username || "None"}</div>
-              </div>
-            </div>
           </section>
 
           <div className="stack">
