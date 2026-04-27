@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import LoadingScreen from "../components/loading-screen";
 import ThemeToggle from "../components/theme-toggle";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
@@ -327,10 +328,7 @@ export default function SettingsPage() {
   return (
     <section className="page-shell">
       {isLoading ? (
-        <div className="loading-state">
-          <strong>Loading settings</strong>
-          <span>Fetching your account preferences and safety settings.</span>
-        </div>
+        <LoadingScreen />
       ) : (
         <div className="stack settings-list-shell">
           <section className="settings-list-section">

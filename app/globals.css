@@ -1236,6 +1236,41 @@ input {
   gap: 14px;
 }
 
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(env(safe-area-inset-top), 16px)
+    max(env(safe-area-inset-right), 16px)
+    max(env(safe-area-inset-bottom), 16px)
+    max(env(safe-area-inset-left), 16px);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.loading-screen-logo {
+  width: clamp(60px, 18vw, 80px);
+  height: auto;
+  object-fit: contain;
+  animation: loading-logo-fade 360ms ease-out both;
+}
+
+@keyframes loading-logo-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .skeleton-card {
   display: grid;
   gap: 14px;

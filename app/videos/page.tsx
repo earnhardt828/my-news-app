@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import LoadingScreen from "../components/loading-screen";
 import ShareButton from "../components/share-button";
 import {
   buildVideoEmbedUrl,
@@ -327,13 +328,7 @@ export default function VideosPage() {
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
 
       {isLoading ? (
-        <div className="reels-feed">
-          {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="reel-card reel-card-skeleton">
-              <div className="reel-skeleton-surface" />
-            </div>
-          ))}
-        </div>
+        <LoadingScreen />
       ) : (
         <div className="reels-feed">
           {videos.map((video) => {

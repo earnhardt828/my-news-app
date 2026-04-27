@@ -1,6 +1,7 @@
 "use client";
 
 import AdSlot from "./components/ad-slot";
+import LoadingScreen from "./components/loading-screen";
 import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
@@ -187,47 +188,6 @@ function formatRelativeTime(timestamp: string | null) {
   }
 
   return `${diffDays} days ago`;
-}
-
-function FeedSkeleton() {
-  return (
-    <div className="stack">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div key={index} className="skeleton-card">
-          <div className="skeleton-meta-row">
-            <div className="skeleton-line skeleton-chip" />
-            <div className="skeleton-line skeleton-body-sm" />
-            <div className="skeleton-line skeleton-body-sm" />
-          </div>
-
-          <div className="stack" style={{ gap: "8px" }}>
-            <div className="skeleton-line skeleton-title-lg skeleton-body-lg" />
-            <div className="skeleton-line skeleton-title skeleton-body-md" />
-          </div>
-
-          <div className="skeleton-action-row">
-            <div className="skeleton-line skeleton-button" />
-            <div className="skeleton-line skeleton-button" />
-            <div className="skeleton-line skeleton-stat" />
-            <div className="skeleton-line skeleton-stat" />
-          </div>
-
-          <div className="skeleton-comment-list">
-            {Array.from({ length: 2 }).map((__, commentIndex) => (
-              <div key={commentIndex} className="skeleton-comment-card">
-                <div className="skeleton-comment-row">
-                  <div className="skeleton-circle" />
-                  <div className="skeleton-line skeleton-body-sm" />
-                </div>
-                <div className="skeleton-line skeleton-body-lg" />
-                <div className="skeleton-line skeleton-body-md" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 export default function Home() {
@@ -1189,7 +1149,7 @@ export default function Home() {
       ) : null}
 
       {isLoading ? (
-        <FeedSkeleton />
+        <LoadingScreen />
       ) : sortMode === "my-feed" && categories.length === 0 ? (
         <div className="empty-state">
           <strong>No categories selected</strong>

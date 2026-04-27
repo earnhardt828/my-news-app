@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import type { User } from "@supabase/supabase-js";
+import LoadingScreen from "../components/loading-screen";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
@@ -801,10 +802,7 @@ export default function Profile() {
   return (
     <section className="page-shell">
       {isLoading ? (
-        <div className="loading-state">
-          <strong>Loading profile</strong>
-          <span>Fetching your account, categories, and comment history.</span>
-        </div>
+        <LoadingScreen />
       ) : !isSignedIn ? (
         <div className="profile-auth-shell">
           <section className="section-card stack profile-auth-card">
