@@ -133,7 +133,7 @@ input {
 .topbar-inner {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 32px) 20px 14px;
+  padding: calc(env(safe-area-inset-top) + 36px) 20px 14px;
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -1684,7 +1684,7 @@ input {
 
 .videos-toolbar {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   padding: 0 20px;
 }
 
@@ -1692,6 +1692,7 @@ input {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-top: -56px;
 }
 
 .videos-toolbar-row-end {
@@ -1709,14 +1710,15 @@ input {
   border-radius: 999px;
   background: var(--button-secondary-bg);
   color: var(--foreground);
-  font-size: 1.2rem;
+  font-size: 1.5rem;
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(20, 33, 61, 0.08);
+  line-height: 1;
 }
 
 .videos-search-shell {
   flex: 1;
-  max-width: min(100%, 420px);
+  max-width: min(100%, 360px);
 }
 
 .videos-category-tabs {
