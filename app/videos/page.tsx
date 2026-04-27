@@ -266,11 +266,23 @@ export default function VideosPage() {
   return (
     <section className="reels-shell videos-page-shell">
       <div className="videos-toolbar">
-        <div className="videos-toolbar-row">
-          <div className="videos-toolbar-copy">
-            <strong>Videos</strong>
-            <span>Short updates from trusted news channels.</span>
-          </div>
+        <div className="videos-toolbar-row videos-toolbar-row-end">
+          {isSearchOpen ? (
+            <label className="search-input-shell videos-search-shell" htmlFor="videos-search-input">
+              <span className="search-input-icon" aria-hidden="true">
+                ⌕
+              </span>
+              <input
+                ref={searchInputRef}
+                id="videos-search-input"
+                className="search-input search-input-with-icon"
+                type="search"
+                placeholder="Search videos"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+            </label>
+          ) : null}
 
           <button
             type="button"
@@ -289,32 +301,6 @@ export default function VideosPage() {
             {isSearchOpen ? "✕" : "⌕"}
           </button>
         </div>
-
-        {isSearchOpen ? (
-          <div className="search-input-shell videos-search-shell">
-            <span className="search-input-icon" aria-hidden="true">
-              ⌕
-            </span>
-            <input
-              ref={searchInputRef}
-              className="search-input search-input-with-icon"
-              type="search"
-              placeholder="Search videos"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-            <button
-              type="button"
-              className="videos-search-clear"
-              onClick={() => {
-                setSearchTerm("");
-                setIsSearchOpen(false);
-              }}
-            >
-              Close
-            </button>
-          </div>
-        ) : null}
 
         <div className="videos-category-tabs" role="tablist" aria-label="Video categories">
           {VIDEO_CATEGORIES.map((category) => (
