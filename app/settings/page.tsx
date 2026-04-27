@@ -30,12 +30,14 @@ type DbProfile = {
   id: string;
   username: string | null;
   avatar_url: string | null;
+  username_last_changed_at?: string | null;
 };
 
 export default function SettingsPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<UserState>(null);
   const [username, setUsername] = useState("");
+  const [savedUsername, setSavedUsername] = useState("");
   const [contactInfo, setContactInfo] = useState("");
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserRecord[]>([]);
   const [message, setMessage] = useState("");
@@ -49,6 +51,7 @@ export default function SettingsPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [usernameLastChangedAt, setUsernameLastChangedAt] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
@@ -65,6 +68,8 @@ export default function SettingsPage() {
 
       if (!user?.id) {
         setUsername("");
+        setSavedUsername("");
+        setUsernameLastChangedAt(null);
         setBlockedUsers([]);
         setIsLoading(false);
         return;
@@ -74,7 +79,7 @@ export default function SettingsPage() {
         await Promise.all([
           supabase
             .from("profiles")
-            .select("username")
+            .select("username, username_last_changed_at")
             .eq("id", user.id)
             .maybeSingle(),
           supabase
@@ -85,6 +90,8 @@ export default function SettingsPage() {
         ]);
 
       setUsername(profileResult.data?.username ?? "");
+      setSavedUsername(profileResult.data?.username ?? "");
+      setUsernameLastChangedAt(profileResult.data?.username_last_changed_at ?? null);
 
       const blockedRecords = (blockedUsersResult.data ?? []) as DbBlockedUser[];
 
@@ -163,10 +170,32 @@ export default function SettingsPage() {
       return;
     }
 
+    const isRealUsernameChange =
+      username.trim().toLowerCase() !== savedUsername.trim().toLowerCase();
+
+    if (isRealUsernameChange && usernameLastChangedAt) {
+      const lastChangedAt = new Date(usernameLastChangedAt).getTime();
+
+      if (!Number.isNaN(lastChangedAt)) {
+        const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+
+        if (Date.now() - lastChangedAt < twentyFourHoursMs) {
+          setIsSavingAccount(false);
+          setMessage("You can only change your username once per day.");
+          return;
+        }
+      }
+    }
+
+    const nextUsernameChangedAt = isRealUsernameChange
+      ? new Date().toISOString()
+      : usernameLastChangedAt;
+
     const { error } = await supabase.from("profiles").upsert({
       id: currentUser.id,
       email: currentUser.email,
       username: username.trim(),
+      username_last_changed_at: nextUsernameChangedAt,
     });
 
     setIsSavingAccount(false);
@@ -179,6 +208,8 @@ export default function SettingsPage() {
     setMessage(
       "Username saved. Contact info remains a safe placeholder until secure email-change support is added."
     );
+    setSavedUsername(username.trim());
+    setUsernameLastChangedAt(nextUsernameChangedAt ?? null);
   };
 
   const handleLogOut = async () => {

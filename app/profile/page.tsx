@@ -42,6 +42,7 @@ type ProfileRow = {
   bio: string | null;
   categories: string[] | null;
   avatar_url: string | null;
+  username_last_changed_at: string | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -141,6 +142,7 @@ export default function Profile() {
     bio: null,
     categories: [],
     avatar_url: null,
+    username_last_changed_at: null,
   });
   const authFlashMessage =
     typeof window !== "undefined"
@@ -167,6 +169,7 @@ export default function Profile() {
       bio: null,
       categories: [],
       avatar_url: null,
+      username_last_changed_at: null,
     };
   }, []);
 
@@ -176,6 +179,7 @@ export default function Profile() {
       bio: string | null;
       categories: string[];
       avatar_url: string | null;
+      username_last_changed_at: string | null;
     }>
   ) => {
     if (!currentUser?.id) {
@@ -189,6 +193,8 @@ export default function Profile() {
       bio: updates?.bio ?? (bio.trim() || null),
       categories: updates?.categories ?? categories,
       avatar_url: updates?.avatar_url ?? (avatarUrl || null),
+      username_last_changed_at:
+        updates?.username_last_changed_at ?? profileRef.current.username_last_changed_at,
     };
 
     const result = await supabase.from("profiles").upsert(payload);
@@ -199,6 +205,7 @@ export default function Profile() {
         bio: payload.bio,
         categories: payload.categories,
         avatar_url: payload.avatar_url,
+        username_last_changed_at: payload.username_last_changed_at,
       };
     }
 
@@ -208,7 +215,7 @@ export default function Profile() {
   const loadProfileForUser = useCallback(async (userId: string) => {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("username, bio, categories, avatar_url")
+      .select("username, bio, categories, avatar_url, username_last_changed_at")
       .eq("id", userId)
       .maybeSingle();
 
@@ -223,6 +230,7 @@ export default function Profile() {
       bio: profile?.bio ?? null,
       categories: profile?.categories ?? [],
       avatar_url: profile?.avatar_url ?? null,
+      username_last_changed_at: profile?.username_last_changed_at ?? null,
     };
 
     const { data: comments } = await supabase
@@ -441,14 +449,36 @@ export default function Profile() {
       return;
     }
 
+    const currentSavedUsername = profileRef.current.username?.trim() ?? "";
+    const isRealUsernameChange =
+      trimmedUsername.toLowerCase() !== currentSavedUsername.toLowerCase();
+
+    if (isRealUsernameChange && profileRef.current.username_last_changed_at) {
+      const lastChangedAt = new Date(profileRef.current.username_last_changed_at).getTime();
+
+      if (!Number.isNaN(lastChangedAt)) {
+        const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+
+        if (Date.now() - lastChangedAt < twentyFourHoursMs) {
+          setIsSavingInlineUsername(false);
+          setMessage("You can only change your username once per day.");
+          return;
+        }
+      }
+    }
+
     const previousUsername = username;
     setUsername(trimmedUsername);
+    const nextUsernameChangedAt = isRealUsernameChange
+      ? new Date().toISOString()
+      : profileRef.current.username_last_changed_at;
 
     const { error } = await saveProfile({
       username: trimmedUsername,
       bio: profileRef.current.bio,
       categories: profileRef.current.categories ?? categories,
       avatar_url: profileRef.current.avatar_url,
+      username_last_changed_at: nextUsernameChangedAt,
     });
 
     setIsSavingInlineUsername(false);
@@ -560,6 +590,7 @@ export default function Profile() {
       bio: nextBio || null,
       categories: profileRef.current.categories ?? categories,
       avatar_url: profileRef.current.avatar_url,
+      username_last_changed_at: profileRef.current.username_last_changed_at,
     });
 
     setIsSavingBio(false);
@@ -623,6 +654,7 @@ export default function Profile() {
       bio: profileRef.current.bio,
       categories: profileRef.current.categories ?? categories,
       avatar_url: publicUrl,
+      username_last_changed_at: profileRef.current.username_last_changed_at,
     });
 
     setIsUploadingAvatar(false);
