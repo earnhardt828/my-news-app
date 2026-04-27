@@ -22,6 +22,7 @@ type YouTubeSearchItem = {
 type YouTubeVideosItem = {
   id?: string;
   statistics?: {
+    viewCount?: string;
     likeCount?: string;
     commentCount?: string;
   };
@@ -32,6 +33,8 @@ type VideoFeedItem = {
   youtubeId: string;
   title: string;
   creator: string;
+  category: string;
+  views: number;
   likes: number;
   comments: number;
   thumbnailUrl: string | null;
@@ -57,6 +60,8 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
     youtubeId: "fallback-1",
     title: "Morning markets in 60 seconds",
     creator: "Reflekt Business",
+    category: "Business",
+    views: 18400,
     likes: 248,
     comments: 36,
     thumbnailUrl: null,
@@ -70,6 +75,8 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
     youtubeId: "fallback-2",
     title: "Tech launch recap from today",
     creator: "Reflekt Tech",
+    category: "Tech",
+    views: 26300,
     likes: 391,
     comments: 51,
     thumbnailUrl: null,
@@ -83,6 +90,8 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
     youtubeId: "fallback-3",
     title: "World headlines quick rundown",
     creator: "Reflekt World",
+    category: "World",
+    views: 14200,
     likes: 172,
     comments: 19,
     thumbnailUrl: null,
@@ -93,17 +102,72 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
   },
 ];
 
+function inferVideoCategory(title: string, creator: string, fallbackCategory?: string | null) {
+  if (fallbackCategory && fallbackCategory !== "Trending") {
+    return fallbackCategory;
+  }
+
+  const haystack = `${title} ${creator}`.toLowerCase();
+
+  if (/(election|senate|white house|policy|president|campaign|government|politic)/.test(haystack)) {
+    return "Politics";
+  }
+
+  if (/(market|economy|stock|business|trade|jobs|finance|inflation)/.test(haystack)) {
+    return "Business";
+  }
+
+  if (/(world|global|international|ukraine|gaza|europe|asia|middle east|foreign)/.test(haystack)) {
+    return "World";
+  }
+
+  if (/(sport|nfl|nba|mlb|fifa|soccer|tennis|golf|olympic)/.test(haystack)) {
+    return "Sports";
+  }
+
+  if (/(tech|ai|apple|google|meta|microsoft|startup|app|software|chip)/.test(haystack)) {
+    return "Tech";
+  }
+
+  if (/(movie|music|celebrity|show|entertainment|hollywood|tv)/.test(haystack)) {
+    return "Entertainment";
+  }
+
+  if (/(health|medical|disease|covid|hospital|doctor|wellness)/.test(haystack)) {
+    return "Health";
+  }
+
+  if (/(science|space|climate|nasa|research|study|physics)/.test(haystack)) {
+    return "Science";
+  }
+
+  return "Trending";
+}
+
 async function fetchRecentVideosForChannel(
   channel: ApprovedChannel,
-  apiKey: string
+  apiKey: string,
+  options: {
+    searchTerm?: string;
+    category?: string;
+  }
 ) {
   const url = new URL("https://www.googleapis.com/youtube/v3/search");
+  const searchQuery = [options.category, options.searchTerm]
+    .filter((value) => value && value !== "Trending")
+    .join(" ")
+    .trim();
+
   url.searchParams.set("part", "snippet");
   url.searchParams.set("channelId", channel.channelId);
-  url.searchParams.set("maxResults", "3");
-  url.searchParams.set("order", "date");
+  url.searchParams.set("maxResults", searchQuery ? "6" : "4");
+  url.searchParams.set("order", searchQuery ? "viewCount" : "date");
   url.searchParams.set("type", "video");
   url.searchParams.set("key", apiKey);
+
+  if (searchQuery) {
+    url.searchParams.set("q", searchQuery);
+  }
 
   const response = await fetch(url.toString(), {
     next: { revalidate: 900 },
@@ -117,8 +181,11 @@ async function fetchRecentVideosForChannel(
   return data.items ?? [];
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
+  const requestUrl = new URL(request.url);
+  const searchTerm = requestUrl.searchParams.get("q")?.trim() ?? "";
+  const category = requestUrl.searchParams.get("category")?.trim() ?? "Trending";
 
   if (!apiKey) {
     return Response.json({
@@ -130,7 +197,12 @@ export async function GET() {
 
   try {
     const searchResults = await Promise.all(
-      APPROVED_CHANNELS.map((channel) => fetchRecentVideosForChannel(channel, apiKey))
+      APPROVED_CHANNELS.map((channel) =>
+        fetchRecentVideosForChannel(channel, apiKey, {
+          searchTerm,
+          category,
+        })
+      )
     );
 
     const flattenedSearchResults = searchResults.flat();
@@ -166,6 +238,7 @@ export async function GET() {
       (statsData.items ?? []).map((item) => [
         item.id,
         {
+          views: Number(item.statistics?.viewCount ?? "0"),
           likes: Number(item.statistics?.likeCount ?? "0"),
           comments: Number(item.statistics?.commentCount ?? "0"),
         },
@@ -192,6 +265,12 @@ export async function GET() {
           youtubeId,
           title: item.snippet?.title ?? "Untitled video",
           creator: item.snippet?.channelTitle ?? "Trusted News Source",
+          category: inferVideoCategory(
+            item.snippet?.title ?? "",
+            item.snippet?.channelTitle ?? "",
+            category
+          ),
+          views: stats?.views ?? 0,
           likes: stats?.likes ?? 0,
           comments: stats?.comments ?? 0,
           thumbnailUrl,
@@ -203,6 +282,13 @@ export async function GET() {
       })
       .filter((video): video is VideoFeedItem => video !== null)
       .sort((a, b) => {
+        const popularityDifference =
+          b.views - a.views || b.likes - a.likes || b.comments - a.comments;
+
+        if (popularityDifference !== 0) {
+          return popularityDifference;
+        }
+
         const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
         const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
         return timeB - timeA;

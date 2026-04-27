@@ -3,6 +3,8 @@ export type VideoItem = {
   youtubeId: string;
   title: string;
   creator: string;
+  category: string;
+  views: number;
   likes: number;
   comments: number;
   saved: boolean;
@@ -27,6 +29,8 @@ export const initialVideos: VideoItem[] = [
     youtubeId: "fallback-1",
     title: "Morning markets in 60 seconds",
     creator: "Reflekt Business",
+    category: "Business",
+    views: 18400,
     likes: 248,
     comments: 36,
     saved: false,
@@ -43,6 +47,8 @@ export const initialVideos: VideoItem[] = [
     youtubeId: "fallback-2",
     title: "Tech launch recap from today",
     creator: "Reflekt Tech",
+    category: "Tech",
+    views: 26300,
     likes: 391,
     comments: 51,
     saved: true,
@@ -59,6 +65,8 @@ export const initialVideos: VideoItem[] = [
     youtubeId: "fallback-3",
     title: "World headlines quick rundown",
     creator: "Reflekt World",
+    category: "World",
+    views: 14200,
     likes: 172,
     comments: 19,
     saved: false,

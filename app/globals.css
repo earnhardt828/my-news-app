@@ -1603,12 +1603,116 @@ input {
   margin: -8px -20px 0;
 }
 
+.videos-page-shell {
+  grid-template-rows: auto auto 1fr;
+  min-height: calc(100svh - 148px);
+}
+
+.videos-toolbar {
+  display: grid;
+  gap: 12px;
+  padding: 0 20px;
+}
+
+.videos-toolbar-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.videos-toolbar-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.videos-toolbar-copy strong {
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.videos-toolbar-copy span {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.videos-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--button-secondary-bg);
+  color: var(--foreground);
+  font-size: 1.2rem;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(20, 33, 61, 0.08);
+}
+
+.videos-search-shell {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.videos-search-shell .search-input {
+  grid-column: 1 / -1;
+}
+
+.videos-search-clear {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.videos-category-tabs {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.videos-category-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.videos-category-tab {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--button-secondary-bg);
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.videos-category-tab-active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--button-secondary-bg));
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
+
 .reels-status {
   margin: 0 20px;
 }
 
 .reels-feed {
-  height: calc(100svh - 132px);
+  height: calc(100svh - 248px);
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
@@ -1622,7 +1726,7 @@ input {
 
 .reel-card {
   position: relative;
-  min-height: calc(100svh - 132px);
+  min-height: calc(100svh - 248px);
   scroll-snap-align: start;
   scroll-snap-stop: always;
   background: #06080f;
@@ -1745,7 +1849,7 @@ input {
 
 .reel-action-button-active .reel-action-icon,
 .reel-action-button-active .reel-action-value {
-  color: #ff8bb9;
+  color: var(--accent);
 }
 
 .reel-action-icon {
@@ -2052,8 +2156,8 @@ input {
 
   .reels-feed,
   .reel-card {
-    height: calc(100svh - 150px);
-    min-height: calc(100svh - 150px);
+    height: calc(100svh - 278px);
+    min-height: calc(100svh - 278px);
   }
 
   .split-grid {
