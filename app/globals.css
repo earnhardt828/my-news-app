@@ -133,7 +133,7 @@ input {
 .topbar-inner {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: calc(22px + env(safe-area-inset-top)) 20px 14px;
+  padding: calc(18px + env(safe-area-inset-top)) 20px 12px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -143,7 +143,7 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 16px;
+  padding: 8px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--card-border-strong);
@@ -151,9 +151,11 @@ input {
 }
 
 .brand-logo {
-  width: min(220px, 58vw);
-  height: auto;
+  width: auto;
+  height: clamp(28px, 4vw, 34px);
+  max-width: min(168px, 48vw);
   display: block;
+  object-fit: contain;
 }
 
 .app-main {
@@ -1287,13 +1289,14 @@ input {
 }
 
 .profile-auth-logo {
-  width: min(180px, 46vw);
-  height: auto;
+  width: min(76px, 20vw);
+  height: min(76px, 20vw);
   display: block;
-  padding: 10px 14px;
-  border-radius: 999px;
+  padding: 10px;
+  border-radius: 24px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 14px 34px rgba(20, 33, 61, 0.08);
+  object-fit: contain;
 }
 
 .profile-auth-actions .button {
