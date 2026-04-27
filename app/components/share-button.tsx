@@ -10,6 +10,18 @@ type ShareButtonProps = {
   className?: string;
 };
 
+const iconProps = {
+  width: 20,
+  height: 20,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.9,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
+
 export default function ShareButton({
   path,
   title,
@@ -63,7 +75,18 @@ export default function ShareButton({
     >
       {iconOnly ? (
         <>
-          <span aria-hidden="true">{status === "copied" ? "✓" : "↗"}</span>
+          <span className="icon-action-glyph" aria-hidden="true">
+            {status === "copied" ? (
+              <svg {...iconProps}>
+                <path d="m5 12 4.2 4.2L19 6.5" />
+              </svg>
+            ) : (
+              <svg {...iconProps}>
+                <path d="M7 17 17 7" />
+                <path d="M9 7h8v8" />
+              </svg>
+            )}
+          </span>
           {status === "sharing" || status === "copied" ? <span>{label}</span> : null}
         </>
       ) : (

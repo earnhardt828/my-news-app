@@ -109,6 +109,18 @@ const CATEGORY_OPTIONS = [
   "World",
 ];
 
+const actionIconProps = {
+  width: 20,
+  height: 20,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.9,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
+
 function getCategoryLabel(category: string) {
   return categoryLabels[category] ?? category;
 }
@@ -1236,7 +1248,14 @@ export default function Home() {
                     onClick={() => handleLike(article.id)}
                     aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
                   >
-                    <span aria-hidden="true">{article.likedByCurrentUser ? "♥" : "♡"}</span>
+                    <span className="icon-action-glyph" aria-hidden="true">
+                      <svg {...actionIconProps}>
+                        <path
+                          d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                          fill={article.likedByCurrentUser ? "currentColor" : "none"}
+                        />
+                      </svg>
+                    </span>
                     <span>{article.likes}</span>
                   </button>
                   <button
@@ -1247,7 +1266,11 @@ export default function Home() {
                     }}
                     aria-label="Open comments"
                   >
-                    <span aria-hidden="true">💬</span>
+                    <span className="icon-action-glyph" aria-hidden="true">
+                      <svg {...actionIconProps}>
+                        <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                      </svg>
+                    </span>
                     <span>{article.comments.length}</span>
                   </button>
                   <ShareButton
@@ -1262,7 +1285,21 @@ export default function Home() {
                     disabled={activeSaveArticleId === article.id}
                     aria-label={article.saved ? "Remove bookmark" : "Save article"}
                   >
-                    {activeSaveArticleId === article.id ? "…" : article.saved ? "🔖" : "📑"}
+                    <span className="icon-action-glyph" aria-hidden="true">
+                      {activeSaveArticleId === article.id ? (
+                        <svg {...actionIconProps}>
+                          <path d="M12 5v7" />
+                          <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
+                        </svg>
+                      ) : (
+                        <svg {...actionIconProps}>
+                          <path
+                            d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                            fill={article.saved ? "currentColor" : "none"}
+                          />
+                        </svg>
+                      )}
+                    </span>
                   </button>
                 </div>
               </article>

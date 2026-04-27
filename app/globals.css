@@ -679,14 +679,13 @@ input {
   border-radius: 16px;
   border: 1px solid var(--border);
   background: var(--button-secondary-bg);
-  color: var(--foreground);
-  font-size: 1.15rem;
+  color: var(--nav-link-color);
   box-shadow: none;
 }
 
 .bookmark-button-active {
   background: var(--accent-faint);
-  color: var(--accent-strong);
+  color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
 }
 
@@ -699,7 +698,7 @@ input {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--button-secondary-bg);
-  color: var(--foreground);
+  color: var(--nav-link-color);
   font-weight: 800;
 }
 
@@ -712,12 +711,21 @@ input {
 
 .icon-action-pill-active {
   background: color-mix(in srgb, var(--accent) 14%, var(--button-secondary-bg));
-  color: var(--accent-strong);
+  color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
 }
 
 .icon-action-pill-static {
   cursor: default;
+}
+
+.icon-action-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
 }
 
 .stat-pill {
