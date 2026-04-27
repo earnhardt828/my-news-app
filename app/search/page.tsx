@@ -106,7 +106,7 @@ export default function Search() {
 
       <section className="section-card stack">
         <div className="search-section-header">
-          <strong>Trending Now</strong>
+          <strong className="search-section-title">Trending Now</strong>
         </div>
 
         <div className="search-trending-list">
