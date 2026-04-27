@@ -102,12 +102,30 @@ function buildSummaryPoints(text: string, title: string) {
   const normalized = text
     .replace(/\s+/g, " ")
     .replace(/\[\+\d+\s+chars\]\s*$/i, "")
+    .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
 
   const sentenceMatches = normalized.match(/[^.!?]+[.!?]?/g) ?? [];
   const cleanedSentences = sentenceMatches
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length > 35);
+    .map((sentence) =>
+      sentence
+        .replace(/\[\+\d+\s+chars\]/gi, "")
+        .replace(/\s+/g, " ")
+        .trim()
+    )
+    .map((sentence) => sentence.replace(/(\.\.\.|…)\s*$/g, "").trim())
+    .filter((sentence) => sentence.length > 28)
+    .map((sentence) => {
+      if (!sentence) {
+        return sentence;
+      }
+
+      const normalizedSentence = /[.!?]$/.test(sentence)
+        ? sentence
+        : `${sentence}.`;
+
+      return normalizedSentence.charAt(0).toUpperCase() + normalizedSentence.slice(1);
+    });
 
   const uniqueSentences: string[] = [];
 
@@ -125,11 +143,15 @@ function buildSummaryPoints(text: string, title: string) {
     return uniqueSentences.slice(0, 5);
   }
 
-  return [
-    `${title} is the focus of this story.`,
-    normalized || "This article preview is limited in the current news feed.",
+  const fallbackPoints = [
+    `${title} is the focus of this update.`,
+    normalized || "This article preview is limited in the current feed.",
     "Open the original article for the publisher's full reporting and context.",
-  ].slice(0, 3);
+  ]
+    .map((point) => point.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  return fallbackPoints.slice(0, 3);
 }
 
 export default function ArticleDetailPage() {
@@ -145,7 +167,6 @@ export default function ArticleDetailPage() {
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [likedByCurrentUser, setLikedByCurrentUser] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     async function loadArticle() {
@@ -395,28 +416,12 @@ export default function ArticleDetailPage() {
 
   const rawContent = article.content?.trim() ?? "";
   const rawDescription = article.description?.trim() ?? "";
-  const hadContentTruncationMarker = /\[\+\d+\s+chars\]\s*$/i.test(rawContent);
   const cleanedContent = rawContent
     .replace(/\s*\[\+\d+\s+chars\]\s*$/i, "")
+    .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
-  const contentEndsWithEllipsis = /(\.\.\.|…)\s*$/.test(cleanedContent);
-  const hasReliableFullLocalContent =
-    Boolean(cleanedContent) &&
-    !hadContentTruncationMarker &&
-    !contentEndsWithEllipsis;
-  const localFullStory = hasReliableFullLocalContent
-    ? cleanedContent
-    : rawDescription || cleanedContent || "No additional content available.";
-  const previewText =
-    hasReliableFullLocalContent && localFullStory.length > 320
-      ? localFullStory.slice(0, 320).trimEnd()
-      : localFullStory;
-  const remainingStory = hasReliableFullLocalContent
-    ? localFullStory.slice(previewText.length).trimStart()
-    : "";
-  const hasAdditionalLocalContent = remainingStory.length > 0;
   const summaryPoints = buildSummaryPoints(
-    [rawDescription, cleanedContent].filter(Boolean).join(" "),
+    [article.title, rawDescription, cleanedContent].filter(Boolean).join(" "),
     article.title
   );
 
@@ -490,28 +495,8 @@ export default function ArticleDetailPage() {
 
         <div className="article-detail-body">
           <div className="article-detail-section">
-            <p className="article-detail-label">Full story</p>
-            <div className="article-detail-copy">
-              {previewText}
-              {isExpanded && hasAdditionalLocalContent ? (
-                <span className="article-detail-copy-continued"> {remainingStory}</span>
-              ) : null}
-              {!isExpanded && hasAdditionalLocalContent ? (
-                <>
-                  ...{" "}
-                  <button
-                    className="article-more-button"
-                    onClick={() => setIsExpanded(true)}
-                  >
-                    More
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="article-detail-section">
             <p className="article-detail-label">Summary</p>
+            <p className="article-summary-note">AI-assisted summary</p>
             <ul className="article-summary-list">
               {summaryPoints.map((point) => (
                 <li key={point} className="article-summary-item">

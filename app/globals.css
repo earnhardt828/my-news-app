@@ -583,16 +583,11 @@ input {
   text-transform: uppercase;
 }
 
-.article-detail-copy {
-  max-width: 65ch;
-  color: var(--foreground);
-  font-size: 1.02rem;
-  line-height: 1.85;
-  text-wrap: pretty;
-}
-
-.article-detail-copy-continued {
-  display: inline;
+.article-summary-note {
+  margin: -4px 0 2px;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .article-summary-list {
@@ -609,17 +604,6 @@ input {
 
 .article-detail-stats-row {
   border-top: 0;
-}
-
-.article-more-button {
-  display: inline;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--accent);
-  font-size: inherit;
-  font-weight: 800;
-  line-height: inherit;
 }
 
 .article-story-links {
