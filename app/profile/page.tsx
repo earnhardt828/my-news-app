@@ -37,6 +37,13 @@ type SavedArticle = {
   time: string;
 };
 
+type ProfileRow = {
+  username: string | null;
+  bio: string | null;
+  categories: string[] | null;
+  avatar_url: string | null;
+};
+
 const CATEGORY_OPTIONS = [
   "Business",
   "Tech",
@@ -129,6 +136,12 @@ export default function Profile() {
   } | null>(null);
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const profileRef = useRef<ProfileRow>({
+    username: null,
+    bio: null,
+    categories: [],
+    avatar_url: null,
+  });
   const authFlashMessage =
     typeof window !== "undefined"
       ? window.location.hash === "#signed-out"
@@ -149,21 +162,47 @@ export default function Profile() {
     setCategories([]);
     setMyComments([]);
     setSavedArticles([]);
+    profileRef.current = {
+      username: null,
+      bio: null,
+      categories: [],
+      avatar_url: null,
+    };
   }, []);
 
-  const saveProfile = async (nextAvatarUrl?: string) => {
+  const saveProfile = async (
+    updates?: Partial<{
+      username: string | null;
+      bio: string | null;
+      categories: string[];
+      avatar_url: string | null;
+    }>
+  ) => {
     if (!currentUser?.id) {
       return { error: new Error("Log in first.") };
     }
 
-    return supabase.from("profiles").upsert({
+    const payload = {
       id: currentUser.id,
       email: currentUser.email,
-      username: username.trim() || null,
-      bio: bio.trim() || null,
-      categories,
-      avatar_url: nextAvatarUrl ?? avatarUrl,
-    });
+      username: updates?.username ?? (username.trim() || null),
+      bio: updates?.bio ?? (bio.trim() || null),
+      categories: updates?.categories ?? categories,
+      avatar_url: updates?.avatar_url ?? (avatarUrl || null),
+    };
+
+    const result = await supabase.from("profiles").upsert(payload);
+
+    if (!result.error) {
+      profileRef.current = {
+        username: payload.username,
+        bio: payload.bio,
+        categories: payload.categories,
+        avatar_url: payload.avatar_url,
+      };
+    }
+
+    return result;
   };
 
   const loadProfileForUser = useCallback(async (userId: string) => {
@@ -179,6 +218,12 @@ export default function Profile() {
     setDraftBio(profile?.bio ?? "");
     setAvatarUrl(profile?.avatar_url ?? "");
     setCategories(profile?.categories ?? []);
+    profileRef.current = {
+      username: profile?.username ?? null,
+      bio: profile?.bio ?? null,
+      categories: profile?.categories ?? [],
+      avatar_url: profile?.avatar_url ?? null,
+    };
 
     const { data: comments } = await supabase
       .from("comments")
@@ -399,12 +444,11 @@ export default function Profile() {
     const previousUsername = username;
     setUsername(trimmedUsername);
 
-    const { error } = await supabase.from("profiles").upsert({
-      id: currentUser.id,
-      email: currentUser.email,
+    const { error } = await saveProfile({
       username: trimmedUsername,
-      categories,
-      avatar_url: avatarUrl || null,
+      bio: profileRef.current.bio,
+      categories: profileRef.current.categories ?? categories,
+      avatar_url: profileRef.current.avatar_url,
     });
 
     setIsSavingInlineUsername(false);
@@ -511,13 +555,11 @@ export default function Profile() {
     const previousBio = bio;
     setBio(nextBio);
 
-    const { error } = await supabase.from("profiles").upsert({
-      id: currentUser.id,
-      email: currentUser.email,
-      username: username.trim() || null,
+    const { error } = await saveProfile({
+      username: profileRef.current.username,
       bio: nextBio || null,
-      categories,
-      avatar_url: avatarUrl || null,
+      categories: profileRef.current.categories ?? categories,
+      avatar_url: profileRef.current.avatar_url,
     });
 
     setIsSavingBio(false);
@@ -576,7 +618,12 @@ export default function Profile() {
       data: { publicUrl },
     } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-    const { error: profileError } = await saveProfile(publicUrl);
+    const { error: profileError } = await saveProfile({
+      username: profileRef.current.username,
+      bio: profileRef.current.bio,
+      categories: profileRef.current.categories ?? categories,
+      avatar_url: publicUrl,
+    });
 
     setIsUploadingAvatar(false);
     event.target.value = "";
@@ -588,6 +635,10 @@ export default function Profile() {
     }
 
     setAvatarUrl(publicUrl);
+    profileRef.current = {
+      ...profileRef.current,
+      avatar_url: publicUrl,
+    };
     setMessage("Profile image uploaded.");
   };
 

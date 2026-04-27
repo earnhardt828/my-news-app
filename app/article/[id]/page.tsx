@@ -98,60 +98,122 @@ function formatRelativeTime(timestamp: string | null) {
   return `${diffDays} days ago`;
 }
 
-function buildSummaryPoints(text: string, title: string) {
-  const normalized = text
+function normalizeSummaryText(value: string) {
+  return value
+    .replace(/\[\+\d+\s+chars\]/gi, "")
+    .replace(/(\.\.\.|…)+/g, "")
     .replace(/\s+/g, " ")
-    .replace(/\[\+\d+\s+chars\]\s*$/i, "")
-    .replace(/(\.\.\.|…)\s*$/g, "")
+    .trim();
+}
+
+function extractDateline(text: string) {
+  const match = text.match(
+    /^([A-Z][A-Z\s.'-]{2,40}(?:\s*\([A-Z]+\))?)\s+[—-]\s+/
+  );
+
+  if (!match) {
+    return {
+      dateline: null as string | null,
+      remainder: text,
+    };
+  }
+
+  return {
+    dateline: match[1].trim(),
+    remainder: text.slice(match[0].length).trim(),
+  };
+}
+
+function cleanSummarySentence(sentence: string) {
+  const cleaned = normalizeSummaryText(sentence)
+    .replace(/^[A-Z][A-Z\s.'-]{2,40}(?:\s*\([A-Z]+\))?\s+[—-]\s+/, "")
+    .replace(/\s{2,}/g, " ")
     .trim();
 
-  const sentenceMatches = normalized.match(/[^.!?]+[.!?]?/g) ?? [];
-  const cleanedSentences = sentenceMatches
-    .map((sentence) =>
-      sentence
-        .replace(/\[\+\d+\s+chars\]/gi, "")
-        .replace(/\s+/g, " ")
-        .trim()
-    )
-    .map((sentence) => sentence.replace(/(\.\.\.|…)\s*$/g, "").trim())
-    .filter((sentence) => sentence.length > 28)
-    .map((sentence) => {
-      if (!sentence) {
-        return sentence;
-      }
+  if (!cleaned) {
+    return "";
+  }
 
-      const normalizedSentence = /[.!?]$/.test(sentence)
-        ? sentence
-        : `${sentence}.`;
+  const withoutTrailingPunctuation = cleaned.replace(/[;:,/-]+$/g, "").trim();
+  const finalized = /[.!?]$/.test(withoutTrailingPunctuation)
+    ? withoutTrailingPunctuation
+    : `${withoutTrailingPunctuation}.`;
 
-      return normalizedSentence.charAt(0).toUpperCase() + normalizedSentence.slice(1);
-    });
+  return finalized.charAt(0).toUpperCase() + finalized.slice(1);
+}
 
-  const uniqueSentences: string[] = [];
+function buildSummaryPoints(
+  title: string,
+  description?: string | null,
+  content?: string | null
+) {
+  const normalizedDescription = normalizeSummaryText(description ?? "");
+  const normalizedContent = normalizeSummaryText(content ?? "");
+  const descriptionDateline = extractDateline(normalizedDescription);
+  const contentDateline = extractDateline(normalizedContent);
+  const dateline = descriptionDateline.dateline ?? contentDateline.dateline;
 
-  cleanedSentences.forEach((sentence) => {
-    const alreadyIncluded = uniqueSentences.some(
-      (existing) => existing.toLowerCase() === sentence.toLowerCase()
+  const combinedText = [descriptionDateline.remainder, contentDateline.remainder]
+    .filter(Boolean)
+    .join(" ");
+
+  const sentenceMatches = combinedText.match(/[^.!?]+[.!?]?/g) ?? [];
+  const uniquePoints: string[] = [];
+
+  sentenceMatches.forEach((sentence) => {
+    const cleanedSentence = cleanSummarySentence(sentence);
+
+    if (!cleanedSentence) {
+      return;
+    }
+
+    const alreadyIncluded = uniquePoints.some(
+      (existing) => existing.toLowerCase() === cleanedSentence.toLowerCase()
     );
 
-    if (!alreadyIncluded && uniqueSentences.length < 5) {
-      uniqueSentences.push(sentence);
+    if (
+      !alreadyIncluded &&
+      cleanedSentence.length >= 24 &&
+      uniquePoints.length < 4
+    ) {
+      uniquePoints.push(cleanedSentence);
     }
   });
 
-  if (uniqueSentences.length >= 3) {
-    return uniqueSentences.slice(0, 5);
+  if (uniquePoints.length === 0) {
+    uniquePoints.push(`${title} is the focus of this update.`);
   }
 
-  const fallbackPoints = [
-    `${title} is the focus of this update.`,
-    normalized || "This article preview is limited in the current feed.",
-    "Open the original article for the publisher's full reporting and context.",
-  ]
-    .map((point) => point.replace(/\s+/g, " ").trim())
-    .filter(Boolean);
+  if (uniquePoints.length < 3) {
+    const fallbackCandidates = [
+      normalizedDescription
+        ? cleanSummarySentence(normalizedDescription)
+        : "",
+      normalizedContent
+        ? cleanSummarySentence(normalizedContent)
+        : "",
+      "Open the original article for the publisher's full reporting and added context.",
+    ].filter(Boolean);
 
-  return fallbackPoints.slice(0, 3);
+    fallbackCandidates.forEach((candidate) => {
+      const alreadyIncluded = uniquePoints.some(
+        (existing) => existing.toLowerCase() === candidate.toLowerCase()
+      );
+
+      if (!alreadyIncluded && uniquePoints.length < 3) {
+        uniquePoints.push(candidate);
+      }
+    });
+  }
+
+  if (dateline && uniquePoints.length > 0) {
+    const firstPoint = uniquePoints[0].replace(/^[—-]\s*/, "");
+    uniquePoints[0] = `${dateline} — ${firstPoint.charAt(0).toLowerCase()}${firstPoint.slice(1)}`;
+    uniquePoints[0] =
+      uniquePoints[0].charAt(0).toUpperCase() + uniquePoints[0].slice(1);
+  }
+
+  return uniquePoints.slice(0, Math.min(5, Math.max(3, uniquePoints.length)));
 }
 
 export default function ArticleDetailPage() {
@@ -421,8 +483,9 @@ export default function ArticleDetailPage() {
     .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
   const summaryPoints = buildSummaryPoints(
-    [article.title, rawDescription, cleanedContent].filter(Boolean).join(" "),
-    article.title
+    article.title,
+    rawDescription,
+    cleanedContent
   );
 
   const handleClose = () => {
