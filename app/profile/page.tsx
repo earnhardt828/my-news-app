@@ -36,6 +36,9 @@ type SavedArticle = {
   source: string;
   category: string;
   time: string;
+  url?: string | null;
+  image?: string | null;
+  published_at?: string | null;
 };
 
 type ProfileRow = {
@@ -287,7 +290,7 @@ export default function Profile() {
 
     const { data: saved } = await supabase
       .from("saved_articles")
-      .select("id, article_id, title, source, category, time")
+      .select("id, article_id, title, source, category, time, url, image, published_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 

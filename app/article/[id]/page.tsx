@@ -383,14 +383,22 @@ export default function ArticleDetailPage() {
       return;
     }
 
-    const { error } = await supabase.from("saved_articles").insert({
-      user_id: userId,
-      article_id: article.id,
-      title: article.title,
-      source: article.source,
-      category: article.category,
-      time: article.time,
-    });
+    const { error } = await supabase.from("saved_articles").upsert(
+      {
+        user_id: userId,
+        article_id: article.id,
+        title: article.title,
+        source: article.source,
+        category: article.category,
+        time: article.time,
+        url: article.url ?? null,
+        image: article.image ?? null,
+        published_at: article.publishedAt ?? null,
+      },
+      {
+        onConflict: "user_id,article_id",
+      }
+    );
 
     if (error) {
       console.error("Error saving article:", error);
