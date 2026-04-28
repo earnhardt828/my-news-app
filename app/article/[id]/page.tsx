@@ -55,6 +55,11 @@ type DbBlockedUser = {
   blocked_user_id: string;
 };
 
+type SummaryItem = {
+  label: string;
+  text: string;
+};
+
 const actionIconProps = {
   width: 20,
   height: 20,
@@ -155,11 +160,11 @@ function cleanSummarySentence(sentence: string) {
   return finalized.charAt(0).toUpperCase() + finalized.slice(1);
 }
 
-function buildSummaryPoints(
+function buildSummaryItems(
   title: string,
   description?: string | null,
   content?: string | null
-) {
+): SummaryItem[] {
   const normalizedDescription = normalizeSummaryText(description ?? "");
   const normalizedContent = normalizeSummaryText(content ?? "");
   const descriptionDateline = extractDateline(normalizedDescription);
@@ -193,31 +198,26 @@ function buildSummaryPoints(
     }
   });
 
+  const titleFallback = cleanSummarySentence(title) || `${title}.`;
+
   if (uniquePoints.length === 0) {
-    uniquePoints.push(`${title} is the focus of this update.`);
+    uniquePoints.push(titleFallback);
   }
 
-  if (uniquePoints.length < 3) {
-    const fallbackCandidates = [
-      normalizedDescription
-        ? cleanSummarySentence(normalizedDescription)
-        : "",
-      normalizedContent
-        ? cleanSummarySentence(normalizedContent)
-        : "",
-      "Open the original article for the publisher's full reporting and added context.",
-    ].filter(Boolean);
+  const fallbackCandidates = [
+    normalizedDescription ? cleanSummarySentence(normalizedDescription) : "",
+    normalizedContent ? cleanSummarySentence(normalizedContent) : "",
+  ].filter(Boolean);
 
-    fallbackCandidates.forEach((candidate) => {
-      const alreadyIncluded = uniquePoints.some(
-        (existing) => existing.toLowerCase() === candidate.toLowerCase()
-      );
+  fallbackCandidates.forEach((candidate) => {
+    const alreadyIncluded = uniquePoints.some(
+      (existing) => existing.toLowerCase() === candidate.toLowerCase()
+    );
 
-      if (!alreadyIncluded && uniquePoints.length < 3) {
-        uniquePoints.push(candidate);
-      }
-    });
-  }
+    if (!alreadyIncluded && uniquePoints.length < 4) {
+      uniquePoints.push(candidate);
+    }
+  });
 
   if (dateline && uniquePoints.length > 0) {
     const firstPoint = uniquePoints[0].replace(/^[—-]\s*/, "");
@@ -226,7 +226,20 @@ function buildSummaryPoints(
       uniquePoints[0].charAt(0).toUpperCase() + uniquePoints[0].slice(1);
   }
 
-  return uniquePoints.slice(0, Math.min(5, Math.max(3, uniquePoints.length)));
+  const labels = [
+    "What happened",
+    "Why it matters",
+    "Key detail",
+    "What’s next",
+  ];
+
+  return uniquePoints
+    .slice(0, Math.min(labels.length, Math.max(3, uniquePoints.length)))
+    .map((text, index) => ({
+      label: labels[index] ?? "Key point",
+      text,
+    }))
+    .filter((item) => item.text);
 }
 
 export default function ArticleDetailPage() {
@@ -593,7 +606,7 @@ export default function ArticleDetailPage() {
     .replace(/\s*\[\+\d+\s+chars\]\s*$/i, "")
     .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
-  const summaryPoints = buildSummaryPoints(
+  const summaryItems = buildSummaryItems(
     article.title,
     rawDescription,
     cleanedContent
@@ -682,9 +695,9 @@ export default function ArticleDetailPage() {
             <p className="article-detail-label">Summary</p>
             <p className="article-summary-note">AI-assisted summary</p>
             <ul className="article-summary-list">
-              {summaryPoints.map((point) => (
-                <li key={point} className="article-summary-item">
-                  {point}
+              {summaryItems.map((item) => (
+                <li key={`${item.label}-${item.text}`} className="article-summary-item">
+                  <strong>{item.label}:</strong> {item.text}
                 </li>
               ))}
             </ul>

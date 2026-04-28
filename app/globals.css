@@ -621,12 +621,16 @@ input {
   margin: 0;
   padding-left: 1.15rem;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   color: var(--foreground);
 }
 
 .article-summary-item {
-  line-height: 1.7;
+  line-height: 1.65;
+}
+
+.article-summary-item strong {
+  font-weight: 850;
 }
 
 .article-detail-stats-row {

@@ -23,11 +23,16 @@ export function getSourceLogoUrl(sourceName: string) {
     return null;
   }
 
-  if (token) {
-    return `https://img.logo.dev/${domain}?token=${token}&format=png&size=128`;
+  // Real source logos depend on two things being configured correctly:
+  // 1. a known publisher -> domain mapping in SOURCE_DOMAIN_MAP
+  // 2. a working logo provider token
+  // If either is missing, we intentionally fall back to the in-app letter badge
+  // so Reflekt never renders broken or empty logo boxes.
+  if (!token) {
+    return null;
   }
 
-  return `https://img.logo.dev/${domain}?format=png&size=128`;
+  return `https://img.logo.dev/${domain}?token=${token}&format=png&size=128`;
 }
 
 export function getSourceInitial(sourceName: string) {
