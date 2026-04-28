@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   type ChangeEvent,
-  type KeyboardEvent,
   useCallback,
   useEffect,
   useRef,
@@ -17,7 +16,6 @@ import {
   saveProfilePatch,
   type AppProfileRecord,
 } from "../../lib/profile-store";
-import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -126,12 +124,10 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [bio, setBio] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [isEditingUsername, setIsEditingUsername] = useState(false);
-  const [draftUsername, setDraftUsername] = useState("");
-  const [isSavingInlineUsername, setIsSavingInlineUsername] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [draftBio, setDraftBio] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
+  const [isSavingCategories, setIsSavingCategories] = useState(false);
   const [myComments, setMyComments] = useState<MyComment[]>([]);
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -146,6 +142,7 @@ export default function Profile() {
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const profileRef = useRef<ProfileRow>({
     username: null,
+    contact_email: null,
     bio: null,
     categories: [],
     avatar_url: null,
@@ -164,8 +161,6 @@ export default function Profile() {
 
   const clearProfileState = useCallback(() => {
     setUsername("");
-    setDraftUsername("");
-    setIsEditingUsername(false);
     setAvatarUrl("");
     setBio("");
     setDraftBio("");
@@ -175,6 +170,7 @@ export default function Profile() {
     setSavedArticles([]);
     profileRef.current = {
       username: null,
+      contact_email: null,
       bio: null,
       categories: [],
       avatar_url: null,
@@ -223,13 +219,13 @@ export default function Profile() {
     if (!result.error && result.data) {
       const payload = result.data;
       setUsername(payload.username ?? "");
-      setDraftUsername(payload.username ?? "");
       setBio(payload.bio ?? "");
       setDraftBio(payload.bio ?? "");
       setAvatarUrl(payload.avatar_url ?? "");
       setCategories(payload.categories ?? []);
       profileRef.current = {
         username: payload.username,
+        contact_email: payload.contact_email,
         bio: payload.bio,
         categories: payload.categories ?? [],
         avatar_url: payload.avatar_url,
@@ -251,13 +247,13 @@ export default function Profile() {
     }
 
     setUsername(profile.username ?? "");
-    setDraftUsername(profile.username ?? "");
     setBio(profile.bio ?? "");
     setDraftBio(profile.bio ?? "");
     setAvatarUrl(profile.avatar_url ?? "");
     setCategories(profile.categories ?? []);
     profileRef.current = {
       username: profile.username,
+      contact_email: profile.contact_email,
       bio: profile.bio,
       categories: profile.categories ?? [],
       avatar_url: profile.avatar_url,
@@ -443,118 +439,6 @@ export default function Profile() {
     }
   };
 
-  const startUsernameEdit = () => {
-    setDraftUsername(username);
-    setIsEditingUsername(true);
-    setMessage("");
-  };
-
-  const cancelUsernameEdit = () => {
-    setDraftUsername(username);
-    setIsEditingUsername(false);
-  };
-
-  const handleInlineUsernameSave = async () => {
-    if (!currentUser?.id) {
-      setMessage("Log in first.");
-      return;
-    }
-
-    const trimmedUsername = draftUsername.trim();
-
-    if (!trimmedUsername) {
-      setMessage("Enter a username.");
-      return;
-    }
-
-    if (!isUsernameAllowed(trimmedUsername)) {
-      setMessage("That username is not available. Please choose another.");
-      return;
-    }
-
-    setIsSavingInlineUsername(true);
-
-    const { data: matchingProfiles, error: availabilityError } = await supabase
-      .from("profiles")
-      .select("id")
-      .ilike("username", trimmedUsername);
-
-    if (availabilityError) {
-      setIsSavingInlineUsername(false);
-      setMessage("Could not check username availability.");
-      return;
-    }
-
-    const isTaken = (matchingProfiles ?? []).some(
-      (profile) => profile.id !== currentUser.id
-    );
-
-    if (isTaken) {
-      setIsSavingInlineUsername(false);
-      setMessage("Username already taken.");
-      return;
-    }
-
-    const currentSavedUsername = profileRef.current.username?.trim() ?? "";
-    const isRealUsernameChange =
-      trimmedUsername.toLowerCase() !== currentSavedUsername.toLowerCase();
-
-    if (isRealUsernameChange && profileRef.current.username_last_changed_at) {
-      const lastChangedAt = new Date(profileRef.current.username_last_changed_at).getTime();
-
-      if (!Number.isNaN(lastChangedAt)) {
-        const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-
-        if (Date.now() - lastChangedAt < twentyFourHoursMs) {
-          setIsSavingInlineUsername(false);
-          setMessage("You can only change your username once per day.");
-          return;
-        }
-      }
-    }
-
-    const previousUsername = username;
-    setUsername(trimmedUsername);
-    const nextUsernameChangedAt = isRealUsernameChange
-      ? new Date().toISOString()
-      : profileRef.current.username_last_changed_at;
-
-    const { error } = await saveProfile({
-      username: trimmedUsername,
-      bio: profileRef.current.bio,
-      categories: profileRef.current.categories ?? categories,
-      avatar_url: profileRef.current.avatar_url,
-      username_last_changed_at: nextUsernameChangedAt,
-      preferred_sources: profileRef.current.preferred_sources ?? [],
-      show_less_sources: profileRef.current.show_less_sources ?? [],
-    });
-
-    setIsSavingInlineUsername(false);
-
-    if (error) {
-      setUsername(previousUsername);
-      setDraftUsername(previousUsername);
-      setMessage(error.message ?? "Could not save username.");
-      return;
-    }
-
-    setDraftUsername(trimmedUsername);
-    setIsEditingUsername(false);
-    setMessage("Username updated.");
-  };
-
-  const handleUsernameKeyDown = async (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      await handleInlineUsernameSave();
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      cancelUsernameEdit();
-    }
-  };
-
   const handleResendConfirmation = async () => {
     if (!pendingConfirmationEmail) {
       setResendStatus({
@@ -587,27 +471,6 @@ export default function Profile() {
       type: "success",
       text: "Confirmation email sent again.",
     });
-  };
-
-  const handleSaveUsername = async () => {
-    if (!currentUser?.id) {
-      setMessage("Log in first.");
-      return;
-    }
-
-    if (!username.trim()) {
-      setMessage("Enter a username.");
-      return;
-    }
-
-    const { error } = await saveProfile();
-
-    if (error) {
-      setMessage(error.message ?? "Could not save profile.");
-      return;
-    }
-
-    setMessage("Profile saved.");
   };
 
   const startBioEdit = () => {
@@ -679,7 +542,8 @@ export default function Profile() {
     setMessage("");
 
     const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "-");
-    const filePath = `${currentUser.id}/avatar-${Date.now()}-${safeFilename}`;
+    const fileStamp = `${file.lastModified || "upload"}-${file.size}`;
+    const filePath = `${currentUser.id}/avatar-${fileStamp}-${safeFilename}`;
 
     const { error: uploadError } = await supabase.storage
       .from("avatars")
@@ -728,6 +592,34 @@ export default function Profile() {
 
   const handleAvatarPickerOpen = () => {
     avatarInputRef.current?.click();
+  };
+
+  const handleCategoryToggle = async (category: string) => {
+    if (!currentUser?.id || isSavingCategories) {
+      return;
+    }
+
+    const nextCategories = categories.includes(category)
+      ? categories.filter((current) => current !== category)
+      : [...categories, category];
+
+    const previousCategories = categories;
+    setCategories(nextCategories);
+    setIsSavingCategories(true);
+
+    const { error } = await saveProfile({
+      categories: nextCategories,
+    });
+
+    setIsSavingCategories(false);
+
+    if (error) {
+      setCategories(previousCategories);
+      setMessage(error.message ?? "Could not save categories.");
+      return;
+    }
+
+    setMessage("Favorite categories updated.");
   };
 
   const handleDeleteComment = async (commentId: number) => {
@@ -966,46 +858,20 @@ export default function Profile() {
               </button>
 
               <div className="profile-meta">
-                {isEditingUsername ? (
-                  <div className="profile-name-editor">
-                    <input
-                      className="input profile-name-input"
-                      type="text"
-                      value={draftUsername}
-                      onChange={(e) => setDraftUsername(e.target.value)}
-                      onKeyDown={handleUsernameKeyDown}
-                      autoFocus
-                      disabled={isSavingInlineUsername}
-                      placeholder="Choose a username"
-                    />
-                    <div className="profile-name-actions">
-                      <button
-                        type="button"
-                        className="button button-secondary profile-inline-button"
-                        onClick={cancelUsernameEdit}
-                        disabled={isSavingInlineUsername}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="profile-name-button"
-                    onClick={startUsernameEdit}
-                  >
-                    <h3 className="profile-name">{username || "News Reader"}</h3>
-                  </button>
-                )}
+                <h3 className="profile-name">{username || "News Reader"}</h3>
                 <div className="profile-meta-row">
                   <span className="chip">{categories.length} categories selected</span>
+                  <Link href="/settings/username" className="chip">
+                    Change username
+                  </Link>
                   <Link href={`/user/${currentUserId}`} className="chip chip-accent">
                     View public profile
                   </Link>
                 </div>
                 {isUploadingAvatar ? (
                   <span className="muted">Uploading image...</span>
+                ) : isSavingCategories ? (
+                  <span className="muted">Saving categories...</span>
                 ) : null}
               </div>
             </div>
@@ -1066,13 +932,8 @@ export default function Profile() {
                     className={`category-pill ${
                       categories.includes(cat) ? "category-pill-active" : ""
                     }`}
-                    onClick={() =>
-                      setCategories((prev) =>
-                        prev.includes(cat)
-                          ? prev.filter((current) => current !== cat)
-                          : [...prev, cat]
-                      )
-                    }
+                    onClick={() => void handleCategoryToggle(cat)}
+                    disabled={isSavingCategories}
                   >
                     {cat}
                   </button>
@@ -1091,10 +952,6 @@ export default function Profile() {
                 hidden
               />
             </div>
-
-            <button className="button button-accent" onClick={handleSaveUsername}>
-              Save Favorite Categories
-            </button>
 
             {message ? <div className="chip chip-accent">{message}</div> : null}
           </section>

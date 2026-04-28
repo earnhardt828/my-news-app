@@ -1844,6 +1844,28 @@ input {
   align-items: stretch;
 }
 
+.settings-detail-shell {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.settings-detail-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.settings-detail-copy {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.settings-detail-note {
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .danger-zone-card {
   border-color: rgba(215, 54, 54, 0.2);
 }

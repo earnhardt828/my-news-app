@@ -1,0 +1,175 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import LoadingScreen from "../../components/loading-screen";
+import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
+import { supabase } from "../../../lib/supabase";
+
+type UserState = {
+  id: string;
+  email: string | null;
+};
+
+export default function SettingsContactPage() {
+  const [currentUser, setCurrentUser] = useState<UserState | null>(null);
+  const [contactEmail, setContactEmail] = useState("");
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    async function loadPage() {
+      setIsLoading(true);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user?.id) {
+        setCurrentUser(null);
+        setContactEmail("");
+        setIsLoading(false);
+        return;
+      }
+
+      setCurrentUser({
+        id: user.id,
+        email: user.email ?? null,
+      });
+
+      const { data, error } = await ensureProfileRow({
+        id: user.id,
+        email: user.email ?? null,
+      });
+
+      if (error || !data) {
+        setMessage({
+          type: "error",
+          text: error?.message ?? "Could not load your contact info.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      setContactEmail(data.contact_email ?? "");
+      setIsLoading(false);
+    }
+
+    void loadPage();
+  }, []);
+
+  const handleSave = async () => {
+    if (!currentUser?.id) {
+      setMessage({
+        type: "error",
+        text: "Log in first to update your contact info.",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage(null);
+
+    const trimmedContactEmail = contactEmail.trim();
+
+    const { error } = await saveProfilePatch(
+      {
+        id: currentUser.id,
+        email: currentUser.email,
+      },
+      {
+        id: currentUser.id,
+        email: currentUser.email,
+        contact_email: trimmedContactEmail || null,
+      }
+    );
+
+    setIsSaving(false);
+
+    if (error) {
+      setMessage({
+        type: "error",
+        text: error.message ?? "Could not save your contact info.",
+      });
+      return;
+    }
+
+    setContactEmail(trimmedContactEmail);
+    setMessage({
+      type: "success",
+      text: "Contact info updated.",
+    });
+  };
+
+  return (
+    <section className="page-shell">
+      {isLoading ? (
+        <LoadingScreen />
+      ) : (
+        <div className="stack settings-detail-shell">
+          <section className="section-card stack">
+            <div className="stack" style={{ gap: "8px" }}>
+              <h2 className="settings-detail-title">Update contact info</h2>
+              <p className="muted settings-detail-copy">
+                Save a contact email for account follow-up without changing your login email.
+              </p>
+            </div>
+
+            {!currentUser?.id ? (
+              <div className="status-message status-error">
+                Log in to update your contact info.
+              </div>
+            ) : (
+              <>
+                <div className="input-row">
+                  <input
+                    className="input"
+                    type="email"
+                    placeholder="Contact email"
+                    value={contactEmail}
+                    onChange={(event) => setContactEmail(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleSave();
+                      }
+                    }}
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="muted settings-detail-note">
+                  Sign-in email changes still need a separate Supabase auth flow.
+                </div>
+                <div className="toolbar">
+                  <button
+                    className="button button-accent"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? "Saving..." : "Save"}
+                  </button>
+                  <Link href="/settings" className="button button-secondary">
+                    Back to Settings
+                  </Link>
+                </div>
+              </>
+            )}
+
+            {message ? (
+              <div
+                className={`status-message ${
+                  message.type === "success" ? "status-success" : "status-error"
+                }`}
+              >
+                {message.text}
+              </div>
+            ) : null}
+          </section>
+        </div>
+      )}
+    </section>
+  );
+}

@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import ThemeToggle from "../components/theme-toggle";
-import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
-import { isUsernameAllowed } from "../../lib/moderation";
+import { ensureProfileRow } from "../../lib/profile-store";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -32,19 +31,14 @@ type DbProfile = {
   id: string;
   username: string | null;
   avatar_url: string | null;
-  username_last_changed_at?: string | null;
 };
 
 export default function SettingsPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<UserState>(null);
-  const [username, setUsername] = useState("");
-  const [savedUsername, setSavedUsername] = useState("");
-  const [contactInfo, setContactInfo] = useState("");
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserRecord[]>([]);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [activeBlockedUserId, setActiveBlockedUserId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
@@ -53,7 +47,6 @@ export default function SettingsPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
-  const [usernameLastChangedAt, setUsernameLastChangedAt] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
@@ -66,38 +59,29 @@ export default function SettingsPage() {
         id: user?.id ?? null,
         email: user?.email ?? null,
       });
-      setContactInfo(user?.email ?? "");
 
       if (!user?.id) {
-        setUsername("");
-        setSavedUsername("");
-        setUsernameLastChangedAt(null);
         setBlockedUsers([]);
         setIsLoading(false);
         return;
       }
 
-      const [profileResult, blockedUsersResult] =
-        await Promise.all([
-          ensureProfileRow({
-            id: user.id,
-            email: user.email ?? null,
-          }),
-          supabase
-            .from("blocked_users")
-            .select("id, blocked_user_id, created_at")
-            .eq("blocker_id", user.id)
-            .order("created_at", { ascending: false }),
-        ]);
+      const [profileResult, blockedUsersResult] = await Promise.all([
+        ensureProfileRow({
+          id: user.id,
+          email: user.email ?? null,
+        }),
+        supabase
+          .from("blocked_users")
+          .select("id, blocked_user_id, created_at")
+          .eq("blocker_id", user.id)
+          .order("created_at", { ascending: false }),
+      ]);
 
       if (profileResult.error) {
         console.error("Error loading settings profile:", profileResult.error);
         setMessage(profileResult.error.message ?? "Could not load your profile.");
       }
-
-      setUsername(profileResult.data?.username ?? "");
-      setSavedUsername(profileResult.data?.username ?? "");
-      setUsernameLastChangedAt(profileResult.data?.username_last_changed_at ?? null);
 
       const blockedRecords = (blockedUsersResult.data ?? []) as DbBlockedUser[];
 
@@ -134,95 +118,8 @@ export default function SettingsPage() {
       setIsLoading(false);
     }
 
-    loadSettings();
+    void loadSettings();
   }, []);
-
-  const handleSaveAccount = async () => {
-    if (!currentUser?.id) {
-      setMessage("Log in first to update account settings.");
-      return;
-    }
-
-    if (!username.trim()) {
-      setMessage("Enter a username before saving.");
-      return;
-    }
-
-    if (!isUsernameAllowed(username.trim())) {
-      setMessage("That username is not available. Please choose another.");
-      return;
-    }
-
-    setIsSavingAccount(true);
-
-    const { data: matchingProfiles, error: availabilityError } = await supabase
-      .from("profiles")
-      .select("id")
-      .ilike("username", username.trim());
-
-    if (availabilityError) {
-      setIsSavingAccount(false);
-      setMessage("Could not check username availability.");
-      return;
-    }
-
-    const isTaken = (matchingProfiles ?? []).some(
-      (profile) => profile.id !== currentUser.id
-    );
-
-    if (isTaken) {
-      setIsSavingAccount(false);
-      setMessage("Username already taken.");
-      return;
-    }
-
-    const isRealUsernameChange =
-      username.trim().toLowerCase() !== savedUsername.trim().toLowerCase();
-
-    if (isRealUsernameChange && usernameLastChangedAt) {
-      const lastChangedAt = new Date(usernameLastChangedAt).getTime();
-
-      if (!Number.isNaN(lastChangedAt)) {
-        const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-
-        if (Date.now() - lastChangedAt < twentyFourHoursMs) {
-          setIsSavingAccount(false);
-          setMessage("You can only change your username once per day.");
-          return;
-        }
-      }
-    }
-
-    const nextUsernameChangedAt = isRealUsernameChange
-      ? new Date().toISOString()
-      : usernameLastChangedAt;
-
-    const { error } = await saveProfilePatch(
-      {
-        id: currentUser.id,
-        email: currentUser.email,
-      },
-      {
-        id: currentUser.id,
-        email: currentUser.email,
-        username: username.trim(),
-        username_last_changed_at: nextUsernameChangedAt ?? null,
-      }
-    );
-
-    setIsSavingAccount(false);
-
-    if (error) {
-      setMessage(error.message ?? "Could not save your username.");
-      return;
-    }
-
-    setMessage(
-      "Username saved. Contact info remains a safe placeholder until secure email-change support is added."
-    );
-    setSavedUsername(username.trim());
-    setUsernameLastChangedAt(nextUsernameChangedAt ?? null);
-  };
 
   const handleLogOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -345,7 +242,7 @@ export default function SettingsPage() {
           <section className="settings-list-section">
             <p className="settings-section-title">Account</p>
             <div className="settings-list-card">
-              <div className="settings-list-row settings-list-row-static">
+              <Link href="/settings/username" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Change username</strong>
                   <span>Update how your profile name appears across Reflekt.</span>
@@ -353,52 +250,17 @@ export default function SettingsPage() {
                 <span className="settings-chevron" aria-hidden="true">
                   ›
                 </span>
-              </div>
-              <div className="settings-inline-fields">
-                <input
-                  className="input"
-                  type="text"
-                  placeholder="Username"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                />
-              </div>
+              </Link>
 
-              <div className="settings-list-row settings-list-row-static">
+              <Link href="/settings/contact" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Update contact info</strong>
-                  <span>
-                    {currentUser?.email
-                      ? "Your current sign-in email is shown below."
-                      : "Log in to review your contact info."}
-                  </span>
+                  <span>Save a contact email without changing your sign-in address.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
                 </span>
-              </div>
-              <div className="settings-inline-fields">
-                <input
-                  className="input"
-                  type="email"
-                  placeholder="Contact email"
-                  value={contactInfo}
-                  onChange={(event) => setContactInfo(event.target.value)}
-                />
-                <div className="muted settings-inline-note">
-                  Secure email updates can be added later with a dedicated auth flow.
-                </div>
-              </div>
-
-              <div className="settings-inline-actions">
-                <button
-                  className="button button-accent"
-                  onClick={handleSaveAccount}
-                  disabled={isSavingAccount}
-                >
-                  {isSavingAccount ? "Saving..." : "Save Account"}
-                </button>
-              </div>
+              </Link>
 
               <button className="settings-list-row settings-list-row-button" onClick={handleLogOut}>
                 <div className="settings-list-copy">
@@ -522,7 +384,7 @@ export default function SettingsPage() {
               <Link href="/terms" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Terms of Use</strong>
-                  <span>See the basic rules for using the app and posting content.</span>
+                  <span>Read the rules for using Reflekt across web and mobile.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
@@ -532,7 +394,7 @@ export default function SettingsPage() {
               <Link href="/community-guidelines" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Community Guidelines</strong>
-                  <span>Learn what behavior is expected in comments and reports.</span>
+                  <span>See what keeps conversations healthy and safe.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
@@ -542,72 +404,68 @@ export default function SettingsPage() {
           </section>
 
           {message ? <div className="chip chip-accent">{message}</div> : null}
+
+          {isDeleteModalOpen ? (
+            <div className="modal-overlay" role="presentation">
+              <div className="modal-card">
+                <h3 style={{ marginTop: 0 }}>Delete account</h3>
+                <p className="muted">
+                  This permanently deletes your Reflekt account and related profile data.
+                  Type <strong>delete</strong> to confirm.
+                </p>
+                <div className="input-row">
+                  <input
+                    className="input"
+                    type="text"
+                    value={deleteConfirmationText}
+                    onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                    placeholder="Type delete"
+                    disabled={isDeletingAccount}
+                  />
+                </div>
+                {deleteStatus ? (
+                  <div
+                    className={`status-message ${
+                      deleteStatus.type === "success" ? "status-success" : "status-error"
+                    }`}
+                  >
+                    {deleteStatus.text}
+                  </div>
+                ) : null}
+                <div className="toolbar">
+                  <button
+                    className="button button-secondary"
+                    onClick={() => {
+                      if (!isDeletingAccount) {
+                        setIsDeleteModalOpen(false);
+                        setDeleteStatus(null);
+                        setDeleteConfirmationText("");
+                      }
+                    }}
+                    disabled={isDeletingAccount}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="button settings-danger-button"
+                    style={{
+                      background: "#c13a50",
+                      color: "#ffffff",
+                      borderColor: "#c13a50",
+                    }}
+                    onClick={handleDeleteAccount}
+                    disabled={
+                      isDeletingAccount || deleteConfirmationText.trim().toLowerCase() !== "delete"
+                    }
+                  >
+                    {isDeletingAccount ? "Deleting..." : "Delete account"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
-
-      {isDeleteModalOpen ? (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="settings-delete-title"
-        >
-          <div className="modal-card">
-            <div className="stack" style={{ gap: "6px" }}>
-              <h3 id="settings-delete-title" className="modal-title">
-                Delete account
-              </h3>
-              <p className="muted" style={{ margin: 0 }}>
-                This permanently deletes your Reflekt account. Type <strong>delete</strong> to confirm.
-              </p>
-            </div>
-
-            <input
-              className="input settings-delete-input"
-              type="text"
-              placeholder="Type delete to confirm"
-              value={deleteConfirmationText}
-              onChange={(event) => setDeleteConfirmationText(event.target.value)}
-              disabled={isDeletingAccount}
-            />
-
-            {deleteStatus ? (
-              <div
-                className={`status-message ${
-                  deleteStatus.type === "success" ? "status-success" : "status-error"
-                }`}
-              >
-                {deleteStatus.text}
-              </div>
-            ) : null}
-
-            <div className="modal-actions">
-              <button
-                className="button button-secondary"
-                onClick={() => {
-                  if (isDeletingAccount) {
-                    return;
-                  }
-
-                  setIsDeleteModalOpen(false);
-                  setDeleteConfirmationText("");
-                  setDeleteStatus(null);
-                }}
-                disabled={isDeletingAccount}
-              >
-                Cancel
-              </button>
-              <button
-                className="button comment-action-danger settings-danger-button"
-                onClick={handleDeleteAccount}
-                disabled={isDeletingAccount || deleteConfirmationText.trim().toLowerCase() !== "delete"}
-              >
-                {isDeletingAccount ? "Deleting..." : "Delete account"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

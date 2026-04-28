@@ -21,6 +21,14 @@ function getPageTitle(pathname: string) {
     return "Settings";
   }
 
+  if (pathname === "/settings/username") {
+    return "Change username";
+  }
+
+  if (pathname === "/settings/contact") {
+    return "Contact info";
+  }
+
   if (pathname === "/my-feed") {
     return "My Feed";
   }

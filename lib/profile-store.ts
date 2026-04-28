@@ -9,6 +9,7 @@ export const PROFILE_SELECT_FIELDS = [
   "id",
   "email",
   "username",
+  "contact_email",
   "bio",
   "avatar_url",
   "categories",
@@ -21,6 +22,7 @@ export type AppProfileRecord = {
   id: string;
   email: string | null;
   username: string | null;
+  contact_email: string | null;
   bio: string | null;
   avatar_url: string | null;
   categories: string[] | null;
@@ -34,6 +36,7 @@ export function getDefaultProfileRecord(user: ProfileUserRef): AppProfileRecord 
     id: user.id,
     email: user.email ?? null,
     username: null,
+    contact_email: null,
     bio: null,
     avatar_url: null,
     categories: [],
