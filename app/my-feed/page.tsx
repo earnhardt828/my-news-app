@@ -5,6 +5,7 @@ import ArticleReaderButton from "../components/article-reader-button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ShareButton from "../components/share-button";
+import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
 import { supabase } from "../../lib/supabase";
 
 type FeedArticle = {
@@ -74,7 +75,7 @@ export default function MyFeed() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("categories")
+        .select("categories, preferred_sources, show_less_sources")
         .eq("id", userData.user.id)
         .maybeSingle();
 
@@ -100,12 +101,19 @@ export default function MyFeed() {
           ? news.filter((item) => userCategories.includes(item.category))
           : news;
 
-      setArticles(
+      const ranked = rankArticlesWithSourcePreferences(
         filtered.map((article) => ({
           ...article,
           saved: savedArticleIds.has(article.id),
-        }))
+        })),
+        {
+          preferredSources: profile?.preferred_sources ?? [],
+          showLessSources: profile?.show_less_sources ?? [],
+          mode: "my-feed",
+        }
       );
+
+      setArticles(ranked);
       setIsLoading(false);
     }
 

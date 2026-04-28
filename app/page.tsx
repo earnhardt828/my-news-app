@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ShareButton from "./components/share-button";
 import { isCommentAllowed } from "../lib/moderation";
 import { supabase } from "../lib/supabase";
+import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
 import {
   buildVideoEmbedUrl,
   initialVideos,
@@ -72,6 +73,8 @@ type DbProfile = {
   id: string;
   avatar_url: string | null;
   username: string | null;
+  preferred_sources?: string[] | null;
+  show_less_sources?: string[] | null;
 };
 
 type DbSavedArticle = {
@@ -199,6 +202,8 @@ export default function Home() {
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [preferredSources, setPreferredSources] = useState<string[]>([]);
+  const [showLessSources, setShowLessSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
@@ -242,15 +247,19 @@ export default function Home() {
       if (userData.user?.id) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("username, categories")
+          .select("username, categories, preferred_sources, show_less_sources")
           .eq("id", userData.user.id)
           .maybeSingle();
 
         setUsername(profile?.username ?? null);
         setCategories(profile?.categories ?? []);
+        setPreferredSources(profile?.preferred_sources ?? []);
+        setShowLessSources(profile?.show_less_sources ?? []);
       } else {
         setUsername(null);
         setCategories([]);
+        setPreferredSources([]);
+        setShowLessSources([]);
       }
 
       const newsRes = await fetch("/api/news");
@@ -921,32 +930,27 @@ export default function Home() {
           ? copied.filter((article) => categories.includes(article.category))
           : copied;
 
-      return filtered.sort((a, b) => {
-        const scoreA = a.likes + a.comments.length;
-        const scoreB = b.likes + b.comments.length;
-        return scoreB - scoreA;
+      return rankArticlesWithSourcePreferences(filtered, {
+        preferredSources,
+        showLessSources,
+        mode: "my-feed",
       });
     }
 
     if (sortMode === "latest") {
-      return copied.sort((a, b) => {
-        const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-        const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-
-        if (timeA === timeB) {
-          return b.id - a.id;
-        }
-
-        return timeB - timeA;
+      return rankArticlesWithSourcePreferences(copied, {
+        preferredSources,
+        showLessSources,
+        mode: "latest",
       });
     }
 
-    return copied.sort((a, b) => {
-      const scoreA = a.likes + a.comments.length;
-      const scoreB = b.likes + b.comments.length;
-      return scoreB - scoreA;
+    return rankArticlesWithSourcePreferences(copied, {
+      preferredSources,
+      showLessSources,
+      mode: "trending",
     });
-  }, [articles, categories, sortMode]);
+  }, [articles, categories, preferredSources, showLessSources, sortMode]);
 
   const activeCommentsArticle =
     activeCommentsArticleId === null
