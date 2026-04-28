@@ -133,7 +133,7 @@ input {
 .topbar-inner {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 36px) 20px 14px;
+  padding: calc(env(safe-area-inset-top) + 44px) 20px 16px;
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -203,7 +203,7 @@ input {
 .app-main {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: 24px 20px 0;
+  padding: 20px 20px 0;
 }
 
 .page-shell {
@@ -831,13 +831,14 @@ input {
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-soft);
-  font-size: 1.2rem;
+  font-size: 1.45rem;
   font-weight: 800;
   pointer-events: none;
+  line-height: 1;
 }
 
 .search-input-with-icon {
-  padding-left: 50px;
+  padding-left: 56px;
 }
 
 .search-section-header {
@@ -1910,7 +1911,7 @@ input {
 
 .videos-toolbar {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   padding: 0 20px;
 }
 
@@ -1918,7 +1919,7 @@ input {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: -56px;
+  margin-top: -20px;
 }
 
 .videos-toolbar-row-end {
@@ -1936,7 +1937,7 @@ input {
   border-radius: 999px;
   background: var(--button-secondary-bg);
   color: var(--foreground);
-  font-size: 1.5rem;
+  font-size: 1.85rem;
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(20, 33, 61, 0.08);
   line-height: 1;
@@ -1981,8 +1982,13 @@ input {
   margin: 0 20px;
 }
 
+.reels-inline-status {
+  margin: 0 20px;
+  font-size: 0.92rem;
+}
+
 .reels-feed {
-  height: calc(100svh - 248px);
+  height: calc(100svh - 236px);
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
@@ -1996,7 +2002,7 @@ input {
 
 .reel-card {
   position: relative;
-  min-height: calc(100svh - 248px);
+  min-height: calc(100svh - 236px);
   scroll-snap-align: start;
   scroll-snap-stop: always;
   background: #06080f;

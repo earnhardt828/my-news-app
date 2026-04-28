@@ -77,10 +77,12 @@ export default function VideosPage() {
   const [selectedCategory, setSelectedCategory] =
     useState<(typeof VIDEO_CATEGORIES)[number]>("Trending");
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const videoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const baseVideosRef = useRef<VideoItem[]>(initialVideos);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const hasLoadedOnceRef = useRef(false);
   const debouncedSearchTerm = useMemo(() => searchTerm.trim(), [searchTerm]);
 
   useEffect(() => {
@@ -88,6 +90,7 @@ export default function VideosPage() {
       selectedCategory === "Trending" && debouncedSearchTerm.length === 0;
 
     async function loadVideos() {
+      const shouldBlockScreen = !hasLoadedOnceRef.current;
       setIsLoading(true);
 
       try {
@@ -149,10 +152,14 @@ export default function VideosPage() {
         setStatusMessage("Could not load YouTube search results, so the current video feed is shown instead.");
       } finally {
         setIsLoading(false);
+        if (shouldBlockScreen) {
+          hasLoadedOnceRef.current = true;
+          setHasLoadedOnce(true);
+        }
       }
     }
 
-    loadVideos();
+    void loadVideos();
   }, [debouncedSearchTerm, selectedCategory]);
 
   useEffect(() => {
@@ -326,8 +333,11 @@ export default function VideosPage() {
       </div>
 
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
+      {isLoading && hasLoadedOnce ? (
+        <div className="muted reels-inline-status">Refreshing videos...</div>
+      ) : null}
 
-      {isLoading ? (
+      {isLoading && !hasLoadedOnce ? (
         <LoadingScreen />
       ) : (
         <div className="reels-feed">
