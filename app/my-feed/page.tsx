@@ -139,7 +139,7 @@ export default function MyFeed() {
 
       if (error) {
         console.error("Error removing saved article:", error);
-        alert("Could not remove saved article");
+        alert(error.message ?? "Could not remove saved article");
         return;
       }
 
@@ -175,7 +175,7 @@ export default function MyFeed() {
 
     if (error) {
       console.error("Error saving article:", error);
-      alert("Could not save article");
+      alert(error.message ?? "Could not save article");
       return;
     }
 

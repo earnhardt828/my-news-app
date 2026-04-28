@@ -12,6 +12,11 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 import LoadingScreen from "../components/loading-screen";
+import {
+  ensureProfileRow,
+  saveProfilePatch,
+  type AppProfileRecord,
+} from "../../lib/profile-store";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
@@ -41,14 +46,10 @@ type SavedArticle = {
   published_at?: string | null;
 };
 
-type ProfileRow = {
-  username: string | null;
-  bio: string | null;
-  categories: string[] | null;
-  avatar_url: string | null;
-  username_last_changed_at: string | null;
-  preferred_sources: string[] | null;
-  show_less_sources: string[] | null;
+type ProfileRow = Omit<AppProfileRecord, "id" | "email">;
+type ProfileUserRef = {
+  id: string;
+  email?: string | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -204,61 +205,75 @@ export default function Profile() {
       return { error: new Error("Log in first.") };
     }
 
-    const payload = {
-      id: currentUser.id,
-      email: currentUser.email,
-      username: updates?.username ?? (username.trim() || null),
-      bio: updates?.bio ?? (bio.trim() || null),
-      categories: updates?.categories ?? categories,
-      avatar_url: updates?.avatar_url ?? (avatarUrl || null),
-      username_last_changed_at:
-        updates?.username_last_changed_at ?? profileRef.current.username_last_changed_at,
-      preferred_sources:
-        updates?.preferred_sources ?? preferredSources,
-      show_less_sources:
-        updates?.show_less_sources ?? showLessSources,
-    };
+    const result = await saveProfilePatch(
+      {
+        id: currentUser.id,
+        email: currentUser.email,
+      },
+      {
+        id: currentUser.id,
+        email: currentUser.email,
+        username: updates?.username ?? (username.trim() || null),
+        bio: updates?.bio ?? (bio.trim() || null),
+        categories: updates?.categories ?? categories,
+        avatar_url: updates?.avatar_url ?? (avatarUrl || null),
+        username_last_changed_at:
+          updates?.username_last_changed_at ?? profileRef.current.username_last_changed_at,
+        preferred_sources:
+          updates?.preferred_sources ?? preferredSources,
+        show_less_sources:
+          updates?.show_less_sources ?? showLessSources,
+      }
+    );
 
-    const result = await supabase.from("profiles").upsert(payload);
-
-    if (!result.error) {
+    if (!result.error && result.data) {
+      const payload = result.data;
+      setUsername(payload.username ?? "");
+      setDraftUsername(payload.username ?? "");
+      setBio(payload.bio ?? "");
+      setDraftBio(payload.bio ?? "");
+      setAvatarUrl(payload.avatar_url ?? "");
+      setCategories(payload.categories ?? []);
+      setPreferredSources(payload.preferred_sources ?? []);
+      setShowLessSources(payload.show_less_sources ?? []);
       profileRef.current = {
         username: payload.username,
         bio: payload.bio,
-        categories: payload.categories,
+        categories: payload.categories ?? [],
         avatar_url: payload.avatar_url,
         username_last_changed_at: payload.username_last_changed_at,
-        preferred_sources: payload.preferred_sources,
-        show_less_sources: payload.show_less_sources,
+        preferred_sources: payload.preferred_sources ?? [],
+        show_less_sources: payload.show_less_sources ?? [],
       };
     }
 
     return result;
   };
 
-  const loadProfileForUser = useCallback(async (userId: string) => {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("username, bio, categories, avatar_url, username_last_changed_at, preferred_sources, show_less_sources")
-      .eq("id", userId)
-      .maybeSingle();
+  const loadProfileForUser = useCallback(async (user: ProfileUserRef) => {
+    const { data: profile, error: profileError } = await ensureProfileRow(user);
 
-    setUsername(profile?.username ?? "");
-    setDraftUsername(profile?.username ?? "");
-    setBio(profile?.bio ?? "");
-    setDraftBio(profile?.bio ?? "");
-    setAvatarUrl(profile?.avatar_url ?? "");
-    setCategories(profile?.categories ?? []);
-    setPreferredSources(profile?.preferred_sources ?? []);
-    setShowLessSources(profile?.show_less_sources ?? []);
+    if (profileError || !profile) {
+      console.error("Error loading profile row:", profileError);
+      throw profileError ?? new Error("Could not load profile.");
+    }
+
+    setUsername(profile.username ?? "");
+    setDraftUsername(profile.username ?? "");
+    setBio(profile.bio ?? "");
+    setDraftBio(profile.bio ?? "");
+    setAvatarUrl(profile.avatar_url ?? "");
+    setCategories(profile.categories ?? []);
+    setPreferredSources(profile.preferred_sources ?? []);
+    setShowLessSources(profile.show_less_sources ?? []);
     profileRef.current = {
-      username: profile?.username ?? null,
-      bio: profile?.bio ?? null,
-      categories: profile?.categories ?? [],
-      avatar_url: profile?.avatar_url ?? null,
-      username_last_changed_at: profile?.username_last_changed_at ?? null,
-      preferred_sources: profile?.preferred_sources ?? [],
-      show_less_sources: profile?.show_less_sources ?? [],
+      username: profile.username,
+      bio: profile.bio,
+      categories: profile.categories ?? [],
+      avatar_url: profile.avatar_url,
+      username_last_changed_at: profile.username_last_changed_at,
+      preferred_sources: profile.preferred_sources ?? [],
+      show_less_sources: profile.show_less_sources ?? [],
     };
 
     try {
@@ -270,8 +285,8 @@ export default function Profile() {
             ...articles
               .map((article) => article.source?.trim() ?? "")
               .filter(Boolean),
-            ...(profile?.preferred_sources ?? []),
-            ...(profile?.show_less_sources ?? []),
+            ...(profile.preferred_sources ?? []),
+            ...(profile.show_less_sources ?? []),
           ].filter(Boolean)
         ),
       ]
@@ -283,16 +298,26 @@ export default function Profile() {
       setAvailableSources([]);
     }
 
-    const { data: comments } = await supabase
+    const { data: comments, error: commentsError } = await supabase
       .from("comments")
       .select("id, text, article_id, username, user_id, created_at")
-      .eq("user_id", userId);
+      .eq("user_id", user.id);
 
-    const { data: saved } = await supabase
+    if (commentsError) {
+      console.error("Error loading profile comments:", commentsError);
+      throw commentsError;
+    }
+
+    const { data: saved, error: savedError } = await supabase
       .from("saved_articles")
       .select("id, article_id, title, source, category, time, url, image, published_at")
-      .eq("user_id", userId)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+
+    if (savedError) {
+      console.error("Error loading saved articles:", savedError);
+      throw savedError;
+    }
 
     setMyComments((comments ?? []) as MyComment[]);
     setSavedArticles((saved ?? []) as SavedArticle[]);
@@ -310,7 +335,10 @@ export default function Profile() {
       email: user.email ?? null,
     });
 
-    await loadProfileForUser(user.id);
+    await loadProfileForUser({
+      id: user.id,
+      email: user.email ?? null,
+    });
     return true;
   }, [clearProfileState, loadProfileForUser]);
 
@@ -761,7 +789,7 @@ export default function Profile() {
     if (error) {
       setPreferredSources(profileRef.current.preferred_sources ?? []);
       setShowLessSources(profileRef.current.show_less_sources ?? []);
-      setMessage("Could not save source preferences.");
+      setMessage(error.message ?? "Could not save source preferences.");
       return;
     }
 
@@ -795,7 +823,7 @@ export default function Profile() {
     if (error) {
       setPreferredSources(profileRef.current.preferred_sources ?? []);
       setShowLessSources(profileRef.current.show_less_sources ?? []);
-      setMessage("Could not save source preferences.");
+      setMessage(error.message ?? "Could not save source preferences.");
       return;
     }
 

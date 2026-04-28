@@ -8,6 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ShareButton from "./components/share-button";
+import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
@@ -245,11 +246,14 @@ export default function Home() {
       setUserId(userData.user?.id ?? null);
 
       if (userData.user?.id) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("username, categories, preferred_sources, show_less_sources")
-          .eq("id", userData.user.id)
-          .maybeSingle();
+        const { data: profile, error: profileError } = await ensureProfileRow({
+          id: userData.user.id,
+          email: userData.user.email ?? null,
+        });
+
+        if (profileError) {
+          console.error("Error loading home profile:", profileError);
+        }
 
         setUsername(profile?.username ?? null);
         setCategories(profile?.categories ?? []);
@@ -486,7 +490,7 @@ export default function Home() {
 
       if (error) {
         console.error("Error removing saved article:", error);
-        alert("Could not remove saved article");
+        alert(error.message ?? "Could not remove saved article");
         return;
       }
 
@@ -522,7 +526,7 @@ export default function Home() {
 
     if (error) {
       console.error("Error saving article:", error);
-      alert("Could not save article");
+      alert(error.message ?? "Could not save article");
       return;
     }
 
@@ -1082,11 +1086,24 @@ export default function Home() {
     setIsSavingCategories(true);
     setCategorySheetStatus(null);
 
-    const { error } = await supabase.from("profiles").upsert({
-      id: userId,
-      username,
-      categories: categoryDraft,
-    });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { error } = await saveProfilePatch(
+      {
+        id: userId,
+        email: user?.email ?? null,
+      },
+      {
+        id: userId,
+        email: user?.email ?? null,
+        username: username ?? null,
+        categories: categoryDraft,
+        preferred_sources: preferredSources,
+        show_less_sources: showLessSources,
+      }
+    );
 
     setIsSavingCategories(false);
 
@@ -1094,7 +1111,7 @@ export default function Home() {
       console.error("Error saving categories:", error);
       setCategorySheetStatus({
         type: "error",
-        text: "Could not save categories right now.",
+        text: error.message ?? "Could not save categories right now.",
       });
       return;
     }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import ThemeToggle from "../components/theme-toggle";
+import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
@@ -78,17 +79,21 @@ export default function SettingsPage() {
 
       const [profileResult, blockedUsersResult] =
         await Promise.all([
-          supabase
-            .from("profiles")
-            .select("username, username_last_changed_at")
-            .eq("id", user.id)
-            .maybeSingle(),
+          ensureProfileRow({
+            id: user.id,
+            email: user.email ?? null,
+          }),
           supabase
             .from("blocked_users")
             .select("id, blocked_user_id, created_at")
             .eq("blocker_id", user.id)
             .order("created_at", { ascending: false }),
         ]);
+
+      if (profileResult.error) {
+        console.error("Error loading settings profile:", profileResult.error);
+        setMessage(profileResult.error.message ?? "Could not load your profile.");
+      }
 
       setUsername(profileResult.data?.username ?? "");
       setSavedUsername(profileResult.data?.username ?? "");
@@ -192,12 +197,18 @@ export default function SettingsPage() {
       ? new Date().toISOString()
       : usernameLastChangedAt;
 
-    const { error } = await supabase.from("profiles").upsert({
-      id: currentUser.id,
-      email: currentUser.email,
-      username: username.trim(),
-      username_last_changed_at: nextUsernameChangedAt,
-    });
+    const { error } = await saveProfilePatch(
+      {
+        id: currentUser.id,
+        email: currentUser.email,
+      },
+      {
+        id: currentUser.id,
+        email: currentUser.email,
+        username: username.trim(),
+        username_last_changed_at: nextUsernameChangedAt ?? null,
+      }
+    );
 
     setIsSavingAccount(false);
 
