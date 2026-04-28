@@ -946,17 +946,22 @@ export default function Home() {
     }
 
     if (sortMode === "latest") {
-      return rankArticlesWithSourcePreferences(copied, {
-        preferredSources,
-        showLessSources,
-        mode: "latest",
+      return copied.sort((a, b) => {
+        const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+        const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+
+        if (timeA === timeB) {
+          return b.id - a.id;
+        }
+
+        return timeB - timeA;
       });
     }
 
-    return rankArticlesWithSourcePreferences(copied, {
-      preferredSources,
-      showLessSources,
-      mode: "trending",
+    return copied.sort((a, b) => {
+      const scoreA = a.likes + a.comments.length;
+      const scoreB = b.likes + b.comments.length;
+      return scoreB - scoreA;
     });
   }, [articles, categories, preferredSources, showLessSources, sortMode]);
 

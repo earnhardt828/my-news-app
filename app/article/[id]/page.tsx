@@ -376,6 +376,7 @@ export default function ArticleDetailPage() {
 
       if (error) {
         console.error("Error removing saved article:", error);
+        alert("Could not remove saved article");
         return;
       }
 
@@ -402,6 +403,7 @@ export default function ArticleDetailPage() {
 
     if (error) {
       console.error("Error saving article:", error);
+      alert("Could not save article");
       return;
     }
 

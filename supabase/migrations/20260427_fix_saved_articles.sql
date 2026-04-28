@@ -5,6 +5,11 @@ add column if not exists published_at text;
 
 alter table public.saved_articles enable row level security;
 
+drop policy if exists "Users can view their own saved articles" on public.saved_articles;
+drop policy if exists "Users can create their own saved articles" on public.saved_articles;
+drop policy if exists "Users can update their own saved articles" on public.saved_articles;
+drop policy if exists "Users can delete their own saved articles" on public.saved_articles;
+
 create policy "Users can view their own saved articles"
   on public.saved_articles
   for select
