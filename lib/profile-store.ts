@@ -18,6 +18,18 @@ export const PROFILE_SELECT_FIELDS = [
   "username_last_changed_at",
 ].join(", ");
 
+const PROFILE_SELECT_FIELDS_FALLBACK = [
+  "id",
+  "email",
+  "username",
+  "bio",
+  "avatar_url",
+  "categories",
+  "preferred_sources",
+  "show_less_sources",
+  "username_last_changed_at",
+].join(", ");
+
 export type AppProfileRecord = {
   id: string;
   email: string | null;
@@ -46,6 +58,43 @@ export function getDefaultProfileRecord(user: ProfileUserRef): AppProfileRecord 
   };
 }
 
+function isMissingContactEmailColumnError(error: { message?: string } | null) {
+  return Boolean(error?.message?.toLowerCase().includes("contact_email"));
+}
+
+async function selectProfileRow(user: ProfileUserRef) {
+  const primaryResult = await supabase
+    .from("profiles")
+    .select(PROFILE_SELECT_FIELDS)
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!isMissingContactEmailColumnError(primaryResult.error)) {
+    return primaryResult;
+  }
+
+  const fallbackResult = await supabase
+    .from("profiles")
+    .select(PROFILE_SELECT_FIELDS_FALLBACK)
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const fallbackData =
+    fallbackResult.data && typeof fallbackResult.data === "object"
+      ? (fallbackResult.data as Omit<AppProfileRecord, "contact_email">)
+      : null;
+
+  return {
+    data: fallbackData
+      ? {
+          ...fallbackData,
+          contact_email: null,
+        }
+      : null,
+    error: fallbackResult.error,
+  };
+}
+
 export async function ensureProfileRow(user: ProfileUserRef) {
   const seed = {
     id: user.id,
@@ -61,11 +110,7 @@ export async function ensureProfileRow(user: ProfileUserRef) {
     };
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(PROFILE_SELECT_FIELDS)
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data, error } = await selectProfileRow(user);
 
   return {
     data: (data as AppProfileRecord | null) ?? getDefaultProfileRecord(user),

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   type ChangeEvent,
+  type KeyboardEvent,
   useCallback,
   useEffect,
   useRef,
@@ -16,6 +17,7 @@ import {
   saveProfilePatch,
   type AppProfileRecord,
 } from "../../lib/profile-store";
+import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -124,6 +126,9 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [bio, setBio] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [draftUsername, setDraftUsername] = useState("");
+  const [isSavingInlineUsername, setIsSavingInlineUsername] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [draftBio, setDraftBio] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
@@ -161,6 +166,8 @@ export default function Profile() {
 
   const clearProfileState = useCallback(() => {
     setUsername("");
+    setDraftUsername("");
+    setIsEditingUsername(false);
     setAvatarUrl("");
     setBio("");
     setDraftBio("");
@@ -219,6 +226,7 @@ export default function Profile() {
     if (!result.error && result.data) {
       const payload = result.data;
       setUsername(payload.username ?? "");
+      setDraftUsername(payload.username ?? "");
       setBio(payload.bio ?? "");
       setDraftBio(payload.bio ?? "");
       setAvatarUrl(payload.avatar_url ?? "");
@@ -247,6 +255,7 @@ export default function Profile() {
     }
 
     setUsername(profile.username ?? "");
+    setDraftUsername(profile.username ?? "");
     setBio(profile.bio ?? "");
     setDraftBio(profile.bio ?? "");
     setAvatarUrl(profile.avatar_url ?? "");
@@ -471,6 +480,120 @@ export default function Profile() {
       type: "success",
       text: "Confirmation email sent again.",
     });
+  };
+
+  const startUsernameEdit = () => {
+    setDraftUsername(username);
+    setIsEditingUsername(true);
+    setMessage("");
+  };
+
+  const cancelUsernameEdit = () => {
+    setDraftUsername(username);
+    setIsEditingUsername(false);
+  };
+
+  const handleInlineUsernameSave = async () => {
+    if (!currentUser?.id) {
+      setMessage("Log in first.");
+      return;
+    }
+
+    const trimmedUsername = draftUsername.trim();
+
+    if (!trimmedUsername) {
+      setMessage("Enter a username.");
+      return;
+    }
+
+    if (!isUsernameAllowed(trimmedUsername)) {
+      setMessage("That username is not available. Please choose another.");
+      return;
+    }
+
+    setIsSavingInlineUsername(true);
+
+    const { data: matchingProfiles, error: availabilityError } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("username", trimmedUsername);
+
+    if (availabilityError) {
+      setIsSavingInlineUsername(false);
+      setMessage(availabilityError.message ?? "Could not check username availability.");
+      return;
+    }
+
+    const isTaken = (matchingProfiles ?? []).some(
+      (profile) => profile.id !== currentUser.id
+    );
+
+    if (isTaken) {
+      setIsSavingInlineUsername(false);
+      setMessage("Username already taken.");
+      return;
+    }
+
+    const currentSavedUsername = profileRef.current.username?.trim() ?? "";
+    const isRealUsernameChange =
+      trimmedUsername.toLowerCase() !== currentSavedUsername.toLowerCase();
+    const attemptedUsernameChangeAtIso = new Date().toISOString();
+
+    if (isRealUsernameChange && profileRef.current.username_last_changed_at) {
+      const lastChangedAt = new Date(profileRef.current.username_last_changed_at).getTime();
+      const attemptedUsernameChangeAt = new Date(attemptedUsernameChangeAtIso).getTime();
+
+      if (!Number.isNaN(lastChangedAt)) {
+        const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+
+        if (attemptedUsernameChangeAt - lastChangedAt < twentyFourHoursMs) {
+          setIsSavingInlineUsername(false);
+          setMessage("You can only change your username once per day.");
+          return;
+        }
+      }
+    }
+
+    const previousUsername = username;
+    setUsername(trimmedUsername);
+    const nextUsernameChangedAt = isRealUsernameChange
+      ? attemptedUsernameChangeAtIso
+      : profileRef.current.username_last_changed_at;
+
+    const { error } = await saveProfile({
+      username: trimmedUsername,
+      bio: profileRef.current.bio,
+      categories: profileRef.current.categories ?? categories,
+      avatar_url: profileRef.current.avatar_url,
+      username_last_changed_at: nextUsernameChangedAt,
+      preferred_sources: profileRef.current.preferred_sources ?? [],
+      show_less_sources: profileRef.current.show_less_sources ?? [],
+    });
+
+    setIsSavingInlineUsername(false);
+
+    if (error) {
+      setUsername(previousUsername);
+      setDraftUsername(previousUsername);
+      setMessage(error.message ?? "Could not save username.");
+      return;
+    }
+
+    setDraftUsername(trimmedUsername);
+    setIsEditingUsername(false);
+    setMessage("Username updated.");
+  };
+
+  const handleUsernameKeyDown = async (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      await handleInlineUsernameSave();
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelUsernameEdit();
+    }
   };
 
   const startBioEdit = () => {
@@ -858,18 +981,48 @@ export default function Profile() {
               </button>
 
               <div className="profile-meta">
-                <h3 className="profile-name">{username || "News Reader"}</h3>
+                {isEditingUsername ? (
+                  <div className="profile-name-editor">
+                    <input
+                      className="input profile-name-input"
+                      type="text"
+                      value={draftUsername}
+                      onChange={(e) => setDraftUsername(e.target.value)}
+                      onKeyDown={handleUsernameKeyDown}
+                      autoFocus
+                      disabled={isSavingInlineUsername}
+                      placeholder="Choose a username"
+                    />
+                    <div className="profile-name-actions">
+                      <button
+                        type="button"
+                        className="button button-secondary profile-inline-button"
+                        onClick={cancelUsernameEdit}
+                        disabled={isSavingInlineUsername}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="profile-name-button"
+                    onClick={startUsernameEdit}
+                  >
+                    <h3 className="profile-name">{username || "News Reader"}</h3>
+                  </button>
+                )}
                 <div className="profile-meta-row">
                   <span className="chip">{categories.length} categories selected</span>
-                  <Link href="/settings/username" className="chip">
-                    Change username
-                  </Link>
                   <Link href={`/user/${currentUserId}`} className="chip chip-accent">
                     View public profile
                   </Link>
                 </div>
                 {isUploadingAvatar ? (
                   <span className="muted">Uploading image...</span>
+                ) : isSavingInlineUsername ? (
+                  <span className="muted">Saving username...</span>
                 ) : isSavingCategories ? (
                   <span className="muted">Saving categories...</span>
                 ) : null}
