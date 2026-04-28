@@ -338,6 +338,19 @@ input {
   min-width: 0;
 }
 
+.source-trigger {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.source-trigger:hover {
+  transform: none;
+}
+
 .trending-tabs-wrap {
   display: flex;
   justify-content: center;
@@ -537,6 +550,10 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+.my-feed-source-trigger {
+  margin-bottom: 12px;
 }
 
 .article-detail-title {
@@ -1053,6 +1070,31 @@ input {
 
 .bottom-sheet-title {
   max-width: 42ch;
+}
+
+.source-sheet {
+  gap: 16px;
+}
+
+.source-sheet-header {
+  justify-content: flex-start;
+}
+
+.source-sheet-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.source-sheet-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.source-sheet-button,
+.source-sheet-close {
+  min-height: 46px;
+  justify-content: center;
 }
 
 .bottom-sheet-input-row {

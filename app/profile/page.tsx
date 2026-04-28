@@ -123,9 +123,6 @@ export default function Profile() {
     text: string;
   } | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
-  const [preferredSources, setPreferredSources] = useState<string[]>([]);
-  const [showLessSources, setShowLessSources] = useState<string[]>([]);
-  const [availableSources, setAvailableSources] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [bio, setBio] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -174,9 +171,6 @@ export default function Profile() {
     setDraftBio("");
     setIsEditingBio(false);
     setCategories([]);
-    setPreferredSources([]);
-    setShowLessSources([]);
-    setAvailableSources([]);
     setMyComments([]);
     setSavedArticles([]);
     profileRef.current = {
@@ -220,9 +214,9 @@ export default function Profile() {
         username_last_changed_at:
           updates?.username_last_changed_at ?? profileRef.current.username_last_changed_at,
         preferred_sources:
-          updates?.preferred_sources ?? preferredSources,
+          updates?.preferred_sources ?? profileRef.current.preferred_sources ?? [],
         show_less_sources:
-          updates?.show_less_sources ?? showLessSources,
+          updates?.show_less_sources ?? profileRef.current.show_less_sources ?? [],
       }
     );
 
@@ -234,8 +228,6 @@ export default function Profile() {
       setDraftBio(payload.bio ?? "");
       setAvatarUrl(payload.avatar_url ?? "");
       setCategories(payload.categories ?? []);
-      setPreferredSources(payload.preferred_sources ?? []);
-      setShowLessSources(payload.show_less_sources ?? []);
       profileRef.current = {
         username: payload.username,
         bio: payload.bio,
@@ -264,8 +256,6 @@ export default function Profile() {
     setDraftBio(profile.bio ?? "");
     setAvatarUrl(profile.avatar_url ?? "");
     setCategories(profile.categories ?? []);
-    setPreferredSources(profile.preferred_sources ?? []);
-    setShowLessSources(profile.show_less_sources ?? []);
     profileRef.current = {
       username: profile.username,
       bio: profile.bio,
@@ -275,28 +265,6 @@ export default function Profile() {
       preferred_sources: profile.preferred_sources ?? [],
       show_less_sources: profile.show_less_sources ?? [],
     };
-
-    try {
-      const response = await fetch("/api/news");
-      const articles = (await response.json()) as Array<{ source?: string | null }>;
-      const sources = [
-        ...new Set(
-          [
-            ...articles
-              .map((article) => article.source?.trim() ?? "")
-              .filter(Boolean),
-            ...(profile.preferred_sources ?? []),
-            ...(profile.show_less_sources ?? []),
-          ].filter(Boolean)
-        ),
-      ]
-        .sort((a, b) => a.localeCompare(b))
-        .slice(0, 18);
-      setAvailableSources(sources);
-    } catch (error) {
-      console.error("Error loading sources:", error);
-      setAvailableSources([]);
-    }
 
     const { data: comments, error: commentsError } = await supabase
       .from("comments")
@@ -557,8 +525,8 @@ export default function Profile() {
       categories: profileRef.current.categories ?? categories,
       avatar_url: profileRef.current.avatar_url,
       username_last_changed_at: nextUsernameChangedAt,
-      preferred_sources: profileRef.current.preferred_sources ?? preferredSources,
-      show_less_sources: profileRef.current.show_less_sources ?? showLessSources,
+      preferred_sources: profileRef.current.preferred_sources ?? [],
+      show_less_sources: profileRef.current.show_less_sources ?? [],
     });
 
     setIsSavingInlineUsername(false);
@@ -671,8 +639,8 @@ export default function Profile() {
       categories: profileRef.current.categories ?? categories,
       avatar_url: profileRef.current.avatar_url,
       username_last_changed_at: profileRef.current.username_last_changed_at,
-      preferred_sources: profileRef.current.preferred_sources ?? preferredSources,
-      show_less_sources: profileRef.current.show_less_sources ?? showLessSources,
+      preferred_sources: profileRef.current.preferred_sources ?? [],
+      show_less_sources: profileRef.current.show_less_sources ?? [],
     });
 
     setIsSavingBio(false);
@@ -737,8 +705,8 @@ export default function Profile() {
       categories: profileRef.current.categories ?? categories,
       avatar_url: publicUrl,
       username_last_changed_at: profileRef.current.username_last_changed_at,
-      preferred_sources: profileRef.current.preferred_sources ?? preferredSources,
-      show_less_sources: profileRef.current.show_less_sources ?? showLessSources,
+      preferred_sources: profileRef.current.preferred_sources ?? [],
+      show_less_sources: profileRef.current.show_less_sources ?? [],
     });
 
     setIsUploadingAvatar(false);
@@ -760,74 +728,6 @@ export default function Profile() {
 
   const handleAvatarPickerOpen = () => {
     avatarInputRef.current?.click();
-  };
-
-  const handleTogglePreferredSource = async (source: string) => {
-    if (!currentUser?.id) {
-      setMessage("Log in first.");
-      return;
-    }
-
-    const nextPreferredSources = preferredSources.includes(source)
-      ? preferredSources.filter((current) => current !== source)
-      : [...preferredSources, source];
-    const nextShowLessSources = showLessSources.filter((current) => current !== source);
-
-    setPreferredSources(nextPreferredSources);
-    setShowLessSources(nextShowLessSources);
-
-    const { error } = await saveProfile({
-      username: profileRef.current.username,
-      bio: profileRef.current.bio,
-      categories: profileRef.current.categories ?? categories,
-      avatar_url: profileRef.current.avatar_url,
-      username_last_changed_at: profileRef.current.username_last_changed_at,
-      preferred_sources: nextPreferredSources,
-      show_less_sources: nextShowLessSources,
-    });
-
-    if (error) {
-      setPreferredSources(profileRef.current.preferred_sources ?? []);
-      setShowLessSources(profileRef.current.show_less_sources ?? []);
-      setMessage(error.message ?? "Could not save source preferences.");
-      return;
-    }
-
-    setMessage("Source preferences updated.");
-  };
-
-  const handleToggleShowLessSource = async (source: string) => {
-    if (!currentUser?.id) {
-      setMessage("Log in first.");
-      return;
-    }
-
-    const nextShowLessSources = showLessSources.includes(source)
-      ? showLessSources.filter((current) => current !== source)
-      : [...showLessSources, source];
-    const nextPreferredSources = preferredSources.filter((current) => current !== source);
-
-    setShowLessSources(nextShowLessSources);
-    setPreferredSources(nextPreferredSources);
-
-    const { error } = await saveProfile({
-      username: profileRef.current.username,
-      bio: profileRef.current.bio,
-      categories: profileRef.current.categories ?? categories,
-      avatar_url: profileRef.current.avatar_url,
-      username_last_changed_at: profileRef.current.username_last_changed_at,
-      preferred_sources: nextPreferredSources,
-      show_less_sources: nextShowLessSources,
-    });
-
-    if (error) {
-      setPreferredSources(profileRef.current.preferred_sources ?? []);
-      setShowLessSources(profileRef.current.show_less_sources ?? []);
-      setMessage(error.message ?? "Could not save source preferences.");
-      return;
-    }
-
-    setMessage("Source preferences updated.");
   };
 
   const handleDeleteComment = async (commentId: number) => {
@@ -1178,57 +1078,6 @@ export default function Profile() {
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="stack">
-              <div className="source-preferences-header">
-                <strong>Source Preferences</strong>
-                <span className="muted">Prefer more from trusted publishers or see a little less from others.</span>
-              </div>
-              {availableSources.length === 0 ? (
-                <div className="empty-state">
-                  <strong>No sources available yet</strong>
-                  <span>Source controls will appear once live publishers are loaded.</span>
-                </div>
-              ) : (
-                <div className="source-preferences-list">
-                  {availableSources.map((source) => {
-                    const isPreferred = preferredSources.includes(source);
-                    const isShowLess = showLessSources.includes(source);
-
-                    return (
-                      <div key={source} className="source-preference-row">
-                        <div className="source-preference-source">
-                          <span className="source-preference-badge">
-                            {source.charAt(0).toUpperCase()}
-                          </span>
-                          <span>{source}</span>
-                        </div>
-                        <div className="source-preference-actions">
-                          <button
-                            type="button"
-                            className={`button button-secondary source-preference-button ${
-                              isPreferred ? "source-preference-button-active" : ""
-                            }`}
-                            onClick={() => handleTogglePreferredSource(source)}
-                          >
-                            Prefer
-                          </button>
-                          <button
-                            type="button"
-                            className={`button button-secondary source-preference-button ${
-                              isShowLess ? "source-preference-button-muted" : ""
-                            }`}
-                            onClick={() => handleToggleShowLessSource(source)}
-                          >
-                            Show less
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             <div className="input-row profile-hidden-input-row">

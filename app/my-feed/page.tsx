@@ -2,10 +2,14 @@
 
 import AdSlot from "../components/ad-slot";
 import ArticleReaderButton from "../components/article-reader-button";
+import LoadingScreen from "../components/loading-screen";
+import SourceBadge from "../components/source-badge";
+import SourcePreferenceSheet from "../components/source-preference-sheet";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ShareButton from "../components/share-button";
 import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
+import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { supabase } from "../../lib/supabase";
 
 type FeedArticle = {
@@ -27,35 +31,24 @@ type SavedArticleRecord = {
 };
 
 function FeedSkeleton() {
-  return (
-    <div className="stack">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div key={index} className="skeleton-card">
-          <div className="skeleton-meta-row">
-            <div className="skeleton-line skeleton-chip" />
-            <div className="skeleton-line skeleton-body-sm" />
-          </div>
-
-          <div className="stack" style={{ gap: "8px" }}>
-            <div className="skeleton-line skeleton-title-lg skeleton-body-lg" />
-            <div className="skeleton-line skeleton-title skeleton-body-md" />
-          </div>
-
-          <div className="skeleton-action-row">
-            <div className="skeleton-line skeleton-button" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <LoadingScreen />;
 }
 
 export default function MyFeed() {
   const [articles, setArticles] = useState<FeedArticle[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [preferredSources, setPreferredSources] = useState<string[]>([]);
+  const [showLessSources, setShowLessSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
+  const [activeSourceName, setActiveSourceName] = useState<string | null>(null);
+  const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
+  const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     async function loadFeed() {
@@ -65,22 +58,31 @@ export default function MyFeed() {
 
       if (!userData.user?.id) {
         setUserId(null);
+        setUserEmail(null);
         setArticles([]);
         setCategories([]);
+        setPreferredSources([]);
+        setShowLessSources([]);
         setIsLoading(false);
         return;
       }
 
       setUserId(userData.user.id);
+      setUserEmail(userData.user.email ?? null);
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("categories, preferred_sources, show_less_sources")
-        .eq("id", userData.user.id)
-        .maybeSingle();
+      const { data: profile, error: profileError } = await ensureProfileRow({
+        id: userData.user.id,
+        email: userData.user.email ?? null,
+      });
+
+      if (profileError) {
+        console.error("Error loading My Feed profile:", profileError);
+      }
 
       const userCategories = profile?.categories ?? [];
       setCategories(userCategories);
+      setPreferredSources(profile?.preferred_sources ?? []);
+      setShowLessSources(profile?.show_less_sources ?? []);
 
       const res = await fetch("/api/news");
       const news = (await res.json()) as Omit<FeedArticle, "saved">[];
@@ -188,6 +190,64 @@ export default function MyFeed() {
     );
   };
 
+  const handleSaveSourcePreference = async (sourceName: string, mode: "prefer" | "show-less") => {
+    if (!userId) {
+      setSourcePreferenceStatus({
+        type: "error",
+        text: "Log in to customize sources.",
+      });
+      return;
+    }
+
+    const nextPreferredSources =
+      mode === "prefer"
+        ? preferredSources.includes(sourceName)
+          ? preferredSources.filter((current) => current !== sourceName)
+          : [...preferredSources, sourceName]
+        : preferredSources.filter((current) => current !== sourceName);
+    const nextShowLessSources =
+      mode === "show-less"
+        ? showLessSources.includes(sourceName)
+          ? showLessSources.filter((current) => current !== sourceName)
+          : [...showLessSources, sourceName]
+        : showLessSources.filter((current) => current !== sourceName);
+
+    setIsSavingSourcePreference(true);
+    setSourcePreferenceStatus(null);
+
+    const { error } = await saveProfilePatch(
+      {
+        id: userId,
+        email: userEmail,
+      },
+      {
+        id: userId,
+        email: userEmail,
+        categories,
+        preferred_sources: nextPreferredSources,
+        show_less_sources: nextShowLessSources,
+      }
+    );
+
+    setIsSavingSourcePreference(false);
+
+    if (error) {
+      console.error("Error saving source preference:", error);
+      setSourcePreferenceStatus({
+        type: "error",
+        text: error.message ?? "Could not save source preference.",
+      });
+      return;
+    }
+
+    setPreferredSources(nextPreferredSources);
+    setShowLessSources(nextShowLessSources);
+    setSourcePreferenceStatus({
+      type: "success",
+      text: "Source preference updated.",
+    });
+  };
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -229,6 +289,19 @@ export default function MyFeed() {
           {articles.map((article, index) => (
             <div key={article.id} className="stack">
               <article className="news-card">
+                <button
+                  type="button"
+                  className="source-trigger my-feed-source-trigger"
+                  onClick={() => {
+                    setActiveSourceName(article.source);
+                    setSourcePreferenceStatus(null);
+                  }}
+                >
+                  <div className="trending-source-brand">
+                    <SourceBadge sourceName={article.source} />
+                    <span className="trending-source-name">{article.source}</span>
+                  </div>
+                </button>
                 <Link href={`/article/${article.id}`} className="article-link">
                   {article.image ? (
                     <img
@@ -241,7 +314,6 @@ export default function MyFeed() {
                   <div className="news-card-header">
                     <div className="news-meta">
                       <span className="chip chip-accent">{article.category}</span>
-                      <span>{article.source}</span>
                       <span>{article.publishedAt ?? article.time}</span>
                     </div>
                   </div>
@@ -281,6 +353,33 @@ export default function MyFeed() {
           ))}
         </div>
       )}
+
+      <SourcePreferenceSheet
+        sourceName={activeSourceName}
+        isOpen={activeSourceName !== null}
+        isPreferred={activeSourceName ? preferredSources.includes(activeSourceName) : false}
+        isShowLess={activeSourceName ? showLessSources.includes(activeSourceName) : false}
+        isSaving={isSavingSourcePreference}
+        status={sourcePreferenceStatus}
+        onPrefer={() => {
+          if (activeSourceName) {
+            void handleSaveSourcePreference(activeSourceName, "prefer");
+          }
+        }}
+        onShowLess={() => {
+          if (activeSourceName) {
+            void handleSaveSourcePreference(activeSourceName, "show-less");
+          }
+        }}
+        onClose={() => {
+          if (isSavingSourcePreference) {
+            return;
+          }
+
+          setActiveSourceName(null);
+          setSourcePreferenceStatus(null);
+        }}
+      />
 
     </section>
   );

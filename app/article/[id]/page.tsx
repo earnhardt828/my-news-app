@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ShareButton from "../../components/share-button";
+import SourcePreferenceSheet from "../../components/source-preference-sheet";
 import SourceBadge from "../../components/source-badge";
+import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
 import { supabase } from "../../../lib/supabase";
 
 type ArticleRecord = {
@@ -225,10 +227,19 @@ export default function ArticleDetailPage() {
   const [likesCount, setLikesCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [likedByCurrentUser, setLikedByCurrentUser] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [preferredSources, setPreferredSources] = useState<string[]>([]);
+  const [showLessSources, setShowLessSources] = useState<string[]>([]);
+  const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
+  const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
+  const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     async function loadArticle() {
@@ -242,6 +253,24 @@ export default function ArticleDetailPage() {
       const { data: userData } = await supabase.auth.getUser();
       const currentUserId = userData.user?.id ?? null;
       setUserId(currentUserId);
+      setUserEmail(userData.user?.email ?? null);
+
+      if (userData.user?.id) {
+        const { data: profile, error: profileError } = await ensureProfileRow({
+          id: userData.user.id,
+          email: userData.user.email ?? null,
+        });
+
+        if (profileError) {
+          console.error("Error loading source preferences:", profileError);
+        }
+
+        setPreferredSources(profile?.preferred_sources ?? []);
+        setShowLessSources(profile?.show_less_sources ?? []);
+      } else {
+        setPreferredSources([]);
+        setShowLessSources([]);
+      }
 
       const [newsRes, likesRes, commentsRes, profilesRes] = await Promise.all([
         fetch("/api/news"),
@@ -464,6 +493,68 @@ export default function ArticleDetailPage() {
     alert(`Blocked ${blockedUsername ?? "this user"}. Their comments are now hidden.`);
   };
 
+  const handleSaveSourcePreference = async (mode: "prefer" | "show-less") => {
+    if (!article?.source) {
+      return;
+    }
+
+    if (!userId) {
+      setSourcePreferenceStatus({
+        type: "error",
+        text: "Log in to customize sources.",
+      });
+      return;
+    }
+
+    const sourceName = article.source;
+    const nextPreferredSources =
+      mode === "prefer"
+        ? preferredSources.includes(sourceName)
+          ? preferredSources.filter((current) => current !== sourceName)
+          : [...preferredSources, sourceName]
+        : preferredSources.filter((current) => current !== sourceName);
+    const nextShowLessSources =
+      mode === "show-less"
+        ? showLessSources.includes(sourceName)
+          ? showLessSources.filter((current) => current !== sourceName)
+          : [...showLessSources, sourceName]
+        : showLessSources.filter((current) => current !== sourceName);
+
+    setIsSavingSourcePreference(true);
+    setSourcePreferenceStatus(null);
+
+    const { error } = await saveProfilePatch(
+      {
+        id: userId,
+        email: userEmail,
+      },
+      {
+        id: userId,
+        email: userEmail,
+        preferred_sources: nextPreferredSources,
+        show_less_sources: nextShowLessSources,
+      }
+    );
+
+    setIsSavingSourcePreference(false);
+
+    if (error) {
+      console.error("Error saving source preference:", error);
+      setSourcePreferenceStatus({
+        type: "error",
+        text: error.message ?? "Could not save source preference.",
+      });
+      return;
+    }
+
+    setPreferredSources(nextPreferredSources);
+    setShowLessSources(nextShowLessSources);
+    setSourcePreferenceStatus({
+      type: "success",
+      text: "Source preference updated.",
+    });
+  };
+
   if (isLoading) {
     return (
       <section className="page-shell">
@@ -518,10 +609,17 @@ export default function ArticleDetailPage() {
       <section className="section-card article-detail-hero">
         <div className="stack" style={{ gap: "10px" }}>
           <div className="article-detail-kicker-row">
-            <span className="article-detail-source-wrap">
+            <button
+              type="button"
+              className="source-trigger article-detail-source-wrap"
+              onClick={() => {
+                setIsSourceSheetOpen(true);
+                setSourcePreferenceStatus(null);
+              }}
+            >
               <SourceBadge sourceName={article.source} />
               <span className="article-detail-source">{article.source}</span>
-            </span>
+            </button>
             <span className="chip chip-accent">{article.category}</span>
           </div>
           <h2 className="article-detail-title">{article.title}</h2>
@@ -593,6 +691,29 @@ export default function ArticleDetailPage() {
           </a>
         </div>
       ) : null}
+
+      <SourcePreferenceSheet
+        sourceName={article.source}
+        isOpen={isSourceSheetOpen}
+        isPreferred={preferredSources.includes(article.source)}
+        isShowLess={showLessSources.includes(article.source)}
+        isSaving={isSavingSourcePreference}
+        status={sourcePreferenceStatus}
+        onPrefer={() => {
+          void handleSaveSourcePreference("prefer");
+        }}
+        onShowLess={() => {
+          void handleSaveSourcePreference("show-less");
+        }}
+        onClose={() => {
+          if (isSavingSourcePreference) {
+            return;
+          }
+
+          setIsSourceSheetOpen(false);
+          setSourcePreferenceStatus(null);
+        }}
+      />
 
       <section className="section-card stack">
         {comments.length === 0 ? (

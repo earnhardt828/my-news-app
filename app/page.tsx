@@ -2,6 +2,7 @@
 
 import AdSlot from "./components/ad-slot";
 import LoadingScreen from "./components/loading-screen";
+import SourcePreferenceSheet from "./components/source-preference-sheet";
 import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
@@ -230,6 +231,7 @@ export default function Home() {
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
   );
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
   const [categorySheetStatus, setCategorySheetStatus] = useState<{
@@ -237,6 +239,12 @@ export default function Home() {
     text: string;
   } | null>(null);
   const [isSavingCategories, setIsSavingCategories] = useState(false);
+  const [activeSourceName, setActiveSourceName] = useState<string | null>(null);
+  const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
+  const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -244,6 +252,7 @@ export default function Home() {
 
       const { data: userData } = await supabase.auth.getUser();
       setUserId(userData.user?.id ?? null);
+      setUserEmail(userData.user?.email ?? null);
 
       if (userData.user?.id) {
         const { data: profile, error: profileError } = await ensureProfileRow({
@@ -264,6 +273,7 @@ export default function Home() {
         setCategories([]);
         setPreferredSources([]);
         setShowLessSources([]);
+        setUserEmail(null);
       }
 
       const newsRes = await fetch("/api/news");
@@ -1127,6 +1137,79 @@ export default function Home() {
     }, 900);
   };
 
+  const openSourcePreferenceSheet = (sourceName: string) => {
+    setActiveSourceName(sourceName);
+    setSourcePreferenceStatus(null);
+  };
+
+  const closeSourcePreferenceSheet = () => {
+    if (isSavingSourcePreference) {
+      return;
+    }
+
+    setActiveSourceName(null);
+    setSourcePreferenceStatus(null);
+  };
+
+  const handleSaveSourcePreference = async (sourceName: string, mode: "prefer" | "show-less") => {
+    if (!userId) {
+      setSourcePreferenceStatus({
+        type: "error",
+        text: "Log in to customize sources.",
+      });
+      return;
+    }
+
+    const nextPreferredSources =
+      mode === "prefer"
+        ? preferredSources.includes(sourceName)
+          ? preferredSources.filter((current) => current !== sourceName)
+          : [...preferredSources, sourceName]
+        : preferredSources.filter((current) => current !== sourceName);
+    const nextShowLessSources =
+      mode === "show-less"
+        ? showLessSources.includes(sourceName)
+          ? showLessSources.filter((current) => current !== sourceName)
+          : [...showLessSources, sourceName]
+        : showLessSources.filter((current) => current !== sourceName);
+
+    setIsSavingSourcePreference(true);
+    setSourcePreferenceStatus(null);
+
+    const { error } = await saveProfilePatch(
+      {
+        id: userId,
+        email: userEmail,
+      },
+      {
+        id: userId,
+        email: userEmail,
+        username: username ?? null,
+        categories,
+        preferred_sources: nextPreferredSources,
+        show_less_sources: nextShowLessSources,
+      }
+    );
+
+    setIsSavingSourcePreference(false);
+
+    if (error) {
+      console.error("Error saving source preference:", error);
+      setSourcePreferenceStatus({
+        type: "error",
+        text: error.message ?? "Could not save source preference.",
+      });
+      return;
+    }
+
+    setPreferredSources(nextPreferredSources);
+    setShowLessSources(nextShowLessSources);
+    setSourcePreferenceStatus({
+      type: "success",
+      text: "Source preference updated.",
+    });
+  };
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -1203,18 +1286,21 @@ export default function Home() {
           {displayedArticles.map((article, index) => (
             <div key={article.id} className="stack">
               <article className="news-card">
+                <button
+                  type="button"
+                  className="source-trigger trending-source-row"
+                  onClick={() => openSourcePreferenceSheet(article.source)}
+                >
+                  <div className="trending-source-brand">
+                    <SourceBadge sourceName={article.source} />
+                    <span className="trending-source-name">{article.source}</span>
+                  </div>
+                  {index < 3 ? (
+                    <span className="chip trending-rank-badge">Top {index + 1}</span>
+                  ) : null}
+                </button>
                 <Link href={`/article/${article.id}`} className="article-link">
                   <div className="news-card-body">
-                    <div className="trending-source-row">
-                      <div className="trending-source-brand">
-                        <SourceBadge sourceName={article.source} />
-                        <span className="trending-source-name">{article.source}</span>
-                      </div>
-                      {index < 3 ? (
-                        <span className="chip trending-rank-badge">Top {index + 1}</span>
-                      ) : null}
-                    </div>
-
                     <div className="trending-title-row">
                       <h3 className="trending-article-title">{article.title}</h3>
                     </div>
@@ -1329,6 +1415,26 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      <SourcePreferenceSheet
+        sourceName={activeSourceName}
+        isOpen={activeSourceName !== null}
+        isPreferred={activeSourceName ? preferredSources.includes(activeSourceName) : false}
+        isShowLess={activeSourceName ? showLessSources.includes(activeSourceName) : false}
+        isSaving={isSavingSourcePreference}
+        status={sourcePreferenceStatus}
+        onPrefer={() => {
+          if (activeSourceName) {
+            void handleSaveSourcePreference(activeSourceName, "prefer");
+          }
+        }}
+        onShowLess={() => {
+          if (activeSourceName) {
+            void handleSaveSourcePreference(activeSourceName, "show-less");
+          }
+        }}
+        onClose={closeSourcePreferenceSheet}
+      />
 
       {isCategorySheetOpen ? (
         <div
