@@ -19,11 +19,15 @@ export function getSourceLogoUrl(sourceName: string) {
   const domain = getSourceDomain(sourceName);
   const token = process.env.NEXT_PUBLIC_LOGODEV_TOKEN;
 
-  if (!domain || !token) {
+  if (!domain) {
     return null;
   }
 
-  return `https://img.logo.dev/${domain}?token=${token}&format=png&size=128`;
+  if (token) {
+    return `https://img.logo.dev/${domain}?token=${token}&format=png&size=128`;
+  }
+
+  return `https://img.logo.dev/${domain}?format=png&size=128`;
 }
 
 export function getSourceInitial(sourceName: string) {

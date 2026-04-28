@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import ShareButton from "../../components/share-button";
 import SourcePreferenceSheet from "../../components/source-preference-sheet";
@@ -53,6 +53,17 @@ type DbProfile = {
 
 type DbBlockedUser = {
   blocked_user_id: string;
+};
+
+const actionIconProps = {
+  width: 20,
+  height: 20,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.9,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
 };
 
 function formatRelativeTime(timestamp: string | null) {
@@ -220,7 +231,6 @@ function buildSummaryPoints(
 
 export default function ArticleDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const articleId = Number(params.id);
   const [article, setArticle] = useState<ArticleRecord | null>(null);
   const [comments, setComments] = useState<ArticleComment[]>([]);
@@ -589,23 +599,8 @@ export default function ArticleDetailPage() {
     cleanedContent
   );
 
-  const handleClose = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push("/");
-  };
-
   return (
-    <section className="page-shell">
-      <div className="article-close-bar">
-        <button className="article-close-button" onClick={handleClose} aria-label="Close article">
-          <span aria-hidden="true">×</span>
-        </button>
-      </div>
-
+    <section className="page-shell article-page-shell">
       <section className="section-card article-detail-hero">
         <div className="stack" style={{ gap: "10px" }}>
           <div className="article-detail-kicker-row">
@@ -642,11 +637,22 @@ export default function ArticleDetailPage() {
             onClick={handleToggleLike}
             aria-label={likedByCurrentUser ? "Unlike article" : "Like article"}
           >
-            <span aria-hidden="true">{likedByCurrentUser ? "♥" : "♡"}</span>
+            <span className="icon-action-glyph" aria-hidden="true">
+              <svg {...actionIconProps}>
+                <path
+                  d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                  fill={likedByCurrentUser ? "currentColor" : "none"}
+                />
+              </svg>
+            </span>
             <span>{likesCount}</span>
           </button>
           <button className="icon-action-pill icon-action-pill-static" aria-label="Comments">
-            <span aria-hidden="true">💬</span>
+            <span className="icon-action-glyph" aria-hidden="true">
+              <svg {...actionIconProps}>
+                <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+              </svg>
+            </span>
             <span>{comments.length}</span>
           </button>
           <ShareButton
@@ -660,7 +666,14 @@ export default function ArticleDetailPage() {
             onClick={handleToggleSave}
             aria-label={isSaved ? "Remove bookmark" : "Save article"}
           >
-            {isSaved ? "🔖" : "📑"}
+            <span className="icon-action-glyph" aria-hidden="true">
+              <svg {...actionIconProps}>
+                <path
+                  d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                  fill={isSaved ? "currentColor" : "none"}
+                />
+              </svg>
+            </span>
           </button>
         </div>
 

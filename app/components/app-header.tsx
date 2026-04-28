@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 function getPageTitle(pathname: string) {
   if (pathname === "/videos") {
@@ -58,6 +58,29 @@ function getPageTitle(pathname: string) {
 
 export default function AppHeader() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  if (pathname.startsWith("/article/")) {
+    return (
+      <div className="app-header-article-close-wrap">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close article"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+    );
+  }
 
   if (pathname !== "/") {
     return (
