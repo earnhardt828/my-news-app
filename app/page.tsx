@@ -248,6 +248,7 @@ export default function Home() {
   const [commentSortMode, setCommentSortMode] = useState<
     "top" | "controversial" | "newest"
   >("top");
+  const [isCommentSortMenuOpen, setIsCommentSortMenuOpen] = useState(false);
   const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
@@ -1533,6 +1534,7 @@ export default function Home() {
                     onClick={() => {
                       setActiveCommentsArticleId(article.id);
                       setCommentSortMode("top");
+                      setIsCommentSortMenuOpen(false);
                       setReplyTarget(null);
                     }}
                     aria-label="Open comments"
@@ -1708,97 +1710,67 @@ export default function Home() {
           className="bottom-sheet-backdrop"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="comments-sheet-title"
+          aria-label="Comments"
+          onClick={() => {
+            setActiveCommentsArticleId(null);
+            setReplyTarget(null);
+            setIsCommentSortMenuOpen(false);
+          }}
         >
-          <div className="bottom-sheet">
+          <div
+            className="bottom-sheet comment-sheet"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="bottom-sheet-handle" aria-hidden="true" />
 
-            <div className="bottom-sheet-header">
-              <div className="stack" style={{ gap: "6px" }}>
-                <h3 id="comments-sheet-title" className="modal-title">
-                  Comments
-                </h3>
-                <p className="muted bottom-sheet-title">
-                  {activeCommentsArticle.title}
-                </p>
-              </div>
-
-              <button
-                className="button button-secondary"
-                onClick={() => {
-                  setActiveCommentsArticleId(null);
-                  setReplyTarget(null);
-                }}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="toolbar comment-sort-tabs">
-              <button
-                className={`toolbar-pill ${
-                  commentSortMode === "top" ? "toolbar-pill-active" : ""
-                }`}
-                onClick={() => setCommentSortMode("top")}
-              >
-                Top comments
-              </button>
-              <button
-                className={`toolbar-pill ${
-                  commentSortMode === "controversial" ? "toolbar-pill-active" : ""
-                }`}
-                onClick={() => setCommentSortMode("controversial")}
-              >
-                Controversial
-              </button>
-              <button
-                className={`toolbar-pill ${
-                  commentSortMode === "newest" ? "toolbar-pill-active" : ""
-                }`}
-                onClick={() => setCommentSortMode("newest")}
-              >
-                Newest
-              </button>
-            </div>
-
-            {replyTarget && replyTarget.articleId === activeCommentsArticle.id ? (
-              <div className="comment-reply-banner">
-                <span>
-                  Replying to <strong>{replyTarget.username ?? "this comment"}</strong>
-                </span>
+            <div className="comment-sheet-topbar">
+              <div className="comment-sort-menu">
                 <button
-                  className="comment-action"
-                  onClick={() => setReplyTarget(null)}
+                  className="comment-sort-trigger"
                   type="button"
+                  onClick={() =>
+                    setIsCommentSortMenuOpen((current) => !current)
+                  }
+                  aria-expanded={isCommentSortMenuOpen}
+                  aria-haspopup="menu"
                 >
-                  Cancel
+                  <span>
+                    {commentSortMode === "top"
+                      ? "Top comments"
+                      : commentSortMode === "controversial"
+                        ? "Controversial"
+                        : "Newest"}
+                  </span>
+                  <span className="comment-sort-chevron" aria-hidden="true">
+                    ▾
+                  </span>
                 </button>
-              </div>
-            ) : null}
 
-            <div className="input-row bottom-sheet-input-row">
-              <input
-                ref={commentInputRef}
-                className="input"
-                type="text"
-                placeholder={
-                  replyTarget && replyTarget.articleId === activeCommentsArticle.id
-                    ? "Write a reply..."
-                    : "Write a comment..."
-                }
-                value={commentInputs[activeCommentsArticle.id] || ""}
-                onChange={(e) =>
-                  handleCommentInputChange(activeCommentsArticle.id, e.target.value)
-                }
-              />
-              <button
-                className="button button-secondary"
-                onClick={() => handleAddComment(activeCommentsArticle.id)}
-              >
-                {replyTarget && replyTarget.articleId === activeCommentsArticle.id
-                  ? "Reply"
-                  : "Add Comment"}
-              </button>
+                {isCommentSortMenuOpen ? (
+                  <div className="comment-sort-dropdown" role="menu">
+                    <button
+                      className="comment-sort-option"
+                      type="button"
+                      onClick={() => {
+                        setCommentSortMode("controversial");
+                        setIsCommentSortMenuOpen(false);
+                      }}
+                    >
+                      Controversial
+                    </button>
+                    <button
+                      className="comment-sort-option"
+                      type="button"
+                      onClick={() => {
+                        setCommentSortMode("newest");
+                        setIsCommentSortMenuOpen(false);
+                      }}
+                    >
+                      Newest
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="bottom-sheet-comments">
@@ -1976,6 +1948,48 @@ export default function Home() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="comment-sheet-composer">
+              {replyTarget && replyTarget.articleId === activeCommentsArticle.id ? (
+                <div className="comment-reply-banner">
+                  <span>
+                    Replying to <strong>{replyTarget.username ?? "this comment"}</strong>
+                  </span>
+                  <button
+                    className="comment-action"
+                    onClick={() => setReplyTarget(null)}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="input-row bottom-sheet-input-row">
+                <input
+                  ref={commentInputRef}
+                  className="input"
+                  type="text"
+                  placeholder={
+                    replyTarget && replyTarget.articleId === activeCommentsArticle.id
+                      ? "Write a reply..."
+                      : "Write a comment..."
+                  }
+                  value={commentInputs[activeCommentsArticle.id] || ""}
+                  onChange={(e) =>
+                    handleCommentInputChange(activeCommentsArticle.id, e.target.value)
+                  }
+                />
+                <button
+                  className="button button-secondary"
+                  onClick={() => handleAddComment(activeCommentsArticle.id)}
+                >
+                  {replyTarget && replyTarget.articleId === activeCommentsArticle.id
+                    ? "Reply"
+                    : "Send"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
