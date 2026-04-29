@@ -50,6 +50,7 @@ type CommentReply = {
 
 type DbComment = {
   id: number;
+  article_id: number | string | null;
   text: string;
   username: string | null;
   user_id: string | null;
@@ -81,7 +82,7 @@ type DbCommentReaction = {
 type DbCommentReply = {
   id: number;
   comment_id: number;
-  article_id: number;
+  article_id: number | string | null;
   text: string;
   username: string | null;
   user_id: string | null;
@@ -191,6 +192,19 @@ function cleanSummarySentence(sentence: string) {
     : `${withoutTrailingPunctuation}.`;
 
   return finalized.charAt(0).toUpperCase() + finalized.slice(1);
+}
+
+function normalizeArticleId(value: number | string | null | undefined) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 function sortComments(
@@ -386,25 +400,98 @@ export default function ArticleDetailPage() {
         setShowLessSources([]);
       }
 
-      const [newsRes, likesRes, commentsRes, reactionsRes, repliesRes, profilesRes] = await Promise.all([
-        fetch("/api/news"),
+      const newsRes = await fetch("/api/news");
+
+      if (!newsRes.ok) {
+        console.error("[Article detail] Failed to fetch news payload", {
+          articleId,
+          status: newsRes.status,
+        });
+      }
+
+      const newsData = (await newsRes.json()) as ArticleRecord[];
+      const targetArticle =
+        newsData.find((item) => item.id === articleId) ?? null;
+      const legacyArticleId = targetArticle
+        ? newsData.findIndex((item) => item.id === targetArticle.id) + 1
+        : null;
+      const articleIdCandidates = Array.from(
+        new Set(
+          [articleId, legacyArticleId]
+            .map((value) => normalizeArticleId(value))
+            .filter((value): value is number => value !== null)
+        )
+      );
+
+      const [likesRes, commentsRes, profilesRes] = await Promise.all([
         supabase
           .from("likes")
           .select("id, article_id, user_id")
           .eq("article_id", articleId),
         supabase
           .from("comments")
-          .select("id, text, username, user_id, created_at")
-          .eq("article_id", articleId),
-        supabase
-          .from("comment_reactions")
-          .select("id, comment_id, user_id, reaction_type"),
-        supabase
-          .from("comment_replies")
-          .select("id, comment_id, article_id, text, username, user_id, created_at")
-          .eq("article_id", articleId),
+          .select("id, article_id, user_id, username, text, created_at")
+          .in("article_id", articleIdCandidates),
         supabase.from("profiles").select("id, avatar_url"),
       ]);
+
+      if (likesRes.error) {
+        console.error("[Article detail] Failed to fetch likes", {
+          articleId,
+          error: likesRes.error,
+        });
+      }
+
+      if (commentsRes.error) {
+        console.error("[Article detail] Failed to fetch comments", {
+          articleId,
+          articleIdType: typeof articleId,
+          articleIdCandidates,
+          error: commentsRes.error,
+        });
+      }
+
+      if (profilesRes.error) {
+        console.error("[Article detail] Failed to fetch profile avatars for comments", {
+          articleId,
+          error: profilesRes.error,
+        });
+      }
+
+      const rawComments = (commentsRes.data ?? []) as DbComment[];
+      const commentIds = rawComments.map((comment) => comment.id);
+      const [reactionsRes, repliesRes] = commentIds.length
+        ? await Promise.all([
+            supabase
+              .from("comment_reactions")
+              .select("id, comment_id, user_id, reaction_type")
+              .in("comment_id", commentIds),
+            supabase
+              .from("comment_replies")
+              .select("id, comment_id, article_id, text, username, user_id, created_at")
+              .in("comment_id", commentIds),
+          ])
+        : [
+            { data: [], error: null },
+            { data: [], error: null },
+          ];
+
+      if (reactionsRes.error) {
+        console.error("[Article detail] Failed to fetch comment reactions", {
+          articleId,
+          commentIds,
+          error: reactionsRes.error,
+        });
+      }
+
+      if (repliesRes.error) {
+        console.error("[Article detail] Failed to fetch comment replies", {
+          articleId,
+          articleIdCandidates,
+          commentIds,
+          error: repliesRes.error,
+        });
+      }
 
       const { data: savedArticlesData } = currentUserId
         ? await supabase
@@ -422,12 +509,7 @@ export default function ArticleDetailPage() {
             .eq("blocker_id", currentUserId)
         : { data: [] as DbBlockedUser[] };
 
-      const newsData = (await newsRes.json()) as ArticleRecord[];
-      const targetArticle =
-        newsData.find((item) => item.id === articleId) ?? null;
-
       const likes = (likesRes.data ?? []) as DbLike[];
-      const rawComments = (commentsRes.data ?? []) as DbComment[];
       const commentReactions = (reactionsRes.data ?? []) as DbCommentReaction[];
       const commentReplies = (repliesRes.data ?? []) as DbCommentReply[];
       const profiles = (profilesRes.data ?? []) as DbProfile[];
@@ -449,7 +531,15 @@ export default function ArticleDetailPage() {
       setComments(
         rawComments
           .filter(
-            (comment) => !comment.user_id || !blockedIds.has(comment.user_id)
+            (comment) => {
+              const normalizedCommentArticleId = normalizeArticleId(comment.article_id);
+
+              return (
+                normalizedCommentArticleId !== null &&
+                articleIdCandidates.includes(normalizedCommentArticleId) &&
+                (!comment.user_id || !blockedIds.has(comment.user_id))
+              );
+            }
           )
           .map((comment) => {
             const reactions = commentReactions.filter(
@@ -459,12 +549,15 @@ export default function ArticleDetailPage() {
               .filter(
                 (reply) =>
                   reply.comment_id === comment.id &&
+                  articleIdCandidates.includes(
+                    normalizeArticleId(reply.article_id) ?? Number.NaN
+                  ) &&
                   (!reply.user_id || !blockedIds.has(reply.user_id))
               )
               .map((reply) => ({
                 id: reply.id,
                 comment_id: reply.comment_id,
-                article_id: reply.article_id,
+                article_id: normalizeArticleId(reply.article_id) ?? articleId,
                 text: reply.text,
                 username: reply.username,
                 user_id: reply.user_id,
