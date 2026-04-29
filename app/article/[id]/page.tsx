@@ -1476,7 +1476,12 @@ export default function ArticleDetailPage() {
                         onClick={() => handleCommentReaction(comment.id, "like")}
                         disabled={activeCommentAction === `reaction-${comment.id}`}
                       >
-                        <span aria-hidden="true">♥</span>
+                        <span className="comment-reaction-glyph" aria-hidden="true">
+                          <svg {...actionIconProps}>
+                            <path d="M7 11v8" />
+                            <path d="M11 19h6.2a2 2 0 0 0 1.9-1.4l1.2-4a2 2 0 0 0-1.9-2.6H14V6.8c0-1-.8-1.8-1.8-1.8-.6 0-1.1.3-1.5.8L7 11Z" />
+                          </svg>
+                        </span>
                         <span>{comment.likes}</span>
                       </button>
                       <button
@@ -1488,7 +1493,12 @@ export default function ArticleDetailPage() {
                         onClick={() => handleCommentReaction(comment.id, "dislike")}
                         disabled={activeCommentAction === `reaction-${comment.id}`}
                       >
-                        <span aria-hidden="true">👎</span>
+                        <span className="comment-reaction-glyph" aria-hidden="true">
+                          <svg {...actionIconProps}>
+                            <path d="M17 13V5" />
+                            <path d="M13 5H6.8a2 2 0 0 0-1.9 1.4l-1.2 4a2 2 0 0 0 1.9 2.6H10v4.2c0 1 .8 1.8 1.8 1.8.6 0 1.1-.3 1.5-.8L17 13Z" />
+                          </svg>
+                        </span>
                         <span>{comment.dislikes}</span>
                       </button>
                     </div>

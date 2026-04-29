@@ -1586,10 +1586,10 @@ export default function Home() {
               ) : null}
 
               {sortMode === "trending" &&
-              (index + 1) % 5 === 0 &&
+              (index + 1) % 3 === 0 &&
               videos.length > 0 ? (
                 <VideoFeedCard
-                  video={videos[Math.floor((index + 1) / 5 - 1) % videos.length]}
+                  video={videos[Math.floor((index + 1) / 3 - 1) % videos.length]}
                   onToggleLike={handleToggleVideoLike}
                   onToggleSave={handleToggleVideoSave}
                   onOpenComments={setActiveCommentsVideoId}

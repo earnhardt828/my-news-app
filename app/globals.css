@@ -522,7 +522,7 @@ input {
 
 .trending-article-title {
   margin: 0;
-  font-size: clamp(1.2rem, 4.8vw, 1.48rem);
+  font-size: clamp(1.24rem, 4.95vw, 1.54rem);
   line-height: 1.22;
   letter-spacing: -0.025em;
   font-weight: 850;
@@ -1381,13 +1381,22 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 34px;
+  min-height: 38px;
   padding: 0 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--button-secondary-bg);
-  color: var(--foreground);
+  color: var(--text-soft);
   font-weight: 800;
+}
+
+.comment-reaction-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: currentColor;
 }
 
 .notifications-list {
