@@ -23,16 +23,16 @@ export function getSourceLogoUrl(sourceName: string) {
     return null;
   }
 
-  // Real source logos depend on two things being configured correctly:
-  // 1. a known publisher -> domain mapping in SOURCE_DOMAIN_MAP
-  // 2. a working logo provider token
-  // If either is missing, we intentionally fall back to the in-app letter badge
-  // so Reflekt never renders broken or empty logo boxes.
-  if (!token) {
-    return null;
+  // Real source logos depend on a known publisher -> domain mapping plus
+  // a provider that can return a valid favicon/logo for that domain.
+  // We try Logo.dev first when configured, then fall back to a Clearbit-style
+  // domain lookup URL. If either provider fails in the UI, SourceBadge falls
+  // back to the in-app letter badge so Reflekt never shows a broken image box.
+  if (token) {
+    return `https://img.logo.dev/${domain}?token=${token}&format=png&size=128`;
   }
 
-  return `https://img.logo.dev/${domain}?token=${token}&format=png&size=128`;
+  return `https://logo.clearbit.com/${domain}?size=128`;
 }
 
 export function getSourceInitial(sourceName: string) {
