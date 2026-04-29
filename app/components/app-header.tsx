@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 function getPageTitle(pathname: string) {
   if (pathname === "/videos") {
@@ -27,6 +29,10 @@ function getPageTitle(pathname: string) {
 
   if (pathname === "/settings/contact") {
     return "Contact info";
+  }
+
+  if (pathname === "/notifications") {
+    return "Notifications";
   }
 
   if (pathname === "/my-feed") {
@@ -59,6 +65,60 @@ function getPageTitle(pathname: string) {
 export default function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+
+  useEffect(() => {
+    if (pathname !== "/") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadUnreadState() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user?.id || !isMounted) {
+        if (isMounted) {
+          setHasUnreadNotifications(false);
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("recipient_user_id", user.id)
+        .is("read_at", null)
+        .limit(1);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        console.error("Error loading unread notifications:", error);
+        setHasUnreadNotifications(false);
+        return;
+      }
+
+      setHasUnreadNotifications((data ?? []).length > 0);
+    }
+
+    void loadUnreadState();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void loadUnreadState();
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [pathname]);
 
   if (pathname.startsWith("/article/")) {
     return (
@@ -92,7 +152,30 @@ export default function AppHeader() {
 
   return (
     <div className="app-header-logo-wrap">
-      <Link href="/" className="brand-mark-link" aria-label="Trending home">
+      <Link
+        href="/notifications"
+        className="header-icon-button"
+        aria-label="Open notifications"
+      >
+        <span className="header-icon-glyph" aria-hidden="true">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+            <path d="M10 17a2 2 0 0 0 4 0" />
+          </svg>
+        </span>
+        {hasUnreadNotifications ? <span className="header-notification-dot" /> : null}
+      </Link>
+
+      <Link href="/" className="brand-mark-link brand-mark-link-center" aria-label="Trending home">
         <Image
           src="/trending-r-logo.png"
           alt="Reflekt"

@@ -7,7 +7,7 @@ import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShareButton from "./components/share-button";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
@@ -31,6 +31,18 @@ type Comment = {
   likes: number;
   dislikes: number;
   currentUserReaction: "like" | "dislike" | null;
+  replies: Reply[];
+};
+
+type Reply = {
+  id: number;
+  comment_id: number;
+  article_id: number;
+  text: string;
+  username: string | null;
+  user_id: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
 };
 
 type Article = {
@@ -92,6 +104,16 @@ type DbCommentReaction = {
   comment_id: number;
   user_id: string;
   reaction_type: "like" | "dislike";
+};
+
+type DbCommentReply = {
+  id: number;
+  comment_id: number;
+  article_id: number;
+  text: string;
+  username: string | null;
+  user_id: string | null;
+  created_at: string | null;
 };
 
 const categoryLabels: Record<string, string> = {
@@ -245,6 +267,12 @@ export default function Home() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const commentInputRef = useRef<HTMLInputElement | null>(null);
+  const [replyTarget, setReplyTarget] = useState<{
+    articleId: number;
+    commentId: number;
+    username: string | null;
+  } | null>(null);
 
   useEffect(() => {
     async function fetchNewsAndEngagement() {
@@ -294,6 +322,10 @@ export default function Home() {
         .from("comment_reactions")
         .select("id, comment_id, user_id, reaction_type");
 
+      const { data: commentRepliesData } = await supabase
+        .from("comment_replies")
+        .select("id, comment_id, article_id, text, username, user_id, created_at");
+
       const { data: profilesData } = await supabase
         .from("profiles")
         .select("id, avatar_url, username");
@@ -315,6 +347,7 @@ export default function Home() {
       const likes = (likesData ?? []) as DbLike[];
       const comments = (commentsData ?? []) as DbComment[];
       const commentReactions = (commentReactionsData ?? []) as DbCommentReaction[];
+      const commentReplies = (commentRepliesData ?? []) as DbCommentReply[];
       const profiles = (profilesData ?? []) as DbProfile[];
       const blockedIds = new Set(
         ((blockedUsersData ?? []) as DbBlockedUser[]).map(
@@ -350,6 +383,24 @@ export default function Home() {
             const reactions = commentReactions.filter(
               (reaction) => reaction.comment_id === comment.id
             );
+            const replies = commentReplies
+              .filter(
+                (reply) =>
+                  reply.comment_id === comment.id &&
+                  (!reply.user_id || !blockedIds.has(reply.user_id))
+              )
+              .map((reply) => ({
+                id: reply.id,
+                comment_id: reply.comment_id,
+                article_id: reply.article_id,
+                text: reply.text,
+                username: reply.username,
+                user_id: reply.user_id,
+                created_at: reply.created_at,
+                avatar_url: reply.user_id
+                  ? avatarLookup.get(reply.user_id) ?? null
+                  : null,
+              }));
 
             return {
               id: comment.id,
@@ -368,6 +419,7 @@ export default function Home() {
               currentUserReaction:
                 reactions.find((reaction) => reaction.user_id === userData.user?.id)
                   ?.reaction_type ?? null,
+              replies,
             };
           });
 
@@ -408,6 +460,46 @@ export default function Home() {
 
     fetchVideos();
   }, []);
+
+  useEffect(() => {
+    if (replyTarget) {
+      commentInputRef.current?.focus();
+    }
+  }, [replyTarget]);
+
+  const createNotification = useCallback(
+    async ({
+      recipientUserId,
+      type,
+      articleId,
+      commentId,
+      replyId,
+    }: {
+      recipientUserId: string | null;
+      type: "comment_like" | "comment_reply";
+      articleId: number;
+      commentId: number;
+      replyId?: number | null;
+    }) => {
+      if (!userId || !recipientUserId || recipientUserId === userId) {
+        return;
+      }
+
+      const { error } = await supabase.from("notifications").insert({
+        recipient_user_id: recipientUserId,
+        actor_user_id: userId,
+        type,
+        article_id: articleId,
+        comment_id: commentId,
+        reply_id: replyId ?? null,
+      });
+
+      if (error) {
+        console.error("Error creating notification:", error);
+      }
+    },
+    [userId]
+  );
 
   const handleLike = async (articleId: number) => {
     if (!userId) {
@@ -576,6 +668,80 @@ export default function Home() {
       return;
     }
 
+    if (replyTarget && replyTarget.articleId === articleId) {
+      const parentComment = articles
+        .find((article) => article.id === articleId)
+        ?.comments.find((comment) => comment.id === replyTarget.commentId);
+
+      if (!parentComment) {
+        alert("That comment is no longer available.");
+        setReplyTarget(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("comment_replies")
+        .insert({
+          comment_id: replyTarget.commentId,
+          article_id: articleId,
+          text,
+          user_id: userId,
+          username,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error saving reply:", error);
+        return;
+      }
+
+      setArticles((prev) =>
+        prev.map((article) =>
+          article.id === articleId
+            ? {
+                ...article,
+                comments: article.comments.map((comment) =>
+                  comment.id === replyTarget.commentId
+                    ? {
+                        ...comment,
+                        replies: [
+                          ...comment.replies,
+                          {
+                            id: data.id,
+                            comment_id: data.comment_id,
+                            article_id: data.article_id,
+                            text: data.text,
+                            username: data.username,
+                            user_id: data.user_id,
+                            avatar_url: null,
+                            created_at: data.created_at,
+                          },
+                        ],
+                      }
+                    : comment
+                ),
+              }
+            : article
+        )
+      );
+
+      void createNotification({
+        recipientUserId: parentComment.user_id,
+        type: "comment_reply",
+        articleId,
+        commentId: replyTarget.commentId,
+        replyId: data.id,
+      });
+
+      setCommentInputs((prev) => ({
+        ...prev,
+        [articleId]: "",
+      }));
+      setReplyTarget(null);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("comments")
       .insert({
@@ -609,6 +775,7 @@ export default function Home() {
                   likes: 0,
                   dislikes: 0,
                   currentUserReaction: null,
+                  replies: [],
                 },
               ],
             }
@@ -772,6 +939,14 @@ export default function Home() {
             : article
         )
       );
+      if (reactionType === "like" && existingReaction.reaction_type !== "like") {
+        void createNotification({
+          recipientUserId: targetComment.user_id,
+          type: "comment_like",
+          articleId,
+          commentId,
+        });
+      }
       return;
     }
 
@@ -852,6 +1027,15 @@ export default function Home() {
           : article
       )
     );
+
+    if (reactionType === "like") {
+      void createNotification({
+        recipientUserId: targetComment.user_id,
+        type: "comment_like",
+        articleId,
+        commentId,
+      });
+    }
   };
 
   const openDeleteModal = (articleId: number, commentId: number) => {
@@ -1349,6 +1533,7 @@ export default function Home() {
                     onClick={() => {
                       setActiveCommentsArticleId(article.id);
                       setCommentSortMode("top");
+                      setReplyTarget(null);
                     }}
                     aria-label="Open comments"
                   >
@@ -1540,7 +1725,10 @@ export default function Home() {
 
               <button
                 className="button button-secondary"
-                onClick={() => setActiveCommentsArticleId(null)}
+                onClick={() => {
+                  setActiveCommentsArticleId(null);
+                  setReplyTarget(null);
+                }}
               >
                 Close
               </button>
@@ -1573,11 +1761,31 @@ export default function Home() {
               </button>
             </div>
 
+            {replyTarget && replyTarget.articleId === activeCommentsArticle.id ? (
+              <div className="comment-reply-banner">
+                <span>
+                  Replying to <strong>{replyTarget.username ?? "this comment"}</strong>
+                </span>
+                <button
+                  className="comment-action"
+                  onClick={() => setReplyTarget(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+
             <div className="input-row bottom-sheet-input-row">
               <input
+                ref={commentInputRef}
                 className="input"
                 type="text"
-                placeholder="Write a comment..."
+                placeholder={
+                  replyTarget && replyTarget.articleId === activeCommentsArticle.id
+                    ? "Write a reply..."
+                    : "Write a comment..."
+                }
                 value={commentInputs[activeCommentsArticle.id] || ""}
                 onChange={(e) =>
                   handleCommentInputChange(activeCommentsArticle.id, e.target.value)
@@ -1587,7 +1795,9 @@ export default function Home() {
                 className="button button-secondary"
                 onClick={() => handleAddComment(activeCommentsArticle.id)}
               >
-                Add Comment
+                {replyTarget && replyTarget.articleId === activeCommentsArticle.id
+                  ? "Reply"
+                  : "Add Comment"}
               </button>
             </div>
 
@@ -1635,6 +1845,45 @@ export default function Home() {
                       <div className="comment-meta">
                         {formatRelativeTime(comment.created_at)}
                       </div>
+                      {comment.replies.length > 0 ? (
+                        <div className="comment-replies">
+                          {comment.replies.map((reply) => (
+                            <div key={reply.id} className="comment-reply-card">
+                              <div className="comment-header">
+                                {reply.user_id ? (
+                                  <Link
+                                    href={`/user/${reply.user_id}`}
+                                    className="comment-user-link"
+                                  >
+                                    <span className="comment-user-avatar">
+                                      {reply.avatar_url ? (
+                                        <Image
+                                          src={reply.avatar_url}
+                                          alt={reply.username ?? "User avatar"}
+                                          width={34}
+                                          height={34}
+                                          unoptimized
+                                        />
+                                      ) : (
+                                        (reply.username ?? "U").charAt(0).toUpperCase()
+                                      )}
+                                    </span>
+                                    <span className="comment-username">
+                                      {reply.username ?? "Unknown"}
+                                    </span>
+                                  </Link>
+                                ) : (
+                                  <strong>{reply.username ?? "Unknown"}</strong>
+                                )}
+                              </div>
+                              <div className="comment-body">{reply.text}</div>
+                              <div className="comment-meta">
+                                {formatRelativeTime(reply.created_at)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="comment-reaction-row">
                         <button
                           className={`comment-reaction-pill ${
@@ -1674,6 +1923,19 @@ export default function Home() {
                         </button>
                       </div>
                       <div className="comment-actions">
+                        <button
+                          className="comment-action"
+                          onClick={() => {
+                            setReplyTarget({
+                              articleId: activeCommentsArticle.id,
+                              commentId: comment.id,
+                              username: comment.username,
+                            });
+                          }}
+                          type="button"
+                        >
+                          Reply
+                        </button>
                         <button
                           className="comment-action"
                           onClick={() => openReportModal(comment.id)}
