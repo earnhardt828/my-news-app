@@ -13,9 +13,9 @@ export default function SourceBadge({
   sourceName,
   className = "",
 }: SourceBadgeProps) {
-  const [imageFailed, setImageFailed] = useState(false);
+  const [failedSourceName, setFailedSourceName] = useState<string | null>(null);
   const logoUrl = getSourceLogoUrl(sourceName);
-  const showLogo = Boolean(logoUrl) && !imageFailed;
+  const showLogo = Boolean(logoUrl) && failedSourceName !== sourceName;
 
   return (
     <span className={`source-avatar ${className}`.trim()} aria-hidden="true">
@@ -27,7 +27,7 @@ export default function SourceBadge({
           height={34}
           className="source-avatar-image"
           unoptimized
-          onError={() => setImageFailed(true)}
+          onError={() => setFailedSourceName(sourceName)}
         />
       ) : (
         <span className="source-avatar-fallback">{getSourceInitial(sourceName)}</span>
