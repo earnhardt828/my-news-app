@@ -346,7 +346,6 @@ export default function ArticleDetailPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
-  const [isCommentsSheetOpen, setIsCommentsSheetOpen] = useState(false);
   const [commentSortMode, setCommentSortMode] = useState<
     "top" | "controversial" | "newest"
   >("top");
@@ -365,6 +364,7 @@ export default function ArticleDetailPage() {
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
   const [commentActionTarget, setCommentActionTarget] = useState<ArticleComment | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
+  const commentsSectionRef = useRef<HTMLElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -594,10 +594,10 @@ export default function ArticleDetailPage() {
   }, [articleId]);
 
   useEffect(() => {
-    if (replyTarget && isCommentsSheetOpen) {
+    if (replyTarget) {
       commentInputRef.current?.focus();
     }
-  }, [isCommentsSheetOpen, replyTarget]);
+  }, [replyTarget]);
 
   const displayedComments = useMemo(
     () => sortComments(comments, commentSortMode),
@@ -1140,6 +1140,17 @@ export default function ArticleDetailPage() {
     window.clearTimeout(longPressTimerRef.current ?? undefined);
   };
 
+  const scrollToComments = () => {
+    commentsSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    window.setTimeout(() => {
+      commentInputRef.current?.focus();
+    }, 220);
+  };
+
   if (isLoading) {
     return (
       <section className="page-shell">
@@ -1226,7 +1237,7 @@ export default function ArticleDetailPage() {
             className="icon-action-pill"
             aria-label="Comments"
             onClick={() => {
-              setIsCommentsSheetOpen(true);
+              scrollToComments();
               setIsCommentSortMenuOpen(false);
               setReplyTarget(null);
             }}
@@ -1288,6 +1299,234 @@ export default function ArticleDetailPage() {
         </div>
       ) : null}
 
+      <section
+        ref={commentsSectionRef}
+        className="section-card article-comments-inline"
+        aria-label="Comments"
+      >
+        <div className="article-comments-inline-header">
+          <h3 className="article-comments-inline-title">Comments</h3>
+        </div>
+
+        <div className="comment-sheet-topbar article-comments-topbar">
+          <div className="comment-sort-menu">
+            <button
+              className="comment-sort-trigger"
+              type="button"
+              onClick={() => setIsCommentSortMenuOpen((current) => !current)}
+              aria-expanded={isCommentSortMenuOpen}
+              aria-haspopup="menu"
+            >
+              <span>
+                {commentSortMode === "top"
+                  ? "Top comments"
+                  : commentSortMode === "controversial"
+                    ? "Controversial"
+                    : "Newest"}
+              </span>
+              <span className="comment-sort-chevron" aria-hidden="true">
+                ▾
+              </span>
+            </button>
+
+            {isCommentSortMenuOpen ? (
+              <div className="comment-sort-dropdown" role="menu">
+                <button
+                  className="comment-sort-option"
+                  type="button"
+                  onClick={() => {
+                    setCommentSortMode("controversial");
+                    setIsCommentSortMenuOpen(false);
+                  }}
+                >
+                  Controversial
+                </button>
+                <button
+                  className="comment-sort-option"
+                  type="button"
+                  onClick={() => {
+                    setCommentSortMode("newest");
+                    setIsCommentSortMenuOpen(false);
+                  }}
+                >
+                  Newest
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="article-comments-thread article-comments-inline-thread">
+          {displayedComments.length === 0 ? (
+            <div className="empty-state">
+              <strong>No comments yet</strong>
+              <span>Start the conversation on this story.</span>
+            </div>
+          ) : (
+            <div className="comment-list article-comment-list">
+              {displayedComments.map((comment) => (
+                <div
+                  key={comment.id}
+                  className="comment-thread-row"
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    openCommentActionSheet(comment);
+                  }}
+                  onMouseDown={() => startCommentLongPress(comment)}
+                  onMouseUp={clearCommentLongPress}
+                  onMouseLeave={clearCommentLongPress}
+                  onTouchStart={() => startCommentLongPress(comment)}
+                  onTouchEnd={clearCommentLongPress}
+                >
+                  <div className="comment-thread-main">
+                    <div className="comment-thread-copy">
+                      <div className="comment-header">
+                        {comment.user_id ? (
+                          <Link
+                            href={`/user/${comment.user_id}`}
+                            className="comment-user-link"
+                          >
+                            <span className="comment-user-avatar">
+                              {comment.avatar_url ? (
+                                <Image
+                                  src={comment.avatar_url}
+                                  alt={comment.username ?? "User avatar"}
+                                  width={34}
+                                  height={34}
+                                  unoptimized
+                                />
+                              ) : (
+                                (comment.username ?? "U").charAt(0).toUpperCase()
+                              )}
+                            </span>
+                            <span className="comment-username">
+                              {comment.username ?? "Unknown"}
+                            </span>
+                          </Link>
+                        ) : (
+                          <strong>{comment.username ?? "Unknown"}</strong>
+                        )}
+                      </div>
+                      <div className="comment-body">{comment.text}</div>
+                      <button
+                        className="comment-action article-comment-reply-action"
+                        type="button"
+                        onClick={() =>
+                          setReplyTarget({
+                            commentId: comment.id,
+                            username: comment.username,
+                          })
+                        }
+                      >
+                        Reply
+                      </button>
+                      {comment.replies.length > 0 ? (
+                        <div className="comment-replies">
+                          {comment.replies.map((reply) => (
+                            <div key={reply.id} className="comment-reply-card">
+                              <div className="comment-header">
+                                {reply.user_id ? (
+                                  <Link
+                                    href={`/user/${reply.user_id}`}
+                                    className="comment-user-link"
+                                  >
+                                    <span className="comment-user-avatar">
+                                      {reply.avatar_url ? (
+                                        <Image
+                                          src={reply.avatar_url}
+                                          alt={reply.username ?? "User avatar"}
+                                          width={34}
+                                          height={34}
+                                          unoptimized
+                                        />
+                                      ) : (
+                                        (reply.username ?? "U")
+                                          .charAt(0)
+                                          .toUpperCase()
+                                      )}
+                                    </span>
+                                    <span className="comment-username">
+                                      {reply.username ?? "Unknown"}
+                                    </span>
+                                  </Link>
+                                ) : (
+                                  <strong>{reply.username ?? "Unknown"}</strong>
+                                )}
+                              </div>
+                              <div className="comment-body">{reply.text}</div>
+                              <div className="comment-meta">
+                                {formatRelativeTime(reply.created_at)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="comment-meta">
+                        {formatRelativeTime(comment.created_at)}
+                      </div>
+                    </div>
+
+                    <div className="comment-thread-reactions">
+                      <button
+                        className={`comment-reaction-pill ${
+                          comment.currentUserReaction === "like"
+                            ? "comment-reaction-pill-active"
+                            : ""
+                        }`}
+                        onClick={() => handleCommentReaction(comment.id, "like")}
+                        disabled={activeCommentAction === `reaction-${comment.id}`}
+                      >
+                        <span aria-hidden="true">♥</span>
+                        <span>{comment.likes}</span>
+                      </button>
+                      <button
+                        className={`comment-reaction-pill ${
+                          comment.currentUserReaction === "dislike"
+                            ? "comment-reaction-pill-active"
+                            : ""
+                        }`}
+                        onClick={() => handleCommentReaction(comment.id, "dislike")}
+                        disabled={activeCommentAction === `reaction-${comment.id}`}
+                      >
+                        <span aria-hidden="true">👎</span>
+                        <span>{comment.dislikes}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="comment-sheet-composer article-comments-inline-composer">
+          {replyTarget ? (
+            <div className="comment-reply-banner">
+              <span>
+                Replying to <strong>{replyTarget.username ?? "this comment"}</strong>
+              </span>
+              <button className="comment-action" onClick={() => setReplyTarget(null)} type="button">
+                Cancel
+              </button>
+            </div>
+          ) : null}
+
+          <div className="input-row bottom-sheet-input-row">
+            <input
+              ref={commentInputRef}
+              className="input"
+              type="text"
+              placeholder={replyTarget ? "Write a reply..." : "Write a comment..."}
+              value={commentInput}
+              onChange={(event) => setCommentInput(event.target.value)}
+            />
+            <button className="button button-secondary" onClick={handleAddComment}>
+              {replyTarget ? "Reply" : "Send"}
+            </button>
+          </div>
+        </div>
+      </section>
+
       <SourcePreferenceSheet
         sourceName={article.source}
         isOpen={isSourceSheetOpen}
@@ -1310,245 +1549,6 @@ export default function ArticleDetailPage() {
           setSourcePreferenceStatus(null);
         }}
       />
-
-      {isCommentsSheetOpen ? (
-        <div
-          className="bottom-sheet-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Comments"
-          onClick={() => {
-            setIsCommentsSheetOpen(false);
-            setReplyTarget(null);
-            setIsCommentSortMenuOpen(false);
-          }}
-        >
-          <div
-            className="bottom-sheet comment-sheet article-comments-sheet"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="bottom-sheet-handle" aria-hidden="true" />
-
-            <div className="article-comments-sheet-title">Comments</div>
-
-            <div className="comment-sheet-topbar">
-              <div className="comment-sort-menu">
-                <button
-                  className="comment-sort-trigger"
-                  type="button"
-                  onClick={() => setIsCommentSortMenuOpen((current) => !current)}
-                  aria-expanded={isCommentSortMenuOpen}
-                  aria-haspopup="menu"
-                >
-                  <span>
-                    {commentSortMode === "top"
-                      ? "Top comments"
-                      : commentSortMode === "controversial"
-                        ? "Controversial"
-                        : "Newest"}
-                  </span>
-                  <span className="comment-sort-chevron" aria-hidden="true">
-                    ▾
-                  </span>
-                </button>
-
-                {isCommentSortMenuOpen ? (
-                  <div className="comment-sort-dropdown" role="menu">
-                    <button
-                      className="comment-sort-option"
-                      type="button"
-                      onClick={() => {
-                        setCommentSortMode("controversial");
-                        setIsCommentSortMenuOpen(false);
-                      }}
-                    >
-                      Controversial
-                    </button>
-                    <button
-                      className="comment-sort-option"
-                      type="button"
-                      onClick={() => {
-                        setCommentSortMode("newest");
-                        setIsCommentSortMenuOpen(false);
-                      }}
-                    >
-                      Newest
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="bottom-sheet-comments article-comments-thread">
-              {displayedComments.length === 0 ? (
-                <div className="empty-state">
-                  <strong>No comments yet</strong>
-                  <span>Start the conversation on this story.</span>
-                </div>
-              ) : (
-                <div className="comment-list article-comment-list">
-                  {displayedComments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="comment-thread-row"
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        openCommentActionSheet(comment);
-                      }}
-                      onMouseDown={() => startCommentLongPress(comment)}
-                      onMouseUp={clearCommentLongPress}
-                      onMouseLeave={clearCommentLongPress}
-                      onTouchStart={() => startCommentLongPress(comment)}
-                      onTouchEnd={clearCommentLongPress}
-                    >
-                      <div className="comment-thread-main">
-                        <div className="comment-thread-copy">
-                          <div className="comment-header">
-                            {comment.user_id ? (
-                              <Link
-                                href={`/user/${comment.user_id}`}
-                                className="comment-user-link"
-                              >
-                                <span className="comment-user-avatar">
-                                  {comment.avatar_url ? (
-                                    <Image
-                                      src={comment.avatar_url}
-                                      alt={comment.username ?? "User avatar"}
-                                      width={34}
-                                      height={34}
-                                      unoptimized
-                                    />
-                                  ) : (
-                                    (comment.username ?? "U").charAt(0).toUpperCase()
-                                  )}
-                                </span>
-                                <span className="comment-username">
-                                  {comment.username ?? "Unknown"}
-                                </span>
-                              </Link>
-                            ) : (
-                              <strong>{comment.username ?? "Unknown"}</strong>
-                            )}
-                          </div>
-                          <div className="comment-body">{comment.text}</div>
-                          <button
-                            className="comment-action article-comment-reply-action"
-                            type="button"
-                            onClick={() =>
-                              setReplyTarget({
-                                commentId: comment.id,
-                                username: comment.username,
-                              })
-                            }
-                          >
-                            Reply
-                          </button>
-                          {comment.replies.length > 0 ? (
-                            <div className="comment-replies">
-                              {comment.replies.map((reply) => (
-                                <div key={reply.id} className="comment-reply-card">
-                                  <div className="comment-header">
-                                    {reply.user_id ? (
-                                      <Link
-                                        href={`/user/${reply.user_id}`}
-                                        className="comment-user-link"
-                                      >
-                                        <span className="comment-user-avatar">
-                                          {reply.avatar_url ? (
-                                            <Image
-                                              src={reply.avatar_url}
-                                              alt={reply.username ?? "User avatar"}
-                                              width={34}
-                                              height={34}
-                                              unoptimized
-                                            />
-                                          ) : (
-                                            (reply.username ?? "U").charAt(0).toUpperCase()
-                                          )}
-                                        </span>
-                                        <span className="comment-username">
-                                          {reply.username ?? "Unknown"}
-                                        </span>
-                                      </Link>
-                                    ) : (
-                                      <strong>{reply.username ?? "Unknown"}</strong>
-                                    )}
-                                  </div>
-                                  <div className="comment-body">{reply.text}</div>
-                                  <div className="comment-meta">
-                                    {formatRelativeTime(reply.created_at)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          <div className="comment-meta">
-                            {formatRelativeTime(comment.created_at)}
-                          </div>
-                        </div>
-
-                        <div className="comment-thread-reactions">
-                          <button
-                            className={`comment-reaction-pill ${
-                              comment.currentUserReaction === "like"
-                                ? "comment-reaction-pill-active"
-                                : ""
-                            }`}
-                            onClick={() => handleCommentReaction(comment.id, "like")}
-                            disabled={activeCommentAction === `reaction-${comment.id}`}
-                          >
-                            <span aria-hidden="true">♥</span>
-                            <span>{comment.likes}</span>
-                          </button>
-                          <button
-                            className={`comment-reaction-pill ${
-                              comment.currentUserReaction === "dislike"
-                                ? "comment-reaction-pill-active"
-                                : ""
-                            }`}
-                            onClick={() => handleCommentReaction(comment.id, "dislike")}
-                            disabled={activeCommentAction === `reaction-${comment.id}`}
-                          >
-                            <span aria-hidden="true">👎</span>
-                            <span>{comment.dislikes}</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="comment-sheet-composer">
-              {replyTarget ? (
-                <div className="comment-reply-banner">
-                  <span>
-                    Replying to <strong>{replyTarget.username ?? "this comment"}</strong>
-                  </span>
-                  <button className="comment-action" onClick={() => setReplyTarget(null)} type="button">
-                    Cancel
-                  </button>
-                </div>
-              ) : null}
-
-              <div className="input-row bottom-sheet-input-row">
-                <input
-                  ref={commentInputRef}
-                  className="input"
-                  type="text"
-                  placeholder={replyTarget ? "Write a reply..." : "Write a comment..."}
-                  value={commentInput}
-                  onChange={(event) => setCommentInput(event.target.value)}
-                />
-                <button className="button button-secondary" onClick={handleAddComment}>
-                  {replyTarget ? "Reply" : "Send"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {commentActionTarget ? (
         <div

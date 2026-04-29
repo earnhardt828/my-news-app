@@ -1324,6 +1324,41 @@ input {
   padding-left: 16px;
 }
 
+.article-comments-inline {
+  display: grid;
+  gap: 16px;
+  padding-top: 20px;
+}
+
+.article-comments-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.article-comments-inline-title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.article-comments-topbar {
+  padding: 0;
+}
+
+.article-comments-inline-thread {
+  padding-top: 0;
+}
+
+.article-comments-inline-composer {
+  position: static;
+  padding: 0;
+  border-top: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
 .article-comment-reply-action {
   margin-top: 8px;
   padding: 0;
