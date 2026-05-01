@@ -1171,6 +1171,77 @@ input {
   justify-content: center;
 }
 
+.share-sheet {
+  display: grid;
+  gap: 18px;
+}
+
+.share-sheet-header {
+  padding-bottom: 0;
+}
+
+.share-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.share-sheet-option {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-height: 96px;
+  padding: 14px 10px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--foreground);
+  text-align: center;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.share-sheet-option:hover,
+.share-sheet-option:active {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-muted));
+  color: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
+.share-sheet-option-wide {
+  grid-column: span 3;
+  grid-template-columns: auto 1fr;
+  justify-items: start;
+  align-items: center;
+  min-height: 68px;
+  padding-inline: 16px;
+  text-align: left;
+}
+
+.share-sheet-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent-strong);
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.share-sheet-label {
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .bottom-sheet-input-row {
   grid-template-columns: 1fr auto;
 }
