@@ -192,6 +192,49 @@ function formatRelativeTime(timestamp: string | null) {
   return `${diffDays} days ago`;
 }
 
+function formatFreshnessTime(
+  timestamp: string | null | undefined,
+  fallback?: string | null
+) {
+  if (!timestamp) {
+    return fallback ?? "Just now";
+  }
+
+  const publishedAt = new Date(timestamp).getTime();
+
+  if (Number.isNaN(publishedAt)) {
+    return fallback ?? "Just now";
+  }
+
+  const diffMs = Date.now() - publishedAt;
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays < 7) {
+    return `${diffDays}d ago`;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(publishedAt));
+}
+
 export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
@@ -1449,7 +1492,7 @@ export default function Home() {
                       <SourceBadge sourceName={article.source} />
                       <span className="trending-source-name">{article.source}</span>
                     </div>
-                    {index < 3 ? (
+                    {sortMode === "trending" && index < 3 ? (
                       <span className="chip trending-rank-badge">Top {index + 1}</span>
                     ) : null}
                   </button>
@@ -1462,7 +1505,9 @@ export default function Home() {
                       <div className="news-card-header">
                         <div className="trending-meta-row">
                           <span className="trending-published-date">
-                            {formatPublishedDate(article.publishedAt, article.time)}
+                            {sortMode === "latest"
+                              ? formatFreshnessTime(article.publishedAt, article.time)
+                              : formatPublishedDate(article.publishedAt, article.time)}
                           </span>
                           <span className="chip chip-accent trending-category-pill">
                             {getCategoryLabel(article.category)}
