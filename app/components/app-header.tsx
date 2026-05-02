@@ -70,7 +70,6 @@ export default function AppHeader() {
 
   useEffect(() => {
     if (!pathname.startsWith("/article/")) {
-      setArticleHeaderSource("Article");
       return;
     }
 
