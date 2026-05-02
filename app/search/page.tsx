@@ -34,25 +34,54 @@ const fallbackTrendingTerms = [
 ];
 
 const TITLE_STOP_WORDS = new Set([
+  "after",
   "a",
   "an",
   "and",
+  "are",
+  "as",
   "at",
+  "be",
+  "by",
   "for",
   "from",
+  "has",
   "how",
   "in",
   "into",
   "is",
   "its",
+  "new",
+  "news",
   "of",
   "on",
   "over",
+  "or",
   "says",
+  "that",
   "the",
   "this",
   "to",
+  "was",
   "with",
+]);
+
+const COMMON_SINGLE_TERM_BLOCKLIST = new Set([
+  "after",
+  "art",
+  "be",
+  "breaking",
+  "has",
+  "how",
+  "its",
+  "new",
+  "news",
+  "said",
+  "says",
+  "that",
+  "this",
+  "update",
+  "was",
 ]);
 
 function formatSearchDate(publishedAt?: string | null, fallback?: string) {
@@ -96,6 +125,48 @@ function tokenizeSearchText(value: string) {
     .filter((token) => token.length > 2 && !TITLE_STOP_WORDS.has(token));
 }
 
+function extractMeaningfulPhrases(title: string) {
+  const rawWords = title
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const phrases: string[] = [];
+
+  for (let start = 0; start < rawWords.length; start += 1) {
+    for (let size = 4; size >= 2; size -= 1) {
+      const words = rawWords.slice(start, start + size);
+
+      if (words.length < 2) {
+        continue;
+      }
+
+      const normalizedWords = words.map((word) => word.toLowerCase());
+
+      if (normalizedWords.some((word) => TITLE_STOP_WORDS.has(word))) {
+        continue;
+      }
+
+      const hasMeaningfulSignal = words.some((word) => {
+        const lowerWord = word.toLowerCase();
+
+        return (
+          /\d/.test(word) ||
+          (word[0] && word[0] === word[0].toUpperCase()) ||
+          lowerWord.length > 5
+        );
+      });
+
+      if (!hasMeaningfulSignal) {
+        continue;
+      }
+
+      phrases.push(words.join(" "));
+    }
+  }
+
+  return phrases;
+}
+
 function buildTrendingTerms(articles: NewsArticle[]) {
   const counts = new Map<string, number>();
 
@@ -106,21 +177,52 @@ function buildTrendingTerms(articles: NewsArticle[]) {
       counts.set(sourceTerm, (counts.get(sourceTerm) ?? 0) + 3);
     }
 
+    extractMeaningfulPhrases(article.title).forEach((phrase, index) => {
+      const weight = 6 - Math.min(index, 3);
+      counts.set(phrase, (counts.get(phrase) ?? 0) + weight);
+    });
+
     tokenizeSearchText(article.title).forEach((token, index) => {
+      if (COMMON_SINGLE_TERM_BLOCKLIST.has(token)) {
+        return;
+      }
+
       const weight = index < 2 ? 2 : 1;
       counts.set(token, (counts.get(token) ?? 0) + weight);
     });
 
     tokenizeSearchText(article.description ?? "").forEach((token) => {
+      if (COMMON_SINGLE_TERM_BLOCKLIST.has(token)) {
+        return;
+      }
+
       counts.set(token, (counts.get(token) ?? 0) + 1);
     });
   });
 
   return [...counts.entries()]
+    .filter(([term]) => {
+      const normalized = term.trim().toLowerCase();
+
+      if (!normalized) {
+        return false;
+      }
+
+      if (normalized.split(" ").length === 1 && COMMON_SINGLE_TERM_BLOCKLIST.has(normalized)) {
+        return false;
+      }
+
+      return normalized.length > 2;
+    })
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([term]) =>
-      sourceLogoMap[term] ? term : term.charAt(0).toUpperCase() + term.slice(1)
+      sourceLogoMap[term]
+        ? term
+        : term
+            .split(" ")
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ")
     );
 }
 
