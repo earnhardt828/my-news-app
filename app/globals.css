@@ -1465,7 +1465,20 @@ input {
   max-width: 42ch;
 }
 
+.source-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
 .source-sheet {
+  position: relative;
+  z-index: 49;
+  pointer-events: auto;
   gap: 16px;
 }
 

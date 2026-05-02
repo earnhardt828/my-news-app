@@ -31,7 +31,7 @@ export default function SourceRatingSheet({
   }
 
   return (
-    <>
+    <div className="source-sheet-overlay" role="dialog" aria-modal="true">
       <button
         className="bottom-sheet-backdrop"
         aria-label="Close source rating sheet"
@@ -91,6 +91,6 @@ export default function SourceRatingSheet({
           </div>
         ) : null}
       </section>
-    </>
+    </div>
   );
 }
