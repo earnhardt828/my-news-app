@@ -2771,6 +2771,17 @@ input {
   border-radius: 20px;
 }
 
+.video-frame-article-vertical {
+  aspect-ratio: 9 / 16;
+  width: min(100%, 420px);
+  margin: 0 auto;
+}
+
+.video-frame-article-horizontal {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+}
+
 .video-card-article .engagement-row {
   margin-top: 0;
 }

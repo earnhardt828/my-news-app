@@ -4,6 +4,7 @@ export type VideoItem = {
   title: string;
   creator: string;
   category: string;
+  orientation: "vertical" | "horizontal";
   views: number;
   likes: number;
   comments: number;
@@ -30,6 +31,7 @@ export const initialVideos: VideoItem[] = [
     title: "Morning markets in 60 seconds",
     creator: "Reflekt Business",
     category: "Business",
+    orientation: "horizontal",
     views: 18400,
     likes: 248,
     comments: 36,
@@ -48,6 +50,7 @@ export const initialVideos: VideoItem[] = [
     title: "Tech launch recap from today",
     creator: "Reflekt Tech",
     category: "Tech",
+    orientation: "horizontal",
     views: 26300,
     likes: 391,
     comments: 51,
@@ -66,6 +69,7 @@ export const initialVideos: VideoItem[] = [
     title: "World headlines quick rundown",
     creator: "Reflekt World",
     category: "World",
+    orientation: "horizontal",
     views: 14200,
     likes: 172,
     comments: 19,
@@ -145,6 +149,17 @@ export function buildVideoEmbedUrl(youtubeId: string, autoplay: boolean) {
   url.searchParams.set("rel", "0");
   url.searchParams.set("modestbranding", "1");
   return url.toString();
+}
+
+export function inferVideoOrientation(
+  width?: number | null,
+  height?: number | null
+) {
+  if (width && height) {
+    return height > width ? "vertical" : "horizontal";
+  }
+
+  return "horizontal";
 }
 
 export function normalizeVideoFeedItems(videos?: VideoApiItem[]) {

@@ -47,6 +47,10 @@ export default function VideoFeedCard({
   variant = "default",
 }: VideoFeedCardProps) {
   const isArticleVariant = variant === "article";
+  const articleFrameClass =
+    video.orientation === "vertical"
+      ? "video-frame-article-vertical"
+      : "video-frame-article-horizontal";
 
   if (isArticleVariant) {
     return (
@@ -70,7 +74,7 @@ export default function VideoFeedCard({
         <div
           ref={frameRef}
           data-video-id={video.id}
-          className={`video-frame video-frame-article video-frame-live ${
+          className={`video-frame video-frame-article ${articleFrameClass} video-frame-live ${
             video.theme ?? "video-card-theme-rose"
           }`}
         >

@@ -12,9 +12,9 @@ type YouTubeSearchItem = {
     channelTitle?: string;
     publishedAt?: string;
     thumbnails?: {
-      high?: { url?: string };
-      medium?: { url?: string };
-      default?: { url?: string };
+      high?: { url?: string; width?: number; height?: number };
+      medium?: { url?: string; width?: number; height?: number };
+      default?: { url?: string; width?: number; height?: number };
     };
   };
 };
@@ -34,6 +34,7 @@ type VideoFeedItem = {
   title: string;
   creator: string;
   category: string;
+  orientation: "vertical" | "horizontal";
   views: number;
   likes: number;
   comments: number;
@@ -61,6 +62,7 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
     title: "Morning markets in 60 seconds",
     creator: "Reflekt Business",
     category: "Business",
+    orientation: "horizontal",
     views: 18400,
     likes: 248,
     comments: 36,
@@ -76,6 +78,7 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
     title: "Tech launch recap from today",
     creator: "Reflekt Tech",
     category: "Tech",
+    orientation: "horizontal",
     views: 26300,
     likes: 391,
     comments: 51,
@@ -91,6 +94,7 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
     title: "World headlines quick rundown",
     creator: "Reflekt World",
     category: "World",
+    orientation: "horizontal",
     views: 14200,
     likes: 172,
     comments: 19,
@@ -227,6 +231,17 @@ async function fetchRecentVideosForChannel(
   return data.items ?? [];
 }
 
+function inferVideoOrientation(
+  width?: number | null,
+  height?: number | null
+) {
+  if (width && height) {
+    return height > width ? "vertical" : "horizontal";
+  }
+
+  return "horizontal";
+}
+
 export async function GET(request: Request) {
   const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
   const requestUrl = new URL(request.url);
@@ -305,6 +320,16 @@ export async function GET(request: Request) {
           item.snippet?.thumbnails?.medium?.url ??
           item.snippet?.thumbnails?.default?.url ??
           null;
+        const thumbnailWidth =
+          item.snippet?.thumbnails?.high?.width ??
+          item.snippet?.thumbnails?.medium?.width ??
+          item.snippet?.thumbnails?.default?.width ??
+          null;
+        const thumbnailHeight =
+          item.snippet?.thumbnails?.high?.height ??
+          item.snippet?.thumbnails?.medium?.height ??
+          item.snippet?.thumbnails?.default?.height ??
+          null;
 
         return {
           id: youtubeId,
@@ -316,6 +341,7 @@ export async function GET(request: Request) {
             item.snippet?.channelTitle ?? "",
             category
           ),
+          orientation: inferVideoOrientation(thumbnailWidth, thumbnailHeight),
           views: stats?.views ?? 0,
           likes: stats?.likes ?? 0,
           comments: stats?.comments ?? 0,
