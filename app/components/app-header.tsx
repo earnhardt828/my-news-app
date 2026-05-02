@@ -66,6 +66,28 @@ export default function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [articleHeaderSource, setArticleHeaderSource] = useState("Article");
+
+  useEffect(() => {
+    if (!pathname.startsWith("/article/")) {
+      setArticleHeaderSource("Article");
+      return;
+    }
+
+    const handleArticleSource = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      setArticleHeaderSource(customEvent.detail || "Article");
+    };
+
+    window.addEventListener("reflekt:article-source", handleArticleSource as EventListener);
+
+    return () => {
+      window.removeEventListener(
+        "reflekt:article-source",
+        handleArticleSource as EventListener
+      );
+    };
+  }, [pathname]);
 
   useEffect(() => {
     if (pathname !== "/") {
@@ -122,7 +144,7 @@ export default function AppHeader() {
 
   if (pathname.startsWith("/article/")) {
     return (
-      <div className="app-header-article-close-wrap">
+      <div className="app-header-article-bar">
         <button
           type="button"
           className="article-close-button app-header-article-close"
@@ -138,6 +160,10 @@ export default function AppHeader() {
         >
           <span aria-hidden="true">×</span>
         </button>
+        <div className="app-header-article-source" aria-live="polite">
+          {articleHeaderSource}
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
       </div>
     );
   }

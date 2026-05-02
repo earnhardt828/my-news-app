@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import ShareButton from "../../components/share-button";
 import SourcePreferenceSheet from "../../components/source-preference-sheet";
 import SourceBadge from "../../components/source-badge";
@@ -207,6 +207,54 @@ function normalizeArticleId(value: number | string | null | undefined) {
   return null;
 }
 
+function getTitleTokens(value: string) {
+  return new Set(
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length > 2)
+  );
+}
+
+function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRecord[]) {
+  const baseTokens = getTitleTokens(baseArticle.title);
+
+  const rankedArticles = allArticles
+    .filter((article) => article.id !== baseArticle.id)
+    .map((article) => {
+      const candidateTokens = getTitleTokens(article.title);
+      let overlapScore = 0;
+
+      baseTokens.forEach((token) => {
+        if (candidateTokens.has(token)) {
+          overlapScore += 1;
+        }
+      });
+
+      const categoryBonus = article.category === baseArticle.category ? 2 : 0;
+      const sourcePenalty = article.source === baseArticle.source ? -2 : 0;
+
+      return {
+        article,
+        score: overlapScore * 4 + categoryBonus + sourcePenalty,
+      };
+    })
+    .sort((left, right) => right.score - left.score);
+
+  const strongMatches = rankedArticles
+    .filter((entry) => entry.score > 0)
+    .slice(0, 4)
+    .map((entry) => entry.article);
+
+  const fallbackMatches =
+    strongMatches.length >= 2
+      ? strongMatches
+      : rankedArticles.slice(0, 4).map((entry) => entry.article);
+
+  return [baseArticle, ...fallbackMatches].slice(0, 5);
+}
+
 function sortComments(
   comments: ArticleComment[],
   mode: "top" | "controversial" | "newest"
@@ -340,6 +388,9 @@ export default function ArticleDetailPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [preferredSources, setPreferredSources] = useState<string[]>([]);
   const [showLessSources, setShowLessSources] = useState<string[]>([]);
+  const [compareArticles, setCompareArticles] = useState<ArticleRecord[]>([]);
+  const [activeCompareIndex, setActiveCompareIndex] = useState(0);
+  const [showComparePrompt, setShowComparePrompt] = useState(false);
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
   const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
@@ -366,6 +417,7 @@ export default function ArticleDetailPage() {
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const commentsSectionRef = useRef<HTMLElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const compareTouchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     async function loadArticle() {
@@ -412,6 +464,18 @@ export default function ArticleDetailPage() {
       const newsData = (await newsRes.json()) as ArticleRecord[];
       const targetArticle =
         newsData.find((item) => item.id === articleId) ?? null;
+
+      if (targetArticle) {
+        const nextCompareArticles = buildCompareArticles(targetArticle, newsData);
+        setCompareArticles(nextCompareArticles);
+        setActiveCompareIndex(0);
+        setShowComparePrompt(nextCompareArticles.length > 1);
+      } else {
+        setCompareArticles([]);
+        setActiveCompareIndex(0);
+        setShowComparePrompt(false);
+      }
+
       const legacyArticleId = targetArticle
         ? newsData.findIndex((item) => item.id === targetArticle.id) + 1
         : null;
@@ -599,6 +663,34 @@ export default function ArticleDetailPage() {
     }
   }, [replyTarget]);
 
+  const activeCompareArticle = compareArticles[activeCompareIndex] ?? article;
+
+  useEffect(() => {
+    if (!activeCompareArticle?.source) {
+      return;
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("reflekt:article-source", {
+        detail: activeCompareArticle.source,
+      })
+    );
+  }, [activeCompareArticle?.source]);
+
+  useEffect(() => {
+    if (!showComparePrompt) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowComparePrompt(false);
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [showComparePrompt]);
+
   const displayedComments = useMemo(
     () => sortComments(comments, commentSortMode),
     [commentSortMode, comments]
@@ -743,7 +835,9 @@ export default function ArticleDetailPage() {
   };
 
   const handleSaveSourcePreference = async (mode: "prefer" | "show-less") => {
-    if (!article?.source) {
+    const activeSourceName = activeCompareArticle?.source ?? article?.source;
+
+    if (!activeSourceName) {
       return;
     }
 
@@ -755,7 +849,7 @@ export default function ArticleDetailPage() {
       return;
     }
 
-    const sourceName = article.source;
+    const sourceName = activeSourceName;
     const nextPreferredSources =
       mode === "prefer"
         ? preferredSources.includes(sourceName)
@@ -1151,6 +1245,48 @@ export default function ArticleDetailPage() {
     }, 220);
   };
 
+  const handleCompareSwipe = (direction: "left" | "right") => {
+    if (compareArticles.length <= 1) {
+      return;
+    }
+
+    setShowComparePrompt(false);
+    setActiveCompareIndex((current) => {
+      if (direction === "left") {
+        return Math.min(compareArticles.length - 1, current + 1);
+      }
+
+      return Math.max(0, current - 1);
+    });
+  };
+
+  const handleCompareTouchStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    compareTouchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+  };
+
+  const handleCompareTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    const start = compareTouchStartRef.current;
+
+    if (!start) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const diffX = touch.clientX - start.x;
+    const diffY = touch.clientY - start.y;
+    compareTouchStartRef.current = null;
+
+    if (Math.abs(diffX) < 48 || Math.abs(diffX) <= Math.abs(diffY)) {
+      return;
+    }
+
+    handleCompareSwipe(diffX < 0 ? "left" : "right");
+  };
+
   if (isLoading) {
     return (
       <section className="page-shell">
@@ -1173,21 +1309,26 @@ export default function ArticleDetailPage() {
     );
   }
 
-  const rawContent = article.content?.trim() ?? "";
-  const rawDescription = article.description?.trim() ?? "";
+  const compareArticle = activeCompareArticle ?? article;
+  const rawContent = compareArticle.content?.trim() ?? "";
+  const rawDescription = compareArticle.description?.trim() ?? "";
   const cleanedContent = rawContent
     .replace(/\s*\[\+\d+\s+chars\]\s*$/i, "")
     .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
   const summaryItems = buildSummaryItems(
-    article.title,
+    compareArticle.title,
     rawDescription,
     cleanedContent
   );
 
   return (
     <section className="page-shell article-page-shell">
-      <section className="section-card article-detail-hero">
+      <section
+        className="section-card article-detail-hero compare-sources-shell"
+        onTouchStart={handleCompareTouchStart}
+        onTouchEnd={handleCompareTouchEnd}
+      >
         <div className="stack" style={{ gap: "10px" }}>
           <div className="article-detail-kicker-row">
             <button
@@ -1198,16 +1339,38 @@ export default function ArticleDetailPage() {
                 setSourcePreferenceStatus(null);
               }}
             >
-              <SourceBadge sourceName={article.source} />
-              <span className="article-detail-source">{article.source}</span>
+              <SourceBadge sourceName={compareArticle.source} />
+              <span className="article-detail-source">{compareArticle.source}</span>
             </button>
-            <span className="chip chip-accent">{article.category}</span>
+            <span className="chip chip-accent">{compareArticle.category}</span>
           </div>
-          <h2 className="article-detail-title">{article.title}</h2>
+          <h2 className="article-detail-title">{compareArticle.title}</h2>
           <p className="article-detail-byline">
             Published: {formatPublishedTimestamp(article.publishedAt, article.time)}
           </p>
         </div>
+
+        {compareArticles.length > 1 ? (
+          <div className="compare-sources-meta">
+            <div
+              className={`compare-sources-prompt ${
+                showComparePrompt ? "compare-sources-prompt-visible" : ""
+              }`}
+            >
+              Swipe to compare sources →
+            </div>
+            <div className="compare-sources-dots" aria-hidden="true">
+              {compareArticles.map((compareItem, index) => (
+                <span
+                  key={compareItem.id}
+                  className={`compare-sources-dot ${
+                    index === activeCompareIndex ? "compare-sources-dot-active" : ""
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {article.image ? (
           <img
@@ -1538,10 +1701,10 @@ export default function ArticleDetailPage() {
       </section>
 
       <SourcePreferenceSheet
-        sourceName={article.source}
+        sourceName={compareArticle.source}
         isOpen={isSourceSheetOpen}
-        isPreferred={preferredSources.includes(article.source)}
-        isShowLess={showLessSources.includes(article.source)}
+        isPreferred={preferredSources.includes(compareArticle.source)}
+        isShowLess={showLessSources.includes(compareArticle.source)}
         isSaving={isSavingSourcePreference}
         status={sourcePreferenceStatus}
         onPrefer={() => {
