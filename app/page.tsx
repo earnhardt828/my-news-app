@@ -2,7 +2,7 @@
 
 import AdSlot from "./components/ad-slot";
 import LoadingScreen from "./components/loading-screen";
-import SourcePreferenceSheet from "./components/source-preference-sheet";
+import SourceRatingSheet from "./components/source-rating-sheet";
 import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
@@ -115,6 +115,13 @@ type DbCommentReply = {
   username: string | null;
   user_id: string | null;
   created_at: string | null;
+};
+
+type DbSourceRating = {
+  id: string;
+  user_id: string;
+  source_name: string;
+  rating: "like" | "dislike";
 };
 
 const actionIconProps = {
@@ -246,6 +253,8 @@ export default function Home() {
   const [categories, setCategories] = useState<string[]>([]);
   const [preferredSources, setPreferredSources] = useState<string[]>([]);
   const [showLessSources, setShowLessSources] = useState<string[]>([]);
+  const [likedSources, setLikedSources] = useState<string[]>([]);
+  const [dislikedSources, setDislikedSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
@@ -272,7 +281,6 @@ export default function Home() {
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
   );
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
   const [categorySheetStatus, setCategorySheetStatus] = useState<{
@@ -281,8 +289,8 @@ export default function Home() {
   } | null>(null);
   const [isSavingCategories, setIsSavingCategories] = useState(false);
   const [activeSourceName, setActiveSourceName] = useState<string | null>(null);
-  const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
-  const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
+  const [isSavingSourceRating, setIsSavingSourceRating] = useState(false);
+  const [sourceRatingStatus, setSourceRatingStatus] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
@@ -299,7 +307,6 @@ export default function Home() {
 
       const { data: userData } = await supabase.auth.getUser();
       setUserId(userData.user?.id ?? null);
-      setUserEmail(userData.user?.email ?? null);
 
       if (userData.user?.id) {
         const { data: profile, error: profileError } = await ensureProfileRow({
@@ -320,7 +327,8 @@ export default function Home() {
         setCategories([]);
         setPreferredSources([]);
         setShowLessSources([]);
-        setUserEmail(null);
+        setLikedSources([]);
+        setDislikedSources([]);
       }
 
       const newsRes = await fetch("/api/news");
@@ -362,12 +370,19 @@ export default function Home() {
             .select("blocked_user_id")
             .eq("blocker_id", userData.user.id)
         : { data: [] as DbBlockedUser[] };
+      const { data: sourceRatingsData } = userData.user?.id
+        ? await supabase
+            .from("source_ratings")
+            .select("id, user_id, source_name, rating")
+            .eq("user_id", userData.user.id)
+        : { data: [] as DbSourceRating[] };
 
       const likes = (likesData ?? []) as DbLike[];
       const comments = (commentsData ?? []) as DbComment[];
       const commentReactions = (commentReactionsData ?? []) as DbCommentReaction[];
       const commentReplies = (commentRepliesData ?? []) as DbCommentReply[];
       const profiles = (profilesData ?? []) as DbProfile[];
+      const sourceRatings = (sourceRatingsData ?? []) as DbSourceRating[];
       const blockedIds = new Set(
         ((blockedUsersData ?? []) as DbBlockedUser[]).map(
           (blockedUser) => blockedUser.blocked_user_id
@@ -455,6 +470,16 @@ export default function Home() {
       });
 
       setBlockedUserIds([...blockedIds]);
+      setLikedSources(
+        sourceRatings
+          .filter((rating) => rating.rating === "like")
+          .map((rating) => rating.source_name)
+      );
+      setDislikedSources(
+        sourceRatings
+          .filter((rating) => rating.rating === "dislike")
+          .map((rating) => rating.source_name)
+      );
       setArticles(mergedArticles);
       setIsLoading(false);
     }
@@ -1158,6 +1183,8 @@ export default function Home() {
       return rankArticlesWithSourcePreferences(filtered, {
         preferredSources,
         showLessSources,
+        likedSources,
+        dislikedSources,
         mode: "my-feed",
       });
     }
@@ -1171,7 +1198,15 @@ export default function Home() {
     return rankArticlesWithSourcePreferences(copied, {
       mode: "trending",
     });
-  }, [articles, categories, preferredSources, showLessSources, sortMode]);
+  }, [
+    articles,
+    categories,
+    preferredSources,
+    showLessSources,
+    likedSources,
+    dislikedSources,
+    sortMode,
+  ]);
 
   const activeCommentsArticle =
     activeCommentsArticleId === null
@@ -1333,74 +1368,107 @@ export default function Home() {
 
   const openSourcePreferenceSheet = (sourceName: string) => {
     setActiveSourceName(sourceName);
-    setSourcePreferenceStatus(null);
+    setSourceRatingStatus(null);
   };
 
   const closeSourcePreferenceSheet = () => {
-    if (isSavingSourcePreference) {
+    if (isSavingSourceRating) {
       return;
     }
 
     setActiveSourceName(null);
-    setSourcePreferenceStatus(null);
+    setSourceRatingStatus(null);
   };
 
-  const handleSaveSourcePreference = async (sourceName: string, mode: "prefer" | "show-less") => {
+  const handleSaveSourceRating = async (
+    sourceName: string,
+    rating: "like" | "dislike"
+  ) => {
     if (!userId) {
-      setSourcePreferenceStatus({
+      setSourceRatingStatus({
         type: "error",
-        text: "Log in to customize sources.",
+        text: "Log in to rate sources.",
       });
       return;
     }
 
-    const nextPreferredSources =
-      mode === "prefer"
-        ? preferredSources.includes(sourceName)
-          ? preferredSources.filter((current) => current !== sourceName)
-          : [...preferredSources, sourceName]
-        : preferredSources.filter((current) => current !== sourceName);
-    const nextShowLessSources =
-      mode === "show-less"
-        ? showLessSources.includes(sourceName)
-          ? showLessSources.filter((current) => current !== sourceName)
-          : [...showLessSources, sourceName]
-        : showLessSources.filter((current) => current !== sourceName);
+    const currentRating = likedSources.includes(sourceName)
+      ? "like"
+      : dislikedSources.includes(sourceName)
+        ? "dislike"
+        : null;
+    const isFirstRating = currentRating === null;
 
-    setIsSavingSourcePreference(true);
-    setSourcePreferenceStatus(null);
+    setIsSavingSourceRating(true);
+    setSourceRatingStatus(null);
 
-    const { error } = await saveProfilePatch(
+    if (currentRating === rating) {
+      const { error } = await supabase
+        .from("source_ratings")
+        .delete()
+        .eq("user_id", userId)
+        .eq("source_name", sourceName);
+
+      setIsSavingSourceRating(false);
+
+      if (error) {
+        console.error("Error clearing source rating:", error);
+        setSourceRatingStatus({
+          type: "error",
+          text: error.message ?? "Could not update source rating.",
+        });
+        return;
+      }
+
+      setLikedSources((prev) => prev.filter((current) => current !== sourceName));
+      setDislikedSources((prev) => prev.filter((current) => current !== sourceName));
+      setSourceRatingStatus({
+        type: "success",
+        text: "Source rating cleared.",
+      });
+      return;
+    }
+
+    const { error } = await supabase.from("source_ratings").upsert(
       {
-        id: userId,
-        email: userEmail,
+        user_id: userId,
+        source_name: sourceName,
+        rating,
+        updated_at: new Date().toISOString(),
       },
       {
-        id: userId,
-        email: userEmail,
-        username: username ?? null,
-        categories,
-        preferred_sources: nextPreferredSources,
-        show_less_sources: nextShowLessSources,
+        onConflict: "user_id,source_name",
       }
     );
 
-    setIsSavingSourcePreference(false);
+    setIsSavingSourceRating(false);
 
     if (error) {
-      console.error("Error saving source preference:", error);
-      setSourcePreferenceStatus({
+      console.error("Error saving source rating:", error);
+      setSourceRatingStatus({
         type: "error",
-        text: error.message ?? "Could not save source preference.",
+        text: error.message ?? "Could not save source rating.",
       });
       return;
     }
 
-    setPreferredSources(nextPreferredSources);
-    setShowLessSources(nextShowLessSources);
-    setSourcePreferenceStatus({
+    setLikedSources((prev) =>
+      rating === "like"
+        ? [...prev.filter((current) => current !== sourceName), sourceName]
+        : prev.filter((current) => current !== sourceName)
+    );
+    setDislikedSources((prev) =>
+      rating === "dislike"
+        ? [...prev.filter((current) => current !== sourceName), sourceName]
+        : prev.filter((current) => current !== sourceName)
+    );
+    setSourceRatingStatus({
       type: "success",
-      text: "Source preference updated.",
+      text: isFirstRating
+        ? rating === "dislike"
+          ? "We'll show you less from this source in My Feed."
+          : "We'll keep showing this source in My Feed."
+        : "Source rating updated.",
     });
   };
 
@@ -1619,21 +1687,28 @@ export default function Home() {
         </div>
       )}
 
-      <SourcePreferenceSheet
+      <SourceRatingSheet
         sourceName={activeSourceName}
         isOpen={activeSourceName !== null}
-        isPreferred={activeSourceName ? preferredSources.includes(activeSourceName) : false}
-        isShowLess={activeSourceName ? showLessSources.includes(activeSourceName) : false}
-        isSaving={isSavingSourcePreference}
-        status={sourcePreferenceStatus}
-        onPrefer={() => {
+        currentRating={
+          activeSourceName
+            ? likedSources.includes(activeSourceName)
+              ? "like"
+              : dislikedSources.includes(activeSourceName)
+                ? "dislike"
+                : null
+            : null
+        }
+        isSaving={isSavingSourceRating}
+        status={sourceRatingStatus}
+        onLike={() => {
           if (activeSourceName) {
-            void handleSaveSourcePreference(activeSourceName, "prefer");
+            void handleSaveSourceRating(activeSourceName, "like");
           }
         }}
-        onShowLess={() => {
+        onDislike={() => {
           if (activeSourceName) {
-            void handleSaveSourcePreference(activeSourceName, "show-less");
+            void handleSaveSourceRating(activeSourceName, "dislike");
           }
         }}
         onClose={closeSourcePreferenceSheet}

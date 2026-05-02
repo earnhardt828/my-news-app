@@ -31,6 +31,11 @@ type SavedArticleRecord = {
   article_id: number;
 };
 
+type DbSourceRating = {
+  source_name: string;
+  rating: "like" | "dislike";
+};
+
 function FeedSkeleton() {
   return <LoadingScreen />;
 }
@@ -92,6 +97,10 @@ export default function MyFeed() {
         .from("saved_articles")
         .select("article_id")
         .eq("user_id", userData.user.id);
+      const { data: sourceRatingsData } = await supabase
+        .from("source_ratings")
+        .select("source_name, rating")
+        .eq("user_id", userData.user.id);
 
       const savedArticleIds = new Set(
         ((savedArticlesData ?? []) as SavedArticleRecord[]).map(
@@ -112,6 +121,12 @@ export default function MyFeed() {
         {
           preferredSources: profile?.preferred_sources ?? [],
           showLessSources: profile?.show_less_sources ?? [],
+          likedSources: ((sourceRatingsData ?? []) as DbSourceRating[])
+            .filter((rating) => rating.rating === "like")
+            .map((rating) => rating.source_name),
+          dislikedSources: ((sourceRatingsData ?? []) as DbSourceRating[])
+            .filter((rating) => rating.rating === "dislike")
+            .map((rating) => rating.source_name),
           mode: "my-feed",
         }
       );

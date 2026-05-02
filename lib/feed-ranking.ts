@@ -10,6 +10,8 @@ type RankableArticle = {
 type SourcePreferenceOptions = {
   preferredSources?: string[];
   showLessSources?: string[];
+  likedSources?: string[];
+  dislikedSources?: string[];
   mode: "trending" | "my-feed" | "latest";
 };
 
@@ -90,10 +92,18 @@ function diversifyArticles<T extends RankableArticle>(articles: T[]) {
 
 export function rankArticlesWithSourcePreferences<T extends RankableArticle>(
   articles: T[],
-  { preferredSources = [], showLessSources = [], mode }: SourcePreferenceOptions
+  {
+    preferredSources = [],
+    showLessSources = [],
+    likedSources = [],
+    dislikedSources = [],
+    mode,
+  }: SourcePreferenceOptions
 ) {
   const preferred = new Set(preferredSources.map(normalizeSource));
   const showLess = new Set(showLessSources.map(normalizeSource));
+  const liked = new Set(likedSources.map(normalizeSource));
+  const disliked = new Set(dislikedSources.map(normalizeSource));
 
   if (mode === "latest") {
     return [...articles].sort((a, b) => {
@@ -112,11 +122,17 @@ export function rankArticlesWithSourcePreferences<T extends RankableArticle>(
     const sourceB = normalizeSource(b.source);
     const preferenceBonusA =
       mode === "my-feed"
-        ? (preferred.has(sourceA) ? 7 : 0) - (showLess.has(sourceA) ? 5.5 : 0)
+        ? (preferred.has(sourceA) ? 7 : 0) -
+          (showLess.has(sourceA) ? 5.5 : 0) +
+          (liked.has(sourceA) ? 5 : 0) -
+          (disliked.has(sourceA) ? 6.5 : 0)
         : 0;
     const preferenceBonusB =
       mode === "my-feed"
-        ? (preferred.has(sourceB) ? 7 : 0) - (showLess.has(sourceB) ? 5.5 : 0)
+        ? (preferred.has(sourceB) ? 7 : 0) -
+          (showLess.has(sourceB) ? 5.5 : 0) +
+          (liked.has(sourceB) ? 5 : 0) -
+          (disliked.has(sourceB) ? 6.5 : 0)
         : 0;
     const sourceWeightA = mode === "trending" ? getSourceWeight(a.source) * 3 : 0;
     const sourceWeightB = mode === "trending" ? getSourceWeight(b.source) * 3 : 0;
@@ -162,7 +178,9 @@ export function rankArticlesWithSourcePreferences<T extends RankableArticle>(
         const sourceBonus =
           mode === "my-feed"
             ? (preferred.has(sourceKey) ? 3.5 : 0) -
-              (showLess.has(sourceKey) ? 2.25 : 0)
+              (showLess.has(sourceKey) ? 2.25 : 0) +
+              (liked.has(sourceKey) ? 2.5 : 0) -
+              (disliked.has(sourceKey) ? 3.25 : 0)
             : getSourceWeight(article.source) * 0.85;
 
         return {

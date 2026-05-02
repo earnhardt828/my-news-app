@@ -1484,6 +1484,10 @@ input {
   gap: 10px;
 }
 
+.source-sheet .status-message {
+  margin-top: 14px;
+}
+
 .source-sheet-button,
 .source-sheet-close {
   min-height: 46px;
