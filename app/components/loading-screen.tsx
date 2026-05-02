@@ -9,14 +9,16 @@ export default function LoadingScreen({
 }: LoadingScreenProps) {
   return (
     <div className="loading-screen" role="status" aria-live="polite" aria-label={label}>
-      <Image
-        src="/trending-r-logo.png"
-        alt="Reflekt"
-        width={72}
-        height={72}
-        priority
-        className="loading-screen-logo"
-      />
+      <div className="loading-screen-logo-wrap">
+        <Image
+          src="/trending-r-logo.png"
+          alt="Reflekt"
+          width={72}
+          height={72}
+          priority
+          className="loading-screen-logo"
+        />
+      </div>
     </div>
   );
 }

@@ -1844,7 +1844,15 @@ input {
   width: clamp(60px, 18vw, 80px);
   height: auto;
   object-fit: contain;
-  animation: loading-logo-fade 360ms ease-out both;
+  animation: loading-logo-fade 420ms ease-out both;
+}
+
+.loading-screen-logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform, opacity;
+  animation: loading-logo-float 2.2s ease-in-out 240ms infinite;
 }
 
 @keyframes loading-logo-fade {
@@ -1856,6 +1864,24 @@ input {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes loading-logo-float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-3px) scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-screen-logo,
+  .loading-screen-logo-wrap {
+    animation: none;
   }
 }
 
