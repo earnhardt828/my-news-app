@@ -48,6 +48,32 @@ export function normalizeSourceLogoName(sourceName: string) {
     .replace(/\s+/g, "-");
 }
 
+export function slugifySourceName(sourceName: string) {
+  return sourceName
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-");
+}
+
+export function getSourceNameFromSlug(sourceSlug: string) {
+  const normalizedSlug = sourceSlug.trim().toLowerCase();
+  const knownSource = Object.keys(sourceLogoMap).find(
+    (sourceName) => slugifySourceName(sourceName) === normalizedSlug
+  );
+
+  if (knownSource) {
+    return knownSource;
+  }
+
+  return normalizedSlug
+    .split("-")
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 export function getSourceLogoUrl(sourceName: string) {
   const trimmedSourceName = sourceName.trim();
   const mappedLogo = sourceLogoMap[trimmedSourceName];

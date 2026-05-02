@@ -1089,6 +1089,89 @@ input {
   font-weight: 800;
 }
 
+.search-results-shell {
+  gap: 12px;
+}
+
+.search-source-card {
+  text-decoration: none;
+  color: inherit;
+}
+
+.search-source-card-row,
+.search-result-source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.search-source-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.search-source-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.search-source-kind {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.search-results-list {
+  display: grid;
+  gap: 10px;
+}
+
+.search-result-card {
+  display: grid;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.search-result-title {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+
+.search-result-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-result-description {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.source-page-shell {
+  gap: 14px;
+}
+
+.source-page-card {
+  display: flex;
+  align-items: center;
+}
+
+.source-page-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .input-row {
   display: grid;
   gap: 10px;

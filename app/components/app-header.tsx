@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { getSourceNameFromSlug } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
 function getPageTitle(pathname: string) {
@@ -69,6 +70,11 @@ export default function AppHeader() {
   const [articleHeaderSource, setArticleHeaderSource] = useState("Article");
   const [articleHeaderUrl, setArticleHeaderUrl] = useState<string | null>(null);
   const [isVideoSearchOpen, setIsVideoSearchOpen] = useState(false);
+  const [sourceHeaderTitle, setSourceHeaderTitle] = useState<string | null>(null);
+  const sourcePathSegments = pathname.split("/");
+  const defaultSourceTitle = pathname.startsWith("/source/")
+    ? getSourceNameFromSlug(sourcePathSegments[sourcePathSegments.length - 1] ?? "")
+    : "Source";
 
   useEffect(() => {
     if (!pathname.startsWith("/article/")) {
@@ -99,6 +105,24 @@ export default function AppHeader() {
       );
     };
   }, [pathname]);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/source/")) {
+      return;
+    }
+
+    const handleSourceTitle = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      setSourceHeaderTitle(customEvent.detail || defaultSourceTitle || "Source");
+    };
+
+    window.addEventListener("reflekt:source-title", handleSourceTitle as EventListener);
+
+    return () => {
+      window.removeEventListener("reflekt:source-title", handleSourceTitle as EventListener);
+      setSourceHeaderTitle(null);
+    };
+  }, [defaultSourceTitle, pathname]);
 
   useEffect(() => {
     if (pathname !== "/videos") {
@@ -228,6 +252,32 @@ export default function AppHeader() {
     );
   }
 
+  if (pathname.startsWith("/source/")) {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close source page"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/search");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          {sourceHeaderTitle || defaultSourceTitle}
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
   if (pathname !== "/") {
     if (pathname === "/videos") {
       return (
@@ -246,6 +296,16 @@ export default function AppHeader() {
               {isVideoSearchOpen ? "✕" : "⌕"}
             </span>
           </button>
+        </div>
+      );
+    }
+
+    if (pathname === "/search") {
+      return (
+        <div className="app-header-title-wrap app-header-title-wrap-center">
+          <span className="app-header-side-spacer" aria-hidden="true" />
+          <h1 className="brand-title">Search</h1>
+          <span className="app-header-side-spacer" aria-hidden="true" />
         </div>
       );
     }

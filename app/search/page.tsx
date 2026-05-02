@@ -1,80 +1,242 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import LoadingScreen from "../components/loading-screen";
+import SourceBadge from "../components/source-badge";
+import { getCategoryLabel } from "../../lib/categories";
+import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 
 type NewsArticle = {
+  id: number;
   title: string;
   source: string;
   category: string;
+  time: string;
+  image?: string | null;
+  description?: string | null;
+  url?: string | null;
+  publishedAt?: string | null;
+  content?: string | null;
 };
 
 const fallbackTrendingTerms = [
   "CNN",
   "Markets",
-  "Tech layoffs",
-  "World News",
-  "AI",
+  "Artificial intelligence",
   "Elections",
-  "CNBC",
-  "Health",
-  "Sports",
-  "Bloomberg",
+  "Reuters",
+  "World news",
+  "Health policy",
+  "Tech earnings",
+  "Sports headlines",
+  "Breaking news",
 ];
+
+const TITLE_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "at",
+  "for",
+  "from",
+  "how",
+  "in",
+  "into",
+  "is",
+  "its",
+  "of",
+  "on",
+  "over",
+  "says",
+  "the",
+  "this",
+  "to",
+  "with",
+]);
+
+function formatSearchDate(publishedAt?: string | null, fallback?: string) {
+  if (!publishedAt) {
+    return fallback ?? "Recent";
+  }
+
+  const timestamp = new Date(publishedAt).getTime();
+
+  if (Number.isNaN(timestamp)) {
+    return fallback ?? "Recent";
+  }
+
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(timestamp));
+}
+
+function tokenizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2 && !TITLE_STOP_WORDS.has(token));
+}
 
 function buildTrendingTerms(articles: NewsArticle[]) {
   const counts = new Map<string, number>();
 
   articles.forEach((article) => {
-    [article.source, article.category, article.title].forEach((term) => {
-      const trimmedTerm = term?.trim();
+    const sourceTerm = article.source?.trim();
 
-      if (!trimmedTerm) {
-        return;
-      }
+    if (sourceTerm) {
+      counts.set(sourceTerm, (counts.get(sourceTerm) ?? 0) + 3);
+    }
 
-      const currentCount = counts.get(trimmedTerm) ?? 0;
-      const weight = trimmedTerm === article.title ? 2 : 1;
-      counts.set(trimmedTerm, currentCount + weight);
+    tokenizeSearchText(article.title).forEach((token, index) => {
+      const weight = index < 2 ? 2 : 1;
+      counts.set(token, (counts.get(token) ?? 0) + weight);
+    });
+
+    tokenizeSearchText(article.description ?? "").forEach((token) => {
+      counts.set(token, (counts.get(token) ?? 0) + 1);
     });
   });
 
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
-    .map(([term]) => term);
+    .map(([term]) =>
+      sourceLogoMap[term] ? term : term.charAt(0).toUpperCase() + term.slice(1)
+    );
+}
+
+function getMatchScore(article: NewsArticle, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return 0;
+  }
+
+  let score = 0;
+  const title = article.title.toLowerCase();
+  const source = article.source.toLowerCase();
+  const category = article.category.toLowerCase();
+  const description = (article.description ?? "").toLowerCase();
+  const content = (article.content ?? "").toLowerCase();
+
+  if (title.includes(normalizedQuery)) score += 8;
+  if (source.includes(normalizedQuery)) score += 10;
+  if (category.includes(normalizedQuery)) score += 4;
+  if (description.includes(normalizedQuery)) score += 3;
+  if (content.includes(normalizedQuery)) score += 2;
+
+  tokenizeSearchText(normalizedQuery).forEach((token) => {
+    if (title.includes(token)) score += 4;
+    if (source.includes(token)) score += 5;
+    if (category.includes(token)) score += 2;
+    if (description.includes(token)) score += 1.5;
+    if (content.includes(token)) score += 1;
+  });
+
+  return score;
 }
 
 export default function Search() {
   const [query, setQuery] = useState("");
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function loadTrendingTerms() {
+    async function loadSearchData() {
+      setIsLoading(true);
+
       try {
         const response = await fetch("/api/news");
         const news = (await response.json()) as NewsArticle[];
+        setArticles(news);
+
         const derivedTerms = buildTrendingTerms(news);
 
         if (derivedTerms.length > 0) {
           setTrendingTerms(derivedTerms);
         }
       } catch (error) {
-        console.error("Error loading search trends:", error);
+        console.error("Error loading search data:", error);
+      } finally {
+        setIsLoading(false);
       }
     }
 
-    loadTrendingTerms();
+    void loadSearchData();
   }, []);
 
-  const filteredSuggestions = useMemo(() => {
-    if (!query.trim()) {
-      return trendingTerms;
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const matchedSourceName = useMemo(() => {
+    if (!normalizedQuery) {
+      return null;
     }
 
-    return trendingTerms.filter((item) =>
-      item.toLowerCase().includes(query.toLowerCase())
+    const uniqueSources = Array.from(new Set(articles.map((article) => article.source))).sort();
+
+    const exactMatch =
+      uniqueSources.find((source) => source.toLowerCase() === normalizedQuery) ?? null;
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    return (
+      uniqueSources.find(
+        (source) =>
+          source.toLowerCase().includes(normalizedQuery) ||
+          normalizedQuery.includes(source.toLowerCase())
+      ) ?? null
     );
-  }, [query, trendingTerms]);
+  }, [articles, normalizedQuery]);
+
+  const filteredResults = useMemo(() => {
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    return [...articles]
+      .map((article) => ({
+        article,
+        score: getMatchScore(article, normalizedQuery),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+
+        const timeA = a.article.publishedAt
+          ? new Date(a.article.publishedAt).getTime()
+          : 0;
+        const timeB = b.article.publishedAt
+          ? new Date(b.article.publishedAt).getTime()
+          : 0;
+
+        return timeB - timeA;
+      })
+      .map(({ article }) => article);
+  }, [articles, normalizedQuery]);
 
   return (
     <section className="page-shell search-shell">
@@ -87,43 +249,101 @@ export default function Search() {
             id="search-input"
             className="search-input search-input-with-icon"
             type="text"
-            placeholder="Search news, users, or companies..."
+            placeholder="Search news, sources, or topics"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
           />
         </label>
+      </section>
 
-        {query.trim() ? (
-          <div className="empty-state">
-            <strong>Search preview</strong>
-            <span>
-              Your current search text is <strong>{query}</strong>. Hook this input
-              into your search data when you’re ready.
-            </span>
+      {!query.trim() ? (
+        <section className="section-card stack">
+          <div className="search-section-header">
+            <strong className="search-section-title">Trending Now</strong>
           </div>
-        ) : null}
-      </section>
 
-      <section className="section-card stack">
-        <div className="search-section-header">
-          <strong className="search-section-title">Trending Now</strong>
-        </div>
-
-        <div className="search-trending-list">
-          {filteredSuggestions.map((item) => (
-            <button
-              key={item}
-              className="search-trending-row"
-              onClick={() => setQuery(item)}
+          {isLoading ? (
+            <LoadingScreen label="Loading search trends" />
+          ) : (
+            <div className="search-trending-list">
+              {trendingTerms.map((item) => (
+                <button
+                  key={item}
+                  className="search-trending-row"
+                  onClick={() => setQuery(item)}
+                >
+                  <span className="search-trending-label">{item}</span>
+                  <span className="search-trending-icon" aria-hidden="true">
+                    ↗
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="stack search-results-shell">
+          {matchedSourceName ? (
+            <Link
+              href={`/source/${slugifySourceName(matchedSourceName)}`}
+              className="section-card search-source-card"
             >
-              <span className="search-trending-label">{item}</span>
-              <span className="search-trending-icon" aria-hidden="true">
-                ↗
+              <div className="search-source-card-row">
+                <div className="search-source-brand">
+                  <SourceBadge sourceName={matchedSourceName} />
+                  <div className="stack" style={{ gap: "4px" }}>
+                    <strong className="search-source-name">{matchedSourceName}</strong>
+                    <span className="search-source-kind">News source</span>
+                  </div>
+                </div>
+                <span className="search-trending-icon" aria-hidden="true">
+                  ↗
+                </span>
+              </div>
+            </Link>
+          ) : null}
+
+          {filteredResults.length === 0 ? (
+            <div className="empty-state">
+              <strong>No results found</strong>
+              <span>
+                Try a news source, person, or topic. Reflekt will search current
+                articles across title, source, category, and story text.
               </span>
-            </button>
-          ))}
-        </div>
-      </section>
+            </div>
+          ) : (
+            <div className="search-results-list">
+              {filteredResults.map((article) => (
+                <Link
+                  key={article.id}
+                  href={`/article/${article.id}`}
+                  className="section-card search-result-card"
+                >
+                  <div className="search-result-source-row">
+                    <div className="trending-source-brand">
+                      <SourceBadge sourceName={article.source} />
+                      <span className="trending-source-name">{article.source}</span>
+                    </div>
+                    <span className="chip chip-accent">{getCategoryLabel(article.category)}</span>
+                  </div>
+
+                  <h3 className="search-result-title">{article.title}</h3>
+
+                  <div className="search-result-meta">
+                    <span className="trending-published-date">
+                      {formatSearchDate(article.publishedAt, article.time)}
+                    </span>
+                  </div>
+
+                  {article.description ? (
+                    <p className="search-result-description">{article.description}</p>
+                  ) : null}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </section>
   );
 }
