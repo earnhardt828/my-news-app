@@ -1468,138 +1468,142 @@ export default function Home() {
         </div>
       ) : (
         <div className="stack">
-          {displayedArticles.map((article, index) => (
-            <div key={article.id} className="stack">
-              <article className="news-card">
-                <button
-                  type="button"
-                  className="source-trigger trending-source-row"
-                  onClick={() => openSourcePreferenceSheet(article.source)}
-                >
-                  <div className="trending-source-brand">
-                    <SourceBadge sourceName={article.source} />
-                    <span className="trending-source-name">{article.source}</span>
-                  </div>
-                  {index < 3 ? (
-                    <span className="chip trending-rank-badge">Top {index + 1}</span>
-                  ) : null}
-                </button>
-                <Link href={`/article/${article.id}`} className="article-link">
-                  <div className="news-card-body">
-                    <div className="trending-title-row">
-                      <h3 className="trending-article-title">{article.title}</h3>
-                    </div>
+          {displayedArticles.map((article, index) => {
+            console.log("SOURCE NAME:", article.source);
 
-                    <div className="news-card-header">
-                      <div className="trending-meta-row">
-                        <span className="trending-published-date">
-                          {formatPublishedDate(article.publishedAt, article.time)}
-                        </span>
-                        <span className="chip chip-accent trending-category-pill">
-                          {getCategoryLabel(article.category)}
-                        </span>
-                      </div>
+            return (
+              <div key={article.id} className="stack">
+                <article className="news-card">
+                  <button
+                    type="button"
+                    className="source-trigger trending-source-row"
+                    onClick={() => openSourcePreferenceSheet(article.source)}
+                  >
+                    <div className="trending-source-brand">
+                      <SourceBadge sourceName={article.source} />
+                      <span className="trending-source-name">{article.source}</span>
                     </div>
-
-                    {article.image ? (
-                      <img
-                        src={article.image}
-                        alt={article.title}
-                        className="article-image"
-                      />
+                    {index < 3 ? (
+                      <span className="chip trending-rank-badge">Top {index + 1}</span>
                     ) : null}
-                  </div>
-                </Link>
+                  </button>
+                  <Link href={`/article/${article.id}`} className="article-link">
+                    <div className="news-card-body">
+                      <div className="trending-title-row">
+                        <h3 className="trending-article-title">{article.title}</h3>
+                      </div>
 
-                <div className="engagement-row trending-stats-row">
-                  <button
-                    className={`icon-action-pill ${
-                      article.likedByCurrentUser ? "icon-action-pill-active" : ""
-                    }`}
-                    onClick={() => handleLike(article.id)}
-                    aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
-                  >
-                    <span className="icon-action-glyph" aria-hidden="true">
-                      <svg {...actionIconProps}>
-                        <path
-                          d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                          fill={article.likedByCurrentUser ? "currentColor" : "none"}
+                      <div className="news-card-header">
+                        <div className="trending-meta-row">
+                          <span className="trending-published-date">
+                            {formatPublishedDate(article.publishedAt, article.time)}
+                          </span>
+                          <span className="chip chip-accent trending-category-pill">
+                            {getCategoryLabel(article.category)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {article.image ? (
+                        <img
+                          src={article.image}
+                          alt={article.title}
+                          className="article-image"
                         />
-                      </svg>
-                    </span>
-                    <span>{article.likes}</span>
-                  </button>
-                  <button
-                    className="icon-action-pill"
-                    onClick={() => {
-                      setActiveCommentsArticleId(article.id);
-                      setCommentSortMode("top");
-                      setIsCommentSortMenuOpen(false);
-                      setReplyTarget(null);
-                    }}
-                    aria-label="Open comments"
-                  >
-                    <span className="icon-action-glyph" aria-hidden="true">
-                      <svg {...actionIconProps}>
-                        <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-                      </svg>
-                    </span>
-                    <span>{article.comments.length}</span>
-                  </button>
-                  <ShareButton
-                    path={`/article/${article.id}`}
-                    title={article.title}
-                    url={article.url}
-                    iconOnly
-                  />
-                  <button
-                    className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
-                    onClick={() => handleToggleSaveArticle(article)}
-                    disabled={activeSaveArticleId === article.id}
-                    aria-label={article.saved ? "Remove bookmark" : "Save article"}
-                  >
-                    <span className="icon-action-glyph" aria-hidden="true">
-                      {activeSaveArticleId === article.id ? (
-                        <svg {...actionIconProps}>
-                          <path d="M12 5v7" />
-                          <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
-                        </svg>
-                      ) : (
+                      ) : null}
+                    </div>
+                  </Link>
+
+                  <div className="engagement-row trending-stats-row">
+                    <button
+                      className={`icon-action-pill ${
+                        article.likedByCurrentUser ? "icon-action-pill-active" : ""
+                      }`}
+                      onClick={() => handleLike(article.id)}
+                      aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
+                    >
+                      <span className="icon-action-glyph" aria-hidden="true">
                         <svg {...actionIconProps}>
                           <path
-                            d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
-                            fill={article.saved ? "currentColor" : "none"}
+                            d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                            fill={article.likedByCurrentUser ? "currentColor" : "none"}
                           />
                         </svg>
-                      )}
-                    </span>
-                  </button>
-                </div>
-              </article>
+                      </span>
+                      <span>{article.likes}</span>
+                    </button>
+                    <button
+                      className="icon-action-pill"
+                      onClick={() => {
+                        setActiveCommentsArticleId(article.id);
+                        setCommentSortMode("top");
+                        setIsCommentSortMenuOpen(false);
+                        setReplyTarget(null);
+                      }}
+                      aria-label="Open comments"
+                    >
+                      <span className="icon-action-glyph" aria-hidden="true">
+                        <svg {...actionIconProps}>
+                          <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                        </svg>
+                      </span>
+                      <span>{article.comments.length}</span>
+                    </button>
+                    <ShareButton
+                      path={`/article/${article.id}`}
+                      title={article.title}
+                      url={article.url}
+                      iconOnly
+                    />
+                    <button
+                      className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
+                      onClick={() => handleToggleSaveArticle(article)}
+                      disabled={activeSaveArticleId === article.id}
+                      aria-label={article.saved ? "Remove bookmark" : "Save article"}
+                    >
+                      <span className="icon-action-glyph" aria-hidden="true">
+                        {activeSaveArticleId === article.id ? (
+                          <svg {...actionIconProps}>
+                            <path d="M12 5v7" />
+                            <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
+                          </svg>
+                        ) : (
+                          <svg {...actionIconProps}>
+                            <path
+                              d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                              fill={article.saved ? "currentColor" : "none"}
+                            />
+                          </svg>
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                </article>
 
-              {(index + 1) % 3 === 0 ? (
-                <AdSlot
-                  title="Sponsored placement"
-                  copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
-                  cta="Learn more"
-                />
-              ) : null}
+                {(index + 1) % 3 === 0 ? (
+                  <AdSlot
+                    title="Sponsored placement"
+                    copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
+                    cta="Learn more"
+                  />
+                ) : null}
 
-              {sortMode === "trending" &&
-              (index + 1) % 3 === 0 &&
-              videos.length > 0 ? (
-                <VideoFeedCard
-                  video={videos[Math.floor((index + 1) / 3 - 1) % videos.length]}
-                  onToggleLike={handleToggleVideoLike}
-                  onToggleSave={handleToggleVideoSave}
-                  onOpenComments={setActiveCommentsVideoId}
-                  onOpenPlayer={setActiveVideoId}
-                  label="Video"
-                  className="video-card-inline"
-                />
-              ) : null}
-            </div>
-          ))}
+                {sortMode === "trending" &&
+                (index + 1) % 3 === 0 &&
+                videos.length > 0 ? (
+                  <VideoFeedCard
+                    video={videos[Math.floor((index + 1) / 3 - 1) % videos.length]}
+                    onToggleLike={handleToggleVideoLike}
+                    onToggleSave={handleToggleVideoSave}
+                    onOpenComments={setActiveCommentsVideoId}
+                    onOpenPlayer={setActiveVideoId}
+                    label="Video"
+                    className="video-card-inline"
+                  />
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       )}
 

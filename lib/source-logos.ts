@@ -1,6 +1,7 @@
 export const sourceLogoMap: Record<string, string> = {
   CNN: "/source-logos/cnn.png",
   "BBC News": "/source-logos/bbc.png",
+  CNBC: "/source-logos/cnbc.png",
   "Fox News": "/source-logos/fox-news.png",
   "Associated Press": "/source-logos/ap-news.png",
   "AP News": "/source-logos/ap-news.png",
@@ -25,6 +26,21 @@ export const sourceLogoMap: Record<string, string> = {
   "Al Jazeera English": "/source-logos/al-jazeera.png",
 };
 
+const confirmedLocalLogoPaths = new Set([
+  "/source-logos/abc.png",
+  "/source-logos/al-jazeera.png",
+  "/source-logos/ap-news.png",
+  "/source-logos/axios.png",
+  "/source-logos/bbc.png",
+  "/source-logos/bloomberg.png",
+  "/source-logos/cbs.png",
+  "/source-logos/cnn.png",
+  "/source-logos/espn.png",
+  "/source-logos/fox-news.png",
+  "/source-logos/huffpost.png",
+  "/source-logos/ign.png",
+]);
+
 export function normalizeSourceLogoName(sourceName: string) {
   return sourceName
     .trim()
@@ -36,7 +52,7 @@ export function getSourceLogoUrl(sourceName: string) {
   const trimmedSourceName = sourceName.trim();
   const mappedLogo = sourceLogoMap[trimmedSourceName];
 
-  if (mappedLogo) {
+  if (mappedLogo && confirmedLocalLogoPaths.has(mappedLogo)) {
     return mappedLogo;
   }
 
@@ -50,7 +66,9 @@ export function getSourceLogoUrl(sourceName: string) {
   // We prefer SOURCE_LOGO_MAP for known publisher naming mismatches, then
   // fall back to a normalized filename guess. If the file is missing, the UI
   // falls back to the in-app letter badge so Reflekt never renders a broken image box.
-  return `/source-logos/${normalized}.png`;
+  const normalizedPath = `/source-logos/${normalized}.png`;
+
+  return confirmedLocalLogoPaths.has(normalizedPath) ? normalizedPath : null;
 }
 
 export function getSourceInitial(sourceName: string) {

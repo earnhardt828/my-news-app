@@ -1339,6 +1339,7 @@ export default function ArticleDetailPage() {
     .replace(/\s*\[\+\d+\s+chars\]\s*$/i, "")
     .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
+  console.log("SOURCE NAME:", compareArticle.source);
   const summaryItems = buildSummaryItems(
     compareArticle.title,
     rawDescription,
