@@ -222,6 +222,13 @@ input {
   justify-self: flex-start;
 }
 
+.header-actions-cluster {
+  justify-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .header-icon-glyph {
   display: inline-flex;
   align-items: center;
@@ -1162,14 +1169,91 @@ input {
 }
 
 .source-page-card {
-  display: flex;
-  align-items: center;
+  display: grid;
+  gap: 14px;
 }
 
 .source-page-brand {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.source-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.source-rating-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.source-rating-summary strong {
+  color: var(--foreground);
+}
+
+.source-rating-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.source-rankings-list {
+  display: grid;
+  gap: 10px;
+}
+
+.source-rankings-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  text-decoration: none;
+  box-shadow: var(--shadow-soft);
+}
+
+.source-rankings-rank {
+  font-size: 0.92rem;
+  font-weight: 900;
+  color: var(--accent-strong);
+}
+
+.source-rankings-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.source-rankings-name {
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.source-rankings-metrics {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.source-rankings-metrics strong {
+  color: var(--foreground);
 }
 
 .input-row {

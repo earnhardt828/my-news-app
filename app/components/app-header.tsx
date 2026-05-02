@@ -36,6 +36,10 @@ function getPageTitle(pathname: string) {
     return "Notifications";
   }
 
+  if (pathname === "/source-rankings") {
+    return "Source Rankings";
+  }
+
   if (pathname === "/my-feed") {
     return "My Feed";
   }
@@ -320,9 +324,9 @@ export default function AppHeader() {
   return (
     <div className="app-header-logo-wrap">
       <Link
-        href="/notifications"
+        href="/source-rankings"
         className="header-icon-button"
-        aria-label="Open notifications"
+        aria-label="Open source rankings"
       >
         <span className="header-icon-glyph" aria-hidden="true">
           <svg
@@ -335,11 +339,13 @@ export default function AppHeader() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-            <path d="M10 17a2 2 0 0 0 4 0" />
+            <path d="M8 21h8" />
+            <path d="M12 17v4" />
+            <path d="M7 4h10v4a5 5 0 0 1-10 0Z" />
+            <path d="M7 6H5a2 2 0 0 0 2 3" />
+            <path d="M17 6h2a2 2 0 0 1-2 3" />
           </svg>
         </span>
-        {hasUnreadNotifications ? <span className="header-notification-dot" /> : null}
       </Link>
 
       <Link href="/" className="brand-mark-link brand-mark-link-center" aria-label="Trending home">
@@ -353,16 +359,40 @@ export default function AppHeader() {
         />
       </Link>
 
-      <button
-        type="button"
-        className="category-launch-button"
-        aria-label="Customize categories"
-        onClick={() => {
-          window.dispatchEvent(new CustomEvent("reflekt:open-categories"));
-        }}
-      >
-        +
-      </button>
+      <div className="header-actions-cluster">
+        <button
+          type="button"
+          className="category-launch-button"
+          aria-label="Customize categories"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("reflekt:open-categories"));
+          }}
+        >
+          +
+        </button>
+        <Link
+          href="/notifications"
+          className="header-icon-button"
+          aria-label="Open notifications"
+        >
+          <span className="header-icon-glyph" aria-hidden="true">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+              <path d="M10 17a2 2 0 0 0 4 0" />
+            </svg>
+          </span>
+          {hasUnreadNotifications ? <span className="header-notification-dot" /> : null}
+        </Link>
+      </div>
     </div>
   );
 }

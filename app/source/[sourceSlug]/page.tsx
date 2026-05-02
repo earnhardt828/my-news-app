@@ -9,6 +9,7 @@ import {
   getSourceNameFromSlug,
   slugifySourceName,
 } from "../../../lib/source-logos";
+import { supabase } from "../../../lib/supabase";
 
 type SourceArticle = {
   id: number;
@@ -18,6 +19,13 @@ type SourceArticle = {
   time: string;
   description?: string | null;
   publishedAt?: string | null;
+};
+
+type SourceRatingRow = {
+  id: string;
+  user_id: string;
+  source_name: string;
+  rating: "like" | "dislike";
 };
 
 function formatSourceDate(publishedAt?: string | null, fallback?: string) {
@@ -47,6 +55,9 @@ export default function SourcePage({
   const [articles, setArticles] = useState<SourceArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sourceSlug, setSourceSlug] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [ratings, setRatings] = useState<SourceRatingRow[]>([]);
+  const [isSavingRating, setIsSavingRating] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -59,12 +70,24 @@ export default function SourcePage({
       }
 
       setSourceSlug(resolvedParams.sourceSlug);
+      const sourceName = getSourceNameFromSlug(resolvedParams.sourceSlug);
       setIsLoading(true);
 
       try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         const response = await fetch("/api/news");
         const news = (await response.json()) as SourceArticle[];
-        const sourceName = getSourceNameFromSlug(resolvedParams.sourceSlug);
+        const { data: ratingsData, error: ratingsError } = await supabase
+          .from("source_ratings")
+          .select("id, user_id, source_name, rating")
+          .eq("source_name", sourceName);
+
+        if (ratingsError) {
+          console.error("Error loading source ratings:", ratingsError);
+        }
+
         const filtered = news
           .filter(
             (article) =>
@@ -81,7 +104,9 @@ export default function SourcePage({
           return;
         }
 
+        setUserId(user?.id ?? null);
         setArticles(filtered);
+        setRatings((ratingsData ?? []) as SourceRatingRow[]);
         window.dispatchEvent(
           new CustomEvent("reflekt:source-title", { detail: sourceName })
         );
@@ -108,16 +133,127 @@ export default function SourcePage({
     () => getSourceNameFromSlug(sourceSlug),
     [sourceSlug]
   );
+  const userRating = useMemo(
+    () =>
+      ratings.find(
+        (rating) => rating.user_id === userId && rating.source_name === sourceName
+      )?.rating ?? null,
+    [ratings, sourceName, userId]
+  );
+  const likeCount = useMemo(
+    () => ratings.filter((rating) => rating.rating === "like").length,
+    [ratings]
+  );
+  const dislikeCount = useMemo(
+    () => ratings.filter((rating) => rating.rating === "dislike").length,
+    [ratings]
+  );
+  const netScore = likeCount - dislikeCount;
+
+  const handleRateSource = async (rating: "like" | "dislike") => {
+    if (!userId) {
+      alert("Log in to rate sources.");
+      return;
+    }
+
+    setIsSavingRating(true);
+
+    const existingRating = ratings.find(
+      (currentRating) =>
+        currentRating.user_id === userId && currentRating.source_name === sourceName
+    );
+
+    if (existingRating?.rating === rating) {
+      const { error } = await supabase
+        .from("source_ratings")
+        .delete()
+        .eq("id", existingRating.id)
+        .eq("user_id", userId);
+
+      setIsSavingRating(false);
+
+      if (error) {
+        console.error("Error clearing source rating:", error);
+        return;
+      }
+
+      setRatings((prev) => prev.filter((currentRating) => currentRating.id !== existingRating.id));
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("source_ratings")
+      .upsert(
+        {
+          user_id: userId,
+          source_name: sourceName,
+          rating,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id,source_name",
+        }
+      )
+      .select("id, user_id, source_name, rating")
+      .single();
+
+    setIsSavingRating(false);
+
+    if (error) {
+      console.error("Error saving source rating:", error);
+      return;
+    }
+
+    setRatings((prev) => {
+      const next = prev.filter(
+        (currentRating) =>
+          !(currentRating.user_id === userId && currentRating.source_name === sourceName)
+      );
+      return [...next, data as SourceRatingRow];
+    });
+  };
 
   return (
     <section className="page-shell source-page-shell">
       <section className="section-card source-page-card">
-        <div className="source-page-brand">
-          <SourceBadge sourceName={sourceName} />
-          <div className="stack" style={{ gap: "4px" }}>
-            <strong className="search-source-name">{sourceName}</strong>
-            <span className="search-source-kind">Recent coverage</span>
+        <div className="source-page-header">
+          <div className="source-page-brand">
+            <SourceBadge sourceName={sourceName} />
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="search-source-name">{sourceName}</strong>
+              <span className="search-source-kind">Recent coverage</span>
+            </div>
           </div>
+          <div className="source-rating-summary">
+            <span>👍 {likeCount}</span>
+            <span>👎 {dislikeCount}</span>
+            <strong>{netScore >= 0 ? `+${netScore}` : netScore}</strong>
+          </div>
+        </div>
+
+        <div className="source-rating-actions">
+          <button
+            type="button"
+            className={`icon-action-pill ${
+              userRating === "like" ? "icon-action-pill-active" : ""
+            }`}
+            onClick={() => void handleRateSource("like")}
+            disabled={isSavingRating}
+          >
+            <span>👍</span>
+            <span>Like</span>
+          </button>
+          <button
+            type="button"
+            className={`icon-action-pill ${
+              userRating === "dislike" ? "icon-action-pill-active" : ""
+            }`}
+            onClick={() => void handleRateSource("dislike")}
+            disabled={isSavingRating}
+          >
+            <span>👎</span>
+            <span>Dislike</span>
+          </button>
         </div>
       </section>
 
