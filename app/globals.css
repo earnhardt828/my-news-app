@@ -163,8 +163,8 @@ input {
 
 .app-header-article-source {
   text-align: center;
-  font-size: 0.96rem;
-  font-weight: 800;
+  font-size: 1.04rem;
+  font-weight: 850;
   color: var(--foreground);
   letter-spacing: -0.02em;
   white-space: nowrap;
@@ -175,6 +175,10 @@ input {
 .app-header-article-spacer {
   width: 44px;
   height: 44px;
+}
+
+.app-header-article-link {
+  text-decoration: none;
 }
 
 .app-header-logo-wrap {
@@ -642,9 +646,10 @@ input {
   touch-action: pan-y;
 }
 
-.compare-sources-meta {
-  display: grid;
-  gap: 10px;
+.compare-sources-top-row {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 2px;
 }
 
 .compare-sources-dots {
@@ -742,7 +747,7 @@ input {
 
 .article-detail-body {
   display: grid;
-  gap: 18px;
+  gap: 22px;
 }
 
 .article-detail-section {
@@ -754,10 +759,18 @@ input {
   background: var(--surface-muted);
 }
 
+.article-summary-section {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .article-detail-label {
   margin: 0;
   color: var(--accent-strong);
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;

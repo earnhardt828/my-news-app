@@ -67,6 +67,7 @@ export default function AppHeader() {
   const router = useRouter();
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [articleHeaderSource, setArticleHeaderSource] = useState("Article");
+  const [articleHeaderUrl, setArticleHeaderUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!pathname.startsWith("/article/")) {
@@ -78,12 +79,22 @@ export default function AppHeader() {
       setArticleHeaderSource(customEvent.detail || "Article");
     };
 
+    const handleArticleUrl = (event: Event) => {
+      const customEvent = event as CustomEvent<string | null>;
+      setArticleHeaderUrl(customEvent.detail ?? null);
+    };
+
     window.addEventListener("reflekt:article-source", handleArticleSource as EventListener);
+    window.addEventListener("reflekt:article-url", handleArticleUrl as EventListener);
 
     return () => {
       window.removeEventListener(
         "reflekt:article-source",
         handleArticleSource as EventListener
+      );
+      window.removeEventListener(
+        "reflekt:article-url",
+        handleArticleUrl as EventListener
       );
     };
   }, [pathname]);
@@ -162,7 +173,33 @@ export default function AppHeader() {
         <div className="app-header-article-source" aria-live="polite">
           {articleHeaderSource}
         </div>
-        <span className="app-header-article-spacer" aria-hidden="true" />
+        {articleHeaderUrl ? (
+          <a
+            href={articleHeaderUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="article-close-button app-header-article-link"
+            aria-label="Open original article"
+          >
+            <span className="icon-action-glyph" aria-hidden="true">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M7 17 17 7" />
+                <path d="M9 7h8v8" />
+              </svg>
+            </span>
+          </a>
+        ) : (
+          <span className="app-header-article-spacer" aria-hidden="true" />
+        )}
       </div>
     );
   }

@@ -196,6 +196,22 @@ function cleanSummarySentence(sentence: string) {
   return finalized.charAt(0).toUpperCase() + finalized.slice(1);
 }
 
+function trimToLastFullSentence(value: string) {
+  const normalized = normalizeSummaryText(value);
+
+  if (!normalized) {
+    return "";
+  }
+
+  const matches = normalized.match(/[^.!?]+[.!?]/g);
+
+  if (!matches || matches.length === 0) {
+    return "";
+  }
+
+  return matches.join(" ").trim();
+}
+
 function normalizeArticleId(value: number | string | null | undefined) {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
@@ -298,8 +314,8 @@ function buildSummaryItems(
   description?: string | null,
   content?: string | null
 ): SummaryItem[] {
-  const normalizedDescription = normalizeSummaryText(description ?? "");
-  const normalizedContent = normalizeSummaryText(content ?? "");
+  const normalizedDescription = trimToLastFullSentence(description ?? "");
+  const normalizedContent = trimToLastFullSentence(content ?? "");
   const descriptionDateline = extractDateline(normalizedDescription);
   const contentDateline = extractDateline(normalizedContent);
   const dateline = descriptionDateline.dateline ?? contentDateline.dateline;
@@ -686,6 +702,14 @@ export default function ArticleDetailPage() {
       })
     );
   }, [activeCompareArticle?.source]);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("reflekt:article-url", {
+        detail: article?.url ?? null,
+      })
+    );
+  }, [article?.url]);
 
   useEffect(() => {
     if (!showCompareTutorial) {
@@ -1339,7 +1363,6 @@ export default function ArticleDetailPage() {
     .replace(/\s*\[\+\d+\s+chars\]\s*$/i, "")
     .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
-  console.log("SOURCE NAME:", compareArticle.source);
   const summaryItems = buildSummaryItems(
     compareArticle.title,
     rawDescription,
@@ -1375,6 +1398,21 @@ export default function ArticleDetailPage() {
         </div>
       ) : null}
 
+      {compareArticles.length > 1 ? (
+        <div className="compare-sources-top-row" aria-hidden="true">
+          <div className="compare-sources-dots">
+            {compareArticles.map((compareItem, index) => (
+              <span
+                key={compareItem.id}
+                className={`compare-sources-dot ${
+                  index === activeCompareIndex ? "compare-sources-dot-active" : ""
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <section
         className="section-card article-detail-hero compare-sources-shell"
         onTouchStart={handleCompareTouchStart}
@@ -1400,21 +1438,6 @@ export default function ArticleDetailPage() {
             Published: {formatPublishedTimestamp(article.publishedAt, article.time)}
           </p>
         </div>
-
-        {compareArticles.length > 1 ? (
-          <div className="compare-sources-meta">
-            <div className="compare-sources-dots" aria-hidden="true">
-              {compareArticles.map((compareItem, index) => (
-                <span
-                  key={compareItem.id}
-                  className={`compare-sources-dot ${
-                    index === activeCompareIndex ? "compare-sources-dot-active" : ""
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
 
         {article.image ? (
           <img
@@ -1479,7 +1502,7 @@ export default function ArticleDetailPage() {
         </div>
 
         <div className="article-detail-body">
-          <div className="article-detail-section">
+          <div className="article-detail-section article-summary-section">
             <p className="article-detail-label">Summary</p>
             <p className="article-summary-note">AI-assisted summary</p>
             <ul className="article-summary-list">
@@ -1492,19 +1515,6 @@ export default function ArticleDetailPage() {
           </div>
         </div>
       </section>
-
-      {article.url ? (
-        <div className="article-story-links">
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noreferrer"
-            className="button button-secondary article-original-button"
-          >
-            Original article
-          </a>
-        </div>
-      ) : null}
 
       <section
         ref={commentsSectionRef}
