@@ -26,8 +26,22 @@ const actionIconProps = {
   "aria-hidden": true,
 };
 
-function rankVideos(videos: VideoItem[]) {
+function rankVideos(
+  videos: VideoItem[],
+  options: { prioritizeRecency?: boolean } = {}
+) {
+  const { prioritizeRecency = false } = options;
+
   return [...videos].sort((a, b) => {
+    if (prioritizeRecency) {
+      const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+      const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+    }
+
     const popularityDifference =
       (b.views ?? 0) - (a.views ?? 0) ||
       b.likes - a.likes ||
@@ -45,6 +59,7 @@ function rankVideos(videos: VideoItem[]) {
 
 function filterVideosLocally(videos: VideoItem[], searchTerm: string, category: string) {
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const prioritizeRecency = category !== "Trending" || normalizedSearchTerm.length > 0;
 
   return rankVideos(
     videos.filter((video) => {
@@ -61,8 +76,9 @@ function filterVideosLocally(videos: VideoItem[], searchTerm: string, category: 
       }
 
       const haystack = `${video.title} ${video.creator} ${video.category}`.toLowerCase();
-      return haystack.includes(normalizedSearchTerm);
-    })
+        return haystack.includes(normalizedSearchTerm);
+    }),
+    { prioritizeRecency }
   );
 }
 
@@ -93,6 +109,8 @@ export default function VideosPage() {
 
     async function loadVideos() {
       const shouldBlockScreen = !hasLoadedOnceRef.current;
+      const prioritizeRecency =
+        selectedCategory !== "Trending" || debouncedSearchTerm.length > 0;
       setIsLoading(true);
 
       try {
@@ -115,7 +133,9 @@ export default function VideosPage() {
           message?: string;
         };
 
-        const normalizedVideos = rankVideos(normalizeVideoFeedItems(data.videos));
+        const normalizedVideos = rankVideos(normalizeVideoFeedItems(data.videos), {
+          prioritizeRecency,
+        });
 
         if (isDefaultFeed) {
           setBaseVideos(normalizedVideos);

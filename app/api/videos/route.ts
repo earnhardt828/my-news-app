@@ -3,6 +3,29 @@ type ApprovedChannel = {
   name: string;
 };
 
+const CATEGORY_SEARCH_TERMS: Record<string, string> = {
+  Politics: "politics news",
+  World: "world news",
+  Business: "business news",
+  Tech: "tech news",
+  Sports: "sports news",
+  Health: "health news",
+  Science: "science news",
+  Entertainment: "entertainment news",
+  Finance: "finance news",
+  Crime: "crime news",
+  Weather: "weather news",
+  Education: "education news",
+  "Real Estate": "real estate news",
+  "Local News": "local news",
+  Culture: "culture news",
+  Lifestyle: "lifestyle news",
+  Travel: "travel news",
+  Food: "food news",
+  Opinion: "opinion news",
+  "Breaking News": "breaking news",
+};
+
 type YouTubeSearchItem = {
   id?: {
     videoId?: string;
@@ -200,23 +223,33 @@ async function fetchRecentVideosForChannel(
   options: {
     searchTerm?: string;
     category?: string;
+    publishedAfter?: string;
+    order?: "date" | "viewCount";
   }
 ) {
   const url = new URL("https://www.googleapis.com/youtube/v3/search");
-  const searchQuery = [options.category, options.searchTerm]
-    .filter((value) => value && value !== "Trending")
+  const categorySearchTerm =
+    options.category && options.category !== "Trending"
+      ? CATEGORY_SEARCH_TERMS[options.category] ?? `${options.category} news`
+      : "";
+  const searchQuery = [options.searchTerm, categorySearchTerm]
+    .filter(Boolean)
     .join(" ")
     .trim();
 
   url.searchParams.set("part", "snippet");
   url.searchParams.set("channelId", channel.channelId);
-  url.searchParams.set("maxResults", searchQuery ? "6" : "4");
-  url.searchParams.set("order", searchQuery ? "viewCount" : "date");
+  url.searchParams.set("maxResults", searchQuery ? "8" : "4");
+  url.searchParams.set("order", options.order ?? "date");
   url.searchParams.set("type", "video");
   url.searchParams.set("key", apiKey);
 
   if (searchQuery) {
     url.searchParams.set("q", searchQuery);
+  }
+
+  if (options.publishedAfter) {
+    url.searchParams.set("publishedAfter", options.publishedAfter);
   }
 
   const response = await fetch(url.toString(), {
@@ -229,6 +262,21 @@ async function fetchRecentVideosForChannel(
 
   const data = (await response.json()) as { items?: YouTubeSearchItem[] };
   return data.items ?? [];
+}
+
+function getPublishedAfterIso(daysAgo: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toISOString();
+}
+
+function getVideoTimestamp(publishedAt: string | null | undefined) {
+  if (!publishedAt) {
+    return 0;
+  }
+
+  const timestamp = new Date(publishedAt).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 function inferVideoOrientation(
@@ -257,16 +305,29 @@ export async function GET(request: Request) {
   }
 
   try {
-    const searchResults = await Promise.all(
-      APPROVED_CHANNELS.map((channel) =>
-        fetchRecentVideosForChannel(channel, apiKey, {
-          searchTerm,
-          category,
-        })
-      )
-    );
+    const isTrendingFeed = category === "Trending" && searchTerm.length === 0;
+    const recencyWindows = isTrendingFeed ? [7] : [3, 7, 14];
+    let flattenedSearchResults: YouTubeSearchItem[] = [];
 
-    const flattenedSearchResults = searchResults.flat();
+    for (const windowDays of recencyWindows) {
+      const searchResults = await Promise.all(
+        APPROVED_CHANNELS.map((channel) =>
+          fetchRecentVideosForChannel(channel, apiKey, {
+            searchTerm,
+            category,
+            publishedAfter: getPublishedAfterIso(windowDays),
+            order: "date",
+          })
+        )
+      );
+
+      flattenedSearchResults = searchResults.flat();
+
+      if (flattenedSearchResults.length >= 10 || windowDays === 14) {
+        break;
+      }
+    }
+
     const videoIds = flattenedSearchResults
       .map((item) => item.id?.videoId)
       .filter((videoId): videoId is string => Boolean(videoId));
@@ -353,7 +414,25 @@ export async function GET(request: Request) {
         };
       })
       .filter((video): video is VideoFeedItem => video !== null)
+      .filter((video) => {
+        if (isTrendingFeed) {
+          return true;
+        }
+
+        const fourteenDaysAgo = getPublishedAfterIso(14);
+        const minimumTimestamp = new Date(fourteenDaysAgo).getTime();
+        return getVideoTimestamp(video.publishedAt) >= minimumTimestamp;
+      })
       .sort((a, b) => {
+        if (!isTrendingFeed) {
+          const recencyDifference =
+            getVideoTimestamp(b.publishedAt) - getVideoTimestamp(a.publishedAt);
+
+          if (recencyDifference !== 0) {
+            return recencyDifference;
+          }
+        }
+
         const popularityDifference =
           b.views - a.views || b.likes - a.likes || b.comments - a.comments;
 
@@ -361,9 +440,7 @@ export async function GET(request: Request) {
           return popularityDifference;
         }
 
-        const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-        const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-        return timeB - timeA;
+        return getVideoTimestamp(b.publishedAt) - getVideoTimestamp(a.publishedAt);
       });
 
     if (videos.length === 0) {
