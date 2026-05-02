@@ -105,6 +105,8 @@ const actionIconProps = {
   strokeLinejoin: "round" as const,
 };
 
+const COMPARE_SOURCES_TUTORIAL_KEY = "reflekt-compare-sources-tutorial-seen";
+
 function formatRelativeTime(timestamp: string | null) {
   if (!timestamp) {
     return "Just now";
@@ -390,7 +392,7 @@ export default function ArticleDetailPage() {
   const [showLessSources, setShowLessSources] = useState<string[]>([]);
   const [compareArticles, setCompareArticles] = useState<ArticleRecord[]>([]);
   const [activeCompareIndex, setActiveCompareIndex] = useState(0);
-  const [showComparePrompt, setShowComparePrompt] = useState(false);
+  const [showCompareTutorial, setShowCompareTutorial] = useState(false);
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
   const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
@@ -469,11 +471,19 @@ export default function ArticleDetailPage() {
         const nextCompareArticles = buildCompareArticles(targetArticle, newsData);
         setCompareArticles(nextCompareArticles);
         setActiveCompareIndex(0);
-        setShowComparePrompt(nextCompareArticles.length > 1);
+        if (
+          nextCompareArticles.length > 1 &&
+          typeof window !== "undefined" &&
+          window.localStorage.getItem(COMPARE_SOURCES_TUTORIAL_KEY) !== "true"
+        ) {
+          setShowCompareTutorial(true);
+        } else {
+          setShowCompareTutorial(false);
+        }
       } else {
         setCompareArticles([]);
         setActiveCompareIndex(0);
-        setShowComparePrompt(false);
+        setShowCompareTutorial(false);
       }
 
       const legacyArticleId = targetArticle
@@ -678,18 +688,21 @@ export default function ArticleDetailPage() {
   }, [activeCompareArticle?.source]);
 
   useEffect(() => {
-    if (!showComparePrompt) {
+    if (!showCompareTutorial) {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      setShowComparePrompt(false);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(COMPARE_SOURCES_TUTORIAL_KEY, "true");
+      }
+      setShowCompareTutorial(false);
     }, 2600);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [showComparePrompt]);
+  }, [showCompareTutorial]);
 
   const displayedComments = useMemo(
     () => sortComments(comments, commentSortMode),
@@ -1250,7 +1263,10 @@ export default function ArticleDetailPage() {
       return;
     }
 
-    setShowComparePrompt(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(COMPARE_SOURCES_TUTORIAL_KEY, "true");
+    }
+    setShowCompareTutorial(false);
     setActiveCompareIndex((current) => {
       if (direction === "left") {
         return Math.min(compareArticles.length - 1, current + 1);
@@ -1285,6 +1301,13 @@ export default function ArticleDetailPage() {
     }
 
     handleCompareSwipe(diffX < 0 ? "left" : "right");
+  };
+
+  const dismissCompareTutorial = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(COMPARE_SOURCES_TUTORIAL_KEY, "true");
+    }
+    setShowCompareTutorial(false);
   };
 
   if (isLoading) {
@@ -1324,6 +1347,33 @@ export default function ArticleDetailPage() {
 
   return (
     <section className="page-shell article-page-shell">
+      {showCompareTutorial ? (
+        <div
+          className="compare-sources-tutorial-backdrop"
+          role="button"
+          tabIndex={0}
+          aria-label="Dismiss compare sources tutorial"
+          onClick={dismissCompareTutorial}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              dismissCompareTutorial();
+            }
+          }}
+        >
+          <div className="compare-sources-tutorial-card">
+            <div className="compare-sources-tutorial-label">
+              Swipe to compare sources
+            </div>
+            <div className="compare-sources-tutorial-motion" aria-hidden="true">
+              <span className="compare-sources-tutorial-arrow">←</span>
+              <span className="compare-sources-tutorial-hand">☞</span>
+              <span className="compare-sources-tutorial-arrow">→</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <section
         className="section-card article-detail-hero compare-sources-shell"
         onTouchStart={handleCompareTouchStart}
@@ -1352,13 +1402,6 @@ export default function ArticleDetailPage() {
 
         {compareArticles.length > 1 ? (
           <div className="compare-sources-meta">
-            <div
-              className={`compare-sources-prompt ${
-                showComparePrompt ? "compare-sources-prompt-visible" : ""
-              }`}
-            >
-              Swipe to compare sources →
-            </div>
             <div className="compare-sources-dots" aria-hidden="true">
               {compareArticles.map((compareItem, index) => (
                 <span
