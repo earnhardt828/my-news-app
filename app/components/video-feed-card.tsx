@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import ShareButton from "./share-button";
 import SourceBadge from "./source-badge";
 import {
@@ -47,8 +48,45 @@ export default function VideoFeedCard({
   variant = "default",
 }: VideoFeedCardProps) {
   const isArticleVariant = variant === "article";
+  const [resolvedOrientation, setResolvedOrientation] = useState<
+    "vertical" | "horizontal"
+  >(video.orientation);
+
+  useEffect(() => {
+    if (
+      !isArticleVariant ||
+      video.fallback ||
+      !video.thumbnailUrl ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const probeImage = new window.Image();
+
+    probeImage.onload = () => {
+      if (probeImage.naturalHeight > probeImage.naturalWidth) {
+        setResolvedOrientation("vertical");
+        return;
+      }
+
+      setResolvedOrientation("horizontal");
+    };
+
+    probeImage.onerror = () => {
+      setResolvedOrientation(video.orientation);
+    };
+
+    probeImage.src = video.thumbnailUrl;
+
+    return () => {
+      probeImage.onload = null;
+      probeImage.onerror = null;
+    };
+  }, [isArticleVariant, video.fallback, video.orientation, video.thumbnailUrl]);
+
   const articleFrameClass =
-    video.orientation === "vertical"
+    resolvedOrientation === "vertical"
       ? "video-frame-article-vertical"
       : "video-frame-article-horizontal";
 
