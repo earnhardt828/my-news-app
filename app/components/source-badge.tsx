@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import { getSourceInitial, getSourceLogoUrl } from "../../lib/source-logos";
 
@@ -13,21 +12,20 @@ export default function SourceBadge({
   sourceName,
   className = "",
 }: SourceBadgeProps) {
-  const [failedSourceName, setFailedSourceName] = useState<string | null>(null);
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
   const logoUrl = getSourceLogoUrl(sourceName);
-  const showLogo = Boolean(logoUrl) && failedSourceName !== sourceName;
+  const showLogo = Boolean(logoUrl) && failedLogoUrl !== logoUrl;
 
   return (
     <span className={`source-avatar ${className}`.trim()} aria-hidden="true">
       {showLogo ? (
-        <Image
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
           src={logoUrl!}
           alt={`${sourceName} logo`}
-          width={34}
-          height={34}
           className="source-avatar-image"
-          unoptimized
-          onError={() => setFailedSourceName(sourceName)}
+          loading="lazy"
+          onError={() => setFailedLogoUrl(logoUrl)}
         />
       ) : (
         <span className="source-avatar-fallback">{getSourceInitial(sourceName)}</span>
