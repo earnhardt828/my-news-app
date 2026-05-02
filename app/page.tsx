@@ -1591,16 +1591,17 @@ export default function Home() {
                 {sortMode === "trending" &&
                 (index + 1) % 3 === 0 &&
                 videos.length > 0 ? (
-                  <VideoFeedCard
-                    video={videos[Math.floor((index + 1) / 3 - 1) % videos.length]}
-                    onToggleLike={handleToggleVideoLike}
-                    onToggleSave={handleToggleVideoSave}
-                    onOpenComments={setActiveCommentsVideoId}
-                    onOpenPlayer={setActiveVideoId}
-                    label="Video"
-                    className="video-card-inline"
-                  />
-                ) : null}
+                <VideoFeedCard
+                  video={videos[Math.floor((index + 1) / 3 - 1) % videos.length]}
+                  onToggleLike={handleToggleVideoLike}
+                  onToggleSave={handleToggleVideoSave}
+                  onOpenComments={setActiveCommentsVideoId}
+                  onOpenPlayer={setActiveVideoId}
+                  label="Video"
+                  className="video-card-inline"
+                  variant="article"
+                />
+              ) : null}
               </div>
             );
           })}
