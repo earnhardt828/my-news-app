@@ -145,7 +145,7 @@ export function buildVideoEmbedUrl(youtubeId: string, autoplay: boolean) {
   url.searchParams.set("autoplay", autoplay ? "1" : "0");
   url.searchParams.set("mute", "1");
   url.searchParams.set("playsinline", "1");
-  url.searchParams.set("controls", "1");
+  url.searchParams.set("controls", "0");
   url.searchParams.set("rel", "0");
   url.searchParams.set("modestbranding", "1");
   return url.toString();

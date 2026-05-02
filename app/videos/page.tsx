@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import LoadingScreen from "../components/loading-screen";
 import ShareButton from "../components/share-button";
+import SourceBadge from "../components/source-badge";
 import { VIDEO_CATEGORIES, getCategoryLabel } from "../../lib/categories";
 import {
   buildVideoEmbedUrl,
@@ -12,6 +13,18 @@ import {
   type VideoApiItem,
   type VideoItem,
 } from "../../lib/video-feed";
+
+const actionIconProps = {
+  width: 20,
+  height: 20,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.9,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
 
 function rankVideos(videos: VideoItem[]) {
   return [...videos].sort((a, b) => {
@@ -162,6 +175,36 @@ export default function VideosPage() {
   }, [isSearchOpen]);
 
   useEffect(() => {
+    const handleToggleVideoSearch = () => {
+      setIsSearchOpen((current) => {
+        if (current) {
+          setSearchTerm("");
+        }
+
+        return !current;
+      });
+    };
+
+    window.addEventListener("reflekt:toggle-video-search", handleToggleVideoSearch);
+
+    return () => {
+      window.removeEventListener("reflekt:toggle-video-search", handleToggleVideoSearch);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("reflekt:video-search-state", { detail: isSearchOpen })
+    );
+
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("reflekt:video-search-state", { detail: false })
+      );
+    };
+  }, [isSearchOpen]);
+
+  useEffect(() => {
     const playableVideos = videos.filter(
       (video) => !video.fallback && Boolean(video.youtubeId)
     );
@@ -263,41 +306,22 @@ export default function VideosPage() {
   return (
     <section className="reels-shell videos-page-shell">
       <div className="videos-toolbar">
-        <div className="videos-toolbar-row videos-toolbar-row-end">
-          {isSearchOpen ? (
-            <label className="search-input-shell videos-search-shell" htmlFor="videos-search-input">
-              <span className="search-input-icon" aria-hidden="true">
-                ⌕
-              </span>
-              <input
-                ref={searchInputRef}
-                id="videos-search-input"
-                className="search-input search-input-with-icon"
-                type="search"
-                placeholder="Search videos"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-              />
-            </label>
-          ) : null}
-
-          <button
-            type="button"
-            className="videos-search-toggle"
-            onClick={() =>
-              setIsSearchOpen((current) => {
-                if (current) {
-                  setSearchTerm("");
-                }
-
-                return !current;
-              })
-            }
-            aria-label={isSearchOpen ? "Close video search" : "Open video search"}
-          >
-            {isSearchOpen ? "✕" : "⌕"}
-          </button>
-        </div>
+        {isSearchOpen ? (
+          <label className="search-input-shell videos-search-shell" htmlFor="videos-search-input">
+            <span className="search-input-icon" aria-hidden="true">
+              ⌕
+            </span>
+            <input
+              ref={searchInputRef}
+              id="videos-search-input"
+              className="search-input search-input-with-icon"
+              type="search"
+              placeholder="Search videos"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
+        ) : null}
 
         <div className="videos-category-tabs" role="tablist" aria-label="Video categories">
           {VIDEO_CATEGORIES.map((category) => (
@@ -340,8 +364,19 @@ export default function VideosPage() {
                     videoFrameRefs.current[video.id] = node;
                   }}
                   data-video-id={video.id}
-                  className={`reel-media ${video.theme ?? "video-card-theme-rose"}`}
+                  className="reel-media"
                 >
+                  {video.thumbnailUrl ? (
+                    <Image
+                      src={video.thumbnailUrl}
+                      alt={video.title}
+                      fill
+                      sizes="100vw"
+                      className="reel-thumbnail"
+                      unoptimized
+                    />
+                  ) : null}
+
                   {isAutoplaying ? (
                     <iframe
                       src={buildVideoEmbedUrl(video.youtubeId, true)}
@@ -356,16 +391,6 @@ export default function VideosPage() {
                       onClick={() => setActiveVideoId(video.id)}
                       aria-label={`Play ${video.title}`}
                     >
-                      {video.thumbnailUrl ? (
-                        <Image
-                          src={video.thumbnailUrl}
-                          alt={video.title}
-                          fill
-                          sizes="100vw"
-                          className="reel-thumbnail"
-                          unoptimized
-                        />
-                      ) : null}
                       <div className="reel-play-overlay">
                         <span className="video-play-badge" aria-hidden="true">
                           ▶
@@ -377,7 +402,10 @@ export default function VideosPage() {
                   <div className="reel-gradient" />
 
                   <div className="reel-meta">
-                    <span className="reel-creator">{video.creator}</span>
+                    <div className="reel-source-row">
+                      <SourceBadge sourceName={video.creator} />
+                      <span className="reel-creator">{video.creator}</span>
+                    </div>
                     <h2 className="reel-title">{video.title}</h2>
                     {video.publishedAt ? (
                       <span className="reel-date">
@@ -398,8 +426,13 @@ export default function VideosPage() {
                       onClick={() => handleToggleLike(video.id)}
                       aria-label={video.liked ? "Unlike video" : "Like video"}
                     >
-                      <span className="reel-action-icon" aria-hidden="true">
-                        {video.liked ? "♥" : "♡"}
+                      <span className="reel-action-icon icon-action-glyph" aria-hidden="true">
+                        <svg {...actionIconProps}>
+                          <path
+                            d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                            fill={video.liked ? "currentColor" : "none"}
+                          />
+                        </svg>
                       </span>
                       <span className="reel-action-value">{video.likes}</span>
                     </button>
@@ -408,8 +441,10 @@ export default function VideosPage() {
                       onClick={() => setActiveCommentsVideoId(video.id)}
                       aria-label="Open video comments"
                     >
-                      <span className="reel-action-icon" aria-hidden="true">
-                        💬
+                      <span className="reel-action-icon icon-action-glyph" aria-hidden="true">
+                        <svg {...actionIconProps}>
+                          <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                        </svg>
                       </span>
                       <span className="reel-action-value">{video.comments}</span>
                     </button>
@@ -420,8 +455,13 @@ export default function VideosPage() {
                       onClick={() => handleToggleSave(video.id)}
                       aria-label={video.saved ? "Remove bookmark" : "Save video"}
                     >
-                      <span className="reel-action-icon" aria-hidden="true">
-                        {video.saved ? "🔖" : "📑"}
+                      <span className="reel-action-icon icon-action-glyph" aria-hidden="true">
+                        <svg {...actionIconProps}>
+                          <path
+                            d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                            fill={video.saved ? "currentColor" : "none"}
+                          />
+                        </svg>
                       </span>
                     </button>
                     <div className="reel-share-wrap">
@@ -432,6 +472,7 @@ export default function VideosPage() {
                           video.watchUrl ||
                           `https://my-news-app-omega-orpin.vercel.app/videos#video-${video.id}`
                         }
+                        iconOnly
                       />
                     </div>
                   </div>
