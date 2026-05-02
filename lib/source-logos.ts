@@ -1,11 +1,12 @@
-const SOURCE_LOGO_MAP: Record<string, string> = {
+export const sourceLogoMap: Record<string, string> = {
   CNN: "/source-logos/cnn.png",
   "BBC News": "/source-logos/bbc.png",
   "Fox News": "/source-logos/fox-news.png",
-  "AP News": "/source-logos/ap-news.png",
   "Associated Press": "/source-logos/ap-news.png",
+  "AP News": "/source-logos/ap-news.png",
   Reuters: "/source-logos/reuters.png",
   "The New York Times": "/source-logos/the-new-york-times.png",
+  "The Washington Post": "/source-logos/washington-post.png",
   "Washington Post": "/source-logos/washington-post.png",
   TMZ: "/source-logos/tmz.png",
   "NBC News": "/source-logos/nbc.png",
@@ -28,20 +29,18 @@ export function normalizeSourceLogoName(sourceName: string) {
   return sourceName
     .trim()
     .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
+    .replace(/\s+/g, "-");
 }
 
 export function getSourceLogoUrl(sourceName: string) {
-  const mappedLogo = SOURCE_LOGO_MAP[sourceName];
+  const trimmedSourceName = sourceName.trim();
+  const mappedLogo = sourceLogoMap[trimmedSourceName];
 
   if (mappedLogo) {
     return mappedLogo;
   }
 
-  const normalized = normalizeSourceLogoName(sourceName);
+  const normalized = normalizeSourceLogoName(trimmedSourceName);
 
   if (!normalized) {
     return null;
