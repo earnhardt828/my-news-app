@@ -109,12 +109,18 @@ function inferVideoCategory(title: string, creator: string, fallbackCategory?: s
 
   const haystack = `${title} ${creator}`.toLowerCase();
 
+  if (/(breaking|urgent|developing|live updates|alert)/.test(haystack)) {
+    return "Breaking News";
+  }
+
   if (/(election|senate|white house|policy|president|campaign|government|politic)/.test(haystack)) {
     return "Politics";
   }
 
   if (/(market|economy|stock|business|trade|jobs|finance|inflation)/.test(haystack)) {
-    return "Business";
+    return /(bank|wall street|invest|fund|earnings|interest rate|bond|nasdaq|dow)/.test(haystack)
+      ? "Finance"
+      : "Business";
   }
 
   if (/(world|global|international|ukraine|gaza|europe|asia|middle east|foreign)/.test(haystack)) {
@@ -139,6 +145,46 @@ function inferVideoCategory(title: string, creator: string, fallbackCategory?: s
 
   if (/(science|space|climate|nasa|research|study|physics)/.test(haystack)) {
     return "Science";
+  }
+
+  if (/(storm|forecast|temperature|hurricane|tornado|rain|snow|wildfire|weather)/.test(haystack)) {
+    return "Weather";
+  }
+
+  if (/(crime|police|court|arrest|trial|shooting|murder|suspect|lawsuit)/.test(haystack)) {
+    return "Crime";
+  }
+
+  if (/(school|student|teacher|college|university|education|campus)/.test(haystack)) {
+    return "Education";
+  }
+
+  if (/(housing|mortgage|home sales|property|real estate|rent)/.test(haystack)) {
+    return "Real Estate";
+  }
+
+  if (/(travel|airport|airline|vacation|tourism|hotel)/.test(haystack)) {
+    return "Travel";
+  }
+
+  if (/(food|restaurant|chef|recipe|dining)/.test(haystack)) {
+    return "Food";
+  }
+
+  if (/(culture|art|museum|book|festival)/.test(haystack)) {
+    return "Culture";
+  }
+
+  if (/(lifestyle|fashion|style|wellbeing|relationship)/.test(haystack)) {
+    return "Lifestyle";
+  }
+
+  if (/(opinion|analysis|editorial|column)/.test(haystack)) {
+    return "Opinion";
+  }
+
+  if (/(local|city hall|community|county|neighborhood|state fair)/.test(haystack)) {
+    return "Local News";
   }
 
   return "Trending";

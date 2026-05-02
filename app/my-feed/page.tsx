@@ -8,6 +8,7 @@ import SourcePreferenceSheet from "../components/source-preference-sheet";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ShareButton from "../components/share-button";
+import { getCategoryLabel } from "../../lib/categories";
 import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { supabase } from "../../lib/supabase";
@@ -270,7 +271,7 @@ export default function MyFeed() {
           <div className="category-grid">
             {categories.map((category) => (
               <span key={category} className="chip chip-accent">
-                {category}
+                {getCategoryLabel(category)}
               </span>
             ))}
           </div>
@@ -313,7 +314,7 @@ export default function MyFeed() {
 
                   <div className="news-card-header">
                     <div className="news-meta">
-                      <span className="chip chip-accent">{article.category}</span>
+                      <span className="chip chip-accent">{getCategoryLabel(article.category)}</span>
                       <span>{article.publishedAt ?? article.time}</span>
                     </div>
                   </div>

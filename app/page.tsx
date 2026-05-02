@@ -13,6 +13,7 @@ import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
+import { CATEGORY_OPTIONS, getCategoryLabel } from "../lib/categories";
 import {
   buildVideoEmbedUrl,
   initialVideos,
@@ -116,28 +117,6 @@ type DbCommentReply = {
   created_at: string | null;
 };
 
-const categoryLabels: Record<string, string> = {
-  Business: "Business 💼",
-  Tech: "Tech 💻",
-  Sports: "Sports 🏈",
-  Politics: "Politics 🏛️",
-  Health: "Health 🏥",
-  Science: "Science 🔬",
-  Entertainment: "Entertainment 🎬",
-  World: "World 🌍",
-};
-
-const CATEGORY_OPTIONS = [
-  "Business",
-  "Tech",
-  "Sports",
-  "Politics",
-  "Health",
-  "Science",
-  "Entertainment",
-  "World",
-];
-
 const actionIconProps = {
   width: 20,
   height: 20,
@@ -149,10 +128,6 @@ const actionIconProps = {
   strokeLinejoin: "round" as const,
   "aria-hidden": true,
 };
-
-function getCategoryLabel(category: string) {
-  return categoryLabels[category] ?? category;
-}
 
 function formatPublishedDate(publishedAt?: string | null, fallback?: string) {
   if (!publishedAt) {

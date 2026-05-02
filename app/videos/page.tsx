@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import LoadingScreen from "../components/loading-screen";
 import ShareButton from "../components/share-button";
+import { VIDEO_CATEGORIES, getCategoryLabel } from "../../lib/categories";
 import {
   buildVideoEmbedUrl,
   initialVideos,
@@ -11,18 +12,6 @@ import {
   type VideoApiItem,
   type VideoItem,
 } from "../../lib/video-feed";
-
-const VIDEO_CATEGORIES = [
-  "Trending",
-  "Politics",
-  "Business",
-  "World",
-  "Sports",
-  "Tech",
-  "Entertainment",
-  "Health",
-  "Science",
-] as const;
 
 function rankVideos(videos: VideoItem[]) {
   return [...videos].sort((a, b) => {
@@ -326,7 +315,7 @@ export default function VideosPage() {
                 setActiveCommentsVideoId(null);
               }}
             >
-              {category}
+              {category === "Trending" ? "Trending 📈" : getCategoryLabel(category)}
             </button>
           ))}
         </div>

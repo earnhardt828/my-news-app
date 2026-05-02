@@ -17,6 +17,7 @@ import {
   saveProfilePatch,
   type AppProfileRecord,
 } from "../../lib/profile-store";
+import { CATEGORY_OPTIONS, getCategoryLabel } from "../../lib/categories";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
@@ -51,17 +52,6 @@ type ProfileUserRef = {
   id: string;
   email?: string | null;
 };
-
-const CATEGORY_OPTIONS = [
-  "Business",
-  "Tech",
-  "Sports",
-  "Politics",
-  "Health",
-  "Science",
-  "Entertainment",
-  "World",
-];
 
 function formatRelativeTime(timestamp: string | null) {
   if (!timestamp) {
@@ -1088,7 +1078,7 @@ export default function Profile() {
                     onClick={() => void handleCategoryToggle(cat)}
                     disabled={isSavingCategories}
                   >
-                    {cat}
+                    {getCategoryLabel(cat)}
                   </button>
                 ))}
               </div>

@@ -1,3 +1,5 @@
+import { CATEGORY_OPTIONS } from "../../../lib/categories";
+
 type NewsApiArticle = {
   content?: string | null;
   description?: string | null;
@@ -9,17 +11,6 @@ type NewsApiArticle = {
     name: string;
   };
 };
-
-const CATEGORY_OPTIONS = [
-  "Business",
-  "Tech",
-  "Sports",
-  "Politics",
-  "Health",
-  "Science",
-  "Entertainment",
-  "World",
-];
 
 function hashArticleId(value: string) {
   let hash = 0;
