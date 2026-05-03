@@ -786,10 +786,16 @@ export default function Home() {
       return;
     }
 
+    const targetArticle = articles.find((article) => article.id === articleId);
+
     const { data, error } = await supabase
       .from("comments")
       .insert({
         article_id: articleId,
+        article_title: targetArticle?.title ?? null,
+        article_source: targetArticle?.source ?? null,
+        article_image: targetArticle?.image ?? null,
+        article_url: targetArticle?.url ?? null,
         text,
         user_id: userId,
         username,

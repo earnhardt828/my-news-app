@@ -10,12 +10,17 @@ type MyComment = {
   text: string;
   article_id: number;
   article_title: string;
+  article_source?: string | null;
+  article_image?: string | null;
+  article_url?: string | null;
   username: string | null;
   user_id: string | null;
   created_at: string | null;
   likes: number;
   dislikes: number;
 };
+
+type RawProfileComment = Omit<MyComment, "likes" | "dislikes">;
 
 function formatRelativeTime(timestamp: string | null) {
   if (!timestamp) {
@@ -120,7 +125,9 @@ export default function ProfileCommentsPage() {
       const [commentsRes, reactionsRes, newsRes] = await Promise.allSettled([
         supabase
           .from("comments")
-          .select("id, text, article_id, username, user_id, created_at")
+          .select(
+            "id, text, article_id, article_title, article_source, article_image, article_url, username, user_id, created_at"
+          )
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
         supabase.from("comment_reactions").select("comment_id, reaction_type"),
@@ -176,12 +183,12 @@ export default function ProfileCommentsPage() {
         newsArticles.map((article) => [article.id, article.title])
       );
 
-      const enrichedComments = (
-        commentsRes.value.data as Omit<MyComment, "article_title" | "likes" | "dislikes">[]
-      ).map((comment) => ({
+      const enrichedComments = ((commentsRes.value.data ?? []) as RawProfileComment[]).map((comment) => ({
         ...comment,
         article_title:
-          articleTitleLookup.get(comment.article_id) ?? `Article #${comment.article_id}`,
+          comment.article_title?.trim() ||
+          articleTitleLookup.get(comment.article_id) ||
+          `Article #${comment.article_id}`,
         likes: reactions.filter(
           (reaction) =>
             reaction.comment_id === comment.id && reaction.reaction_type === "like"

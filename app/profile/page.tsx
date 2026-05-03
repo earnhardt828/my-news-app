@@ -32,12 +32,17 @@ type MyComment = {
   text: string;
   article_id: number;
   article_title: string;
+  article_source?: string | null;
+  article_image?: string | null;
+  article_url?: string | null;
   username: string | null;
   user_id: string | null;
   created_at: string | null;
   likes: number;
   dislikes: number;
 };
+
+type RawProfileComment = Omit<MyComment, "likes" | "dislikes">;
 
 type SavedArticle = {
   id: number;
@@ -270,7 +275,9 @@ export default function Profile() {
     const [commentsRes, savedRes, reactionsRes, newsRes] = await Promise.allSettled([
       supabase
         .from("comments")
-        .select("id, text, article_id, username, user_id, created_at")
+        .select(
+          "id, text, article_id, article_title, article_source, article_image, article_url, username, user_id, created_at"
+        )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
       supabase
@@ -314,11 +321,12 @@ export default function Profile() {
       console.error("Error loading comment reactions:", reactionsRes.reason);
       setMyComments(
         ((commentsRes.value.data ?? []) as Omit<
-          MyComment,
-          "article_title" | "likes" | "dislikes"
+          RawProfileComment,
+          never
         >[]).map((comment) => ({
           ...comment,
-          article_title: `Article #${comment.article_id}`,
+          article_title:
+            comment.article_title?.trim() || `Article #${comment.article_id}`,
           likes: 0,
           dislikes: 0,
         }))
@@ -330,11 +338,12 @@ export default function Profile() {
       console.error("Error loading comment reactions:", reactionsRes.value.error);
       setMyComments(
         ((commentsRes.value.data ?? []) as Omit<
-          MyComment,
-          "article_title" | "likes" | "dislikes"
+          RawProfileComment,
+          never
         >[]).map((comment) => ({
           ...comment,
-          article_title: `Article #${comment.article_id}`,
+          article_title:
+            comment.article_title?.trim() || `Article #${comment.article_id}`,
           likes: 0,
           dislikes: 0,
         }))
@@ -361,13 +370,13 @@ export default function Profile() {
     );
     const reactions = reactionsRes.value.data ?? [];
 
-    const enrichedComments = ((
-      commentsRes.value.data ?? []
-    ) as Omit<MyComment, "article_title" | "likes" | "dislikes">[])
+    const enrichedComments = ((commentsRes.value.data ?? []) as RawProfileComment[])
       .map((comment) => ({
         ...comment,
         article_title:
-          articleTitleLookup.get(comment.article_id) ?? `Article #${comment.article_id}`,
+          comment.article_title?.trim() ||
+          articleTitleLookup.get(comment.article_id) ||
+          `Article #${comment.article_id}`,
         likes: reactions.filter(
           (reaction) =>
             reaction.comment_id === comment.id && reaction.reaction_type === "like"
