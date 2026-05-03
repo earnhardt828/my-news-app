@@ -1202,10 +1202,28 @@ export default function Profile() {
 
             <div className="stack">
               <section className="section-card stack">
-              <div>
-                <h3 className="profile-section-title">
-                  Bookmarked articles
-                </h3>
+              <div className="profile-section-row">
+                <h3 className="profile-section-title">Bookmarked Articles</h3>
+                <Link
+                  href="/profile/bookmarks"
+                  className="profile-section-icon-button"
+                  aria-label="Open bookmarked articles"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </Link>
               </div>
 
               {savedArticles.length === 0 ? (
@@ -1215,7 +1233,7 @@ export default function Profile() {
                 </div>
               ) : (
                 <div className="comment-list">
-                  {savedArticles.map((article) => (
+                  {savedArticles.slice(0, 3).map((article) => (
                     <Link
                       key={article.id}
                       href={`/article/${article.article_id}`}

@@ -24,6 +24,10 @@ function getPageTitle(pathname: string) {
     return "Favorite categories";
   }
 
+  if (pathname === "/profile/bookmarks") {
+    return "Bookmarked Articles";
+  }
+
   if (pathname === "/settings") {
     return "Settings";
   }
@@ -306,6 +310,32 @@ export default function AppHeader() {
         </button>
         <div className="app-header-article-source" aria-live="polite">
           Favorite categories
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (pathname === "/profile/bookmarks") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close bookmarks"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/profile");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          Bookmarked Articles
         </div>
         <span className="app-header-article-spacer" aria-hidden="true" />
       </div>
