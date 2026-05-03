@@ -68,6 +68,17 @@ type VideoFeedItem = {
   fallback: boolean;
 };
 
+type YouTubeApiErrorContext = {
+  endpoint: "search" | "videos";
+  status: number;
+  statusText: string;
+  responseBody: unknown;
+  channelName?: string;
+  searchTerm?: string;
+  category?: string;
+  publishedAfter?: string;
+};
+
 const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UC16niRr50-MSBwiO3YDb3RA", name: "BBC News" },
   { channelId: "UCupvZG-5ko_eiXAupbDfxWw", name: "CNN" },
@@ -128,6 +139,28 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
     fallback: true,
   },
 ];
+
+class YouTubeApiError extends Error {
+  context: YouTubeApiErrorContext;
+
+  constructor(message: string, context: YouTubeApiErrorContext) {
+    super(message);
+    this.name = "YouTubeApiError";
+    this.context = context;
+  }
+}
+
+async function readYouTubeErrorBody(response: Response) {
+  try {
+    return await response.clone().json();
+  } catch {
+    try {
+      return await response.clone().text();
+    } catch {
+      return null;
+    }
+  }
+}
 
 function inferVideoCategory(title: string, creator: string, fallbackCategory?: string | null) {
   if (fallbackCategory && fallbackCategory !== "Trending") {
@@ -257,7 +290,16 @@ async function fetchRecentVideosForChannel(
   });
 
   if (!response.ok) {
-    throw new Error(`YouTube search failed for ${channel.name}`);
+    throw new YouTubeApiError(`YouTube search failed for ${channel.name}`, {
+      endpoint: "search",
+      status: response.status,
+      statusText: response.statusText,
+      responseBody: await readYouTubeErrorBody(response),
+      channelName: channel.name,
+      searchTerm: options.searchTerm,
+      category: options.category,
+      publishedAfter: options.publishedAfter,
+    });
   }
 
   const data = (await response.json()) as { items?: YouTubeSearchItem[] };
@@ -350,7 +392,14 @@ export async function GET(request: Request) {
     });
 
     if (!statsResponse.ok) {
-      throw new Error("YouTube video statistics request failed.");
+      throw new YouTubeApiError("YouTube video statistics request failed.", {
+        endpoint: "videos",
+        status: statsResponse.status,
+        statusText: statsResponse.statusText,
+        responseBody: await readYouTubeErrorBody(statsResponse),
+        searchTerm,
+        category,
+      });
     }
 
     const statsData = (await statsResponse.json()) as {
@@ -453,7 +502,14 @@ export async function GET(request: Request) {
 
     return Response.json({ videos, fallback: false });
   } catch (error) {
-    console.error("Error loading YouTube news videos:", error);
+    if (error instanceof YouTubeApiError) {
+      console.error("YouTube API error:", {
+        message: error.message,
+        ...error.context,
+      });
+    } else {
+      console.error("Error loading YouTube news videos:", error);
+    }
 
     return Response.json({
       videos: FALLBACK_VIDEOS,
