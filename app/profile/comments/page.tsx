@@ -246,18 +246,25 @@ export default function ProfileCommentsPage() {
           .map((article) => [article.url.trim(), article.title])
       );
 
-      const enrichedComments = ((commentsRes.value.data ?? []) as RawProfileComment[]).map((comment) => ({
-        ...comment,
-        article_title: resolveCommentArticleTitle(
-          comment,
-          articleTitleLookup,
-          articleUrlLookup
-        ),
-        hearts: reactions.filter(
-          (reaction) =>
-            reaction.comment_id === comment.id && reaction.reaction_type === "like"
-        ).length,
-      }));
+      const enrichedComments = ((commentsRes.value.data ?? []) as RawProfileComment[]).map((comment) => {
+        console.log("PROFILE COMMENT:", comment);
+
+        // Older comments created before article metadata was stored can only be
+        // backfilled when the current /api/news payload still contains a
+        // matching article id or URL.
+        return {
+          ...comment,
+          article_title: resolveCommentArticleTitle(
+            comment,
+            articleTitleLookup,
+            articleUrlLookup
+          ),
+          hearts: reactions.filter(
+            (reaction) =>
+              reaction.comment_id === comment.id && reaction.reaction_type === "like"
+          ).length,
+        };
+      });
 
       setComments(enrichedComments);
       setMessage("");

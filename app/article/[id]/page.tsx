@@ -1103,16 +1103,21 @@ export default function ArticleDetailPage() {
       return;
     }
 
-    const targetArticle = compareArticle ?? article;
+    const currentCommentArticle = compareArticle ?? article;
+    const currentCommentArticleImage =
+      currentCommentArticle?.image ??
+      (("urlToImage" in (currentCommentArticle ?? {})
+        ? (currentCommentArticle as { urlToImage?: string | null }).urlToImage
+        : null) ?? null);
 
     let insertResponse = await supabase
       .from("comments")
       .insert({
         article_id: articleId,
-        article_title: targetArticle?.title ?? null,
-        article_source: targetArticle?.source ?? null,
-        article_image: targetArticle?.image ?? null,
-        article_url: targetArticle?.url ?? null,
+        article_title: currentCommentArticle?.title ?? null,
+        article_source: currentCommentArticle?.source ?? null,
+        article_image: currentCommentArticleImage,
+        article_url: currentCommentArticle?.url ?? null,
         text,
         user_id: userId,
         username,
