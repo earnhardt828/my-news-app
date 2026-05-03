@@ -20,7 +20,31 @@ type MyComment = {
   dislikes: number;
 };
 
-type RawProfileComment = Omit<MyComment, "likes" | "dislikes">;
+type RawProfileComment = Omit<MyComment, "likes" | "dislikes" | "article_title"> & {
+  article_title?: string | null;
+};
+
+function isMissingCommentMetadataColumnError(message: string | null | undefined) {
+  if (!message) {
+    return false;
+  }
+
+  return /article_title|article_source|article_image|article_url/i.test(message);
+}
+
+function resolveCommentArticleTitle(
+  comment: {
+    article_id: number;
+    article_title?: string | null;
+  },
+  articleTitleLookup: Map<number, string>
+) {
+  return (
+    comment.article_title?.trim() ||
+    articleTitleLookup.get(comment.article_id) ||
+    "Article unavailable"
+  );
+}
 
 function formatRelativeTime(timestamp: string | null) {
   if (!timestamp) {
@@ -123,13 +147,36 @@ export default function ProfileCommentsPage() {
       }
 
       const [commentsRes, reactionsRes, newsRes] = await Promise.allSettled([
-        supabase
-          .from("comments")
-          .select(
-            "id, text, article_id, article_title, article_source, article_image, article_url, username, user_id, created_at"
-          )
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
+        (async () => {
+          let response: {
+            data: RawProfileComment[] | null;
+            error: { message?: string | null } | null;
+          } = await supabase
+            .from("comments")
+            .select(
+              "id, text, article_id, article_title, article_source, article_image, article_url, username, user_id, created_at"
+            )
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+
+          if (
+            response.error &&
+            isMissingCommentMetadataColumnError(response.error.message)
+          ) {
+            console.error(
+              "Profile comments metadata columns are missing, retrying with base columns:",
+              response.error
+            );
+
+            response = await supabase
+              .from("comments")
+              .select("id, text, article_id, username, user_id, created_at")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false });
+          }
+
+          return response;
+        })(),
         supabase.from("comment_reactions").select("comment_id, reaction_type"),
         fetch("/api/news"),
       ]);
@@ -185,10 +232,7 @@ export default function ProfileCommentsPage() {
 
       const enrichedComments = ((commentsRes.value.data ?? []) as RawProfileComment[]).map((comment) => ({
         ...comment,
-        article_title:
-          comment.article_title?.trim() ||
-          articleTitleLookup.get(comment.article_id) ||
-          `Article #${comment.article_id}`,
+        article_title: resolveCommentArticleTitle(comment, articleTitleLookup),
         likes: reactions.filter(
           (reaction) =>
             reaction.comment_id === comment.id && reaction.reaction_type === "like"

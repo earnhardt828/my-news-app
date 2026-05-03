@@ -7,6 +7,7 @@ import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShareButton from "./components/share-button";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
@@ -251,6 +252,7 @@ function formatFreshnessTime(
 }
 
 export default function Home() {
+  const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<"trending" | "my-feed" | "latest">(
@@ -1687,12 +1689,9 @@ export default function Home() {
                     <button
                       className="icon-action-pill"
                       onClick={() => {
-                        setActiveCommentsArticleId(article.id);
-                        setCommentSortMode("top");
-                        setIsCommentSortMenuOpen(false);
-                        setReplyTarget(null);
+                        router.push(`/article/${article.id}#comments`);
                       }}
-                      aria-label="Open comments"
+                      aria-label="Open article comments"
                     >
                       <span className="icon-action-glyph" aria-hidden="true">
                         <svg {...actionIconProps}>

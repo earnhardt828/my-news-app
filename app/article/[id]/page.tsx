@@ -690,11 +690,23 @@ export default function ArticleDetailPage() {
 
     const hash = window.location.hash;
 
-    if (!hash.startsWith("#comment-")) {
-      return;
-    }
-
     window.requestAnimationFrame(() => {
+      if (hash === "#comments") {
+        commentsSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+
+        window.setTimeout(() => {
+          commentInputRef.current?.focus();
+        }, 220);
+        return;
+      }
+
+      if (!hash.startsWith("#comment-")) {
+        return;
+      }
+
       const target = document.querySelector(hash);
 
       if (target instanceof HTMLElement) {
@@ -1544,6 +1556,7 @@ export default function ArticleDetailPage() {
 
       <section
         ref={commentsSectionRef}
+        id="comments"
         className="section-card article-comments-inline"
         aria-label="Comments"
       >
