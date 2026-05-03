@@ -124,6 +124,14 @@ type DbSourceRating = {
   rating: "like" | "dislike";
 };
 
+function isMissingCommentMetadataColumnError(message: string | null | undefined) {
+  if (!message) {
+    return false;
+  }
+
+  return /article_title|article_source|article_image|article_url/i.test(message);
+}
+
 const actionIconProps = {
   width: 20,
   height: 20,
@@ -272,6 +280,10 @@ export default function Home() {
   const [activeCommentsArticleId, setActiveCommentsArticleId] = useState<number | null>(
     null
   );
+  const [commentComposerStatus, setCommentComposerStatus] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [commentSortMode, setCommentSortMode] = useState<
     "top" | "controversial" | "newest"
   >("top");
@@ -686,6 +698,7 @@ export default function Home() {
   };
 
   const handleCommentInputChange = (articleId: number, value: string) => {
+    setCommentComposerStatus(null);
     setCommentInputs((prev) => ({
       ...prev,
       [articleId]: value,
@@ -695,20 +708,35 @@ export default function Home() {
   const handleAddComment = async (articleId: number) => {
     const text = commentInputs[articleId]?.trim();
 
-    if (!text) return;
+    if (!text) {
+      setCommentComposerStatus({
+        type: "error",
+        text: "Write a comment before sending.",
+      });
+      return;
+    }
 
     if (!userId) {
-      alert("Log in to comment");
+      setCommentComposerStatus({
+        type: "error",
+        text: "Log in to comment.",
+      });
       return;
     }
 
     if (!username) {
-      alert("Set a username on your Profile page first");
+      setCommentComposerStatus({
+        type: "error",
+        text: "Set a username on your Profile page first.",
+      });
       return;
     }
 
     if (!isCommentAllowed(text)) {
-      alert("Please edit your comment before posting.");
+      setCommentComposerStatus({
+        type: "error",
+        text: "Please edit your comment before posting.",
+      });
       return;
     }
 
@@ -718,7 +746,10 @@ export default function Home() {
         ?.comments.find((comment) => comment.id === replyTarget.commentId);
 
       if (!parentComment) {
-        alert("That comment is no longer available.");
+        setCommentComposerStatus({
+          type: "error",
+          text: "That comment is no longer available.",
+        });
         setReplyTarget(null);
         return;
       }
@@ -737,6 +768,10 @@ export default function Home() {
 
       if (error) {
         console.error("Error saving reply:", error);
+        setCommentComposerStatus({
+          type: "error",
+          text: error.message ?? "Could not save reply.",
+        });
         return;
       }
 
@@ -783,28 +818,58 @@ export default function Home() {
         [articleId]: "",
       }));
       setReplyTarget(null);
+      setCommentComposerStatus(null);
       return;
     }
 
     const targetArticle = articles.find((article) => article.id === articleId);
 
-    const { data, error } = await supabase
+    const fullCommentPayload = {
+      article_id: articleId,
+      article_title: targetArticle?.title ?? null,
+      article_source: targetArticle?.source ?? null,
+      article_image: targetArticle?.image ?? null,
+      article_url: targetArticle?.url ?? null,
+      text,
+      user_id: userId,
+      username,
+    };
+
+    let insertResponse = await supabase
       .from("comments")
-      .insert({
-        article_id: articleId,
-        article_title: targetArticle?.title ?? null,
-        article_source: targetArticle?.source ?? null,
-        article_image: targetArticle?.image ?? null,
-        article_url: targetArticle?.url ?? null,
-        text,
-        user_id: userId,
-        username,
-      })
+      .insert(fullCommentPayload)
       .select()
       .single();
 
+    if (
+      insertResponse.error &&
+      isMissingCommentMetadataColumnError(insertResponse.error.message)
+    ) {
+      console.error(
+        "Comment insert failed with article metadata payload, retrying without optional columns:",
+        insertResponse.error
+      );
+
+      insertResponse = await supabase
+        .from("comments")
+        .insert({
+          article_id: articleId,
+          text,
+          user_id: userId,
+          username,
+        })
+        .select()
+        .single();
+    }
+
+    const { data, error } = insertResponse;
+
     if (error) {
       console.error("Error saving comment:", error);
+      setCommentComposerStatus({
+        type: "error",
+        text: error.message ?? "Could not save comment.",
+      });
       return;
     }
 
@@ -837,6 +902,8 @@ export default function Home() {
       ...prev,
       [articleId]: "",
     }));
+    setReplyTarget(null);
+    setCommentComposerStatus(null);
   };
 
   const handleDeleteComment = async (articleId: number, commentId: number) => {
@@ -2087,6 +2154,17 @@ export default function Home() {
                     : "Send"}
                 </button>
               </div>
+              {commentComposerStatus ? (
+                <div
+                  className={`status-message ${
+                    commentComposerStatus.type === "success"
+                      ? "status-success"
+                      : "status-error"
+                  }`}
+                >
+                  {commentComposerStatus.text}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
