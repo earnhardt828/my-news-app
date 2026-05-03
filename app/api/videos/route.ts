@@ -3,52 +3,14 @@ type ApprovedChannel = {
   name: string;
 };
 
-const CATEGORY_SEARCH_TERMS: Record<string, string> = {
-  Politics: "politics news",
-  World: "world news",
-  Business: "business news",
-  Tech: "tech news",
-  Sports: "sports news",
-  Health: "health news",
-  Science: "science news",
-  Entertainment: "entertainment news",
-  Finance: "finance news",
-  Crime: "crime news",
-  Weather: "weather news",
-  Education: "education news",
-  "Real Estate": "real estate news",
-  "Local News": "local news",
-  Culture: "culture news",
-  Lifestyle: "lifestyle news",
-  Travel: "travel news",
-  Food: "food news",
-  Opinion: "opinion news",
-  "Breaking News": "breaking news",
-};
-
-type YouTubeSearchItem = {
-  id?: {
-    videoId?: string;
-  };
-  snippet?: {
-    title?: string;
-    channelTitle?: string;
-    publishedAt?: string;
-    thumbnails?: {
-      high?: { url?: string; width?: number; height?: number };
-      medium?: { url?: string; width?: number; height?: number };
-      default?: { url?: string; width?: number; height?: number };
-    };
-  };
-};
-
-type YouTubeVideosItem = {
-  id?: string;
-  statistics?: {
-    viewCount?: string;
-    likeCount?: string;
-    commentCount?: string;
-  };
+type RssFeedEntry = {
+  videoId: string;
+  title: string;
+  creator: string;
+  publishedAt: string | null;
+  thumbnailUrl: string | null;
+  thumbnailWidth: number | null;
+  thumbnailHeight: number | null;
 };
 
 type VideoFeedItem = {
@@ -66,17 +28,6 @@ type VideoFeedItem = {
   watchUrl: string;
   embedUrl: string;
   fallback: boolean;
-};
-
-type YouTubeApiErrorContext = {
-  endpoint: "search" | "videos";
-  status: number;
-  statusText: string;
-  responseBody: unknown;
-  channelName?: string;
-  searchTerm?: string;
-  category?: string;
-  publishedAfter?: string;
 };
 
 const APPROVED_CHANNELS: ApprovedChannel[] = [
@@ -140,26 +91,46 @@ const FALLBACK_VIDEOS: VideoFeedItem[] = [
   },
 ];
 
-class YouTubeApiError extends Error {
-  context: YouTubeApiErrorContext;
-
-  constructor(message: string, context: YouTubeApiErrorContext) {
-    super(message);
-    this.name = "YouTubeApiError";
-    this.context = context;
-  }
+function decodeXmlEntities(value: string) {
+  return value
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) =>
+      String.fromCharCode(Number.parseInt(code, 16))
+    )
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 }
 
-async function readYouTubeErrorBody(response: Response) {
-  try {
-    return await response.clone().json();
-  } catch {
-    try {
-      return await response.clone().text();
-    } catch {
-      return null;
-    }
+function extractXmlTag(block: string, tagName: string) {
+  const pattern = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i");
+  const match = block.match(pattern);
+  return match ? decodeXmlEntities(match[1].trim()) : null;
+}
+
+function extractThumbnail(block: string) {
+  const match = block.match(/<media:thumbnail\b([^>]*)\/?>/i);
+
+  if (!match) {
+    return {
+      thumbnailUrl: null,
+      thumbnailWidth: null,
+      thumbnailHeight: null,
+    };
   }
+
+  const attrs = match[1];
+  const url = attrs.match(/\burl="([^"]+)"/i)?.[1] ?? null;
+  const width = attrs.match(/\bwidth="(\d+)"/i)?.[1] ?? null;
+  const height = attrs.match(/\bheight="(\d+)"/i)?.[1] ?? null;
+
+  return {
+    thumbnailUrl: url,
+    thumbnailWidth: width ? Number(width) : null,
+    thumbnailHeight: height ? Number(height) : null,
+  };
 }
 
 function inferVideoCategory(title: string, creator: string, fallbackCategory?: string | null) {
@@ -250,66 +221,12 @@ function inferVideoCategory(title: string, creator: string, fallbackCategory?: s
   return "Trending";
 }
 
-async function fetchRecentVideosForChannel(
-  channel: ApprovedChannel,
-  apiKey: string,
-  options: {
-    searchTerm?: string;
-    category?: string;
-    publishedAfter?: string;
-    order?: "date" | "viewCount";
-  }
-) {
-  const url = new URL("https://www.googleapis.com/youtube/v3/search");
-  const categorySearchTerm =
-    options.category && options.category !== "Trending"
-      ? CATEGORY_SEARCH_TERMS[options.category] ?? `${options.category} news`
-      : "";
-  const searchQuery = [options.searchTerm, categorySearchTerm]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  url.searchParams.set("part", "snippet");
-  url.searchParams.set("channelId", channel.channelId);
-  url.searchParams.set("maxResults", searchQuery ? "8" : "4");
-  url.searchParams.set("order", options.order ?? "date");
-  url.searchParams.set("type", "video");
-  url.searchParams.set("key", apiKey);
-
-  if (searchQuery) {
-    url.searchParams.set("q", searchQuery);
+function inferVideoOrientation(width?: number | null, height?: number | null) {
+  if (width && height) {
+    return height > width ? "vertical" : "horizontal";
   }
 
-  if (options.publishedAfter) {
-    url.searchParams.set("publishedAfter", options.publishedAfter);
-  }
-
-  const response = await fetch(url.toString(), {
-    next: { revalidate: 900 },
-  });
-
-  if (!response.ok) {
-    throw new YouTubeApiError(`YouTube search failed for ${channel.name}`, {
-      endpoint: "search",
-      status: response.status,
-      statusText: response.statusText,
-      responseBody: await readYouTubeErrorBody(response),
-      channelName: channel.name,
-      searchTerm: options.searchTerm,
-      category: options.category,
-      publishedAfter: options.publishedAfter,
-    });
-  }
-
-  const data = (await response.json()) as { items?: YouTubeSearchItem[] };
-  return data.items ?? [];
-}
-
-function getPublishedAfterIso(daysAgo: number) {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() - daysAgo);
-  return date.toISOString();
+  return "horizontal";
 }
 
 function getVideoTimestamp(publishedAt: string | null | undefined) {
@@ -321,200 +238,199 @@ function getVideoTimestamp(publishedAt: string | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function inferVideoOrientation(
-  width?: number | null,
-  height?: number | null
-) {
-  if (width && height) {
-    return height > width ? "vertical" : "horizontal";
+function getPublishedAfterIso(daysAgo: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toISOString();
+}
+
+function normalizeForSearch(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function buildRssFeedUrl(channelId: string) {
+  return `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+}
+
+async function fetchVideosForChannel(channel: ApprovedChannel) {
+  const response = await fetch(buildRssFeedUrl(channel.channelId), {
+    next: { revalidate: 900 },
+  });
+
+  if (!response.ok) {
+    throw new Error(`RSS feed request failed for ${channel.name} (${response.status})`);
   }
 
-  return "horizontal";
+  const xml = await response.text();
+  const entryBlocks = xml.match(/<entry\b[\s\S]*?<\/entry>/gi) ?? [];
+
+  return entryBlocks
+    .map((entry): RssFeedEntry | null => {
+      const videoId = extractXmlTag(entry, "yt:videoId");
+      const title = extractXmlTag(entry, "title");
+      const creator = extractXmlTag(entry, "name") ?? channel.name;
+      const publishedAt = extractXmlTag(entry, "published");
+      const { thumbnailUrl, thumbnailWidth, thumbnailHeight } = extractThumbnail(entry);
+
+      if (!videoId || !title) {
+        return null;
+      }
+
+      return {
+        videoId,
+        title,
+        creator,
+        publishedAt,
+        thumbnailUrl,
+        thumbnailWidth,
+        thumbnailHeight,
+      };
+    })
+    .filter((entry): entry is RssFeedEntry => entry !== null);
+}
+
+function filterAndSortVideos(
+  entries: RssFeedEntry[],
+  options: {
+    category: string;
+    searchTerm: string;
+  }
+) {
+  const normalizedSearch = normalizeForSearch(options.searchTerm);
+  const isTrendingFeed = options.category === "Trending" && normalizedSearch.length === 0;
+
+  const mappedVideos = entries.map((entry) => {
+    const inferredCategory = inferVideoCategory(
+      entry.title,
+      entry.creator,
+      options.category
+    );
+
+    return {
+      id: entry.videoId,
+      youtubeId: entry.videoId,
+      title: entry.title,
+      creator: entry.creator,
+      category: inferredCategory,
+      orientation: inferVideoOrientation(
+        entry.thumbnailWidth,
+        entry.thumbnailHeight
+      ),
+      views: 0,
+      likes: 0,
+      comments: 0,
+      thumbnailUrl: entry.thumbnailUrl,
+      publishedAt: entry.publishedAt,
+      watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${entry.videoId}?autoplay=1`,
+      fallback: false,
+    } satisfies VideoFeedItem;
+  });
+
+  const searchFiltered = normalizedSearch
+    ? mappedVideos.filter((video) => {
+        const haystack = normalizeForSearch(
+          `${video.title} ${video.creator} ${video.category}`
+        );
+        return haystack.includes(normalizedSearch);
+      })
+    : mappedVideos;
+
+  const categoryFiltered =
+    options.category !== "Trending"
+      ? searchFiltered.filter((video) => video.category === options.category)
+      : searchFiltered;
+
+  const deduped = Array.from(
+    new Map(categoryFiltered.map((video) => [video.youtubeId, video])).values()
+  );
+
+  deduped.sort((a, b) => getVideoTimestamp(b.publishedAt) - getVideoTimestamp(a.publishedAt));
+
+  if (isTrendingFeed) {
+    return deduped;
+  }
+
+  const sevenDayCutoff = new Date(getPublishedAfterIso(7)).getTime();
+  const fourteenDayCutoff = new Date(getPublishedAfterIso(14)).getTime();
+  const withinSevenDays = deduped.filter(
+    (video) => getVideoTimestamp(video.publishedAt) >= sevenDayCutoff
+  );
+
+  if (withinSevenDays.length >= 6) {
+    return withinSevenDays;
+  }
+
+  const withinFourteenDays = deduped.filter(
+    (video) => getVideoTimestamp(video.publishedAt) >= fourteenDayCutoff
+  );
+
+  return withinFourteenDays;
 }
 
 export async function GET(request: Request) {
-  const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
   const requestUrl = new URL(request.url);
   const searchTerm = requestUrl.searchParams.get("q")?.trim() ?? "";
   const category = requestUrl.searchParams.get("category")?.trim() ?? "Trending";
 
-  if (!apiKey) {
-    return Response.json({
-      videos: FALLBACK_VIDEOS,
-      fallback: true,
-      message: "Set NEXT_PUBLIC_YOUTUBE_API_KEY to load real news videos.",
-    });
-  }
-
   try {
-    const isTrendingFeed = category === "Trending" && searchTerm.length === 0;
-    const recencyWindows = isTrendingFeed ? [7] : [3, 7, 14];
-    let flattenedSearchResults: YouTubeSearchItem[] = [];
+    const results = await Promise.allSettled(
+      APPROVED_CHANNELS.map((channel) => fetchVideosForChannel(channel))
+    );
 
-    for (const windowDays of recencyWindows) {
-      const searchResults = await Promise.all(
-        APPROVED_CHANNELS.map((channel) =>
-          fetchRecentVideosForChannel(channel, apiKey, {
-            searchTerm,
-            category,
-            publishedAfter: getPublishedAfterIso(windowDays),
-            order: "date",
-          })
-        )
-      );
+    const successfulEntries = results.flatMap((result) =>
+      result.status === "fulfilled" ? result.value : []
+    );
+    const failedFeeds = results
+      .map((result, index) =>
+        result.status === "rejected"
+          ? {
+              channel: APPROVED_CHANNELS[index]?.name ?? "Unknown channel",
+              error:
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : String(result.reason),
+            }
+          : null
+      )
+      .filter((entry): entry is { channel: string; error: string } => entry !== null);
 
-      flattenedSearchResults = searchResults.flat();
-
-      if (flattenedSearchResults.length >= 10 || windowDays === 14) {
-        break;
-      }
+    if (failedFeeds.length > 0) {
+      console.error("YouTube RSS feed failures:", failedFeeds);
     }
 
-    const videoIds = flattenedSearchResults
-      .map((item) => item.id?.videoId)
-      .filter((videoId): videoId is string => Boolean(videoId));
-
-    if (videoIds.length === 0) {
+    if (successfulEntries.length === 0) {
       return Response.json({
         videos: FALLBACK_VIDEOS,
         fallback: true,
-        message: "No recent videos were returned by YouTube.",
+        message: "Falling back to placeholder videos because the YouTube RSS feeds failed.",
       });
     }
 
-    const statsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
-    statsUrl.searchParams.set("part", "statistics");
-    statsUrl.searchParams.set("id", videoIds.join(","));
-    statsUrl.searchParams.set("key", apiKey);
-
-    const statsResponse = await fetch(statsUrl.toString(), {
-      next: { revalidate: 900 },
+    const videos = filterAndSortVideos(successfulEntries, {
+      category,
+      searchTerm,
     });
-
-    if (!statsResponse.ok) {
-      throw new YouTubeApiError("YouTube video statistics request failed.", {
-        endpoint: "videos",
-        status: statsResponse.status,
-        statusText: statsResponse.statusText,
-        responseBody: await readYouTubeErrorBody(statsResponse),
-        searchTerm,
-        category,
-      });
-    }
-
-    const statsData = (await statsResponse.json()) as {
-      items?: YouTubeVideosItem[];
-    };
-    const statsLookup = new Map(
-      (statsData.items ?? []).map((item) => [
-        item.id,
-        {
-          views: Number(item.statistics?.viewCount ?? "0"),
-          likes: Number(item.statistics?.likeCount ?? "0"),
-          comments: Number(item.statistics?.commentCount ?? "0"),
-        },
-      ])
-    );
-
-    const videos = flattenedSearchResults
-      .map((item): VideoFeedItem | null => {
-        const youtubeId = item.id?.videoId;
-
-        if (!youtubeId) {
-          return null;
-        }
-
-        const stats = statsLookup.get(youtubeId);
-        const thumbnailUrl =
-          item.snippet?.thumbnails?.high?.url ??
-          item.snippet?.thumbnails?.medium?.url ??
-          item.snippet?.thumbnails?.default?.url ??
-          null;
-        const thumbnailWidth =
-          item.snippet?.thumbnails?.high?.width ??
-          item.snippet?.thumbnails?.medium?.width ??
-          item.snippet?.thumbnails?.default?.width ??
-          null;
-        const thumbnailHeight =
-          item.snippet?.thumbnails?.high?.height ??
-          item.snippet?.thumbnails?.medium?.height ??
-          item.snippet?.thumbnails?.default?.height ??
-          null;
-
-        return {
-          id: youtubeId,
-          youtubeId,
-          title: item.snippet?.title ?? "Untitled video",
-          creator: item.snippet?.channelTitle ?? "Trusted News Source",
-          category: inferVideoCategory(
-            item.snippet?.title ?? "",
-            item.snippet?.channelTitle ?? "",
-            category
-          ),
-          orientation: inferVideoOrientation(thumbnailWidth, thumbnailHeight),
-          views: stats?.views ?? 0,
-          likes: stats?.likes ?? 0,
-          comments: stats?.comments ?? 0,
-          thumbnailUrl,
-          publishedAt: item.snippet?.publishedAt ?? null,
-          watchUrl: `https://www.youtube.com/watch?v=${youtubeId}`,
-          embedUrl: `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1`,
-          fallback: false,
-        };
-      })
-      .filter((video): video is VideoFeedItem => video !== null)
-      .filter((video) => {
-        if (isTrendingFeed) {
-          return true;
-        }
-
-        const fourteenDaysAgo = getPublishedAfterIso(14);
-        const minimumTimestamp = new Date(fourteenDaysAgo).getTime();
-        return getVideoTimestamp(video.publishedAt) >= minimumTimestamp;
-      })
-      .sort((a, b) => {
-        if (!isTrendingFeed) {
-          const recencyDifference =
-            getVideoTimestamp(b.publishedAt) - getVideoTimestamp(a.publishedAt);
-
-          if (recencyDifference !== 0) {
-            return recencyDifference;
-          }
-        }
-
-        const popularityDifference =
-          b.views - a.views || b.likes - a.likes || b.comments - a.comments;
-
-        if (popularityDifference !== 0) {
-          return popularityDifference;
-        }
-
-        return getVideoTimestamp(b.publishedAt) - getVideoTimestamp(a.publishedAt);
-      });
 
     if (videos.length === 0) {
       return Response.json({
         videos: FALLBACK_VIDEOS,
         fallback: true,
-        message: "No usable YouTube videos were returned.",
+        message: "No recent videos were returned by the trusted channel feeds.",
       });
     }
 
-    return Response.json({ videos, fallback: false });
+    return Response.json({
+      videos,
+      fallback: false,
+    });
   } catch (error) {
-    if (error instanceof YouTubeApiError) {
-      console.error("YouTube API error:", {
-        message: error.message,
-        ...error.context,
-      });
-    } else {
-      console.error("Error loading YouTube news videos:", error);
-    }
+    console.error("Error loading RSS news videos:", error);
 
     return Response.json({
       videos: FALLBACK_VIDEOS,
       fallback: true,
-      message: "Falling back to placeholder videos because the YouTube API failed.",
+      message: "Falling back to placeholder videos because the RSS feeds failed.",
     });
   }
 }

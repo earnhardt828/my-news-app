@@ -171,7 +171,7 @@ export default function VideosPage() {
         }
 
         setVideos(fallbackVideos);
-        setStatusMessage("Could not load YouTube search results, so the current video feed is shown instead.");
+        setStatusMessage("Could not load channel feed results, so the current video feed is shown instead.");
       } finally {
         setIsLoading(false);
         if (shouldBlockScreen) {
