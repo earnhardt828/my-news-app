@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { supabase } from "../../../lib/supabase";
+import { extractVideoIdFromUrl } from "../../../lib/video-feed";
 
 type MyComment = {
   id: number;
@@ -119,6 +120,20 @@ function ReactionSummary({ hearts }: { hearts: number }) {
       </span>
     </div>
   );
+}
+
+function getCommentDetailPath(comment: {
+  article_id: number | string;
+  article_url?: string | null;
+  id: number;
+}) {
+  const videoId = extractVideoIdFromUrl(comment.article_url);
+
+  if (videoId) {
+    return `/video/${videoId}#comment-${comment.id}`;
+  }
+
+  return `/article/${comment.article_id}#comment-${comment.id}`;
 }
 
 export default function ProfileCommentsPage() {
@@ -302,12 +317,12 @@ export default function ProfileCommentsPage() {
                 role="button"
                 tabIndex={0}
                 onClick={() => {
-                  router.push(`/article/${comment.article_id}#comment-${comment.id}`);
+                  router.push(getCommentDetailPath(comment));
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    router.push(`/article/${comment.article_id}#comment-${comment.id}`);
+                    router.push(getCommentDetailPath(comment));
                   }
                 }}
               >

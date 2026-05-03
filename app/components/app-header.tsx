@@ -86,6 +86,7 @@ export default function AppHeader() {
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [articleHeaderSource, setArticleHeaderSource] = useState("Article");
   const [articleHeaderUrl, setArticleHeaderUrl] = useState<string | null>(null);
+  const [videoHeaderSource, setVideoHeaderSource] = useState("Video");
   const [isVideoSearchOpen, setIsVideoSearchOpen] = useState(false);
   const [sourceHeaderTitle, setSourceHeaderTitle] = useState<string | null>(null);
   const sourcePathSegments = pathname.split("/");
@@ -142,6 +143,24 @@ export default function AppHeader() {
         "reflekt:article-url",
         handleArticleUrl as EventListener
       );
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/video/")) {
+      return;
+    }
+
+    const handleVideoSource = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      setVideoHeaderSource(customEvent.detail || "Video");
+    };
+
+    window.addEventListener("reflekt:video-source", handleVideoSource as EventListener);
+
+    return () => {
+      window.removeEventListener("reflekt:video-source", handleVideoSource as EventListener);
+      setVideoHeaderSource("Video");
     };
   }, [pathname]);
 
@@ -336,6 +355,32 @@ export default function AppHeader() {
         </button>
         <div className="app-header-article-source" aria-live="polite">
           {sourceHeaderTitle || defaultSourceTitle}
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (pathname.startsWith("/video/")) {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close video"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          {videoHeaderSource}
         </div>
         <span className="app-header-article-spacer" aria-hidden="true" />
       </div>

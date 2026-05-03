@@ -21,6 +21,7 @@ import {
 import { getCategoryLabel } from "../../lib/categories";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
+import { extractVideoIdFromUrl } from "../../lib/video-feed";
 
 type UserState = {
   id: string | null;
@@ -150,6 +151,20 @@ function formatRelativeTime(timestamp: string | null) {
   }
 
   return `${diffDays} days ago`;
+}
+
+function getCommentDetailPath(comment: {
+  article_id: number | string;
+  article_url?: string | null;
+  id: number;
+}) {
+  const videoId = extractVideoIdFromUrl(comment.article_url);
+
+  if (videoId) {
+    return `/video/${videoId}#comment-${comment.id}`;
+  }
+
+  return `/article/${comment.article_id}#comment-${comment.id}`;
 }
 
 export default function Profile() {
@@ -1401,13 +1416,13 @@ export default function Profile() {
                       tabIndex={0}
                       onClick={() => {
                         setOpenCommentMenuId(null);
-                        router.push(`/article/${comment.article_id}#comment-${comment.id}`);
+                        router.push(getCommentDetailPath(comment));
                       }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
                           setOpenCommentMenuId(null);
-                          router.push(`/article/${comment.article_id}#comment-${comment.id}`);
+                          router.push(getCommentDetailPath(comment));
                         }
                       }}
                     >

@@ -1748,8 +1748,8 @@ export default function Home() {
                   video={videos[Math.floor((index + 1) / 3 - 1) % videos.length]}
                   onToggleLike={handleToggleVideoLike}
                   onToggleSave={handleToggleVideoSave}
-                  onOpenComments={setActiveCommentsVideoId}
-                  onOpenPlayer={setActiveVideoId}
+                  onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
+                  onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
                   label="Video"
                   className="video-card-inline"
                   variant="article"

@@ -24,6 +24,38 @@ export type VideoApiItem = Omit<VideoItem, "saved" | "liked" | "theme"> & {
   theme?: string | null;
 };
 
+export function getVideoCommentArticleId(videoId: string) {
+  let hash = 0;
+
+  for (let index = 0; index < videoId.length; index += 1) {
+    hash = (hash * 31 + videoId.charCodeAt(index)) >>> 0;
+  }
+
+  return hash === 0 ? 1 : hash;
+}
+
+export function extractVideoIdFromUrl(url: string | null | undefined) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.hostname.includes("youtube.com")) {
+      return parsed.searchParams.get("v");
+    }
+
+    if (parsed.hostname.includes("youtu.be")) {
+      return parsed.pathname.replace(/^\/+/, "").trim() || null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export const initialVideos: VideoItem[] = [
   {
     id: "fallback-1",

@@ -101,7 +101,14 @@ export default function VideoFeedCard({
           {label ? <span className="chip video-chip">{label}</span> : null}
         </div>
 
-        <h3 className="trending-article-title">{video.title}</h3>
+        <button
+          type="button"
+          className="video-card-detail-trigger"
+          onClick={() => onOpenPlayer(video.id)}
+          aria-label={`Open details for ${video.title}`}
+        >
+          <h3 className="trending-article-title">{video.title}</h3>
+        </button>
 
         <div className="trending-meta-row">
           <span className="trending-published-date">
@@ -117,13 +124,21 @@ export default function VideoFeedCard({
           }`}
         >
           {!video.fallback ? (
-            <iframe
-              src={buildVideoEmbedUrl(video.youtubeId, true)}
-              title={video.title}
-              className="video-player-frame"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            <>
+              <iframe
+                src={buildVideoEmbedUrl(video.youtubeId, true)}
+                title={video.title}
+                className="video-player-frame"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+              <button
+                type="button"
+                className="video-frame-detail-trigger"
+                onClick={() => onOpenPlayer(video.id)}
+                aria-label={`Open details for ${video.title}`}
+              />
+            </>
           ) : (
             <button
               className="video-frame-button"

@@ -1901,6 +1901,58 @@ input {
   color: var(--accent-strong);
 }
 
+.video-card-detail-trigger {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+
+.video-frame-detail-trigger {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 0;
+  background: transparent;
+}
+
+.video-detail-page-shell {
+  gap: 18px;
+}
+
+.video-detail-hero {
+  gap: 18px;
+}
+
+.video-detail-title {
+  font-size: clamp(1.5rem, 5.4vw, 2rem);
+}
+
+.video-detail-player-shell {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background: #05070b;
+}
+
+.video-detail-player-shell .video-player-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.video-detail-placeholder {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #05070b;
+}
+
 .comment-reaction-row {
   display: flex;
   gap: 8px;
