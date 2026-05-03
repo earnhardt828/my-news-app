@@ -32,7 +32,10 @@ export default function RootLayout({
             var theme = storedTheme === "dark" || storedTheme === "light"
               ? storedTheme
               : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+            var weekdayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+            var weekday = weekdayNames[new Date().getDay()] || "monday";
             document.documentElement.dataset.theme = theme;
+            document.documentElement.dataset.weekday = weekday;
             document.documentElement.style.colorScheme = theme;
           } catch (error) {}
         `}</Script>
