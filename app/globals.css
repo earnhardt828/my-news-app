@@ -2523,6 +2523,12 @@ input {
   font-weight: 700;
 }
 
+.profile-comment-reaction-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .source-preferences-header {
   display: grid;
   gap: 6px;

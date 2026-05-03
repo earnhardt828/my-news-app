@@ -1264,8 +1264,28 @@ export default function Profile() {
             </section>
 
             <section className="section-card stack">
-              <div>
+              <div className="profile-section-row">
                 <h3 className="profile-section-title">My Comments</h3>
+                <Link
+                  href="/profile/comments"
+                  className="profile-section-icon-button"
+                  aria-label="Open all comments"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </Link>
               </div>
 
               {myComments.length === 0 ? (
@@ -1275,7 +1295,7 @@ export default function Profile() {
                 </div>
               ) : (
                 <div className="comment-list">
-                  {myComments.map((comment) => (
+                  {myComments.slice(0, 3).map((comment) => (
                     <div
                       key={comment.id}
                       className="comment-card profile-comment-card"
@@ -1336,14 +1356,49 @@ export default function Profile() {
                           ) : null}
                         </div>
                       </div>
-                      <div className="muted comment-body">{comment.text}</div>
+                      <div className="comment-body">
+                        <strong>{comment.username ?? "You"}</strong>{" "}
+                        <span className="muted">{comment.text}</span>
+                      </div>
                       <div className="profile-comment-footer">
                         <div className="comment-meta">
                           {formatRelativeTime(comment.created_at)}
                         </div>
                         <div className="profile-comment-reaction-summary">
-                          <span>👍 {comment.likes}</span>
-                          <span>👎 {comment.dislikes}</span>
+                          <span className="profile-comment-reaction-item">
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M7 11v8" />
+                              <path d="M11 19h6.2a2 2 0 0 0 1.9-1.4l1.2-4a2 2 0 0 0-1.9-2.6H14V6.8c0-1-.8-1.8-1.8-1.8-.6 0-1.1.3-1.5.8L7 11Z" />
+                            </svg>
+                            <span>{comment.likes}</span>
+                          </span>
+                          <span className="profile-comment-reaction-item">
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M17 13V5" />
+                              <path d="M13 5H6.8a2 2 0 0 0-1.9 1.4l-1.2 4a2 2 0 0 0 1.9 2.6H10v4.2c0 1 .8 1.8 1.8 1.8.6 0 1.1-.3 1.5-.8L17 13Z" />
+                            </svg>
+                            <span>{comment.dislikes}</span>
+                          </span>
                         </div>
                       </div>
                     </div>
