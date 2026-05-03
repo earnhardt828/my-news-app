@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "reflekt-theme";
+const STORAGE_KEY = "graffiti-theme";
 
 type ThemeMode = "light" | "dark";
 
@@ -18,6 +18,7 @@ function getInitialTheme(): ThemeMode {
 
   const storedTheme =
     window.localStorage.getItem(STORAGE_KEY) ??
+    window.localStorage.getItem("reflekt-theme") ??
     window.localStorage.getItem("mirur-theme");
 
   if (storedTheme === "dark" || storedTheme === "light") {

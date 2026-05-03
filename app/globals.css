@@ -256,17 +256,29 @@ input {
   border: 2px solid #ffffff;
 }
 
+.branding-image-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .branding-image-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .branding-image-dark {
+  display: block;
+}
+
 .brand-mark-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
-  padding: 6px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid var(--card-border-strong);
-  box-shadow: 0 14px 34px rgba(20, 33, 61, 0.08);
+  width: min(184px, 48vw);
+  min-width: 140px;
+  height: 46px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .brand-mark-link-center {
@@ -2059,6 +2071,10 @@ input {
   overflow: hidden;
 }
 
+:root[data-theme="dark"] .loading-screen {
+  background: #0c1323;
+}
+
 .loading-screen-logo {
   width: clamp(60px, 18vw, 80px);
   height: auto;
@@ -2072,6 +2088,23 @@ input {
   justify-content: center;
   will-change: transform, opacity;
   animation: loading-logo-float 2.2s ease-in-out 240ms infinite;
+}
+
+.loading-screen-bottom-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 26px);
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-screen-bottom-logo {
+  width: clamp(150px, 44vw, 220px);
+  height: auto;
+  object-fit: contain;
+  animation: loading-logo-fade 520ms ease-out both;
 }
 
 @keyframes loading-logo-fade {
@@ -2099,7 +2132,8 @@ input {
 
 @media (prefers-reduced-motion: reduce) {
   .loading-screen-logo,
-  .loading-screen-logo-wrap {
+  .loading-screen-logo-wrap,
+  .loading-screen-bottom-logo {
     animation: none;
   }
 }
@@ -2231,13 +2265,13 @@ input {
 }
 
 .profile-auth-logo {
-  width: min(96px, 26vw);
-  height: min(96px, 26vw);
+  width: min(172px, 50vw);
+  height: auto;
   display: block;
-  padding: 12px;
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14px 34px rgba(20, 33, 61, 0.08);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   object-fit: contain;
 }
 

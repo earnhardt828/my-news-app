@@ -67,7 +67,7 @@ export default function CommunityGuidelinesPage() {
         <div className="comment-card">
           <strong>Safety contact</strong>
           <div className="muted" style={{ marginTop: "6px" }}>
-            Placeholder contact: support@reflekt.app
+            Placeholder contact: support@graffiti.app
           </div>
         </div>
 

@@ -992,11 +992,19 @@ export default function Profile() {
           <section className="section-card stack profile-auth-card">
             <div className="stack" style={{ gap: "8px" }}>
               <Image
-                src="/reflekt-logo.png"
-                alt="Reflekt"
-                width={96}
-                height={96}
-                className="profile-auth-logo"
+                src="/branding/graffiti-name-logo-transparent.png"
+                alt="Graffiti"
+                width={156}
+                height={68}
+                className="profile-auth-logo branding-image-light"
+                priority
+              />
+              <Image
+                src="/branding/graffiti-name-white-transparent.png"
+                alt="Graffiti"
+                width={156}
+                height={68}
+                className="profile-auth-logo branding-image-dark"
                 priority
               />
               <p className="muted profile-auth-helper">

@@ -409,7 +409,7 @@ export default function Search() {
             <div className="empty-state">
               <strong>No results found</strong>
               <span>
-                Try a news source, person, or topic. Reflekt will search current
+                Try a news source, person, or topic. Graffiti will search current
                 articles across title, source, category, and story text.
               </span>
             </div>

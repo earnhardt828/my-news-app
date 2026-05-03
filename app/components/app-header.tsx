@@ -76,7 +76,7 @@ function getPageTitle(pathname: string) {
     return "Profile";
   }
 
-  return "Reflekt";
+  return "Graffiti";
 }
 
 export default function AppHeader() {
@@ -522,11 +522,19 @@ export default function AppHeader() {
 
       <Link href="/" className="brand-mark-link brand-mark-link-center" aria-label="Trending home">
         <Image
-          src="/trending-r-logo.png"
-          alt="Reflekt"
-          width={56}
-          height={56}
-          className="brand-mark-logo"
+          src="/branding/graffiti-name-logo.png"
+          alt="Graffiti"
+          width={180}
+          height={40}
+          className="brand-mark-logo branding-image-light"
+          priority
+        />
+        <Image
+          src="/branding/graffiti-name-white.png"
+          alt="Graffiti"
+          width={180}
+          height={40}
+          className="brand-mark-logo branding-image-dark"
           priority
         />
       </Link>

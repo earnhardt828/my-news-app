@@ -1801,7 +1801,7 @@ export default function Home() {
                   Customize feed
                 </h3>
                 <p className="muted bottom-sheet-title">
-                  Choose categories to shape your Reflekt feed.
+                  Choose categories to shape your Graffiti feed.
                 </p>
               </div>
               <button

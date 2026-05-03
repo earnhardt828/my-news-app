@@ -245,7 +245,7 @@ export default function ProfileCommentsPage() {
         <section className="section-card stack">
           <div className="stack" style={{ gap: "6px" }}>
             <strong className="profile-section-title">All comments</strong>
-            <span className="muted">Your recent conversations across Reflekt.</span>
+            <span className="muted">Your recent conversations across Graffiti.</span>
           </div>
 
           <div className="comment-list">
