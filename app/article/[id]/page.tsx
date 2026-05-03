@@ -212,6 +212,19 @@ function trimToLastFullSentence(value: string) {
   return matches.join(" ").trim();
 }
 
+function getCompleteSentences(value: string) {
+  const normalized = trimToLastFullSentence(value);
+
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized
+    .match(/[^.!?]+[.!?]/g)
+    ?.map((sentence) => cleanSummarySentence(sentence))
+    .filter(Boolean) ?? [];
+}
+
 function normalizeArticleId(value: number | string | null | undefined) {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
@@ -314,17 +327,14 @@ function buildSummaryItems(
   const descriptionDateline = extractDateline(normalizedDescription);
   const contentDateline = extractDateline(normalizedContent);
   const dateline = descriptionDateline.dateline ?? contentDateline.dateline;
-
-  const combinedText = [descriptionDateline.remainder, contentDateline.remainder]
-    .filter(Boolean)
-    .join(" ");
-
-  const sentenceMatches = combinedText.match(/[^.!?]+[.!?]?/g) ?? [];
   const uniquePoints: string[] = [];
 
-  sentenceMatches.forEach((sentence) => {
-    const cleanedSentence = cleanSummarySentence(sentence);
+  const completeSentences = [
+    ...getCompleteSentences(descriptionDateline.remainder),
+    ...getCompleteSentences(contentDateline.remainder),
+  ];
 
+  completeSentences.forEach((cleanedSentence) => {
     if (!cleanedSentence) {
       return;
     }
@@ -349,8 +359,9 @@ function buildSummaryItems(
   }
 
   const fallbackCandidates = [
-    normalizedDescription ? cleanSummarySentence(normalizedDescription) : "",
-    normalizedContent ? cleanSummarySentence(normalizedContent) : "",
+    getCompleteSentences(normalizedDescription)[0] ?? "",
+    getCompleteSentences(normalizedContent)[0] ?? "",
+    titleFallback,
   ].filter(Boolean);
 
   fallbackCandidates.forEach((candidate) => {
