@@ -8,13 +8,14 @@
   --surface-muted: #eef3f9;
   --border: rgba(20, 33, 61, 0.1);
   --text-soft: #6a768f;
-  --accent: #34d0eb;
-  --accent-strong: #109fbe;
-  --accent-faint: rgba(52, 208, 235, 0.16);
+  --accent: #ff4fd8;
+  --accent-strong: #d92db3;
+  --accent-secondary: #34d0eb;
+  --accent-faint: rgba(255, 79, 216, 0.14);
   --shadow-soft: 0 22px 60px rgba(20, 33, 61, 0.1);
-  --body-top: #f2fdff;
-  --body-mid: #f4f7fb;
-  --body-bottom: #eefaff;
+  --body-top: #fff7fd;
+  --body-mid: #f8f5fb;
+  --body-bottom: #f5fbff;
   --topbar-bg: rgba(244, 247, 251, 0.84);
   --topbar-border: rgba(255, 255, 255, 0.7);
   --nav-bg: rgba(255, 255, 255, 0.94);
@@ -22,8 +23,8 @@
   --nav-shadow: 0 18px 42px rgba(20, 33, 61, 0.12);
   --nav-link-color: #7f8aa1;
   --nav-link-hover-bg: rgba(20, 33, 61, 0.05);
-  --nav-link-active-bg: rgba(52, 208, 235, 0.14);
-  --nav-link-active-text: #109fbe;
+  --nav-link-active-bg: rgba(255, 79, 216, 0.12);
+  --nav-link-active-text: #d92db3;
   --card-border-strong: rgba(255, 255, 255, 0.7);
   --button-secondary-bg: #ffffff;
   --input-bg: rgba(255, 255, 255, 0.92);
@@ -50,13 +51,14 @@
   --surface-muted: #182235;
   --border: rgba(186, 201, 231, 0.14);
   --text-soft: #99a6c0;
-  --accent: #34d0eb;
-  --accent-strong: #7feaf7;
-  --accent-faint: rgba(52, 208, 235, 0.22);
+  --accent: #ff4fd8;
+  --accent-strong: #ff95ea;
+  --accent-secondary: #34d0eb;
+  --accent-faint: rgba(255, 79, 216, 0.2);
   --shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.34);
-  --body-top: #081d24;
+  --body-top: #1c0c22;
   --body-mid: #0d1526;
-  --body-bottom: #0a1520;
+  --body-bottom: #09141f;
   --topbar-bg: rgba(12, 19, 35, 0.84);
   --topbar-border: rgba(186, 201, 231, 0.08);
   --nav-bg: rgba(18, 26, 43, 0.96);
@@ -64,8 +66,8 @@
   --nav-shadow: 0 22px 50px rgba(0, 0, 0, 0.34);
   --nav-link-color: #99a6c0;
   --nav-link-hover-bg: rgba(186, 201, 231, 0.08);
-  --nav-link-active-bg: rgba(52, 208, 235, 0.2);
-  --nav-link-active-text: #7feaf7;
+  --nav-link-active-bg: rgba(255, 79, 216, 0.22);
+  --nav-link-active-text: #ff95ea;
   --card-border-strong: rgba(186, 201, 231, 0.08);
   --button-secondary-bg: #182235;
   --input-bg: rgba(24, 34, 53, 0.92);
@@ -103,8 +105,12 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(52, 208, 235, 0.18), transparent 30%),
+    radial-gradient(circle at 14% 10%, rgba(255, 79, 216, 0.12), transparent 24%),
+    radial-gradient(circle at 86% 12%, rgba(52, 208, 235, 0.1), transparent 22%),
+    radial-gradient(circle at 18% 82%, rgba(255, 79, 216, 0.05), transparent 18%),
+    linear-gradient(135deg, transparent 0 24%, rgba(255, 79, 216, 0.028) 24% 25%, transparent 25% 49%, rgba(52, 208, 235, 0.024) 49% 50%, transparent 50% 74%, rgba(255, 79, 216, 0.028) 74% 75%, transparent 75% 100%),
     linear-gradient(180deg, var(--body-top) 0%, var(--body-mid) 34%, var(--body-bottom) 100%);
+  background-size: auto, auto, auto, 180px 180px, auto;
   color: var(--foreground);
   font-family: var(--font-sans);
 }
@@ -279,6 +285,7 @@ input {
   background: transparent;
   border: 0;
   box-shadow: none;
+  overflow: hidden;
 }
 
 .brand-mark-link-center {

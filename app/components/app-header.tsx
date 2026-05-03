@@ -82,6 +82,7 @@ function getPageTitle(pathname: string) {
 export default function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [articleHeaderSource, setArticleHeaderSource] = useState("Article");
   const [articleHeaderUrl, setArticleHeaderUrl] = useState<string | null>(null);
@@ -91,6 +92,28 @@ export default function AppHeader() {
   const defaultSourceTitle = pathname.startsWith("/source/")
     ? getSourceNameFromSlug(sourcePathSegments[sourcePathSegments.length - 1] ?? "")
     : "Source";
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const syncTheme = () => {
+      setIsDarkTheme(document.documentElement.dataset.theme === "dark");
+    };
+
+    syncTheme();
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (!pathname.startsWith("/article/")) {
@@ -522,19 +545,15 @@ export default function AppHeader() {
 
       <Link href="/" className="brand-mark-link brand-mark-link-center" aria-label="Trending home">
         <Image
-          src="/branding/graffiti-name-logo.png"
+          src={
+            isDarkTheme
+              ? "/branding/graffiti-name-white-transparent.png"
+              : "/branding/graffiti-name-logo-transparent.png"
+          }
           alt="Graffiti"
           width={180}
           height={40}
-          className="brand-mark-logo branding-image-light"
-          priority
-        />
-        <Image
-          src="/branding/graffiti-name-white.png"
-          alt="Graffiti"
-          width={180}
-          height={40}
-          className="brand-mark-logo branding-image-dark"
+          className="brand-mark-logo"
           priority
         />
       </Link>
