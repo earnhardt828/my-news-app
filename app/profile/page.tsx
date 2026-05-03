@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -30,9 +31,12 @@ type MyComment = {
   id: number;
   text: string;
   article_id: number;
+  article_title: string;
   username: string | null;
   user_id: string | null;
   created_at: string | null;
+  likes: number;
+  dislikes: number;
 };
 
 type SavedArticle = {
@@ -99,6 +103,7 @@ function formatRelativeTime(timestamp: string | null) {
 }
 
 export default function Profile() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -134,6 +139,7 @@ export default function Profile() {
     text: string;
   } | null>(null);
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
+  const [openCommentMenuId, setOpenCommentMenuId] = useState<number | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const profileRef = useRef<ProfileRow>({
     username: null,
@@ -261,29 +267,61 @@ export default function Profile() {
       show_less_sources: profile.show_less_sources ?? [],
     };
 
-    const { data: comments, error: commentsError } = await supabase
-      .from("comments")
-      .select("id, text, article_id, username, user_id, created_at")
-      .eq("user_id", user.id);
+    const [commentsRes, savedRes, reactionsRes, newsRes] = await Promise.all([
+      supabase
+        .from("comments")
+        .select("id, text, article_id, username, user_id, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("saved_articles")
+        .select("id, article_id, title, source, category, time, url, image, published_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("comment_reactions")
+        .select("comment_id, reaction_type"),
+      fetch("/api/news"),
+    ]);
 
-    if (commentsError) {
-      console.error("Error loading profile comments:", commentsError);
-      throw commentsError;
+    if (commentsRes.error) {
+      console.error("Error loading profile comments:", commentsRes.error);
+      throw commentsRes.error;
     }
 
-    const { data: saved, error: savedError } = await supabase
-      .from("saved_articles")
-      .select("id, article_id, title, source, category, time, url, image, published_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (savedError) {
-      console.error("Error loading saved articles:", savedError);
-      throw savedError;
+    if (savedRes.error) {
+      console.error("Error loading saved articles:", savedRes.error);
+      throw savedRes.error;
     }
 
-    setMyComments((comments ?? []) as MyComment[]);
-    setSavedArticles((saved ?? []) as SavedArticle[]);
+    if (reactionsRes.error) {
+      console.error("Error loading comment reactions:", reactionsRes.error);
+      throw reactionsRes.error;
+    }
+
+    const newsArticles = ((await newsRes.json()) as { id: number; title: string }[]) ?? [];
+    const articleTitleLookup = new Map(
+      newsArticles.map((article) => [article.id, article.title])
+    );
+    const reactions = reactionsRes.data ?? [];
+
+    const enrichedComments = ((commentsRes.data ?? []) as Omit<MyComment, "article_title" | "likes" | "dislikes">[])
+      .map((comment) => ({
+        ...comment,
+        article_title:
+          articleTitleLookup.get(comment.article_id) ?? `Article #${comment.article_id}`,
+        likes: reactions.filter(
+          (reaction) =>
+            reaction.comment_id === comment.id && reaction.reaction_type === "like"
+        ).length,
+        dislikes: reactions.filter(
+          (reaction) =>
+            reaction.comment_id === comment.id && reaction.reaction_type === "dislike"
+        ).length,
+      }));
+
+    setMyComments(enrichedComments as MyComment[]);
+    setSavedArticles((savedRes.data ?? []) as SavedArticle[]);
   }, []);
 
   const syncSignedInProfile = useCallback(async (user: User | null) => {
@@ -762,6 +800,7 @@ export default function Profile() {
   };
 
   const openDeleteModal = (commentId: number) => {
+    setOpenCommentMenuId(null);
     setDeleteCommentId(commentId);
   };
 
@@ -789,6 +828,7 @@ export default function Profile() {
     }
 
     setReportingCommentId(commentId);
+    setOpenCommentMenuId(null);
     setReportReason("");
     setReportStatus(null);
   };
@@ -854,6 +894,21 @@ export default function Profile() {
   const initials = username.trim().charAt(0).toUpperCase() || "N";
   const isSignedIn = Boolean(currentUser?.id);
   const currentUserId = currentUser?.id ?? "";
+
+  useEffect(() => {
+    if (openCommentMenuId === null) {
+      return;
+    }
+
+    const closeMenu = () => {
+      setOpenCommentMenuId(null);
+    };
+
+    window.addEventListener("click", closeMenu);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+    };
+  }, [openCommentMenuId]);
 
   return (
     <section className="page-shell">
@@ -1099,13 +1154,10 @@ export default function Profile() {
             {message ? <div className="chip chip-accent">{message}</div> : null}
           </section>
 
-          <div className="stack">
-            <section className="section-card stack">
+            <div className="stack">
+              <section className="section-card stack">
               <div>
-                <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                  Saved
-                </p>
-                <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
+                <h3 className="profile-section-title">
                   Bookmarked articles
                 </h3>
               </div>
@@ -1118,12 +1170,30 @@ export default function Profile() {
               ) : (
                 <div className="comment-list">
                   {savedArticles.map((article) => (
-                    <div key={article.id} className="comment-card">
-                      <strong>{article.title}</strong>
-                      <div className="comment-meta">
-                        {article.category} · {article.source} · {article.time}
+                    <Link
+                      key={article.id}
+                      href={`/article/${article.article_id}`}
+                      className="comment-card profile-saved-article-card"
+                    >
+                      <div className="profile-saved-article-copy">
+                        <strong className="profile-saved-article-title">{article.title}</strong>
+                        <div className="comment-meta">
+                          {article.category} · {article.source} · {article.time}
+                        </div>
                       </div>
-                    </div>
+                      {article.image ? (
+                        <div
+                          className="profile-saved-article-thumb"
+                          role="img"
+                          aria-label={article.title}
+                          style={{ backgroundImage: `url(${article.image})` }}
+                        />
+                      ) : (
+                        <div className="profile-saved-article-thumb profile-saved-article-thumb-placeholder">
+                          {article.source.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </Link>
                   ))}
                 </div>
               )}
@@ -1131,12 +1201,7 @@ export default function Profile() {
 
             <section className="section-card stack">
               <div>
-                <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                  My Comments
-                </p>
-                <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                  Your conversation history
-                </h3>
+                <h3 className="profile-section-title">My Comments</h3>
               </div>
 
               {myComments.length === 0 ? (
@@ -1147,36 +1212,75 @@ export default function Profile() {
               ) : (
                 <div className="comment-list">
                   {myComments.map((comment) => (
-                    <div key={comment.id} className="comment-card">
-                      <div className="comment-header">
-                        <strong>Article #{comment.article_id}</strong>
-                        <span className="chip">Your comment</span>
+                    <div
+                      key={comment.id}
+                      className="comment-card profile-comment-card"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setOpenCommentMenuId(null);
+                        router.push(`/article/${comment.article_id}#comment-${comment.id}`);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setOpenCommentMenuId(null);
+                          router.push(`/article/${comment.article_id}#comment-${comment.id}`);
+                        }
+                      }}
+                    >
+                      <div className="profile-comment-toprow">
+                        <strong className="profile-comment-article-title">
+                          {comment.article_title}
+                        </strong>
+                        <div className="profile-comment-menu-wrap">
+                          <button
+                            type="button"
+                            className="profile-comment-menu-button"
+                            aria-label="Open comment actions"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOpenCommentMenuId((current) =>
+                                current === comment.id ? null : comment.id
+                              );
+                            }}
+                          >
+                            <span aria-hidden="true">⋯</span>
+                          </button>
+                          {openCommentMenuId === comment.id ? (
+                            <div
+                              className="profile-comment-menu"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <button
+                                className="profile-comment-menu-item"
+                                type="button"
+                                onClick={() => openReportModal(comment.id)}
+                              >
+                                Report
+                              </button>
+                              {comment.user_id === currentUserId ? (
+                                <button
+                                  className="profile-comment-menu-item profile-comment-menu-item-danger"
+                                  type="button"
+                                  onClick={() => openDeleteModal(comment.id)}
+                                >
+                                  Delete
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                      <div className="muted comment-body">
-                        {comment.text}
-                      </div>
-                      <div className="comment-meta">
-                        {formatRelativeTime(comment.created_at)}
-                      </div>
-                      <div className="comment-actions">
-                        <button
-                          className="comment-action"
-                          onClick={() => openReportModal(comment.id)}
-                          disabled={activeCommentAction === `report-${comment.id}`}
-                        >
-                          {activeCommentAction === `report-${comment.id}`
-                            ? "Reporting..."
-                            : "Report"}
-                        </button>
-                        <button
-                          className="comment-action comment-action-danger"
-                          onClick={() => openDeleteModal(comment.id)}
-                          disabled={activeCommentAction === `delete-${comment.id}`}
-                        >
-                          {activeCommentAction === `delete-${comment.id}`
-                            ? "Deleting..."
-                            : "Delete"}
-                        </button>
+                      <div className="muted comment-body">{comment.text}</div>
+                      <div className="profile-comment-footer">
+                        <div className="comment-meta">
+                          {formatRelativeTime(comment.created_at)}
+                        </div>
+                        <div className="profile-comment-reaction-summary">
+                          <span>👍 {comment.likes}</span>
+                          <span>👎 {comment.dislikes}</span>
+                        </div>
                       </div>
                     </div>
                   ))}

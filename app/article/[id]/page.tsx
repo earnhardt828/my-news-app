@@ -684,6 +684,26 @@ export default function ArticleDetailPage() {
   }, [articleId]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || comments.length === 0) {
+      return;
+    }
+
+    const hash = window.location.hash;
+
+    if (!hash.startsWith("#comment-")) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector(hash);
+
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  }, [comments]);
+
+  useEffect(() => {
     if (replyTarget) {
       commentInputRef.current?.focus();
     }
@@ -1584,6 +1604,7 @@ export default function ArticleDetailPage() {
               {displayedComments.map((comment) => (
                 <div
                   key={comment.id}
+                  id={`comment-${comment.id}`}
                   className="comment-thread-row"
                   onContextMenu={(event) => {
                     event.preventDefault();

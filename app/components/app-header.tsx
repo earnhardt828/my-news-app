@@ -152,7 +152,7 @@ export default function AppHeader() {
   }, [pathname]);
 
   useEffect(() => {
-    if (pathname !== "/") {
+    if (pathname !== "/profile") {
       return;
     }
 
@@ -340,6 +340,37 @@ export default function AppHeader() {
       );
     }
 
+    if (pathname === "/profile") {
+      return (
+        <div className="app-header-title-wrap app-header-title-wrap-center">
+          <span className="app-header-side-spacer" aria-hidden="true" />
+          <h1 className="brand-title">Profile</h1>
+          <Link
+            href="/notifications"
+            className="header-icon-button"
+            aria-label="Open notifications"
+          >
+            <span className="header-icon-glyph" aria-hidden="true">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                <path d="M10 17a2 2 0 0 0 4 0" />
+              </svg>
+            </span>
+            {hasUnreadNotifications ? <span className="header-notification-dot" /> : null}
+          </Link>
+        </div>
+      );
+    }
+
     return (
       <div className="app-header-title-wrap">
         <h1 className="brand-title">{getPageTitle(pathname)}</h1>
@@ -396,28 +427,6 @@ export default function AppHeader() {
         >
           +
         </button>
-        <Link
-          href="/notifications"
-          className="header-icon-button"
-          aria-label="Open notifications"
-        >
-          <span className="header-icon-glyph" aria-hidden="true">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-              <path d="M10 17a2 2 0 0 0 4 0" />
-            </svg>
-          </span>
-          {hasUnreadNotifications ? <span className="header-notification-dot" /> : null}
-        </Link>
       </div>
     </div>
   );
