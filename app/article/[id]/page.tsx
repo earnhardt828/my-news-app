@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import ShareButton from "../../components/share-button";
-import SourcePreferenceSheet from "../../components/source-preference-sheet";
+import SourceRatingSheet from "../../components/source-rating-sheet";
 import SourceBadge from "../../components/source-badge";
-import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
+import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
 import { supabase } from "../../../lib/supabase";
 
@@ -386,19 +386,18 @@ export default function ArticleDetailPage() {
   const [likesCount, setLikesCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [likedByCurrentUser, setLikedByCurrentUser] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [preferredSources, setPreferredSources] = useState<string[]>([]);
-  const [showLessSources, setShowLessSources] = useState<string[]>([]);
+  const [likedSources, setLikedSources] = useState<string[]>([]);
+  const [dislikedSources, setDislikedSources] = useState<string[]>([]);
   const [compareArticles, setCompareArticles] = useState<ArticleRecord[]>([]);
   const [activeCompareIndex, setActiveCompareIndex] = useState(0);
   const [showCompareTutorial, setShowCompareTutorial] = useState(false);
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
-  const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
-  const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
+  const [isSavingSourceRating, setIsSavingSourceRating] = useState(false);
+  const [sourceRatingStatus, setSourceRatingStatus] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
@@ -434,7 +433,6 @@ export default function ArticleDetailPage() {
       const { data: userData } = await supabase.auth.getUser();
       const currentUserId = userData.user?.id ?? null;
       setUserId(currentUserId);
-      setUserEmail(userData.user?.email ?? null);
 
       if (userData.user?.id) {
         const { data: profile, error: profileError } = await ensureProfileRow({
@@ -443,16 +441,14 @@ export default function ArticleDetailPage() {
         });
 
         if (profileError) {
-          console.error("Error loading source preferences:", profileError);
+          console.error("Error loading article profile:", profileError);
         }
 
         setUsername(profile?.username ?? null);
-        setPreferredSources(profile?.preferred_sources ?? []);
-        setShowLessSources(profile?.show_less_sources ?? []);
       } else {
         setUsername(null);
-        setPreferredSources([]);
-        setShowLessSources([]);
+        setLikedSources([]);
+        setDislikedSources([]);
       }
 
       const newsRes = await fetch("/api/news");
@@ -583,6 +579,12 @@ export default function ArticleDetailPage() {
             .select("blocked_user_id")
             .eq("blocker_id", currentUserId)
         : { data: [] as DbBlockedUser[] };
+      const { data: sourceRatingsData } = currentUserId
+        ? await supabase
+            .from("source_ratings")
+            .select("source_name, rating")
+            .eq("user_id", currentUserId)
+        : { data: [] as { source_name: string; rating: "like" | "dislike" }[] };
 
       const likes = (likesRes.data ?? []) as DbLike[];
       const commentReactions = (reactionsRes.data ?? []) as DbCommentReaction[];
@@ -596,6 +598,10 @@ export default function ArticleDetailPage() {
       const avatarLookup = new Map(
         profiles.map((profile) => [profile.id, profile.avatar_url])
       );
+      const sourceRatings = (sourceRatingsData ?? []) as {
+        source_name: string;
+        rating: "like" | "dislike";
+      }[];
 
       setArticle(targetArticle);
       setLikesCount(likes.length);
@@ -603,6 +609,16 @@ export default function ArticleDetailPage() {
         likes.some((like) => like.user_id && like.user_id === currentUserId)
       );
       setIsSaved(Boolean(savedArticlesData));
+      setLikedSources(
+        sourceRatings
+          .filter((rating) => rating.rating === "like")
+          .map((rating) => rating.source_name)
+      );
+      setDislikedSources(
+        sourceRatings
+          .filter((rating) => rating.rating === "dislike")
+          .map((rating) => rating.source_name)
+      );
       setComments(
         rawComments
           .filter(
@@ -906,7 +922,7 @@ export default function ArticleDetailPage() {
     return `${month}/${day}/${year} ${hours}:${minutes}`;
   };
 
-  const handleSaveSourcePreference = async (mode: "prefer" | "show-less") => {
+  const handleSaveSourceRating = async (rating: "like" | "dislike") => {
     const activeSourceName = activeCompareArticle?.source ?? article?.source;
 
     if (!activeSourceName) {
@@ -914,59 +930,86 @@ export default function ArticleDetailPage() {
     }
 
     if (!userId) {
-      setSourcePreferenceStatus({
+      setSourceRatingStatus({
         type: "error",
-        text: "Log in to customize sources.",
+        text: "Log in to rate sources.",
       });
       return;
     }
 
     const sourceName = activeSourceName;
-    const nextPreferredSources =
-      mode === "prefer"
-        ? preferredSources.includes(sourceName)
-          ? preferredSources.filter((current) => current !== sourceName)
-          : [...preferredSources, sourceName]
-        : preferredSources.filter((current) => current !== sourceName);
-    const nextShowLessSources =
-      mode === "show-less"
-        ? showLessSources.includes(sourceName)
-          ? showLessSources.filter((current) => current !== sourceName)
-          : [...showLessSources, sourceName]
-        : showLessSources.filter((current) => current !== sourceName);
+    const currentRating = likedSources.includes(sourceName)
+      ? "like"
+      : dislikedSources.includes(sourceName)
+        ? "dislike"
+        : null;
 
-    setIsSavingSourcePreference(true);
-    setSourcePreferenceStatus(null);
+    setIsSavingSourceRating(true);
+    setSourceRatingStatus(null);
 
-    const { error } = await saveProfilePatch(
-      {
-        id: userId,
-        email: userEmail,
-      },
-      {
-        id: userId,
-        email: userEmail,
-        preferred_sources: nextPreferredSources,
-        show_less_sources: nextShowLessSources,
+    if (currentRating === rating) {
+      const { error } = await supabase
+        .from("source_ratings")
+        .delete()
+        .eq("user_id", userId)
+        .eq("source_name", sourceName);
+
+      setIsSavingSourceRating(false);
+
+      if (error) {
+        console.error("Error clearing source rating:", error);
+        setSourceRatingStatus({
+          type: "error",
+          text: error.message ?? "Could not update source rating.",
+        });
+        return;
       }
-    );
 
-    setIsSavingSourcePreference(false);
-
-    if (error) {
-      console.error("Error saving source preference:", error);
-      setSourcePreferenceStatus({
-        type: "error",
-        text: error.message ?? "Could not save source preference.",
+      setLikedSources((prev) => prev.filter((current) => current !== sourceName));
+      setDislikedSources((prev) => prev.filter((current) => current !== sourceName));
+      setSourceRatingStatus({
+        type: "success",
+        text: "Source rating cleared.",
       });
       return;
     }
 
-    setPreferredSources(nextPreferredSources);
-    setShowLessSources(nextShowLessSources);
-    setSourcePreferenceStatus({
+    const { error } = await supabase.from("source_ratings").upsert(
+      {
+        user_id: userId,
+        source_name: sourceName,
+        rating,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "user_id,source_name",
+      }
+    );
+
+    setIsSavingSourceRating(false);
+
+    if (error) {
+      console.error("Error saving source rating:", error);
+      setSourceRatingStatus({
+        type: "error",
+        text: error.message ?? "Could not save source rating.",
+      });
+      return;
+    }
+
+    setLikedSources((prev) =>
+      rating === "like"
+        ? [...prev.filter((current) => current !== sourceName), sourceName]
+        : prev.filter((current) => current !== sourceName)
+    );
+    setDislikedSources((prev) =>
+      rating === "dislike"
+        ? [...prev.filter((current) => current !== sourceName), sourceName]
+        : prev.filter((current) => current !== sourceName)
+    );
+    setSourceRatingStatus({
       type: "success",
-      text: "Source preference updated.",
+      text: "Source rating updated.",
     });
   };
 
@@ -1451,7 +1494,7 @@ export default function ArticleDetailPage() {
               className="source-trigger article-detail-source-wrap"
               onClick={() => {
                 setIsSourceSheetOpen(true);
-                setSourcePreferenceStatus(null);
+                setSourceRatingStatus(null);
               }}
             >
               <SourceBadge sourceName={compareArticle.source} />
@@ -1796,26 +1839,31 @@ export default function ArticleDetailPage() {
         </div>
       ) : null}
 
-      <SourcePreferenceSheet
+      <SourceRatingSheet
         sourceName={compareArticle.source}
         isOpen={isSourceSheetOpen}
-        isPreferred={preferredSources.includes(compareArticle.source)}
-        isShowLess={showLessSources.includes(compareArticle.source)}
-        isSaving={isSavingSourcePreference}
-        status={sourcePreferenceStatus}
-        onPrefer={() => {
-          void handleSaveSourcePreference("prefer");
+        currentRating={
+          likedSources.includes(compareArticle.source)
+            ? "like"
+            : dislikedSources.includes(compareArticle.source)
+              ? "dislike"
+              : null
+        }
+        isSaving={isSavingSourceRating}
+        status={sourceRatingStatus}
+        onLike={() => {
+          void handleSaveSourceRating("like");
         }}
-        onShowLess={() => {
-          void handleSaveSourcePreference("show-less");
+        onDislike={() => {
+          void handleSaveSourceRating("dislike");
         }}
         onClose={() => {
-          if (isSavingSourcePreference) {
+          if (isSavingSourceRating) {
             return;
           }
 
           setIsSourceSheetOpen(false);
-          setSourcePreferenceStatus(null);
+          setSourceRatingStatus(null);
         }}
       />
 

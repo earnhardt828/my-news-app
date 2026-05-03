@@ -528,6 +528,12 @@ input {
   min-width: 0;
 }
 
+.trending-source-button {
+  width: auto;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
 .source-trigger {
   width: 100%;
   padding: 0;

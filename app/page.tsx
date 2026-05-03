@@ -1626,19 +1626,21 @@ export default function Home() {
             return (
               <div key={article.id} className="stack">
                 <article className="news-card">
-                  <button
-                    type="button"
-                    className="source-trigger trending-source-row"
-                    onClick={() => openSourcePreferenceSheet(article.source)}
-                  >
-                    <div className="trending-source-brand">
-                      <SourceBadge sourceName={article.source} />
-                      <span className="trending-source-name">{article.source}</span>
-                    </div>
+                  <div className="trending-source-row">
+                    <button
+                      type="button"
+                      className="source-trigger trending-source-button"
+                      onClick={() => openSourcePreferenceSheet(article.source)}
+                    >
+                      <div className="trending-source-brand">
+                        <SourceBadge sourceName={article.source} />
+                        <span className="trending-source-name">{article.source}</span>
+                      </div>
+                    </button>
                     {sortMode === "trending" && index < 3 ? (
                       <span className="chip trending-rank-badge">Top {index + 1}</span>
                     ) : null}
-                  </button>
+                  </div>
                   <Link href={`/article/${article.id}`} className="article-link">
                     <div className="news-card-body">
                       <div className="trending-title-row">
