@@ -35,13 +35,19 @@ function resolveCommentArticleTitle(
   comment: {
     article_id: number;
     article_title?: string | null;
+    article_url?: string | null;
   },
-  articleTitleLookup: Map<number, string>
+  articleTitleLookup: Map<number, string>,
+  articleUrlLookup: Map<string, string>
 ) {
+  const normalizedStoredTitle = comment.article_title?.replace(/\s+/g, " ").trim();
+  const normalizedArticleUrl = comment.article_url?.trim() ?? "";
+
   return (
-    comment.article_title?.trim() ||
+    normalizedStoredTitle ||
     articleTitleLookup.get(comment.article_id) ||
-    "Article unavailable"
+    (normalizedArticleUrl ? articleUrlLookup.get(normalizedArticleUrl) : null) ||
+    "Article"
   );
 }
 
@@ -195,7 +201,11 @@ export default function ProfileCommentsPage() {
 
       const newsArticles =
         newsRes.status === "fulfilled" && newsRes.value.ok
-          ? ((((await newsRes.value.json()) as { id: number; title: string }[]) ?? []))
+          ? ((((await newsRes.value.json()) as {
+              id: number;
+              title: string;
+              url?: string | null;
+            }[]) ?? []))
           : [];
 
       if (newsRes.status === "rejected") {
@@ -210,10 +220,22 @@ export default function ProfileCommentsPage() {
       const articleTitleLookup = new Map(
         newsArticles.map((article) => [article.id, article.title])
       );
+      const articleUrlLookup = new Map(
+        newsArticles
+          .filter(
+            (article): article is { id: number; title: string; url: string } =>
+              Boolean(article.url?.trim())
+          )
+          .map((article) => [article.url.trim(), article.title])
+      );
 
       const enrichedComments = ((commentsRes.value.data ?? []) as RawProfileComment[]).map((comment) => ({
         ...comment,
-        article_title: resolveCommentArticleTitle(comment, articleTitleLookup),
+        article_title: resolveCommentArticleTitle(
+          comment,
+          articleTitleLookup,
+          articleUrlLookup
+        ),
         hearts: reactions.filter(
           (reaction) =>
             reaction.comment_id === comment.id && reaction.reaction_type === "like"
