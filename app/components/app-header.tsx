@@ -237,13 +237,14 @@ export default function AppHeader() {
         <div className="app-header-article-source" aria-live="polite">
           {articleHeaderSource}
         </div>
-        {articleHeaderUrl ? (
-          <a
-            href={articleHeaderUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="article-close-button app-header-article-link"
-            aria-label="Open original article"
+        <div className="app-header-article-actions">
+          <button
+            type="button"
+            className="article-close-button app-header-article-filter"
+            aria-label="Choose comment sort"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("reflekt:article-comment-sort-toggle"));
+            }}
           >
             <span className="icon-action-glyph" aria-hidden="true">
               <svg
@@ -256,14 +257,38 @@ export default function AppHeader() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <path d="M7 17 17 7" />
-                <path d="M9 7h8v8" />
+                <path d="M4 7h16" />
+                <path d="M7 12h10" />
+                <path d="M10 17h4" />
               </svg>
             </span>
-          </a>
-        ) : (
-          <span className="app-header-article-spacer" aria-hidden="true" />
-        )}
+          </button>
+          {articleHeaderUrl ? (
+            <a
+              href={articleHeaderUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="article-close-button app-header-article-link"
+              aria-label="Open original article"
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M7 17 17 7" />
+                  <path d="M9 7h8v8" />
+                </svg>
+              </span>
+            </a>
+          ) : null}
+        </div>
       </div>
     );
   }

@@ -176,6 +176,14 @@ input {
   width: 100%;
 }
 
+.app-header-article-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 96px;
+}
+
 .app-header-article-source {
   text-align: center;
   font-size: 1.04rem;
@@ -185,11 +193,6 @@ input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.app-header-article-spacer {
-  width: 44px;
-  height: 44px;
 }
 
 .app-header-article-link {
@@ -1337,6 +1340,14 @@ input {
   gap: 10px;
 }
 
+.comment-user-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .comment-user-avatar {
   display: inline-flex;
   align-items: center;
@@ -1360,6 +1371,12 @@ input {
 
 .comment-username {
   font-weight: 800;
+}
+
+.comment-header-time {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .modal-backdrop {
@@ -1750,10 +1767,6 @@ input {
   letter-spacing: -0.02em;
 }
 
-.article-comments-topbar {
-  padding: 0;
-}
-
 .article-comments-inline-thread {
   padding-top: 0;
 }
@@ -1775,6 +1788,28 @@ input {
   color: var(--text-soft);
   font-size: 0.9rem;
   font-weight: 700;
+}
+
+.article-comment-send-button {
+  min-width: 44px;
+  padding-inline: 12px;
+}
+
+.article-comment-sort-sheet {
+  width: min(100%, 760px);
+  max-height: min(52vh, 420px);
+}
+
+.article-comment-sort-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.article-comment-sort-option-active {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-muted));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  color: var(--accent-strong);
 }
 
 .comment-reaction-row {
