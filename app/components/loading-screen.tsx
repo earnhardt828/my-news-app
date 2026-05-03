@@ -19,7 +19,7 @@ export default function LoadingScreen({
           className="loading-screen-logo branding-image-light"
         />
         <Image
-          src="/branding/graffiti-loading-center-transparent.png"
+          src="/branding/graffiti-loading-center-dark.png"
           alt="Graffiti"
           width={72}
           height={72}
@@ -37,7 +37,7 @@ export default function LoadingScreen({
           className="loading-screen-bottom-logo branding-image-light"
         />
         <Image
-          src="/branding/graffiti-loading-bottom-transparent.png"
+          src="/branding/graffiti-loading-bottom-dark.png"
           alt="Graffiti"
           width={180}
           height={36}
