@@ -38,11 +38,10 @@ type MyComment = {
   username: string | null;
   user_id: string | null;
   created_at: string | null;
-  likes: number;
-  dislikes: number;
+  hearts: number;
 };
 
-type RawProfileComment = Omit<MyComment, "likes" | "dislikes" | "article_title"> & {
+type RawProfileComment = Omit<MyComment, "hearts" | "article_title"> & {
   article_title?: string | null;
 };
 
@@ -373,8 +372,7 @@ export default function Profile() {
         >[]).map((comment) => ({
           ...comment,
           article_title: resolveCommentArticleTitle(comment, new Map()),
-          likes: 0,
-          dislikes: 0,
+          hearts: 0,
         }))
       );
       return;
@@ -389,8 +387,7 @@ export default function Profile() {
         >[]).map((comment) => ({
           ...comment,
           article_title: resolveCommentArticleTitle(comment, new Map()),
-          likes: 0,
-          dislikes: 0,
+          hearts: 0,
         }))
       );
       return;
@@ -419,13 +416,9 @@ export default function Profile() {
       .map((comment) => ({
         ...comment,
         article_title: resolveCommentArticleTitle(comment, articleTitleLookup),
-        likes: reactions.filter(
+        hearts: reactions.filter(
           (reaction) =>
             reaction.comment_id === comment.id && reaction.reaction_type === "like"
-        ).length,
-        dislikes: reactions.filter(
-          (reaction) =>
-            reaction.comment_id === comment.id && reaction.reaction_type === "dislike"
         ).length,
       }));
 
@@ -1428,27 +1421,9 @@ export default function Profile() {
                               strokeLinejoin="round"
                               aria-hidden="true"
                             >
-                              <path d="M7 11v8" />
-                              <path d="M11 19h6.2a2 2 0 0 0 1.9-1.4l1.2-4a2 2 0 0 0-1.9-2.6H14V6.8c0-1-.8-1.8-1.8-1.8-.6 0-1.1.3-1.5.8L7 11Z" />
+                              <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
                             </svg>
-                            <span>{comment.likes}</span>
-                          </span>
-                          <span className="profile-comment-reaction-item">
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.9"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                            >
-                              <path d="M17 13V5" />
-                              <path d="M13 5H6.8a2 2 0 0 0-1.9 1.4l-1.2 4a2 2 0 0 0 1.9 2.6H10v4.2c0 1 .8 1.8 1.8 1.8.6 0 1.1-.3 1.5-.8L17 13Z" />
-                            </svg>
-                            <span>{comment.dislikes}</span>
+                            <span>{comment.hearts}</span>
                           </span>
                         </div>
                       </div>

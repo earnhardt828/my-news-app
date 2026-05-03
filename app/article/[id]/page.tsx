@@ -275,7 +275,7 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
 
 function sortComments(
   comments: ArticleComment[],
-  mode: "top" | "controversial" | "newest"
+  mode: "top" | "newest"
 ) {
   const copied = [...comments];
 
@@ -287,25 +287,12 @@ function sortComments(
     });
   }
 
-  if (mode === "controversial") {
-    return copied.sort((a, b) => {
-      if (b.dislikes === a.dislikes) {
-        return b.likes - a.likes;
-      }
-
-      return b.dislikes - a.dislikes;
-    });
-  }
-
   return copied.sort((a, b) => {
-    const scoreA = a.likes - a.dislikes;
-    const scoreB = b.likes - b.dislikes;
-
-    if (scoreB === scoreA) {
+    if (b.likes === a.likes) {
       return b.likes - a.likes;
     }
 
-    return scoreB - scoreA;
+    return b.likes - a.likes;
   });
 }
 
@@ -415,9 +402,7 @@ export default function ArticleDetailPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
-  const [commentSortMode, setCommentSortMode] = useState<
-    "top" | "controversial" | "newest"
-  >("top");
+  const [commentSortMode, setCommentSortMode] = useState<"top" | "newest">("top");
   const [isCommentSortSheetOpen, setIsCommentSortSheetOpen] = useState(false);
   const [commentInput, setCommentInput] = useState("");
   const [replyTarget, setReplyTarget] = useState<{
@@ -1107,10 +1092,7 @@ export default function ArticleDetailPage() {
     setCommentInput("");
   };
 
-  const handleCommentReaction = async (
-    commentId: number,
-    reactionType: "like" | "dislike"
-  ) => {
+  const handleCommentReaction = async (commentId: number) => {
     if (!userId) {
       alert("Log in to react to comments");
       return;
@@ -1131,7 +1113,7 @@ export default function ArticleDetailPage() {
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (existingReaction?.reaction_type === reactionType) {
+    if (existingReaction?.reaction_type === "like") {
       const { error } = await supabase
         .from("comment_reactions")
         .delete()
@@ -1150,12 +1132,7 @@ export default function ArticleDetailPage() {
           comment.id === commentId
             ? {
                 ...comment,
-                likes:
-                  reactionType === "like" ? Math.max(0, comment.likes - 1) : comment.likes,
-                dislikes:
-                  reactionType === "dislike"
-                    ? Math.max(0, comment.dislikes - 1)
-                    : comment.dislikes,
+                likes: Math.max(0, comment.likes - 1),
                 currentUserReaction: null,
               }
             : comment
@@ -1167,7 +1144,7 @@ export default function ArticleDetailPage() {
     if (existingReaction) {
       const { error } = await supabase
         .from("comment_reactions")
-        .update({ reaction_type: reactionType })
+        .update({ reaction_type: "like" })
         .eq("id", existingReaction.id)
         .eq("user_id", userId);
 
@@ -1183,21 +1160,18 @@ export default function ArticleDetailPage() {
           comment.id === commentId
             ? {
                 ...comment,
-                likes:
-                  reactionType === "like"
-                    ? comment.likes + 1
-                    : Math.max(0, comment.likes - 1),
+                likes: comment.likes + (existingReaction.reaction_type === "like" ? 0 : 1),
                 dislikes:
-                  reactionType === "dislike"
-                    ? comment.dislikes + 1
-                    : Math.max(0, comment.dislikes - 1),
-                currentUserReaction: reactionType,
+                  existingReaction.reaction_type === "dislike"
+                    ? Math.max(0, comment.dislikes - 1)
+                    : comment.dislikes,
+                currentUserReaction: "like",
               }
             : comment
         )
       );
 
-      if (reactionType === "like" && existingReaction.reaction_type !== "like") {
+      if (existingReaction.reaction_type !== "like") {
         void createNotification({
           recipientUserId: targetComment.user_id,
           type: "comment_like",
@@ -1210,7 +1184,7 @@ export default function ArticleDetailPage() {
     const { error } = await supabase.from("comment_reactions").insert({
       comment_id: commentId,
       user_id: userId,
-      reaction_type: reactionType,
+      reaction_type: "like",
     });
 
     setActiveCommentAction(null);
@@ -1225,22 +1199,18 @@ export default function ArticleDetailPage() {
         comment.id === commentId
           ? {
               ...comment,
-              likes: reactionType === "like" ? comment.likes + 1 : comment.likes,
-              dislikes:
-                reactionType === "dislike" ? comment.dislikes + 1 : comment.dislikes,
-              currentUserReaction: reactionType,
+              likes: comment.likes + 1,
+              currentUserReaction: "like",
             }
           : comment
       )
     );
 
-    if (reactionType === "like") {
-      void createNotification({
-        recipientUserId: targetComment.user_id,
-        type: "comment_like",
-        commentId,
-      });
-    }
+    void createNotification({
+      recipientUserId: targetComment.user_id,
+      type: "comment_like",
+      commentId,
+    });
   };
 
   const handleSubmitReport = async () => {
@@ -1708,33 +1678,27 @@ export default function ArticleDetailPage() {
                             ? "comment-reaction-pill-active"
                             : ""
                         }`}
-                        onClick={() => handleCommentReaction(comment.id, "like")}
+                        onClick={() => handleCommentReaction(comment.id)}
                         disabled={activeCommentAction === `reaction-${comment.id}`}
+                        aria-label={
+                          comment.currentUserReaction === "like"
+                            ? "Remove heart"
+                            : "Heart comment"
+                        }
                       >
                         <span className="comment-reaction-glyph" aria-hidden="true">
                           <svg {...actionIconProps}>
-                            <path d="M7 11v8" />
-                            <path d="M11 19h6.2a2 2 0 0 0 1.9-1.4l1.2-4a2 2 0 0 0-1.9-2.6H14V6.8c0-1-.8-1.8-1.8-1.8-.6 0-1.1.3-1.5.8L7 11Z" />
+                            <path
+                              d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                              fill={
+                                comment.currentUserReaction === "like"
+                                  ? "currentColor"
+                                  : "none"
+                              }
+                            />
                           </svg>
                         </span>
                         <span>{comment.likes}</span>
-                      </button>
-                      <button
-                        className={`comment-reaction-pill ${
-                          comment.currentUserReaction === "dislike"
-                            ? "comment-reaction-pill-active"
-                            : ""
-                        }`}
-                        onClick={() => handleCommentReaction(comment.id, "dislike")}
-                        disabled={activeCommentAction === `reaction-${comment.id}`}
-                      >
-                        <span className="comment-reaction-glyph" aria-hidden="true">
-                          <svg {...actionIconProps}>
-                            <path d="M17 13V5" />
-                            <path d="M13 5H6.8a2 2 0 0 0-1.9 1.4l-1.2 4a2 2 0 0 0 1.9 2.6H10v4.2c0 1 .8 1.8 1.8 1.8.6 0 1.1-.3 1.5-.8L17 13Z" />
-                          </svg>
-                        </span>
-                        <span>{comment.dislikes}</span>
                       </button>
                     </div>
                   </div>
@@ -1803,7 +1767,6 @@ export default function ArticleDetailPage() {
             <div className="source-sheet-actions">
               {[
                 { value: "top" as const, label: "Top comments" },
-                { value: "controversial" as const, label: "Controversial" },
                 { value: "newest" as const, label: "Newest" },
               ].map((option) => (
                 <button
