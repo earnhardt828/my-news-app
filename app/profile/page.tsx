@@ -18,7 +18,7 @@ import {
   saveProfilePatch,
   type AppProfileRecord,
 } from "../../lib/profile-store";
-import { CATEGORY_OPTIONS, getCategoryLabel } from "../../lib/categories";
+import { getCategoryLabel } from "../../lib/categories";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
@@ -128,7 +128,6 @@ export default function Profile() {
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [draftBio, setDraftBio] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
-  const [isSavingCategories, setIsSavingCategories] = useState(false);
   const [myComments, setMyComments] = useState<MyComment[]>([]);
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -803,34 +802,6 @@ export default function Profile() {
     avatarInputRef.current?.click();
   };
 
-  const handleCategoryToggle = async (category: string) => {
-    if (!currentUser?.id || isSavingCategories) {
-      return;
-    }
-
-    const nextCategories = categories.includes(category)
-      ? categories.filter((current) => current !== category)
-      : [...categories, category];
-
-    const previousCategories = categories;
-    setCategories(nextCategories);
-    setIsSavingCategories(true);
-
-    const { error } = await saveProfile({
-      categories: nextCategories,
-    });
-
-    setIsSavingCategories(false);
-
-    if (error) {
-      setCategories(previousCategories);
-      setMessage(error.message ?? "Could not save categories.");
-      return;
-    }
-
-    setMessage("Favorite categories updated.");
-  };
-
   const handleDeleteComment = async (commentId: number) => {
     if (!currentUser?.id) {
       setMessage("Log in to manage comments.");
@@ -1126,8 +1097,6 @@ export default function Profile() {
                   <span className="muted">Uploading image...</span>
                 ) : isSavingInlineUsername ? (
                   <span className="muted">Saving username...</span>
-                ) : isSavingCategories ? (
-                  <span className="muted">Saving categories...</span>
                 ) : null}
               </div>
             </div>
@@ -1180,21 +1149,40 @@ export default function Profile() {
 
               <div className="profile-divider" />
 
-              <strong>Favorite Categories</strong>
-              <div className="category-grid">
-                {CATEGORY_OPTIONS.map((cat) => (
-                  <button
-                    key={cat}
-                    className={`category-pill ${
-                      categories.includes(cat) ? "category-pill-active" : ""
-                    }`}
-                    onClick={() => void handleCategoryToggle(cat)}
-                    disabled={isSavingCategories}
+              <div className="profile-section-row">
+                <strong className="profile-section-title-sm">Favorite categories</strong>
+                <Link
+                  href="/profile/categories"
+                  className="profile-section-icon-button"
+                  aria-label="Manage favorite categories"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
                   >
-                    {getCategoryLabel(cat)}
-                  </button>
-                ))}
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </Link>
               </div>
+              {categories.length === 0 ? (
+                <div className="profile-categories-empty">No categories selected yet.</div>
+              ) : (
+                <div className="category-grid">
+                  {categories.slice(0, 5).map((category) => (
+                    <span key={category} className="category-pill category-pill-active">
+                      {getCategoryLabel(category)}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="input-row profile-hidden-input-row">

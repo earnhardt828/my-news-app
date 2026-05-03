@@ -2271,6 +2271,38 @@ input {
   color: var(--foreground);
 }
 
+.profile-section-title-sm {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.profile-section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-section-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--button-secondary-bg);
+  color: var(--foreground);
+}
+
+.profile-categories-empty {
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
 .profile-name-button {
   padding: 0;
   border: 0;
