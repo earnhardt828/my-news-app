@@ -1109,19 +1109,22 @@ export default function ArticleDetailPage() {
       (("urlToImage" in (currentCommentArticle ?? {})
         ? (currentCommentArticle as { urlToImage?: string | null }).urlToImage
         : null) ?? null);
+    const commentInsertPayload = {
+      article_id: articleId,
+      article_title: currentCommentArticle?.title ?? null,
+      article_source: currentCommentArticle?.source ?? null,
+      article_image: currentCommentArticleImage,
+      article_url: currentCommentArticle?.url ?? null,
+      text,
+      user_id: userId,
+      username,
+    };
+
+    console.log("COMMENT INSERT PAYLOAD:", commentInsertPayload);
 
     let insertResponse = await supabase
       .from("comments")
-      .insert({
-        article_id: articleId,
-        article_title: currentCommentArticle?.title ?? null,
-        article_source: currentCommentArticle?.source ?? null,
-        article_image: currentCommentArticleImage,
-        article_url: currentCommentArticle?.url ?? null,
-        text,
-        user_id: userId,
-        username,
-      })
+      .insert(commentInsertPayload)
       .select()
       .single();
 
@@ -1151,6 +1154,14 @@ export default function ArticleDetailPage() {
     if (error) {
       console.error("Error saving comment:", error);
       return;
+    }
+
+    console.log("COMMENT INSERT RESULT:", data);
+
+    if (!data.article_title) {
+      console.warn(
+        "Inserted comment row is missing article_title. This usually means the comments metadata columns have not been added in Supabase yet."
+      );
     }
 
     setComments((prev) => [
