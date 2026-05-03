@@ -225,6 +225,14 @@ function normalizeArticleId(value: number | string | null | undefined) {
   return null;
 }
 
+function isMissingCommentMetadataColumnError(message: string | null | undefined) {
+  if (!message) {
+    return false;
+  }
+
+  return /article_title|article_source|article_image|article_url/i.test(message);
+}
+
 function getTitleTokens(value: string) {
   return new Set(
     value
@@ -1097,7 +1105,7 @@ export default function ArticleDetailPage() {
 
     const targetArticle = compareArticle ?? article;
 
-    const { data, error } = await supabase
+    let insertResponse = await supabase
       .from("comments")
       .insert({
         article_id: articleId,
@@ -1111,6 +1119,29 @@ export default function ArticleDetailPage() {
       })
       .select()
       .single();
+
+    if (
+      insertResponse.error &&
+      isMissingCommentMetadataColumnError(insertResponse.error.message)
+    ) {
+      console.error(
+        "Article comment insert failed with article metadata payload, retrying without optional columns:",
+        insertResponse.error
+      );
+
+      insertResponse = await supabase
+        .from("comments")
+        .insert({
+          article_id: articleId,
+          text,
+          user_id: userId,
+          username,
+        })
+        .select()
+        .single();
+    }
+
+    const { data, error } = insertResponse;
 
     if (error) {
       console.error("Error saving comment:", error);

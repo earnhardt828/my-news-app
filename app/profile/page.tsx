@@ -42,8 +42,22 @@ type MyComment = {
 };
 
 type RawProfileComment = Omit<MyComment, "hearts" | "article_title"> & {
+  article_id: number | string;
   article_title?: string | null;
 };
+
+function normalizeArticleId(value: number | string | null | undefined) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
 
 type SavedArticle = {
   id: number;
@@ -74,7 +88,7 @@ function isMissingCommentMetadataColumnError(message: string | null | undefined)
 
 function resolveCommentArticleTitle(
   comment: {
-    article_id: number;
+    article_id: number | string;
     article_title?: string | null;
     article_url?: string | null;
   },
@@ -83,10 +97,11 @@ function resolveCommentArticleTitle(
 ) {
   const normalizedStoredTitle = comment.article_title?.replace(/\s+/g, " ").trim();
   const normalizedArticleUrl = comment.article_url?.trim() ?? "";
+  const normalizedArticleId = normalizeArticleId(comment.article_id);
 
   return (
     normalizedStoredTitle ||
-    articleTitleLookup.get(comment.article_id) ||
+    (normalizedArticleId !== null ? articleTitleLookup.get(normalizedArticleId) : null) ||
     (normalizedArticleUrl ? articleUrlLookup.get(normalizedArticleUrl) : null) ||
     "Article"
   );
@@ -418,7 +433,9 @@ export default function Profile() {
     }
 
     const articleTitleLookup = new Map(
-      newsArticles.map((article) => [article.id, article.title])
+      newsArticles
+        .map((article) => [normalizeArticleId(article.id), article.title] as const)
+        .filter((entry): entry is [number, string] => entry[0] !== null)
     );
     const articleUrlLookup = new Map(
       newsArticles
