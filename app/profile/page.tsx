@@ -49,6 +49,7 @@ type SavedArticle = {
   url?: string | null;
   image?: string | null;
   published_at?: string | null;
+  created_at?: string | null;
 };
 
 type ProfileRow = Omit<AppProfileRecord, "id" | "email">;
@@ -267,7 +268,7 @@ export default function Profile() {
       show_less_sources: profile.show_less_sources ?? [],
     };
 
-    const [commentsRes, savedRes, reactionsRes, newsRes] = await Promise.all([
+    const [commentsRes, savedRes, reactionsRes, newsRes] = await Promise.allSettled([
       supabase
         .from("comments")
         .select("id, text, article_id, username, user_id, created_at")
@@ -275,7 +276,9 @@ export default function Profile() {
         .order("created_at", { ascending: false }),
       supabase
         .from("saved_articles")
-        .select("id, article_id, title, source, category, time, url, image, published_at")
+        .select(
+          "id, article_id, title, source, url, image, category, time, published_at, created_at"
+        )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
       supabase
@@ -284,28 +287,84 @@ export default function Profile() {
       fetch("/api/news"),
     ]);
 
-    if (commentsRes.error) {
-      console.error("Error loading profile comments:", commentsRes.error);
-      throw commentsRes.error;
+    if (savedRes.status === "rejected") {
+      console.error("Error loading saved articles:", savedRes.reason);
+      throw savedRes.reason;
     }
 
-    if (savedRes.error) {
-      console.error("Error loading saved articles:", savedRes.error);
-      throw savedRes.error;
+    if (savedRes.value.error) {
+      console.error("Error loading saved articles:", savedRes.value.error);
+      throw savedRes.value.error;
     }
 
-    if (reactionsRes.error) {
-      console.error("Error loading comment reactions:", reactionsRes.error);
-      throw reactionsRes.error;
+    setSavedArticles((savedRes.value.data ?? []) as SavedArticle[]);
+
+    if (commentsRes.status === "rejected") {
+      console.error("Error loading profile comments:", commentsRes.reason);
+      setMyComments([]);
+      return;
     }
 
-    const newsArticles = ((await newsRes.json()) as { id: number; title: string }[]) ?? [];
+    if (commentsRes.value.error) {
+      console.error("Error loading profile comments:", commentsRes.value.error);
+      setMyComments([]);
+      return;
+    }
+
+    if (reactionsRes.status === "rejected") {
+      console.error("Error loading comment reactions:", reactionsRes.reason);
+      setMyComments(
+        ((commentsRes.value.data ?? []) as Omit<
+          MyComment,
+          "article_title" | "likes" | "dislikes"
+        >[]).map((comment) => ({
+          ...comment,
+          article_title: `Article #${comment.article_id}`,
+          likes: 0,
+          dislikes: 0,
+        }))
+      );
+      return;
+    }
+
+    if (reactionsRes.value.error) {
+      console.error("Error loading comment reactions:", reactionsRes.value.error);
+      setMyComments(
+        ((commentsRes.value.data ?? []) as Omit<
+          MyComment,
+          "article_title" | "likes" | "dislikes"
+        >[]).map((comment) => ({
+          ...comment,
+          article_title: `Article #${comment.article_id}`,
+          likes: 0,
+          dislikes: 0,
+        }))
+      );
+      return;
+    }
+
+    const newsArticles =
+      newsRes.status === "fulfilled" && newsRes.value.ok
+        ? ((((await newsRes.value.json()) as { id: number; title: string }[]) ?? []))
+        : [];
+
+    if (newsRes.status === "rejected") {
+      console.error("Error loading article titles for profile comments:", newsRes.reason);
+    } else if (!newsRes.value.ok) {
+      console.error("Error loading article titles for profile comments:", {
+        status: newsRes.value.status,
+        statusText: newsRes.value.statusText,
+      });
+    }
+
     const articleTitleLookup = new Map(
       newsArticles.map((article) => [article.id, article.title])
     );
-    const reactions = reactionsRes.data ?? [];
+    const reactions = reactionsRes.value.data ?? [];
 
-    const enrichedComments = ((commentsRes.data ?? []) as Omit<MyComment, "article_title" | "likes" | "dislikes">[])
+    const enrichedComments = ((
+      commentsRes.value.data ?? []
+    ) as Omit<MyComment, "article_title" | "likes" | "dislikes">[])
       .map((comment) => ({
         ...comment,
         article_title:
@@ -321,7 +380,6 @@ export default function Profile() {
       }));
 
     setMyComments(enrichedComments as MyComment[]);
-    setSavedArticles((savedRes.data ?? []) as SavedArticle[]);
   }, []);
 
   const syncSignedInProfile = useCallback(async (user: User | null) => {
