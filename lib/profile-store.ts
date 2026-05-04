@@ -62,6 +62,23 @@ function isMissingContactEmailColumnError(error: { message?: string } | null) {
   return Boolean(error?.message?.toLowerCase().includes("contact_email"));
 }
 
+async function upsertProfileRow(payload: Record<string, unknown>) {
+  let response = await supabase
+    .from("profiles")
+    .upsert(payload, { onConflict: "id" });
+
+  if (isMissingContactEmailColumnError(response.error)) {
+    const fallbackPayload = { ...payload };
+    delete fallbackPayload.contact_email;
+
+    response = await supabase
+      .from("profiles")
+      .upsert(fallbackPayload, { onConflict: "id" });
+  }
+
+  return response;
+}
+
 async function selectProfileRow(user: ProfileUserRef) {
   const primaryResult = await supabase
     .from("profiles")
@@ -102,9 +119,7 @@ export async function ensureProfileRow(user: ProfileUserRef) {
     updated_at: new Date().toISOString(),
   };
 
-  const { error: upsertError } = await supabase
-    .from("profiles")
-    .upsert(seed, { onConflict: "id" });
+  const { error: upsertError } = await upsertProfileRow(seed);
 
   if (upsertError) {
     return {
@@ -143,9 +158,7 @@ export async function saveProfilePatch(user: ProfileUserRef, updates: Partial<Ap
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase
-    .from("profiles")
-    .upsert(payload, { onConflict: "id" });
+  const { error } = await upsertProfileRow(payload);
 
   if (error) {
     return {
