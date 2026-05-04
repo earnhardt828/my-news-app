@@ -99,9 +99,12 @@ export async function ensureProfileRow(user: ProfileUserRef) {
   const seed = {
     id: user.id,
     email: user.email ?? null,
+    updated_at: new Date().toISOString(),
   };
 
-  const { error: upsertError } = await supabase.from("profiles").upsert(seed);
+  const { error: upsertError } = await supabase
+    .from("profiles")
+    .upsert(seed, { onConflict: "id" });
 
   if (upsertError) {
     return {
@@ -129,7 +132,7 @@ export async function saveProfilePatch(user: ProfileUserRef, updates: Partial<Ap
   }
 
   const current = ensured.data;
-  const payload: AppProfileRecord = {
+  const payload = {
     ...current,
     ...updates,
     id: user.id,
@@ -137,9 +140,12 @@ export async function saveProfilePatch(user: ProfileUserRef, updates: Partial<Ap
     categories: updates.categories ?? current.categories ?? [],
     preferred_sources: updates.preferred_sources ?? current.preferred_sources ?? [],
     show_less_sources: updates.show_less_sources ?? current.show_less_sources ?? [],
+    updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase.from("profiles").upsert(payload);
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(payload, { onConflict: "id" });
 
   if (error) {
     return {
@@ -148,8 +154,17 @@ export async function saveProfilePatch(user: ProfileUserRef, updates: Partial<Ap
     };
   }
 
+  const refreshed = await selectProfileRow(user);
+
+  if (refreshed.error) {
+    return {
+      data: null as AppProfileRecord | null,
+      error: refreshed.error,
+    };
+  }
+
   return {
-    data: payload,
+    data: (refreshed.data as AppProfileRecord | null) ?? getDefaultProfileRecord(user),
     error: null,
   };
 }

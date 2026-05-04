@@ -703,6 +703,28 @@ export default function Profile() {
 
     setIsSavingInlineUsername(true);
 
+    const ensuredProfile = await ensureProfileRow({
+      id: currentUser.id,
+      email: currentUser.email,
+    });
+
+    if (ensuredProfile.error || !ensuredProfile.data) {
+      setIsSavingInlineUsername(false);
+      setMessage(ensuredProfile.error?.message ?? "Could not prepare your profile.");
+      return;
+    }
+
+    profileRef.current = {
+      username: ensuredProfile.data.username,
+      contact_email: ensuredProfile.data.contact_email,
+      bio: ensuredProfile.data.bio,
+      categories: ensuredProfile.data.categories ?? [],
+      avatar_url: ensuredProfile.data.avatar_url,
+      username_last_changed_at: ensuredProfile.data.username_last_changed_at,
+      preferred_sources: ensuredProfile.data.preferred_sources ?? [],
+      show_less_sources: ensuredProfile.data.show_less_sources ?? [],
+    };
+
     const { data: matchingProfiles, error: availabilityError } = await supabase
       .from("profiles")
       .select("id")
@@ -720,7 +742,7 @@ export default function Profile() {
 
     if (isTaken) {
       setIsSavingInlineUsername(false);
-      setMessage("Username already taken.");
+      setMessage("That username is not available. Please choose another.");
       return;
     }
 
