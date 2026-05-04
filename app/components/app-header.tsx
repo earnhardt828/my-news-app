@@ -564,9 +564,9 @@ export default function AppHeader() {
   return (
     <div className="app-header-logo-wrap">
       <Link
-        href="/source-rankings"
+        href="/profile/bookmarks"
         className="header-icon-button"
-        aria-label="Open source rankings"
+        aria-label="Open bookmarked articles"
       >
         <span className="header-icon-glyph" aria-hidden="true">
           <svg
@@ -579,11 +579,7 @@ export default function AppHeader() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="M8 21h8" />
-            <path d="M12 17v4" />
-            <path d="M7 4h10v4a5 5 0 0 1-10 0Z" />
-            <path d="M7 6H5a2 2 0 0 0 2 3" />
-            <path d="M17 6h2a2 2 0 0 1-2 3" />
+            <path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z" />
           </svg>
         </span>
       </Link>

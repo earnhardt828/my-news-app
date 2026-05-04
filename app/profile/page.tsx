@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -21,7 +20,6 @@ import {
 import { getCategoryLabel } from "../../lib/categories";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
-import { extractVideoIdFromUrl } from "../../lib/video-feed";
 
 type UserState = {
   id: string | null;
@@ -108,67 +106,7 @@ function resolveCommentArticleTitle(
   );
 }
 
-function formatRelativeTime(timestamp: string | null) {
-  if (!timestamp) {
-    return "Just now";
-  }
-
-  const createdAt = new Date(timestamp).getTime();
-
-  if (Number.isNaN(createdAt)) {
-    return "Just now";
-  }
-
-  const diffMs = Date.now() - createdAt;
-  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-
-  if (diffMinutes < 1) {
-    return "Just now";
-  }
-
-  if (diffMinutes === 1) {
-    return "1 minute ago";
-  }
-
-  if (diffMinutes < 60) {
-    return `${diffMinutes} minutes ago`;
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60);
-
-  if (diffHours === 1) {
-    return "1 hour ago";
-  }
-
-  if (diffHours < 24) {
-    return `${diffHours} hours ago`;
-  }
-
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffDays === 1) {
-    return "1 day ago";
-  }
-
-  return `${diffDays} days ago`;
-}
-
-function getCommentDetailPath(comment: {
-  article_id: number | string;
-  article_url?: string | null;
-  id: number;
-}) {
-  const videoId = extractVideoIdFromUrl(comment.article_url);
-
-  if (videoId) {
-    return `/video/${videoId}#comment-${comment.id}`;
-  }
-
-  return `/article/${comment.article_id}#comment-${comment.id}`;
-}
-
 export default function Profile() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -195,15 +133,6 @@ export default function Profile() {
   const [myComments, setMyComments] = useState<MyComment[]>([]);
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
-  const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
-  const [reportReason, setReportReason] = useState("");
-  const [reportStatus, setReportStatus] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
-  const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
-  const [openCommentMenuId, setOpenCommentMenuId] = useState<number | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const profileRef = useRef<ProfileRow>({
     username: null,
@@ -929,142 +858,11 @@ export default function Profile() {
     avatarInputRef.current?.click();
   };
 
-  const handleDeleteComment = async (commentId: number) => {
-    if (!currentUser?.id) {
-      setMessage("Log in to manage comments.");
-      return;
-    }
-
-    setActiveCommentAction(`delete-${commentId}`);
-
-    const { error } = await supabase
-      .from("comments")
-      .delete()
-      .eq("id", commentId)
-      .eq("user_id", currentUser.id);
-
-    setActiveCommentAction(null);
-
-    if (error) {
-      console.error("Error deleting comment:", error);
-      setMessage("Could not delete comment.");
-      return;
-    }
-
-    setMyComments((prev) => prev.filter((comment) => comment.id !== commentId));
-    setMessage("Comment deleted.");
-  };
-
-  const openDeleteModal = (commentId: number) => {
-    setOpenCommentMenuId(null);
-    setDeleteCommentId(commentId);
-  };
-
-  const closeDeleteModal = () => {
-    if (deleteCommentId && activeCommentAction === `delete-${deleteCommentId}`) {
-      return;
-    }
-
-    setDeleteCommentId(null);
-  };
-
-  const confirmDeleteComment = async () => {
-    if (deleteCommentId === null) {
-      return;
-    }
-
-    await handleDeleteComment(deleteCommentId);
-    setDeleteCommentId(null);
-  };
-
-  const openReportModal = (commentId: number) => {
-    if (!currentUser?.id) {
-      setMessage("Log in to report comments.");
-      return;
-    }
-
-    setReportingCommentId(commentId);
-    setOpenCommentMenuId(null);
-    setReportReason("");
-    setReportStatus(null);
-  };
-
-  const closeReportModal = () => {
-    if (activeCommentAction?.startsWith("report-")) {
-      return;
-    }
-
-    setReportingCommentId(null);
-    setReportReason("");
-    setReportStatus(null);
-  };
-
-  const handleSubmitReport = async () => {
-    if (!currentUser?.id || reportingCommentId === null) {
-      setMessage("Log in to report comments.");
-      return;
-    }
-
-    const trimmedReason = reportReason.trim();
-
-    if (!trimmedReason) {
-      setReportStatus({
-        type: "error",
-        text: "Please add a reason before submitting your report.",
-      });
-      return;
-    }
-
-    setActiveCommentAction(`report-${reportingCommentId}`);
-    setReportStatus(null);
-
-    const { error } = await supabase.from("reports").insert({
-      comment_id: reportingCommentId,
-      user_id: currentUser.id,
-      reason: trimmedReason,
-    });
-
-    setActiveCommentAction(null);
-
-    if (error) {
-      console.error("Error reporting comment:", error);
-      setReportStatus({
-        type: "error",
-        text: "Could not submit report. Please try again.",
-      });
-      return;
-    }
-
-    setMessage("Report submitted.");
-    setReportStatus({
-      type: "success",
-      text: "Report submitted successfully.",
-    });
-    setReportReason("");
-    window.setTimeout(() => {
-      setReportingCommentId(null);
-      setReportStatus(null);
-    }, 1200);
-  };
-
   const initials = username.trim().charAt(0).toUpperCase() || "N";
   const isSignedIn = Boolean(currentUser?.id);
   const currentUserId = currentUser?.id ?? "";
-
-  useEffect(() => {
-    if (openCommentMenuId === null) {
-      return;
-    }
-
-    const closeMenu = () => {
-      setOpenCommentMenuId(null);
-    };
-
-    window.addEventListener("click", closeMenu);
-    return () => {
-      window.removeEventListener("click", closeMenu);
-    };
-  }, [openCommentMenuId]);
+  const totalPoints =
+    myComments.length + myComments.reduce((sum, comment) => sum + comment.hearts, 0);
 
   return (
     <section className="page-shell">
@@ -1222,6 +1020,7 @@ export default function Profile() {
                     <h3 className="profile-name">{username || "News Reader"}</h3>
                   </button>
                 )}
+                <span className="muted">{totalPoints} points</span>
                 <div className="profile-meta-row">
                   <span className="chip">{categories.length} categories selected</span>
                   <Link href={`/user/${currentUserId}`} className="chip chip-accent">
@@ -1398,220 +1197,9 @@ export default function Profile() {
               )}
             </section>
 
-            <section className="section-card stack">
-              <div className="profile-section-row">
-                <h3 className="profile-section-title">My Comments</h3>
-                <Link
-                  href="/profile/comments"
-                  className="profile-section-icon-button"
-                  aria-label="Open all comments"
-                >
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.9"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 5v14" />
-                    <path d="M5 12h14" />
-                  </svg>
-                </Link>
-              </div>
-
-              {myComments.length === 0 ? (
-                <div className="empty-state">
-                  <strong>No comments yet</strong>
-                  <span>Your comments on articles will show up here.</span>
-                </div>
-              ) : (
-                <div className="comment-list">
-                  {myComments.slice(0, 3).map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="comment-card profile-comment-card"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        setOpenCommentMenuId(null);
-                        router.push(getCommentDetailPath(comment));
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setOpenCommentMenuId(null);
-                          router.push(getCommentDetailPath(comment));
-                        }
-                      }}
-                    >
-                      <div className="profile-comment-toprow">
-                        <strong className="profile-comment-article-title">
-                          {comment.article_title}
-                        </strong>
-                        <div className="profile-comment-menu-wrap">
-                          <button
-                            type="button"
-                            className="profile-comment-menu-button"
-                            aria-label="Open comment actions"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setOpenCommentMenuId((current) =>
-                                current === comment.id ? null : comment.id
-                              );
-                            }}
-                          >
-                            <span aria-hidden="true">⋯</span>
-                          </button>
-                          {openCommentMenuId === comment.id ? (
-                            <div
-                              className="profile-comment-menu"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <button
-                                className="profile-comment-menu-item"
-                                type="button"
-                                onClick={() => openReportModal(comment.id)}
-                              >
-                                Report
-                              </button>
-                              {comment.user_id === currentUserId ? (
-                                <button
-                                  className="profile-comment-menu-item profile-comment-menu-item-danger"
-                                  type="button"
-                                  onClick={() => openDeleteModal(comment.id)}
-                                >
-                                  Delete
-                                </button>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="comment-body">
-                        <strong>{comment.username ?? "You"}</strong>{" "}
-                        <span className="muted">{comment.text}</span>
-                      </div>
-                      <div className="profile-comment-footer">
-                        <div className="comment-meta">
-                          {formatRelativeTime(comment.created_at)}
-                        </div>
-                        <div className="profile-comment-reaction-summary">
-                          <span className="profile-comment-reaction-item">
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.9"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                            >
-                              <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
-                            </svg>
-                            <span>{comment.hearts}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
           </div>
         </div>
       )}
-
-      {reportingCommentId !== null ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="profile-report-title">
-          <div className="modal-card">
-            <div className="stack" style={{ gap: "6px" }}>
-              <h3 id="profile-report-title" className="modal-title">
-                Report comment
-              </h3>
-              <p className="muted" style={{ margin: 0 }}>
-                Share what happened so this comment can be reviewed.
-              </p>
-            </div>
-
-            <textarea
-              className="textarea"
-              placeholder="Add a reason for this report..."
-              value={reportReason}
-              onChange={(e) => setReportReason(e.target.value)}
-              disabled={activeCommentAction === `report-${reportingCommentId}`}
-            />
-
-            {reportStatus ? (
-              <div
-                className={`status-message ${
-                  reportStatus.type === "success" ? "status-success" : "status-error"
-                }`}
-              >
-                {reportStatus.text}
-              </div>
-            ) : null}
-
-            <div className="modal-actions">
-              <button
-                className="button button-secondary"
-                onClick={closeReportModal}
-                disabled={activeCommentAction === `report-${reportingCommentId}`}
-              >
-                Cancel
-              </button>
-              <button
-                className="button button-accent"
-                onClick={handleSubmitReport}
-                disabled={activeCommentAction === `report-${reportingCommentId}`}
-              >
-                {activeCommentAction === `report-${reportingCommentId}`
-                  ? "Submitting..."
-                  : "Submit Report"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {deleteCommentId !== null ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="profile-delete-title">
-          <div className="modal-card">
-            <div className="stack" style={{ gap: "6px" }}>
-              <h3 id="profile-delete-title" className="modal-title">
-                Delete comment
-              </h3>
-              <p className="muted" style={{ margin: 0 }}>
-                Are you sure you want to delete this comment?
-              </p>
-            </div>
-
-            <div className="modal-actions">
-              <button
-                className="button button-secondary"
-                onClick={closeDeleteModal}
-                disabled={activeCommentAction === `delete-${deleteCommentId}`}
-              >
-                Cancel
-              </button>
-              <button
-                className="button comment-action-danger"
-                onClick={confirmDeleteComment}
-                disabled={activeCommentAction === `delete-${deleteCommentId}`}
-              >
-                {activeCommentAction === `delete-${deleteCommentId}`
-                  ? "Deleting..."
-                  : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
