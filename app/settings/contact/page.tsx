@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
@@ -151,9 +150,6 @@ export default function SettingsContactPage() {
                   >
                     {isSaving ? "Saving..." : "Save"}
                   </button>
-                  <Link href="/settings" className="button button-secondary">
-                    Back to Settings
-                  </Link>
                 </div>
               </>
             )}

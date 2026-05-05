@@ -491,6 +491,58 @@ export default function AppHeader() {
     );
   }
 
+  if (pathname === "/settings/contact") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close contact info"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/settings");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          Contact info
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (pathname === "/privacy") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close privacy page"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/settings");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          Privacy
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
   if (pathname !== "/") {
     if (pathname === "/videos") {
       return (
@@ -550,6 +602,16 @@ export default function AppHeader() {
             </span>
             {hasUnreadNotifications ? <span className="header-notification-dot" /> : null}
           </Link>
+        </div>
+      );
+    }
+
+    if (pathname === "/settings") {
+      return (
+        <div className="app-header-title-wrap app-header-title-wrap-center">
+          <span className="app-header-side-spacer" aria-hidden="true" />
+          <h1 className="brand-title">Settings</h1>
+          <span className="app-header-side-spacer" aria-hidden="true" />
         </div>
       );
     }

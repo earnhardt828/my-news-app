@@ -406,12 +406,13 @@ export default function SettingsPage() {
           {message ? <div className="chip chip-accent">{message}</div> : null}
 
           {isDeleteModalOpen ? (
-            <div className="modal-overlay" role="presentation">
+            <div className="modal-backdrop" role="presentation">
               <div className="modal-card">
-                <h3 style={{ marginTop: 0 }}>Delete account</h3>
+                <h3 className="modal-title">Are you sure?</h3>
                 <p className="muted">
-                  This permanently deletes your Graffiti account and related profile data.
-                  Type <strong>delete</strong> to confirm.
+                  Deleting your Graffiti account permanently removes your profile and
+                  related data from the app. Type <strong>delete</strong> to confirm
+                  before we continue.
                 </p>
                 <div className="input-row">
                   <input
@@ -432,7 +433,7 @@ export default function SettingsPage() {
                     {deleteStatus.text}
                   </div>
                 ) : null}
-                <div className="toolbar">
+                <div className="modal-actions">
                   <button
                     className="button button-secondary"
                     onClick={() => {
@@ -457,7 +458,7 @@ export default function SettingsPage() {
                     disabled={
                       isDeletingAccount || deleteConfirmationText.trim().toLowerCase() !== "delete"
                     }
-                  >
+                    >
                     {isDeletingAccount ? "Deleting..." : "Delete account"}
                   </button>
                 </div>
