@@ -3047,6 +3047,25 @@ input {
   line-height: 1.45;
 }
 
+.settings-empty-state {
+  padding: 18px 4px;
+  color: var(--text-soft);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.settings-field {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-field-label {
+  color: var(--foreground);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
 .legal-reading {
   max-width: 680px;
   margin: 0 auto;

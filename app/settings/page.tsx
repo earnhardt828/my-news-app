@@ -307,7 +307,7 @@ export default function SettingsPage() {
           <section className="settings-list-section">
             <p className="settings-section-title">Safety</p>
             <div className="settings-list-card">
-              <div className="settings-list-row settings-list-row-static">
+              <Link href="/settings/blocked-users" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Blocked users</strong>
                   <span>
@@ -321,7 +321,7 @@ export default function SettingsPage() {
                 <span className="settings-chevron" aria-hidden="true">
                   ›
                 </span>
-              </div>
+              </Link>
 
               {blockedUsers.length > 0 ? (
                 <div className="settings-sublist">
@@ -356,7 +356,7 @@ export default function SettingsPage() {
                 </div>
               ) : null}
 
-              <div className="settings-list-row settings-list-row-static">
+              <Link href="/settings/report-abuse" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Report abuse or safety issue</strong>
                   <span>Reach out at support@graffiti.app for urgent safety concerns.</span>
@@ -364,7 +364,7 @@ export default function SettingsPage() {
                 <span className="settings-chevron" aria-hidden="true">
                   ›
                 </span>
-              </div>
+              </Link>
             </div>
           </section>
 

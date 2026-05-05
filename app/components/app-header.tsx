@@ -517,6 +517,58 @@ export default function AppHeader() {
     );
   }
 
+  if (pathname === "/settings/blocked-users") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close blocked users"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/settings");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          Blocked users
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (pathname === "/settings/report-abuse") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close report abuse"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/settings");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          Report a safety issue
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
   if (pathname === "/privacy") {
     return (
       <div className="app-header-article-bar">
