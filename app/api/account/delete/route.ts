@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+type BlockedUsersDeleteClient = {
+  from: (table: "blocked_users") => {
+    delete: () => {
+      eq: (
+        column: string,
+        value: string
+      ) => PromiseLike<{ error: { message?: string; code?: string } | null }>;
+    };
+  };
+};
+
 function getBearerToken(request: Request) {
   const authHeader = request.headers.get("authorization") ?? "";
 
@@ -9,6 +20,28 @@ function getBearerToken(request: Request) {
   }
 
   return authHeader.slice("Bearer ".length).trim();
+}
+
+async function deleteBlockedUsersByColumn(
+  adminClient: BlockedUsersDeleteClient,
+  column: string,
+  userId: string
+) {
+  const { error } = await adminClient.from("blocked_users").delete().eq(column, userId);
+
+  if (
+    error &&
+    !(
+      error.message?.toLowerCase().includes("blocked_users") &&
+      (error.message?.toLowerCase().includes("column") ||
+        error.message?.toLowerCase().includes("schema cache") ||
+        error.code === "42703")
+    )
+  ) {
+    throw error;
+  }
+
+  return { error: null };
 }
 
 export async function DELETE(request: Request) {
@@ -84,8 +117,10 @@ export async function DELETE(request: Request) {
       adminClient.from("comment_reactions").delete().eq("user_id", user.id),
       adminClient.from("likes").delete().eq("user_id", user.id),
       adminClient.from("saved_articles").delete().eq("user_id", user.id),
-      adminClient.from("blocked_users").delete().eq("blocker_id", user.id),
-      adminClient.from("blocked_users").delete().eq("blocked_user_id", user.id),
+      deleteBlockedUsersByColumn(adminClient, "blocker_id", user.id),
+      deleteBlockedUsersByColumn(adminClient, "blocker_user_id", user.id),
+      deleteBlockedUsersByColumn(adminClient, "blocked_user_id", user.id),
+      deleteBlockedUsersByColumn(adminClient, "blocked_id", user.id),
       adminClient.from("comments").delete().eq("user_id", user.id),
       adminClient.from("profiles").delete().eq("id", user.id),
       adminClient.from("account_deletion_requests").delete().eq("user_id", user.id),

@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShareButton from "./components/share-button";
+import { createBlockedUser, listBlockedUsers } from "../lib/blocked-users";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
 import { supabase } from "../lib/supabase";
@@ -378,12 +379,12 @@ export default function Home() {
             .eq("user_id", userData.user.id)
         : { data: [] as DbSavedArticle[] };
 
-      const { data: blockedUsersData } = userData.user?.id
-        ? await supabase
-            .from("blocked_users")
-            .select("blocked_user_id")
-            .eq("blocker_id", userData.user.id)
-        : { data: [] as DbBlockedUser[] };
+      const { data: blockedUsersData, error: blockedUsersError } = userData.user?.id
+        ? await listBlockedUsers(supabase, userData.user.id)
+        : { data: [] as DbBlockedUser[], error: null };
+      if (blockedUsersError) {
+        console.error("Error loading blocked users:", blockedUsersError);
+      }
       const { data: sourceRatingsData } = userData.user?.id
         ? await supabase
             .from("source_ratings")
@@ -969,10 +970,12 @@ export default function Home() {
 
     setActiveCommentAction(`block-${blockedUserId}`);
 
-    const { error } = await supabase.from("blocked_users").insert({
-      blocker_id: userId,
-      blocked_user_id: blockedUserId,
-    });
+    const { error } = await createBlockedUser(
+      supabase,
+      userId,
+      blockedUserId,
+      blockedUsername ?? null
+    );
 
     setActiveCommentAction(null);
 

@@ -1224,8 +1224,20 @@ input {
   color: inherit;
 }
 
+.search-user-card {
+  text-decoration: none;
+  color: inherit;
+}
+
 .search-source-card-row,
 .search-result-source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.search-user-card-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1239,16 +1251,38 @@ input {
   min-width: 0;
 }
 
+.search-user-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .search-source-name {
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 
+.search-user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
+}
+
 .search-source-kind {
   color: var(--text-soft);
   font-size: 0.88rem;
   font-weight: 700;
+}
+
+.search-user-bio {
+  color: var(--text-soft);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .search-results-list {
@@ -2778,6 +2812,22 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.user-profile-shell {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.user-comment-card {
+  text-decoration: none;
+}
+
+.user-comment-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .source-preferences-header {

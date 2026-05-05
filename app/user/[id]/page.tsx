@@ -3,80 +3,279 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createBlockedUser, listBlockedUsers, removeBlockedUser } from "../../../lib/blocked-users";
+import { extractVideoIdFromUrl } from "../../../lib/video-feed";
 import { supabase } from "../../../lib/supabase";
 
 type ProfileRecord = {
+  id: string;
   username: string | null;
   avatar_url: string | null;
+  bio: string | null;
 };
 
-type UserComment = {
+type DbComment = {
   id: number;
-  article_id: number;
+  article_id: number | string | null;
+  article_title: string | null;
+  article_url: string | null;
   text: string;
   username: string | null;
+  user_id: string | null;
+  created_at: string | null;
 };
+
+type DbCommentReaction = {
+  comment_id: number;
+  reaction_type: "like" | "dislike";
+};
+
+type PublicComment = DbComment & {
+  hearts: number;
+};
+
+function formatRelativeTime(timestamp: string | null) {
+  if (!timestamp) {
+    return "Recent";
+  }
+
+  const parsed = new Date(timestamp).getTime();
+
+  if (Number.isNaN(parsed)) {
+    return "Recent";
+  }
+
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - parsed) / 60000));
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  return `${diffDays}d ago`;
+}
 
 export default function UserProfilePage() {
   const params = useParams<{ id: string }>();
-  const userId = params.id;
+  const routeIdentifier = decodeURIComponent(params.id ?? "");
+  const [viewerId, setViewerId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
-  const [comments, setComments] = useState<UserComment[]>([]);
+  const [comments, setComments] = useState<PublicComment[]>([]);
+  const [isBlocked, setIsBlocked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBlocking, setIsBlocking] = useState(false);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     async function loadUserProfile() {
-      if (!userId) {
+      if (!routeIdentifier) {
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
 
-      const { data: profileData } = await supabase
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setViewerId(user?.id ?? null);
+
+      let profileData: ProfileRecord | null = null;
+
+      const { data: usernameProfile, error: usernameProfileError } = await supabase
         .from("profiles")
-        .select("username, avatar_url")
-        .eq("id", userId)
+        .select("id, username, avatar_url, bio")
+        .ilike("username", routeIdentifier)
         .maybeSingle();
 
-      const { data: commentData } = await supabase
-        .from("comments")
-        .select("id, article_id, text, username")
-        .eq("user_id", userId);
+      if (usernameProfileError) {
+        console.error("Error loading user profile by username:", usernameProfileError);
+      }
 
-      setProfile((profileData ?? null) as ProfileRecord | null);
-      setComments((commentData ?? []) as UserComment[]);
+      profileData = (usernameProfile ?? null) as ProfileRecord | null;
+
+      if (!profileData) {
+        const { data: idProfile, error: idProfileError } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url, bio")
+          .eq("id", routeIdentifier)
+          .maybeSingle();
+
+        if (idProfileError) {
+          console.error("Error loading user profile by id:", idProfileError);
+        }
+
+        profileData = (idProfile ?? null) as ProfileRecord | null;
+      }
+
+      if (!profileData?.id) {
+        setProfile(null);
+        setComments([]);
+        setIsBlocked(false);
+        setIsLoading(false);
+        return;
+      }
+
+      const [{ data: blockedUsersData, error: blockedUsersError }, { data: commentData, error: commentError }] =
+        await Promise.all([
+          user?.id ? listBlockedUsers(supabase, user.id) : Promise.resolve({ data: [], error: null }),
+          supabase
+            .from("comments")
+            .select(
+              "id, article_id, article_title, article_url, text, username, user_id, created_at"
+            )
+            .eq("user_id", profileData.id)
+            .order("created_at", { ascending: false }),
+        ]);
+
+      if (blockedUsersError) {
+        console.error("Error loading blocked users for public profile:", blockedUsersError);
+      }
+
+      if (commentError) {
+        console.error("Error loading public profile comments:", commentError);
+      }
+
+      const rawComments = (commentData ?? []) as DbComment[];
+      const commentIds = rawComments.map((comment) => comment.id);
+
+      const { data: reactionData, error: reactionError } =
+        commentIds.length > 0
+          ? await supabase
+              .from("comment_reactions")
+              .select("comment_id, reaction_type")
+              .in("comment_id", commentIds)
+          : { data: [] as DbCommentReaction[], error: null };
+
+      if (reactionError) {
+        console.error("Error loading public profile comment reactions:", reactionError);
+      }
+
+      const heartCounts = new Map<number, number>();
+      ((reactionData ?? []) as DbCommentReaction[]).forEach((reaction) => {
+        if (reaction.reaction_type !== "like") {
+          return;
+        }
+
+        heartCounts.set(reaction.comment_id, (heartCounts.get(reaction.comment_id) ?? 0) + 1);
+      });
+
+      const blockedIds = new Set(
+        ((blockedUsersData ?? []) as { blocked_user_id: string }[]).map(
+          (blockedUser) => blockedUser.blocked_user_id
+        )
+      );
+
+      setProfile(profileData);
+      setComments(
+        rawComments.map((comment) => ({
+          ...comment,
+          hearts: heartCounts.get(comment.id) ?? 0,
+        }))
+      );
+      setIsBlocked(blockedIds.has(profileData.id));
       setIsLoading(false);
     }
 
-    loadUserProfile();
-  }, [userId]);
+    void loadUserProfile();
+  }, [routeIdentifier]);
 
-  const displayName = profile?.username || "Graffiti user";
-  const initials = displayName.charAt(0).toUpperCase();
+  useEffect(() => {
+    if (!profile?.username || typeof window === "undefined") {
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent("reflekt:user-title", { detail: `@${profile.username}` }));
+  }, [profile?.username]);
+
+  const likesReceived = useMemo(
+    () => comments.reduce((sum, comment) => sum + comment.hearts, 0),
+    [comments]
+  );
+
+  const displayName = profile?.username ? `@${profile.username}` : "Graffiti user";
+  const initials = (profile?.username ?? "G").charAt(0).toUpperCase();
+  const isOwnProfile = Boolean(viewerId && profile?.id && viewerId === profile.id);
+
+  const handleBlockToggle = async () => {
+    if (!profile?.id) {
+      return;
+    }
+
+    if (!viewerId) {
+      setMessage({
+        type: "error",
+        text: "Log in to block users.",
+      });
+      return;
+    }
+
+    if (viewerId === profile.id) {
+      setMessage({
+        type: "error",
+        text: "You cannot block yourself.",
+      });
+      return;
+    }
+
+    setIsBlocking(true);
+    setMessage(null);
+
+    const result = isBlocked
+      ? await removeBlockedUser(supabase, viewerId, profile.id)
+      : await createBlockedUser(supabase, viewerId, profile.id, profile.username ?? null);
+
+    setIsBlocking(false);
+
+    if (result.error) {
+      console.error("Error updating block state:", result.error);
+      setMessage({
+        type: "error",
+        text: result.error.message ?? "Could not update block status.",
+      });
+      return;
+    }
+
+    setIsBlocked((previous) => !previous);
+    setMessage({
+      type: "success",
+      text: isBlocked ? "User unblocked." : "User blocked.",
+    });
+  };
 
   return (
     <section className="page-shell">
-      <div className="page-hero">
-        <p className="page-eyebrow">User Profile</p>
-        <h2 className="page-title">{displayName}</h2>
-        <p className="page-subtitle">
-          Explore this user&apos;s profile and recent comments across Graffiti.
-        </p>
-      </div>
-
       {isLoading ? (
         <div className="loading-state">
           <strong>Loading profile</strong>
-          <span>Fetching profile details and comment history.</span>
+          <span>Fetching profile details and recent comments.</span>
+        </div>
+      ) : !profile ? (
+        <div className="empty-state">
+          <strong>User not found</strong>
+          <span>This public Graffiti profile could not be loaded.</span>
         </div>
       ) : (
-        <div className="split-grid">
+        <div className="stack user-profile-shell">
           <section className="section-card stack">
             <div className="profile-hero">
               <div className="avatar-shell">
-                {profile?.avatar_url ? (
+                {profile.avatar_url ? (
                   <Image
                     src={profile.avatar_url}
                     alt={displayName}
@@ -95,32 +294,48 @@ export default function UserProfilePage() {
               </div>
 
               <div className="profile-meta">
-                <h3 className="profile-name">{displayName}</h3>
-                <span className="muted">Public Graffiti profile</span>
-                <span className="chip">{comments.length} comments</span>
+                <h2 className="profile-name">{displayName}</h2>
+                {profile.bio ? <p className="profile-bio-text">{profile.bio}</p> : null}
+                <div className="profile-stats-row">
+                  <div className="profile-stat-block">
+                    <span className="profile-stat-value">{comments.length}</span>
+                    <span className="profile-stat-label">Comments</span>
+                  </div>
+                  <div className="profile-stat-block">
+                    <span className="profile-stat-value">{likesReceived}</span>
+                    <span className="profile-stat-label">Likes Received</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="comment-card">
-              <strong>Username</strong>
-              <div className="muted" style={{ marginTop: "6px" }}>
-                {profile?.username ?? "Not set"}
+            {!isOwnProfile ? (
+              <div className="toolbar">
+                <button
+                  className={`button ${isBlocked ? "button-secondary" : "button-accent"}`}
+                  onClick={handleBlockToggle}
+                  disabled={isBlocking}
+                >
+                  {isBlocking ? (isBlocked ? "Unblocking..." : "Blocking...") : isBlocked ? "Unblock" : "Block"}
+                </button>
               </div>
-            </div>
+            ) : null}
 
-            <Link href="/" className="button button-secondary">
-              Back to Trending
-            </Link>
+            {message ? (
+              <div
+                className={`status-message ${
+                  message.type === "success" ? "status-success" : "status-error"
+                }`}
+              >
+                {message.text}
+              </div>
+            ) : null}
           </section>
 
           <section className="section-card stack">
-            <div>
-              <p className="page-eyebrow" style={{ marginBottom: "8px" }}>
-                Comments
-              </p>
-              <h3 className="profile-name" style={{ fontSize: "1.25rem" }}>
-                Recent conversation
-              </h3>
+            <div className="stack" style={{ gap: "6px" }}>
+              <strong className="profile-section-title">Recent comments</strong>
+              <span className="muted">Public comments posted across Graffiti.</span>
             </div>
 
             {comments.length === 0 ? (
@@ -130,12 +345,47 @@ export default function UserProfilePage() {
               </div>
             ) : (
               <div className="comment-list">
-                {comments.map((comment) => (
-                  <div key={comment.id} className="comment-card">
-                    <strong>Article #{comment.article_id}</strong>
-                    <div className="muted comment-body">{comment.text}</div>
-                  </div>
-                ))}
+                {comments.map((comment) => {
+                  const videoId = extractVideoIdFromUrl(comment.article_url);
+                  const commentHref = videoId
+                    ? `/video/${videoId}#comment-${comment.id}`
+                    : comment.article_id
+                      ? `/article/${comment.article_id}#comment-${comment.id}`
+                      : "/";
+
+                  return (
+                    <Link key={comment.id} href={commentHref} className="comment-card user-comment-card">
+                      <strong className="profile-comment-article-title">
+                        {comment.article_title?.trim() || "Article"}
+                      </strong>
+                      <div className="user-comment-meta">
+                        <strong>{displayName}</strong>
+                        <span className="comment-header-time">
+                          {formatRelativeTime(comment.created_at)}
+                        </span>
+                      </div>
+                      <p className="comment-body">{comment.text}</p>
+                      <div className="profile-comment-reaction-summary">
+                        <span className="profile-comment-reaction-item">
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill={comment.hearts > 0 ? "currentColor" : "none"}
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="m12 20.8-.8-.7C6 15.5 3 12.7 3 9.3 3 6.8 5 5 7.6 5c1.5 0 2.9.7 3.8 1.9C12.3 5.7 13.7 5 15.2 5 17.9 5 20 6.8 20 9.3c0 3.4-3 6.2-8.2 10.8l-.8.7Z" />
+                          </svg>
+                          <span>{comment.hearts}</span>
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </section>

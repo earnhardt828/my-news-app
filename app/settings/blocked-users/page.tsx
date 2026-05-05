@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
+import { listBlockedUsers, removeBlockedUser } from "../../../lib/blocked-users";
 import { supabase } from "../../../lib/supabase";
 
 type UserState = {
@@ -54,11 +55,10 @@ export default function SettingsBlockedUsersPage() {
         return;
       }
 
-      const { data: blockedUsersData, error: blockedUsersError } = await supabase
-        .from("blocked_users")
-        .select("id, blocked_user_id, created_at")
-        .eq("blocker_id", user.id)
-        .order("created_at", { ascending: false });
+      const { data: blockedUsersData, error: blockedUsersError } = await listBlockedUsers(
+        supabase,
+        user.id
+      );
 
       if (blockedUsersError) {
         console.error("Error loading blocked users:", blockedUsersError);
@@ -118,11 +118,7 @@ export default function SettingsBlockedUsersPage() {
 
     setActiveBlockedUserId(blockedUserId);
 
-    const { error } = await supabase
-      .from("blocked_users")
-      .delete()
-      .eq("blocker_id", currentUser.id)
-      .eq("blocked_user_id", blockedUserId);
+    const { error } = await removeBlockedUser(supabase, currentUser.id, blockedUserId);
 
     setActiveBlockedUserId(null);
 

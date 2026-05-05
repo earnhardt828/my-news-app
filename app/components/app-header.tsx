@@ -89,6 +89,7 @@ export default function AppHeader() {
   const [videoHeaderSource, setVideoHeaderSource] = useState("Video");
   const [isVideoSearchOpen, setIsVideoSearchOpen] = useState(false);
   const [sourceHeaderTitle, setSourceHeaderTitle] = useState<string | null>(null);
+  const [userHeaderTitle, setUserHeaderTitle] = useState<string | null>(null);
   const sourcePathSegments = pathname.split("/");
   const defaultSourceTitle = pathname.startsWith("/source/")
     ? getSourceNameFromSlug(sourcePathSegments[sourcePathSegments.length - 1] ?? "")
@@ -181,6 +182,24 @@ export default function AppHeader() {
       setSourceHeaderTitle(null);
     };
   }, [defaultSourceTitle, pathname]);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/user/")) {
+      return;
+    }
+
+    const handleUserTitle = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      setUserHeaderTitle(customEvent.detail || "Profile");
+    };
+
+    window.addEventListener("reflekt:user-title", handleUserTitle as EventListener);
+
+    return () => {
+      window.removeEventListener("reflekt:user-title", handleUserTitle as EventListener);
+      setUserHeaderTitle(null);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     if (pathname !== "/videos") {
@@ -355,6 +374,32 @@ export default function AppHeader() {
         </button>
         <div className="app-header-article-source" aria-live="polite">
           {sourceHeaderTitle || defaultSourceTitle}
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (pathname.startsWith("/user/")) {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close user profile"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/search");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          {userHeaderTitle || "Profile"}
         </div>
         <span className="app-header-article-spacer" aria-hidden="true" />
       </div>

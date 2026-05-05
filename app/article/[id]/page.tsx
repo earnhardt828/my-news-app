@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import ShareButton from "../../components/share-button";
 import SourceRatingSheet from "../../components/source-rating-sheet";
 import SourceBadge from "../../components/source-badge";
+import { listBlockedUsers } from "../../../lib/blocked-users";
 import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
 import { supabase } from "../../../lib/supabase";
@@ -592,12 +593,12 @@ export default function ArticleDetailPage() {
             .maybeSingle()
         : { data: null as { article_id: number } | null };
 
-      const { data: blockedUsersData } = currentUserId
-        ? await supabase
-            .from("blocked_users")
-            .select("blocked_user_id")
-            .eq("blocker_id", currentUserId)
-        : { data: [] as DbBlockedUser[] };
+      const { data: blockedUsersData, error: blockedUsersError } = currentUserId
+        ? await listBlockedUsers(supabase, currentUserId)
+        : { data: [] as DbBlockedUser[], error: null };
+      if (blockedUsersError) {
+        console.error("Error loading blocked users:", blockedUsersError);
+      }
       const { data: sourceRatingsData } = currentUserId
         ? await supabase
             .from("source_ratings")

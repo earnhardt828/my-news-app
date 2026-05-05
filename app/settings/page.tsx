@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import ThemeToggle from "../components/theme-toggle";
+import { listBlockedUsers, removeBlockedUser } from "../../lib/blocked-users";
 import { ensureProfileRow } from "../../lib/profile-store";
 import { supabase } from "../../lib/supabase";
 
@@ -71,16 +72,17 @@ export default function SettingsPage() {
           id: user.id,
           email: user.email ?? null,
         }),
-        supabase
-          .from("blocked_users")
-          .select("id, blocked_user_id, created_at")
-          .eq("blocker_id", user.id)
-          .order("created_at", { ascending: false }),
+        listBlockedUsers(supabase, user.id),
       ]);
 
       if (profileResult.error) {
         console.error("Error loading settings profile:", profileResult.error);
         setMessage(profileResult.error.message ?? "Could not load your profile.");
+      }
+
+      if (blockedUsersResult.error) {
+        console.error("Error loading blocked users:", blockedUsersResult.error);
+        setMessage(blockedUsersResult.error.message ?? "Could not load blocked users.");
       }
 
       const blockedRecords = (blockedUsersResult.data ?? []) as DbBlockedUser[];
@@ -145,11 +147,7 @@ export default function SettingsPage() {
 
     setActiveBlockedUserId(blockedUserId);
 
-    const { error } = await supabase
-      .from("blocked_users")
-      .delete()
-      .eq("blocker_id", currentUser.id)
-      .eq("blocked_user_id", blockedUserId);
+    const { error } = await removeBlockedUser(supabase, currentUser.id, blockedUserId);
 
     setActiveBlockedUserId(null);
 

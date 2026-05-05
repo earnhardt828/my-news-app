@@ -1,11 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import SourceBadge from "../components/source-badge";
+import { listBlockedUsers } from "../../lib/blocked-users";
 import { getCategoryLabel } from "../../lib/categories";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
+import { supabase } from "../../lib/supabase";
 
 type NewsArticle = {
   id: number;
@@ -18,6 +21,13 @@ type NewsArticle = {
   url?: string | null;
   publishedAt?: string | null;
   content?: string | null;
+};
+
+type UserProfileSearchResult = {
+  id: string;
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
 };
 
 const fallbackTrendingTerms = [
@@ -260,15 +270,20 @@ function getMatchScore(article: NewsArticle, query: string) {
 export default function Search() {
   const [query, setQuery] = useState("");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [userResults, setUserResults] = useState<UserProfileSearchResult[]>([]);
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
   const [isLoading, setIsLoading] = useState(true);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
 
   useEffect(() => {
     async function loadSearchData() {
       setIsLoading(true);
 
       try {
-        const response = await fetch("/api/news");
+        const [response, userResult] = await Promise.all([
+          fetch("/api/news"),
+          supabase.auth.getUser(),
+        ]);
         const news = (await response.json()) as NewsArticle[];
         setArticles(news);
 
@@ -276,6 +291,26 @@ export default function Search() {
 
         if (derivedTerms.length > 0) {
           setTrendingTerms(derivedTerms);
+        }
+
+        const user = userResult.data.user;
+        if (user?.id) {
+          const { data: blockedUsersData, error: blockedUsersError } = await listBlockedUsers(
+            supabase,
+            user.id
+          );
+
+          if (blockedUsersError) {
+            console.error("Error loading blocked users for search:", blockedUsersError);
+          }
+
+          setBlockedUserIds(
+            ((blockedUsersData ?? []) as { blocked_user_id: string }[]).map(
+              (blockedUser) => blockedUser.blocked_user_id
+            )
+          );
+        } else {
+          setBlockedUserIds([]);
         }
       } catch (error) {
         console.error("Error loading search data:", error);
@@ -288,6 +323,57 @@ export default function Search() {
   }, []);
 
   const normalizedQuery = query.trim().toLowerCase();
+
+  useEffect(() => {
+    async function loadUserResults() {
+      if (!normalizedQuery) {
+        setUserResults([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url, bio")
+        .ilike("username", `%${normalizedQuery}%`)
+        .limit(8);
+
+      if (error) {
+        console.error("Error loading user search results:", error);
+        setUserResults([]);
+        return;
+      }
+
+      const profiles = ((data ?? []) as UserProfileSearchResult[])
+        .filter((profile) => profile.username)
+        .filter((profile) => !blockedUserIds.includes(profile.id))
+        .sort((a, b) => {
+          const aName = a.username?.toLowerCase() ?? "";
+          const bName = b.username?.toLowerCase() ?? "";
+
+          if (aName === normalizedQuery && bName !== normalizedQuery) {
+            return -1;
+          }
+
+          if (bName === normalizedQuery && aName !== normalizedQuery) {
+            return 1;
+          }
+
+          if (aName.startsWith(normalizedQuery) && !bName.startsWith(normalizedQuery)) {
+            return -1;
+          }
+
+          if (bName.startsWith(normalizedQuery) && !aName.startsWith(normalizedQuery)) {
+            return 1;
+          }
+
+          return aName.localeCompare(bName);
+        });
+
+      setUserResults(profiles);
+    }
+
+    void loadUserResults();
+  }, [blockedUserIds, normalizedQuery]);
 
   const matchedSourceName = useMemo(() => {
     if (!normalizedQuery) {
@@ -385,6 +471,50 @@ export default function Search() {
         </section>
       ) : (
         <section className="stack search-results-shell">
+          {userResults.length > 0 ? (
+            <div className="search-results-list">
+              {userResults.map((user) => (
+                <Link
+                  key={user.id}
+                  href={`/user/${encodeURIComponent(user.username ?? user.id)}`}
+                  className="section-card search-user-card"
+                >
+                  <div className="search-user-card-row">
+                    <div className="search-user-brand">
+                      <span className="avatar-shell search-user-avatar">
+                        {user.avatar_url ? (
+                          <Image
+                            src={user.avatar_url}
+                            alt={user.username ?? "User avatar"}
+                            width={48}
+                            height={48}
+                            unoptimized
+                            className="source-avatar-image"
+                          />
+                        ) : (
+                          <span className="avatar-fallback">
+                            {(user.username ?? "G").charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </span>
+                      <div className="stack" style={{ gap: "4px" }}>
+                        <strong className="search-source-name">@{user.username}</strong>
+                        {user.bio ? (
+                          <span className="search-user-bio">{user.bio}</span>
+                        ) : (
+                          <span className="search-source-kind">Graffiti user</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="search-trending-icon" aria-hidden="true">
+                      ↗
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+
           {matchedSourceName ? (
             <Link
               href={`/source/${slugifySourceName(matchedSourceName)}`}
