@@ -861,8 +861,11 @@ export default function Profile() {
   const initials = username.trim().charAt(0).toUpperCase() || "N";
   const isSignedIn = Boolean(currentUser?.id);
   const currentUserId = currentUser?.id ?? "";
-  const totalPoints =
-    myComments.length + myComments.reduce((sum, comment) => sum + comment.hearts, 0);
+  const commentsCount = myComments.length;
+  const likesReceivedCount = myComments.reduce(
+    (sum, comment) => sum + comment.hearts,
+    0
+  );
 
   return (
     <section className="page-shell">
@@ -1020,7 +1023,16 @@ export default function Profile() {
                     <h3 className="profile-name">{username || "News Reader"}</h3>
                   </button>
                 )}
-                <span className="muted">{totalPoints} points</span>
+                <div className="profile-stats-row" aria-label="Profile stats">
+                  <div className="profile-stat-block">
+                    <strong className="profile-stat-value">{commentsCount}</strong>
+                    <span className="profile-stat-label">Comments</span>
+                  </div>
+                  <div className="profile-stat-block">
+                    <strong className="profile-stat-value">{likesReceivedCount}</strong>
+                    <span className="profile-stat-label">Likes Received</span>
+                  </div>
+                </div>
                 <div className="profile-meta-row">
                   <span className="chip">{categories.length} categories selected</span>
                   <Link href={`/user/${currentUserId}`} className="chip chip-accent">
