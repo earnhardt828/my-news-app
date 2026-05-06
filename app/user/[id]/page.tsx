@@ -80,6 +80,7 @@ export default function UserProfilePage() {
   const [comments, setComments] = useState<PublicComment[]>([]);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isUnavailable, setIsUnavailable] = useState(false);
+  const [isBlockedByThem, setIsBlockedByThem] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBlocking, setIsBlocking] = useState(false);
   const [message, setMessage] = useState<{
@@ -134,6 +135,7 @@ export default function UserProfilePage() {
         setComments([]);
         setIsBlocked(false);
         setIsUnavailable(false);
+        setIsBlockedByThem(false);
         setIsLoading(false);
         return;
       }
@@ -201,12 +203,16 @@ export default function UserProfilePage() {
         )
       );
       const mutuallyHiddenIds = new Set((mutuallyHiddenUserIds ?? []) as string[]);
+      const viewerBlockedProfile = blockedIds.has(profileData.id);
+      const profileBlockedViewer =
+        Boolean(user?.id) && mutuallyHiddenIds.has(profileData.id) && !viewerBlockedProfile;
 
       if (user?.id && mutuallyHiddenIds.has(profileData.id)) {
         setProfile(profileData);
         setComments([]);
-        setIsBlocked(blockedIds.has(profileData.id));
+        setIsBlocked(viewerBlockedProfile);
         setIsUnavailable(true);
+        setIsBlockedByThem(Boolean(profileBlockedViewer));
         setIsLoading(false);
         return;
       }
@@ -218,8 +224,9 @@ export default function UserProfilePage() {
           hearts: heartCounts.get(comment.id) ?? 0,
         }))
       );
-      setIsBlocked(blockedIds.has(profileData.id));
+      setIsBlocked(viewerBlockedProfile);
       setIsUnavailable(false);
+      setIsBlockedByThem(false);
       setIsLoading(false);
     }
 
@@ -242,6 +249,14 @@ export default function UserProfilePage() {
   const displayName = profile?.username ? `@${profile.username}` : "Graffiti user";
   const initials = (profile?.username ?? "G").charAt(0).toUpperCase();
   const isOwnProfile = Boolean(viewerId && profile?.id && viewerId === profile.id);
+  const blockButtonLabel = !viewerId
+    ? "Log in to block users."
+    : isBlocked
+      ? "Unblock"
+      : "Block";
+  const isBlockButtonDisabled = Boolean(
+    isBlocking || (isUnavailable && !isBlocked) || isBlockedByThem
+  );
 
   const handleBlockToggle = async () => {
     if (!profile?.id) {
@@ -260,6 +275,14 @@ export default function UserProfilePage() {
       setMessage({
         type: "error",
         text: "You cannot block yourself.",
+      });
+      return;
+    }
+
+    if (isUnavailable && !isBlocked) {
+      setMessage({
+        type: "error",
+        text: "This profile is unavailable.",
       });
       return;
     }
@@ -300,11 +323,6 @@ export default function UserProfilePage() {
         <div className="empty-state">
           <strong>User not found</strong>
           <span>This public Graffiti profile could not be loaded.</span>
-        </div>
-      ) : isUnavailable ? (
-        <div className="empty-state">
-          <strong>This profile is unavailable.</strong>
-          <span>You cannot view this profile right now.</span>
         </div>
       ) : (
         <div className="stack user-profile-shell">
@@ -348,11 +366,17 @@ export default function UserProfilePage() {
             {!isOwnProfile ? (
               <div className="toolbar">
                 <button
-                  className={`button ${isBlocked ? "button-secondary" : "button-accent"}`}
+                  className={`button ${
+                    isBlocked ? "button-secondary" : isUnavailable ? "button-secondary" : "button-accent"
+                  }`}
                   onClick={handleBlockToggle}
-                  disabled={isBlocking}
+                  disabled={isBlockButtonDisabled}
                 >
-                  {isBlocking ? (isBlocked ? "Unblocking..." : "Blocking...") : isBlocked ? "Unblock" : "Block"}
+                  {isBlocking
+                    ? isBlocked
+                      ? "Unblocking..."
+                      : "Blocking..."
+                    : blockButtonLabel}
                 </button>
               </div>
             ) : null}
@@ -368,63 +392,76 @@ export default function UserProfilePage() {
             ) : null}
           </section>
 
-          <section className="section-card stack">
-            <div className="stack" style={{ gap: "6px" }}>
-              <strong className="profile-section-title">Recent comments</strong>
-              <span className="muted">Public comments posted across Graffiti.</span>
-            </div>
-
-            {comments.length === 0 ? (
+          {isUnavailable ? (
+            <section className="section-card stack">
               <div className="empty-state">
-                <strong>No comments yet</strong>
-                <span>This user has not posted any comments yet.</span>
+                <strong>This profile is unavailable.</strong>
+                <span>
+                  {isBlocked
+                    ? "You blocked this user. Unblock them to restore access."
+                    : "You cannot view this profile right now."}
+                </span>
               </div>
-            ) : (
-              <div className="comment-list">
-                {comments.map((comment) => {
-                  const videoId = extractVideoIdFromUrl(comment.article_url);
-                  const commentHref = videoId
-                    ? `/video/${videoId}#comment-${comment.id}`
-                    : comment.article_id
-                      ? `/article/${comment.article_id}#comment-${comment.id}`
-                      : "/";
+            </section>
+          ) : (
+            <section className="section-card stack">
+              <div className="stack" style={{ gap: "6px" }}>
+                <strong className="profile-section-title">Recent comments</strong>
+                <span className="muted">Public comments posted across Graffiti.</span>
+              </div>
 
-                  return (
-                    <Link key={comment.id} href={commentHref} className="comment-card user-comment-card">
-                      <strong className="profile-comment-article-title">
-                        {comment.article_title?.trim() || "Article"}
-                      </strong>
-                      <div className="user-comment-meta">
-                        <strong>{displayName}</strong>
-                        <span className="comment-header-time">
-                          {formatRelativeTime(comment.created_at)}
-                        </span>
-                      </div>
-                      <p className="comment-body">{comment.text}</p>
-                      <div className="profile-comment-reaction-summary">
-                        <span className="profile-comment-reaction-item">
-                          <svg
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill={comment.hearts > 0 ? "currentColor" : "none"}
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="m12 20.8-.8-.7C6 15.5 3 12.7 3 9.3 3 6.8 5 5 7.6 5c1.5 0 2.9.7 3.8 1.9C12.3 5.7 13.7 5 15.2 5 17.9 5 20 6.8 20 9.3c0 3.4-3 6.2-8.2 10.8l-.8.7Z" />
-                          </svg>
-                          <span>{comment.hearts}</span>
-                        </span>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+              {comments.length === 0 ? (
+                <div className="empty-state">
+                  <strong>No comments yet</strong>
+                  <span>This user has not posted any comments yet.</span>
+                </div>
+              ) : (
+                <div className="comment-list">
+                  {comments.map((comment) => {
+                    const videoId = extractVideoIdFromUrl(comment.article_url);
+                    const commentHref = videoId
+                      ? `/video/${videoId}#comment-${comment.id}`
+                      : comment.article_id
+                        ? `/article/${comment.article_id}#comment-${comment.id}`
+                        : "/";
+
+                    return (
+                      <Link key={comment.id} href={commentHref} className="comment-card user-comment-card">
+                        <strong className="profile-comment-article-title">
+                          {comment.article_title?.trim() || "Article"}
+                        </strong>
+                        <div className="user-comment-meta">
+                          <strong>{displayName}</strong>
+                          <span className="comment-header-time">
+                            {formatRelativeTime(comment.created_at)}
+                          </span>
+                        </div>
+                        <p className="comment-body">{comment.text}</p>
+                        <div className="profile-comment-reaction-summary">
+                          <span className="profile-comment-reaction-item">
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill={comment.hearts > 0 ? "currentColor" : "none"}
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="m12 20.8-.8-.7C6 15.5 3 12.7 3 9.3 3 6.8 5 5 7.6 5c1.5 0 2.9.7 3.8 1.9C12.3 5.7 13.7 5 15.2 5 17.9 5 20 6.8 20 9.3c0 3.4-3 6.2-8.2 10.8l-.8.7Z" />
+                            </svg>
+                            <span>{comment.hearts}</span>
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       )}
     </section>

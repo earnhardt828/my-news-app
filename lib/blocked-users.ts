@@ -186,8 +186,8 @@ export async function listMutuallyHiddenUserIds(
         }
       });
 
-      const hiddenUserIds = [...hiddenIds];
-      console.log("HIDDEN USER IDS", hiddenUserIds);
+      const hiddenUserIds = Array.from(hiddenIds);
+      console.log("HIDDEN USER IDS", Array.from(hiddenIds));
       return { data: hiddenUserIds, error: null };
     }
 
