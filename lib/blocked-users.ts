@@ -19,6 +19,14 @@ export type NormalizedBlockedUserRow = {
   created_at: string;
 };
 
+type NormalizedBlockedRelationshipRow = {
+  id: number;
+  blocker_id: string;
+  blocked_id: string;
+  blocked_username: string | null;
+  created_at: string;
+};
+
 const BLOCKED_USERS_COLUMN_PAIRS: BlockedUsersColumnPair[] = [
   { blocker: "blocker_id", blocked: "blocked_id", username: "blocked_username" },
   { blocker: "blocker_id", blocked: "blocked_user_id", username: "blocked_username" },
@@ -50,6 +58,21 @@ function normalizeBlockedUsersRow(
     blocked_user_id: String(row[blockedColumn] ?? ""),
     blocked_username: usernameColumn ? String(row[usernameColumn] ?? "") || null : null,
   } satisfies NormalizedBlockedUserRow;
+}
+
+function normalizeBlockedRelationshipRow(
+  row: RawBlockedUserRow,
+  blockerColumn: string,
+  blockedColumn: string,
+  usernameColumn?: string | null
+) {
+  return {
+    id: row.id,
+    blocker_id: String(row[blockerColumn] ?? ""),
+    blocked_id: String(row[blockedColumn] ?? ""),
+    blocked_username: usernameColumn ? String(row[usernameColumn] ?? "") || null : null,
+    created_at: row.created_at,
+  } satisfies NormalizedBlockedRelationshipRow;
 }
 
 export async function listBlockedUsers(
@@ -132,34 +155,50 @@ export async function listMutuallyHiddenUserIds(
   data: string[] | null;
   error: { message?: string; code?: string } | null;
 }> {
-  const [outboundResult, inboundResult] = await Promise.all([
-    listBlockedUsers(supabaseClient, currentUserId),
-    listUsersWhoBlocked(supabaseClient, currentUserId),
-  ]);
+  let lastError: { message?: string; code?: string } | null = null;
 
-  if (outboundResult.error) {
-    return { data: null, error: outboundResult.error };
+  for (const pair of BLOCKED_USERS_COLUMN_PAIRS) {
+    const selectColumns = pair.username
+      ? `id, ${pair.blocker}, ${pair.blocked}, ${pair.username}, created_at`
+      : `id, ${pair.blocker}, ${pair.blocked}, created_at`;
+
+    const { data, error } = await supabaseClient
+      .from("blocked_users")
+      .select(selectColumns)
+      .or(`${pair.blocker}.eq.${currentUserId},${pair.blocked}.eq.${currentUserId}`)
+      .order("created_at", { ascending: false });
+
+    if (!error) {
+      const rows = ((data ?? []) as unknown as RawBlockedUserRow[]).map((row) =>
+        normalizeBlockedRelationshipRow(row, pair.blocker, pair.blocked, pair.username)
+      );
+      console.log("BLOCKED ROWS", rows);
+
+      const hiddenIds = new Set<string>();
+
+      rows.forEach((row) => {
+        if (row.blocker_id === currentUserId && row.blocked_id) {
+          hiddenIds.add(row.blocked_id);
+        }
+
+        if (row.blocked_id === currentUserId && row.blocker_id) {
+          hiddenIds.add(row.blocker_id);
+        }
+      });
+
+      const hiddenUserIds = [...hiddenIds];
+      console.log("HIDDEN USER IDS", hiddenUserIds);
+      return { data: hiddenUserIds, error: null };
+    }
+
+    if (!isMissingBlockedUsersColumnError(error)) {
+      return { data: null, error };
+    }
+
+    lastError = error;
   }
 
-  if (inboundResult.error) {
-    return { data: null, error: inboundResult.error };
-  }
-
-  const hiddenIds = new Set<string>();
-
-  (outboundResult.data ?? []).forEach((blockedUser) => {
-    if (blockedUser.blocked_user_id) {
-      hiddenIds.add(blockedUser.blocked_user_id);
-    }
-  });
-
-  (inboundResult.data ?? []).forEach((blockerId) => {
-    if (blockerId) {
-      hiddenIds.add(blockerId);
-    }
-  });
-
-  return { data: [...hiddenIds], error: null };
+  return { data: null, error: lastError };
 }
 
 export async function createBlockedUser(
