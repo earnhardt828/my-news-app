@@ -198,8 +198,8 @@ export default function UserProfilePage() {
       });
 
       const blockedIds = new Set(
-        ((blockedUsersData ?? []) as { blocked_user_id: string }[]).map(
-          (blockedUser) => blockedUser.blocked_user_id
+        ((blockedUsersData ?? []) as { blocked_id: string }[]).map(
+          (blockedUser) => blockedUser.blocked_id
         )
       );
       const mutuallyHiddenIds = new Set((mutuallyHiddenUserIds ?? []) as string[]);
@@ -290,19 +290,44 @@ export default function UserProfilePage() {
     setIsBlocking(true);
     setMessage(null);
 
-    const result = isBlocked
-      ? await removeBlockedUser(supabase, viewerId, profile.id)
-      : await createBlockedUser(supabase, viewerId, profile.id, profile.username ?? null);
+    if (isBlocked) {
+      const result = await removeBlockedUser(supabase, viewerId, profile.id);
+      setIsBlocking(false);
 
-    setIsBlocking(false);
+      if (result.error) {
+        console.error("Error updating block state:", result.error);
+        setMessage({
+          type: "error",
+          text: result.error.message ?? "Could not update block status.",
+        });
+        return;
+      }
+    } else {
+      const result = await createBlockedUser(
+        supabase,
+        viewerId,
+        profile.id,
+        profile.username ?? null
+      );
+      setIsBlocking(false);
 
-    if (result.error) {
-      console.error("Error updating block state:", result.error);
-      setMessage({
-        type: "error",
-        text: result.error.message ?? "Could not update block status.",
-      });
-      return;
+      if (result.alreadyExists) {
+        setIsBlocked(true);
+        setMessage({
+          type: "success",
+          text: "User already blocked.",
+        });
+        return;
+      }
+
+      if (result.error) {
+        console.error("Error updating block state:", result.error);
+        setMessage({
+          type: "error",
+          text: result.error.message ?? "Could not update block status.",
+        });
+        return;
+      }
     }
 
     setIsBlocked((previous) => !previous);

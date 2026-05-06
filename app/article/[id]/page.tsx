@@ -70,7 +70,7 @@ type DbProfile = {
 };
 
 type DbBlockedUser = {
-  blocked_user_id: string;
+  blocked_id: string;
 };
 
 type DbCommentReaction = {

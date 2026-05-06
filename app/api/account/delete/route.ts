@@ -118,8 +118,6 @@ export async function DELETE(request: Request) {
       adminClient.from("likes").delete().eq("user_id", user.id),
       adminClient.from("saved_articles").delete().eq("user_id", user.id),
       deleteBlockedUsersByColumn(adminClient, "blocker_id", user.id),
-      deleteBlockedUsersByColumn(adminClient, "blocker_user_id", user.id),
-      deleteBlockedUsersByColumn(adminClient, "blocked_user_id", user.id),
       deleteBlockedUsersByColumn(adminClient, "blocked_id", user.id),
       adminClient.from("comments").delete().eq("user_id", user.id),
       adminClient.from("profiles").delete().eq("id", user.id),

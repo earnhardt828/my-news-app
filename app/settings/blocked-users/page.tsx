@@ -12,7 +12,7 @@ type UserState = {
 
 type BlockedUserRecord = {
   id: number;
-  blocked_user_id: string;
+  blocked_id: string;
   created_at: string;
   username: string | null;
   avatar_url: string | null;
@@ -20,8 +20,9 @@ type BlockedUserRecord = {
 
 type DbBlockedUser = {
   id: number;
-  blocked_user_id: string;
+  blocked_id: string;
   created_at: string;
+  blocked_username: string | null;
 };
 
 type DbProfile = {
@@ -76,7 +77,7 @@ export default function SettingsBlockedUsersPage() {
         return;
       }
 
-      const blockedUserIds = blockedRecords.map((blockedUser) => blockedUser.blocked_user_id);
+      const blockedUserIds = blockedRecords.map((blockedUser) => blockedUser.blocked_id);
       const { data: blockedProfilesData, error: blockedProfilesError } = await supabase
         .from("profiles")
         .select("id, username, avatar_url")
@@ -100,8 +101,11 @@ export default function SettingsBlockedUsersPage() {
       setBlockedUsers(
         blockedRecords.map((blockedUser) => ({
           ...blockedUser,
-          username: profileLookup.get(blockedUser.blocked_user_id)?.username ?? null,
-          avatar_url: profileLookup.get(blockedUser.blocked_user_id)?.avatar_url ?? null,
+          username:
+            blockedUser.blocked_username ??
+            profileLookup.get(blockedUser.blocked_id)?.username ??
+            null,
+          avatar_url: profileLookup.get(blockedUser.blocked_id)?.avatar_url ?? null,
         }))
       );
       setIsLoading(false);
@@ -129,7 +133,7 @@ export default function SettingsBlockedUsersPage() {
     }
 
     setBlockedUsers((prev) =>
-      prev.filter((blockedUser) => blockedUser.blocked_user_id !== blockedUserId)
+      prev.filter((blockedUser) => blockedUser.blocked_id !== blockedUserId)
     );
     setMessage("Blocked user removed.");
   };
@@ -166,10 +170,10 @@ export default function SettingsBlockedUsersPage() {
                     </div>
                     <button
                       className="comment-action"
-                      onClick={() => handleUnblockUser(blockedUser.blocked_user_id)}
-                      disabled={activeBlockedUserId === blockedUser.blocked_user_id}
+                      onClick={() => handleUnblockUser(blockedUser.blocked_id)}
+                      disabled={activeBlockedUserId === blockedUser.blocked_id}
                     >
-                      {activeBlockedUserId === blockedUser.blocked_user_id
+                      {activeBlockedUserId === blockedUser.blocked_id
                         ? "Unblocking..."
                         : "Unblock"}
                     </button>

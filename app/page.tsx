@@ -103,7 +103,7 @@ type DbSavedArticle = {
 };
 
 type DbBlockedUser = {
-  blocked_user_id: string;
+  blocked_id: string;
 };
 
 type DbCommentReaction = {
@@ -494,7 +494,7 @@ export default function Home() {
 
       setBlockedUserIds(
         ((ownBlockedUsersData ?? []) as DbBlockedUser[]).map(
-          (blockedUser) => blockedUser.blocked_user_id
+          (blockedUser) => blockedUser.blocked_id
         )
       );
       setLikedSources(
@@ -982,7 +982,7 @@ export default function Home() {
 
     setActiveCommentAction(`block-${blockedUserId}`);
 
-    const { error } = await createBlockedUser(
+    const { error, alreadyExists } = await createBlockedUser(
       supabase,
       userId,
       blockedUserId,
@@ -990,6 +990,14 @@ export default function Home() {
     );
 
     setActiveCommentAction(null);
+
+    if (alreadyExists) {
+      alert("User already blocked");
+      setBlockedUserIds((prev) =>
+        prev.includes(blockedUserId) ? prev : [...prev, blockedUserId]
+      );
+      return;
+    }
 
     if (error) {
       console.error("Error blocking user:", error);
