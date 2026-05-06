@@ -4,7 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { createBlockedUser, listBlockedUsers, removeBlockedUser } from "../../../lib/blocked-users";
+import {
+  createBlockedUser,
+  listBlockedUsers,
+  listMutuallyHiddenUserIds,
+  removeBlockedUser,
+} from "../../../lib/blocked-users";
 import { extractVideoIdFromUrl } from "../../../lib/video-feed";
 import { supabase } from "../../../lib/supabase";
 
@@ -74,6 +79,7 @@ export default function UserProfilePage() {
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [comments, setComments] = useState<PublicComment[]>([]);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [isUnavailable, setIsUnavailable] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBlocking, setIsBlocking] = useState(false);
   const [message, setMessage] = useState<{
@@ -127,13 +133,20 @@ export default function UserProfilePage() {
         setProfile(null);
         setComments([]);
         setIsBlocked(false);
+        setIsUnavailable(false);
         setIsLoading(false);
         return;
       }
 
-      const [{ data: blockedUsersData, error: blockedUsersError }, { data: commentData, error: commentError }] =
-        await Promise.all([
+      const [
+        { data: blockedUsersData, error: blockedUsersError },
+        { data: mutuallyHiddenUserIds, error: mutuallyHiddenUsersError },
+        { data: commentData, error: commentError },
+      ] = await Promise.all([
           user?.id ? listBlockedUsers(supabase, user.id) : Promise.resolve({ data: [], error: null }),
+          user?.id
+            ? listMutuallyHiddenUserIds(supabase, user.id)
+            : Promise.resolve({ data: [], error: null }),
           supabase
             .from("comments")
             .select(
@@ -145,6 +158,13 @@ export default function UserProfilePage() {
 
       if (blockedUsersError) {
         console.error("Error loading blocked users for public profile:", blockedUsersError);
+      }
+
+      if (mutuallyHiddenUsersError) {
+        console.error(
+          "Error loading mutual blocked users for public profile:",
+          mutuallyHiddenUsersError
+        );
       }
 
       if (commentError) {
@@ -180,6 +200,16 @@ export default function UserProfilePage() {
           (blockedUser) => blockedUser.blocked_user_id
         )
       );
+      const mutuallyHiddenIds = new Set((mutuallyHiddenUserIds ?? []) as string[]);
+
+      if (user?.id && mutuallyHiddenIds.has(profileData.id)) {
+        setProfile(profileData);
+        setComments([]);
+        setIsBlocked(blockedIds.has(profileData.id));
+        setIsUnavailable(true);
+        setIsLoading(false);
+        return;
+      }
 
       setProfile(profileData);
       setComments(
@@ -189,6 +219,7 @@ export default function UserProfilePage() {
         }))
       );
       setIsBlocked(blockedIds.has(profileData.id));
+      setIsUnavailable(false);
       setIsLoading(false);
     }
 
@@ -269,6 +300,11 @@ export default function UserProfilePage() {
         <div className="empty-state">
           <strong>User not found</strong>
           <span>This public Graffiti profile could not be loaded.</span>
+        </div>
+      ) : isUnavailable ? (
+        <div className="empty-state">
+          <strong>This profile is unavailable.</strong>
+          <span>You cannot view this profile right now.</span>
         </div>
       ) : (
         <div className="stack user-profile-shell">

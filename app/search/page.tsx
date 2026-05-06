@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import SourceBadge from "../components/source-badge";
-import { listBlockedUsers } from "../../lib/blocked-users";
+import { listMutuallyHiddenUserIds } from "../../lib/blocked-users";
 import { getCategoryLabel } from "../../lib/categories";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
@@ -295,7 +295,7 @@ export default function Search() {
 
         const user = userResult.data.user;
         if (user?.id) {
-          const { data: blockedUsersData, error: blockedUsersError } = await listBlockedUsers(
+          const { data: blockedUsersData, error: blockedUsersError } = await listMutuallyHiddenUserIds(
             supabase,
             user.id
           );
@@ -305,9 +305,7 @@ export default function Search() {
           }
 
           setBlockedUserIds(
-            ((blockedUsersData ?? []) as { blocked_user_id: string }[]).map(
-              (blockedUser) => blockedUser.blocked_user_id
-            )
+            (blockedUsersData ?? []) as string[]
           );
         } else {
           setBlockedUserIds([]);

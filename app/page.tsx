@@ -10,7 +10,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShareButton from "./components/share-button";
-import { createBlockedUser, listBlockedUsers } from "../lib/blocked-users";
+import {
+  createBlockedUser,
+  listBlockedUsers,
+  listMutuallyHiddenUserIds,
+} from "../lib/blocked-users";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
 import { supabase } from "../lib/supabase";
@@ -380,10 +384,16 @@ export default function Home() {
         : { data: [] as DbSavedArticle[] };
 
       const { data: blockedUsersData, error: blockedUsersError } = userData.user?.id
+        ? await listMutuallyHiddenUserIds(supabase, userData.user.id)
+        : { data: [] as string[], error: null };
+      const { data: ownBlockedUsersData, error: ownBlockedUsersError } = userData.user?.id
         ? await listBlockedUsers(supabase, userData.user.id)
         : { data: [] as DbBlockedUser[], error: null };
       if (blockedUsersError) {
         console.error("Error loading blocked users:", blockedUsersError);
+      }
+      if (ownBlockedUsersError) {
+        console.error("Error loading own blocked users:", ownBlockedUsersError);
       }
       const { data: sourceRatingsData } = userData.user?.id
         ? await supabase
@@ -399,9 +409,7 @@ export default function Home() {
       const profiles = (profilesData ?? []) as DbProfile[];
       const sourceRatings = (sourceRatingsData ?? []) as DbSourceRating[];
       const blockedIds = new Set(
-        ((blockedUsersData ?? []) as DbBlockedUser[]).map(
-          (blockedUser) => blockedUser.blocked_user_id
-        )
+        (blockedUsersData ?? []) as string[]
       );
       const savedArticleIds = new Set(
         ((savedArticlesData ?? []) as DbSavedArticle[]).map(
@@ -484,7 +492,11 @@ export default function Home() {
         };
       });
 
-      setBlockedUserIds([...blockedIds]);
+      setBlockedUserIds(
+        ((ownBlockedUsersData ?? []) as DbBlockedUser[]).map(
+          (blockedUser) => blockedUser.blocked_user_id
+        )
+      );
       setLikedSources(
         sourceRatings
           .filter((rating) => rating.rating === "like")
@@ -989,7 +1001,12 @@ export default function Home() {
     setArticles((prev) =>
       prev.map((article) => ({
         ...article,
-        comments: article.comments.filter((comment) => comment.user_id !== blockedUserId),
+        comments: article.comments
+          .filter((comment) => comment.user_id !== blockedUserId)
+          .map((comment) => ({
+            ...comment,
+            replies: comment.replies.filter((reply) => reply.user_id !== blockedUserId),
+          })),
       }))
     );
     alert(`Blocked ${blockedUsername ?? "this user"}. Their comments are now hidden.`);

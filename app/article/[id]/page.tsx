@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import ShareButton from "../../components/share-button";
 import SourceRatingSheet from "../../components/source-rating-sheet";
 import SourceBadge from "../../components/source-badge";
-import { listBlockedUsers } from "../../../lib/blocked-users";
+import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
 import { supabase } from "../../../lib/supabase";
@@ -594,7 +594,7 @@ export default function ArticleDetailPage() {
         : { data: null as { article_id: number } | null };
 
       const { data: blockedUsersData, error: blockedUsersError } = currentUserId
-        ? await listBlockedUsers(supabase, currentUserId)
+        ? await listMutuallyHiddenUserIds(supabase, currentUserId)
         : { data: [] as DbBlockedUser[], error: null };
       if (blockedUsersError) {
         console.error("Error loading blocked users:", blockedUsersError);
@@ -611,9 +611,7 @@ export default function ArticleDetailPage() {
       const commentReplies = (repliesRes.data ?? []) as DbCommentReply[];
       const profiles = (profilesRes.data ?? []) as DbProfile[];
       const blockedIds = new Set(
-        ((blockedUsersData ?? []) as DbBlockedUser[]).map(
-          (blockedUser) => blockedUser.blocked_user_id
-        )
+        (blockedUsersData ?? []) as string[]
       );
       const avatarLookup = new Map(
         profiles.map((profile) => [profile.id, profile.avatar_url])

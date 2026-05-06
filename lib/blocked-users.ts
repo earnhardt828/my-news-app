@@ -91,6 +91,77 @@ export async function listBlockedUsers(
   return { data: null, error: lastError };
 }
 
+export async function listUsersWhoBlocked(
+  supabaseClient: SupabaseClient,
+  blockedUserId: string
+): Promise<{
+  data: string[] | null;
+  error: { message?: string; code?: string } | null;
+}> {
+  let lastError: { message?: string; code?: string } | null = null;
+
+  for (const pair of BLOCKED_USERS_COLUMN_PAIRS) {
+    const { data, error } = await supabaseClient
+      .from("blocked_users")
+      .select(`id, ${pair.blocker}, created_at`)
+      .eq(pair.blocked, blockedUserId)
+      .order("created_at", { ascending: false });
+
+    if (!error) {
+      const blockerIds = ((data ?? []) as unknown as RawBlockedUserRow[])
+        .map((row) => String(row[pair.blocker] ?? ""))
+        .filter(Boolean);
+
+      return { data: blockerIds, error: null };
+    }
+
+    if (!isMissingBlockedUsersColumnError(error)) {
+      return { data: null, error };
+    }
+
+    lastError = error;
+  }
+
+  return { data: null, error: lastError };
+}
+
+export async function listMutuallyHiddenUserIds(
+  supabaseClient: SupabaseClient,
+  currentUserId: string
+): Promise<{
+  data: string[] | null;
+  error: { message?: string; code?: string } | null;
+}> {
+  const [outboundResult, inboundResult] = await Promise.all([
+    listBlockedUsers(supabaseClient, currentUserId),
+    listUsersWhoBlocked(supabaseClient, currentUserId),
+  ]);
+
+  if (outboundResult.error) {
+    return { data: null, error: outboundResult.error };
+  }
+
+  if (inboundResult.error) {
+    return { data: null, error: inboundResult.error };
+  }
+
+  const hiddenIds = new Set<string>();
+
+  (outboundResult.data ?? []).forEach((blockedUser) => {
+    if (blockedUser.blocked_user_id) {
+      hiddenIds.add(blockedUser.blocked_user_id);
+    }
+  });
+
+  (inboundResult.data ?? []).forEach((blockerId) => {
+    if (blockerId) {
+      hiddenIds.add(blockerId);
+    }
+  });
+
+  return { data: [...hiddenIds], error: null };
+}
+
 export async function createBlockedUser(
   supabaseClient: SupabaseClient,
   blockerId: string,

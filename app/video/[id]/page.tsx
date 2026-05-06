@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
 import SourceBadge from "../../components/source-badge";
+import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import {
   buildVideoEmbedUrl,
   formatVideoPublishedDate,
@@ -244,17 +245,31 @@ export default function VideoDetailPage() {
         profilesRes.status === "fulfilled" && !profilesRes.value.error
           ? ((profilesRes.value.data ?? []) as DbProfile[])
           : [];
+      const { data: hiddenUserIds, error: hiddenUsersError } = user?.id
+        ? await listMutuallyHiddenUserIds(supabase, user.id)
+        : { data: [] as string[], error: null };
+
+      if (hiddenUsersError) {
+        console.error("Error loading blocked users for video comments:", hiddenUsersError);
+      }
+
+      const hiddenIds = new Set((hiddenUserIds ?? []) as string[]);
 
       const avatarLookup = new Map(profileRows.map((profile) => [profile.id, profile.avatar_url]));
 
       const mappedComments = commentRows
-        .filter((comment) => normalizeArticleId(comment.article_id) === commentArticleId)
+        .filter(
+          (comment) =>
+            normalizeArticleId(comment.article_id) === commentArticleId &&
+            (!comment.user_id || !hiddenIds.has(comment.user_id))
+        )
         .map((comment) => {
           const commentReplies = replyRows
             .filter(
               (reply) =>
                 reply.comment_id === comment.id &&
-                normalizeArticleId(reply.article_id) === commentArticleId
+                normalizeArticleId(reply.article_id) === commentArticleId &&
+                (!reply.user_id || !hiddenIds.has(reply.user_id))
             )
             .map((reply) => ({
               id: reply.id,
