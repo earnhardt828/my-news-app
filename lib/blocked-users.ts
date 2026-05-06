@@ -41,7 +41,6 @@ export async function listMutuallyHiddenUserIds(
     .order("created_at", { ascending: false });
 
   const rows = ((data ?? []) as BlockedUserRow[]) ?? [];
-  console.log("BLOCKED ROWS", rows);
 
   const hiddenUserIds = new Set<string>();
 
@@ -54,8 +53,6 @@ export async function listMutuallyHiddenUserIds(
       hiddenUserIds.add(row.blocker_id);
     }
   });
-
-  console.log("HIDDEN USER IDS", Array.from(hiddenUserIds));
 
   return {
     data: Array.from(hiddenUserIds),
