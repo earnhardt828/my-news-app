@@ -259,6 +259,12 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]) {
 function buildSearchQueries(rawQuery: string) {
   const query = rawQuery.trim();
   const encodedQuery = encodeURIComponent(query);
+  const exactPhrase = encodeURIComponent(`"${query}"`);
+  const queryWords = query
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 1);
+  const tokenQuery = encodeURIComponent(queryWords.join(" AND "));
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const oneHundredEightyDaysAgo = new Date(
     Date.now() - 180 * 24 * 60 * 60 * 1000
@@ -266,11 +272,15 @@ function buildSearchQueries(rawQuery: string) {
 
   return [
     {
+      url: `https://newsapi.org/v2/everything?q=${exactPhrase}&language=en&sortBy=publishedAt&pageSize=30&from=${encodeURIComponent(thirtyDaysAgo)}`,
+      category: "Search",
+    },
+    {
       url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&pageSize=40&from=${encodeURIComponent(thirtyDaysAgo)}`,
       category: "Search",
     },
     {
-      url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&pageSize=20&from=${encodeURIComponent(oneHundredEightyDaysAgo)}`,
+      url: `https://newsapi.org/v2/everything?q=${tokenQuery || encodedQuery}&language=en&sortBy=publishedAt&pageSize=30&from=${encodeURIComponent(oneHundredEightyDaysAgo)}`,
       category: "Search",
     },
   ] satisfies NewsQueryConfig[];

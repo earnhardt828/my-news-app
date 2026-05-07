@@ -312,6 +312,10 @@ function getMatchScore(article: NewsArticle, query: string) {
   return score;
 }
 
+function getSearchResultImage(article: NewsArticle) {
+  return article.image ?? null;
+}
+
 export default function Search() {
   const [query, setQuery] = useState("");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -721,33 +725,49 @@ export default function Search() {
                   href={`/article/${article.id}`}
                   className="section-card search-result-card"
                 >
-                  <div className="search-result-source-row">
-                    <div className="trending-source-brand">
-                      <SourceBadge sourceName={article.source} />
-                      <span className="trending-source-name">{article.source}</span>
+                  <div className="search-result-layout">
+                    <div className="search-result-copy">
+                      <div className="search-result-source-row">
+                        <div className="trending-source-brand">
+                          <SourceBadge sourceName={article.source} />
+                          <span className="trending-source-name">{article.source}</span>
+                        </div>
+                        <span className="chip chip-accent">{getCategoryLabel(article.category)}</span>
+                      </div>
+
+                      <h3 className="search-result-title">{article.title}</h3>
+
+                      <div className="search-result-meta">
+                        <span className="trending-published-date">
+                          {formatSearchDate(article.publishedAt, article.time)}
+                        </span>
+                        {formatSearchDateDetail(article.publishedAt) ? (
+                          <span className="search-result-date-detail">
+                            {formatSearchDateDetail(article.publishedAt)}
+                          </span>
+                        ) : null}
+                        {!isArticleWithinDays(article, 30) ? (
+                          <span className="chip search-result-age-chip">Older</span>
+                        ) : null}
+                      </div>
+
+                      {article.description ? (
+                        <p className="search-result-description">{article.description}</p>
+                      ) : null}
                     </div>
-                    <span className="chip chip-accent">{getCategoryLabel(article.category)}</span>
-                  </div>
-
-                  <h3 className="search-result-title">{article.title}</h3>
-
-                  <div className="search-result-meta">
-                    <span className="trending-published-date">
-                      {formatSearchDate(article.publishedAt, article.time)}
-                    </span>
-                    {formatSearchDateDetail(article.publishedAt) ? (
-                      <span className="search-result-date-detail">
-                        {formatSearchDateDetail(article.publishedAt)}
-                      </span>
-                    ) : null}
-                    {!isArticleWithinDays(article, 30) ? (
-                      <span className="chip search-result-age-chip">Older</span>
+                    {getSearchResultImage(article) ? (
+                      <div className="search-result-image-shell">
+                        <Image
+                          src={getSearchResultImage(article) as string}
+                          alt={article.title}
+                          width={112}
+                          height={112}
+                          unoptimized
+                          className="search-result-image"
+                        />
+                      </div>
                     ) : null}
                   </div>
-
-                  {article.description ? (
-                    <p className="search-result-description">{article.description}</p>
-                  ) : null}
                 </Link>
               ))}
             </div>
