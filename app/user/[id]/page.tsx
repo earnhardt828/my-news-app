@@ -10,7 +10,7 @@ import {
   listMutuallyHiddenUserIds,
   removeBlockedUser,
 } from "../../../lib/blocked-users";
-import { fetchProfileByUsernameOrId, getProfileIdentity } from "../../../lib/profile-identities";
+import { getProfileIdentity } from "../../../lib/profile-identities";
 import { extractVideoIdFromUrl } from "../../../lib/video-feed";
 import { supabase } from "../../../lib/supabase";
 
@@ -76,7 +76,7 @@ function formatRelativeTime(timestamp: string | null) {
 
 export default function UserProfilePage() {
   const params = useParams<{ id: string }>();
-  const routeIdentifier = decodeURIComponent(params.id ?? "");
+  const routeUsername = decodeURIComponent(params.id ?? "");
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [comments, setComments] = useState<PublicComment[]>([]);
@@ -92,28 +92,45 @@ export default function UserProfilePage() {
 
   useEffect(() => {
     async function loadUserProfile() {
-      if (!routeIdentifier) {
+      if (!routeUsername) {
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
+      console.log("USER ROUTE PARAM", routeUsername);
 
       const {
         data: { user },
       } = await supabase.auth.getUser();
       setViewerId(user?.id ?? null);
 
-      const { data: profileData, error: profileError } =
-        await fetchProfileByUsernameOrId<ProfileRecord>(
-          supabase,
-          routeIdentifier,
-          "id, user_id, username, avatar_url, bio"
-        );
+      const profileWithUserIdResult = await supabase
+        .from("profiles")
+        .select("id, user_id, username, avatar_url, bio")
+        .ilike("username", routeUsername)
+        .maybeSingle();
+
+      let profileData: ProfileRecord | null =
+        (profileWithUserIdResult.data as ProfileRecord | null) ?? null;
+      let profileError = profileWithUserIdResult.error;
+
+      if (profileWithUserIdResult.error?.code === "42703") {
+        const fallbackProfileResult = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url, bio")
+          .ilike("username", routeUsername)
+          .maybeSingle();
+
+        profileData = (fallbackProfileResult.data as ProfileRecord | null) ?? null;
+        profileError = fallbackProfileResult.error;
+      }
 
       if (profileError) {
         console.error("Error loading user profile:", profileError);
       }
+
+      console.log("PROFILE QUERY RESULT", profileData);
 
       if (!profileData?.id) {
         setProfile(null);
@@ -218,7 +235,7 @@ export default function UserProfilePage() {
     }
 
     void loadUserProfile();
-  }, [routeIdentifier]);
+  }, [routeUsername]);
 
   useEffect(() => {
     if (!profile?.username || typeof window === "undefined") {
@@ -291,12 +308,25 @@ export default function UserProfilePage() {
         return;
       }
     } else {
-      const { data: targetProfile, error: targetProfileError } =
-        await fetchProfileByUsernameOrId<ProfileRecord>(
-          supabase,
-          profile.id,
-          "id, user_id, username, avatar_url, bio"
-        );
+      const targetProfileResult = await supabase
+        .from("profiles")
+        .select("id, user_id, username, avatar_url, bio")
+        .eq("id", profile.id)
+        .maybeSingle();
+
+      let targetProfile = (targetProfileResult.data as ProfileRecord | null) ?? null;
+      let targetProfileError = targetProfileResult.error;
+
+      if (targetProfileResult.error?.code === "42703") {
+        const fallbackTargetProfileResult = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url, bio")
+          .eq("id", profile.id)
+          .maybeSingle();
+
+        targetProfile = (fallbackTargetProfileResult.data as ProfileRecord | null) ?? null;
+        targetProfileError = fallbackTargetProfileResult.error;
+      }
 
       if (targetProfileError) {
         setIsBlocking(false);

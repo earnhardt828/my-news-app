@@ -508,6 +508,10 @@ export default function Search() {
                   key={user.id}
                   href={`/user/${encodeURIComponent(user.username ?? user.id)}`}
                   className="section-card search-user-card"
+                  onClick={() => {
+                    console.log("CLICKED USER", user);
+                    console.log("NAVIGATING TO USERNAME", user.username);
+                  }}
                 >
                   <div className="search-user-card-row">
                     <div className="search-user-brand">
