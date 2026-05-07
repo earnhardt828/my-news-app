@@ -501,7 +501,14 @@ export default function UserProfilePage() {
                         : "/";
 
                     return (
-                      <Link key={comment.id} href={commentHref} className="comment-card user-comment-card">
+                      <Link
+                        key={comment.id}
+                        href={commentHref}
+                        className="comment-card user-comment-card"
+                        onClick={() => {
+                          console.log("PUBLIC PROFILE CLICK ARTICLE_ID", comment.article_id);
+                        }}
+                      >
                         <strong className="profile-comment-article-title">
                           {comment.article_title?.trim() || "Article"}
                         </strong>

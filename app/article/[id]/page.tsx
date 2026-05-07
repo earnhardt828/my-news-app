@@ -52,6 +52,10 @@ type CommentReply = {
 type DbComment = {
   id: number;
   article_id: number | string | null;
+  article_title?: string | null;
+  article_source?: string | null;
+  article_image?: string | null;
+  article_url?: string | null;
   text: string;
   username: string | null;
   user_id: string | null;
@@ -62,6 +66,17 @@ type DbLike = {
   id: number;
   article_id: number;
   user_id: string | null;
+};
+
+type DbSavedArticle = {
+  article_id: number | string | null;
+  title: string | null;
+  source: string | null;
+  image: string | null;
+  url: string | null;
+  category?: string | null;
+  time?: string | null;
+  published_at?: string | null;
 };
 
 type DbProfile = {
@@ -443,6 +458,8 @@ export default function ArticleDetailPage() {
 
   useEffect(() => {
     async function loadArticle() {
+      console.log("ARTICLE PAGE ROUTE ID", params.id);
+
       if (!articleId || Number.isNaN(articleId)) {
         setIsLoading(false);
         return;
@@ -483,6 +500,7 @@ export default function ArticleDetailPage() {
       const newsData = (await newsRes.json()) as ArticleRecord[];
       const targetArticle =
         newsData.find((item) => item.id === articleId) ?? null;
+      console.log("ARTICLE LIVE MATCH", targetArticle);
 
       if (targetArticle) {
         const nextCompareArticles = buildCompareArticles(targetArticle, newsData);
@@ -510,20 +528,41 @@ export default function ArticleDetailPage() {
         new Set(
           [articleId, legacyArticleId]
             .map((value) => normalizeArticleId(value))
-            .filter((value): value is number => value !== null)
+          .filter((value): value is number => value !== null)
         )
       );
 
-      const [likesRes, commentsRes, profilesRes] = await Promise.all([
+      let commentsRes: {
+        data: DbComment[] | null;
+        error: { message?: string } | null;
+      } = await supabase
+        .from("comments")
+        .select(
+          "id, article_id, article_title, article_source, article_image, article_url, user_id, username, text, created_at"
+        )
+        .in("article_id", articleIdCandidates);
+
+      if (
+        commentsRes.error &&
+        isMissingCommentMetadataColumnError(commentsRes.error.message)
+      ) {
+        commentsRes = await supabase
+          .from("comments")
+          .select("id, article_id, user_id, username, text, created_at")
+          .in("article_id", articleIdCandidates);
+      }
+
+      const [likesRes, profilesRes, storedBookmarksRes] = await Promise.all([
         supabase
           .from("likes")
           .select("id, article_id, user_id")
           .eq("article_id", articleId),
-        supabase
-          .from("comments")
-          .select("id, article_id, user_id, username, text, created_at")
-          .in("article_id", articleIdCandidates),
         supabase.from("profiles").select("id, avatar_url"),
+        supabase
+          .from("saved_articles")
+          .select("article_id, title, source, image, url, category, time, published_at")
+          .in("article_id", articleIdCandidates)
+          .limit(1),
       ]);
 
       if (likesRes.error) {
@@ -549,7 +588,56 @@ export default function ArticleDetailPage() {
         });
       }
 
+      if (storedBookmarksRes.error) {
+        console.error("[Article detail] Failed to fetch saved article fallback metadata", {
+          articleId,
+          articleIdCandidates,
+          error: storedBookmarksRes.error,
+        });
+      }
+
       const rawComments = (commentsRes.data ?? []) as DbComment[];
+      const storedBookmarkRows = (storedBookmarksRes.data ?? []) as DbSavedArticle[];
+      const storedCommentMetadata =
+        rawComments.find(
+          (comment) =>
+            Boolean(comment.article_title?.trim()) ||
+            Boolean(comment.article_source?.trim()) ||
+            Boolean(comment.article_image?.trim()) ||
+            Boolean(comment.article_url?.trim())
+        ) ?? null;
+      const storedBookmarkMetadata = storedBookmarkRows[0] ?? null;
+      const storedArticle =
+        targetArticle ??
+        (storedCommentMetadata || storedBookmarkMetadata
+          ? {
+              id: articleId,
+              title:
+                storedCommentMetadata?.article_title?.trim() ||
+                storedBookmarkMetadata?.title?.trim() ||
+                "Article",
+              source:
+                storedCommentMetadata?.article_source?.trim() ||
+                storedBookmarkMetadata?.source?.trim() ||
+                "Graffiti",
+              category: storedBookmarkMetadata?.category?.trim() || "News",
+              time:
+                storedBookmarkMetadata?.time?.trim() ||
+                (storedBookmarkMetadata?.published_at ? "Archived story" : "Stored story"),
+              image:
+                storedCommentMetadata?.article_image?.trim() ||
+                storedBookmarkMetadata?.image?.trim() ||
+                null,
+              url:
+                storedCommentMetadata?.article_url?.trim() ||
+                storedBookmarkMetadata?.url?.trim() ||
+                null,
+              publishedAt: storedBookmarkMetadata?.published_at?.trim() || null,
+              description: null,
+              content: null,
+            }
+          : null);
+      console.log("ARTICLE STORED FALLBACK", storedArticle);
       const commentIds = rawComments.map((comment) => comment.id);
       const [reactionsRes, repliesRes] = commentIds.length
         ? await Promise.all([
@@ -621,7 +709,7 @@ export default function ArticleDetailPage() {
         rating: "like" | "dislike";
       }[];
 
-      setArticle(targetArticle);
+      setArticle(storedArticle);
       setLikesCount(likes.length);
       setLikedByCurrentUser(
         likes.some((like) => like.user_id && like.user_id === currentUserId)
@@ -700,7 +788,7 @@ export default function ArticleDetailPage() {
     }
 
     loadArticle();
-  }, [articleId]);
+  }, [articleId, params.id]);
 
   useEffect(() => {
     if (typeof window === "undefined" || comments.length === 0) {
