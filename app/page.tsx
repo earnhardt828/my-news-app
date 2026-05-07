@@ -28,6 +28,8 @@ import {
   type VideoItem,
 } from "../lib/video-feed";
 
+const FEED_PAGE_SIZE = 24;
+
 type Comment = {
   id: number;
   text: string;
@@ -128,6 +130,18 @@ type DbSourceRating = {
   user_id: string;
   source_name: string;
   rating: "like" | "dislike";
+};
+
+type FeedArticlePayload = Omit<
+  Article,
+  "likes" | "likeUsers" | "likedByCurrentUser" | "comments" | "saved"
+>;
+
+type PaginatedNewsResponse = {
+  articles: FeedArticlePayload[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
 };
 
 function isMissingCommentMetadataColumnError(message: string | null | undefined) {
@@ -256,6 +270,47 @@ function formatFreshnessTime(
   }).format(new Date(publishedAt));
 }
 
+function getArticleDeduplicationKey(article: Pick<Article, "id" | "url" | "title" | "source">) {
+  if (article.url?.trim()) {
+    return `url:${article.url.trim().toLowerCase()}`;
+  }
+
+  return `id:${article.id}:${article.title.trim().toLowerCase()}:${article.source
+    .trim()
+    .toLowerCase()}`;
+}
+
+function mergeArticlesByIdentity(existing: Article[], incoming: Article[]) {
+  const merged = [...existing];
+  const existingKeys = new Set(existing.map((article) => getArticleDeduplicationKey(article)));
+
+  incoming.forEach((article) => {
+    const dedupeKey = getArticleDeduplicationKey(article);
+
+    if (existingKeys.has(dedupeKey)) {
+      return;
+    }
+
+    existingKeys.add(dedupeKey);
+    merged.push(article);
+  });
+
+  return merged;
+}
+
+function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
+  if (Array.isArray(payload)) {
+    return {
+      articles: payload,
+      hasMore: false,
+      page: 1,
+      pageSize: payload.length,
+    };
+  }
+
+  return payload;
+}
+
 export default function Home() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -313,17 +368,33 @@ export default function Home() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [feedPage, setFeedPage] = useState(1);
+  const [hasMoreArticles, setHasMoreArticles] = useState(true);
+  const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const isFetchingNextPageRef = useRef(false);
   const [replyTarget, setReplyTarget] = useState<{
     articleId: number;
     commentId: number;
     username: string | null;
   } | null>(null);
 
-  useEffect(() => {
-    async function fetchNewsAndEngagement() {
-      setIsLoading(true);
+  const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
+    const replace = options?.replace ?? false;
 
+    if (!replace && isFetchingNextPageRef.current) {
+      return;
+    }
+
+    if (replace) {
+      setIsLoading(true);
+    } else {
+      isFetchingNextPageRef.current = true;
+      setIsLoadingMoreArticles(true);
+    }
+
+    try {
       const { data: userData } = await supabase.auth.getUser();
       setUserId(userData.user?.id ?? null);
 
@@ -350,11 +421,11 @@ export default function Home() {
         setDislikedSources([]);
       }
 
-      const newsRes = await fetch("/api/news");
-      const newsData = (await newsRes.json()) as Omit<
-        Article,
-        "likes" | "likeUsers" | "likedByCurrentUser" | "comments" | "saved"
-      >[];
+      const newsRes = await fetch(`/api/news?page=${pageToLoad}&pageSize=${FEED_PAGE_SIZE}`);
+      const newsPayload = normalizeNewsPayload(
+        (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+      const newsData = newsPayload.articles;
 
       const { data: likesData } = await supabase
         .from("likes")
@@ -389,12 +460,15 @@ export default function Home() {
       const { data: ownBlockedUsersData, error: ownBlockedUsersError } = userData.user?.id
         ? await listBlockedUsers(supabase, userData.user.id)
         : { data: [] as DbBlockedUser[], error: null };
+
       if (blockedUsersError) {
         console.error("Error loading blocked users:", blockedUsersError);
       }
+
       if (ownBlockedUsersError) {
         console.error("Error loading own blocked users:", ownBlockedUsersError);
       }
+
       const { data: sourceRatingsData } = userData.user?.id
         ? await supabase
             .from("source_ratings")
@@ -408,17 +482,14 @@ export default function Home() {
       const commentReplies = (commentRepliesData ?? []) as DbCommentReply[];
       const profiles = (profilesData ?? []) as DbProfile[];
       const sourceRatings = (sourceRatingsData ?? []) as DbSourceRating[];
-      const blockedIds = new Set(
-        (blockedUsersData ?? []) as string[]
-      );
+      const blockedIds = new Set((blockedUsersData ?? []) as string[]);
       const savedArticleIds = new Set(
         ((savedArticlesData ?? []) as DbSavedArticle[]).map(
           (savedArticle) => savedArticle.article_id
         )
       );
-      const avatarLookup = new Map(
-        profiles.map((profile) => [profile.id, profile.avatar_url])
-      );
+      const avatarLookup = new Map(profiles.map((profile) => [profile.id, profile.avatar_url]));
+      const usernameLookup = new Map(profiles.map((profile) => [profile.id, profile.username]));
 
       const mergedArticles: Article[] = newsData.map((item) => {
         const articleLikes = likes.filter((like) => like.article_id === item.id).length;
@@ -426,9 +497,7 @@ export default function Home() {
           .filter((like) => like.article_id === item.id)
           .map((like) => ({
             user_id: like.user_id,
-            username: like.user_id
-              ? profiles.find((profile) => profile.id === like.user_id)?.username ?? null
-              : null,
+            username: like.user_id ? usernameLookup.get(like.user_id) ?? null : null,
           }));
         const articleComments = comments
           .filter(
@@ -454,9 +523,7 @@ export default function Home() {
                 username: reply.username,
                 user_id: reply.user_id,
                 created_at: reply.created_at,
-                avatar_url: reply.user_id
-                  ? avatarLookup.get(reply.user_id) ?? null
-                  : null,
+                avatar_url: reply.user_id ? avatarLookup.get(reply.user_id) ?? null : null,
               }));
 
             return {
@@ -464,9 +531,7 @@ export default function Home() {
               text: comment.text,
               username: comment.username,
               user_id: comment.user_id,
-              avatar_url: comment.user_id
-                ? avatarLookup.get(comment.user_id) ?? null
-                : null,
+              avatar_url: comment.user_id ? avatarLookup.get(comment.user_id) ?? null : null,
               created_at: comment.created_at,
               likes: reactions.filter((reaction) => reaction.reaction_type === "like")
                 .length,
@@ -507,12 +572,29 @@ export default function Home() {
           .filter((rating) => rating.rating === "dislike")
           .map((rating) => rating.source_name)
       );
-      setArticles(mergedArticles);
+      setHasMoreArticles(newsPayload.hasMore);
+      setFeedPage(pageToLoad);
+      setArticles((prev) =>
+        replace ? mergedArticles : mergeArticlesByIdentity(prev, mergedArticles)
+      );
+    } catch (error) {
+      console.error("Error loading feed articles:", error);
+    } finally {
+      isFetchingNextPageRef.current = false;
       setIsLoading(false);
+      setIsLoadingMoreArticles(false);
     }
-
-    fetchNewsAndEngagement();
   }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadFeedPage(1, { replace: true });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [loadFeedPage]);
 
   useEffect(() => {
     async function fetchVideos() {
@@ -537,6 +619,41 @@ export default function Home() {
       commentInputRef.current?.focus();
     }
   }, [replyTarget]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+
+    if (!sentinel || isLoading || isLoadingMoreArticles || !hasMoreArticles) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+
+        if (
+          !entry?.isIntersecting ||
+          isLoadingMoreArticles ||
+          isLoading ||
+          !hasMoreArticles ||
+          isFetchingNextPageRef.current
+        ) {
+          return;
+        }
+
+        void loadFeedPage(feedPage + 1);
+      },
+      {
+        rootMargin: "320px 0px",
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [feedPage, hasMoreArticles, isLoading, isLoadingMoreArticles, loadFeedPage]);
 
   const createNotification = useCallback(
     async ({
@@ -1786,6 +1903,14 @@ export default function Home() {
               </div>
             );
           })}
+          {isLoadingMoreArticles ? (
+            <div className="feed-inline-loading" role="status" aria-live="polite">
+              Loading more stories...
+            </div>
+          ) : null}
+          {!isLoading && hasMoreArticles ? (
+            <div ref={loadMoreSentinelRef} className="feed-load-sentinel" aria-hidden="true" />
+          ) : null}
         </div>
       )}
 

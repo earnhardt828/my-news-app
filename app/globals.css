@@ -1227,6 +1227,19 @@ input {
   text-align: center;
 }
 
+.feed-inline-loading {
+  padding: 12px 8px 20px;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.feed-load-sentinel {
+  width: 100%;
+  height: 1px;
+}
+
 .search-results-filter-row {
   position: relative;
   z-index: 2;

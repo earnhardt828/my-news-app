@@ -15,6 +15,21 @@ type NewsQueryConfig = {
   category: string;
 };
 
+type ApiArticle = {
+  id: number;
+  title: string;
+  source: string;
+  category: string;
+  time: string;
+  image?: string | null;
+  description?: string | null;
+  url?: string | null;
+  publishedAt?: string | null;
+  content?: string | null;
+  likes: number;
+  comments: null[];
+};
+
 const NEWS_API_KEY = "200bc3d2913541a6a40bbfc887d1d5f1";
 
 const NEWS_QUERY_CONFIGS: NewsQueryConfig[] = [
@@ -170,7 +185,25 @@ function diversifyArticles<T extends { source: string; category: string }>(artic
   return diversified;
 }
 
-async function fetchNewsQueryBatch(queries: NewsQueryConfig[]) {
+function withRequestPagination(url: string, page: number, pageSize?: number) {
+  const parsed = new URL(url);
+  parsed.searchParams.set("page", String(Math.max(1, page)));
+
+  if (pageSize) {
+    parsed.searchParams.set("pageSize", String(Math.min(100, Math.max(1, pageSize))));
+  }
+
+  return parsed.toString();
+}
+
+function buildHomeQueries(page: number) {
+  return NEWS_QUERY_CONFIGS.map((query) => ({
+    ...query,
+    url: withRequestPagination(query.url, page),
+  }));
+}
+
+async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArticle[]> {
   const responses = await Promise.allSettled(
     queries.map(async (query) => {
       const response = await fetch(query.url, {
@@ -256,7 +289,7 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]) {
   return articles;
 }
 
-function buildSearchQueries(rawQuery: string) {
+function buildSearchQueries(rawQuery: string, page: number, pageSize: number) {
   const query = rawQuery.trim();
   const encodedQuery = encodeURIComponent(query);
   const exactPhrase = encodeURIComponent(`"${query}"`);
@@ -272,15 +305,27 @@ function buildSearchQueries(rawQuery: string) {
 
   return [
     {
-      url: `https://newsapi.org/v2/everything?q=${exactPhrase}&language=en&sortBy=publishedAt&pageSize=30&from=${encodeURIComponent(thirtyDaysAgo)}`,
+      url: withRequestPagination(
+        `https://newsapi.org/v2/everything?q=${exactPhrase}&language=en&sortBy=publishedAt&from=${encodeURIComponent(thirtyDaysAgo)}`,
+        page,
+        Math.max(20, Math.min(40, pageSize))
+      ),
       category: "Search",
     },
     {
-      url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&pageSize=40&from=${encodeURIComponent(thirtyDaysAgo)}`,
+      url: withRequestPagination(
+        `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&from=${encodeURIComponent(thirtyDaysAgo)}`,
+        page,
+        Math.max(24, Math.min(50, pageSize + 10))
+      ),
       category: "Search",
     },
     {
-      url: `https://newsapi.org/v2/everything?q=${tokenQuery || encodedQuery}&language=en&sortBy=publishedAt&pageSize=30&from=${encodeURIComponent(oneHundredEightyDaysAgo)}`,
+      url: withRequestPagination(
+        `https://newsapi.org/v2/everything?q=${tokenQuery || encodedQuery}&language=en&sortBy=publishedAt&from=${encodeURIComponent(oneHundredEightyDaysAgo)}`,
+        page,
+        Math.max(18, Math.min(40, pageSize))
+      ),
       category: "Search",
     },
   ] satisfies NewsQueryConfig[];
@@ -289,20 +334,42 @@ function buildSearchQueries(rawQuery: string) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q")?.trim() ?? "";
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const pageSize = Math.min(
+    30,
+    Math.max(1, Number(searchParams.get("pageSize") ?? "24") || 24)
+  );
+  const isPaginatedRequest =
+    Boolean(query) || searchParams.has("page") || searchParams.has("pageSize");
 
   if (query) {
-    const searchArticles = await fetchNewsQueryBatch(buildSearchQueries(query));
-
-    return Response.json(
-      searchArticles.sort((left, right) => {
+    const searchArticles = await fetchNewsQueryBatch(buildSearchQueries(query, page, pageSize));
+    const sortedSearchArticles = searchArticles.sort((left, right) => {
         const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
         const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
         return rightTime - leftTime;
-      })
-    );
+      });
+
+    return Response.json({
+      articles: sortedSearchArticles.slice(0, pageSize),
+      page,
+      pageSize,
+      hasMore: sortedSearchArticles.length >= pageSize,
+    });
   }
 
-  const articles = await fetchNewsQueryBatch(NEWS_QUERY_CONFIGS);
+  const articles = await fetchNewsQueryBatch(
+    isPaginatedRequest ? buildHomeQueries(page) : NEWS_QUERY_CONFIGS
+  );
+
+  if (isPaginatedRequest) {
+    return Response.json({
+      articles: articles.slice(0, pageSize),
+      page,
+      pageSize,
+      hasMore: articles.length >= pageSize,
+    });
+  }
 
   return Response.json(articles.slice(0, 60));
 }

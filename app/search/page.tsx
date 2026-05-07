@@ -2,11 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel } from "../../lib/categories";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
+
+const SEARCH_PAGE_SIZE = 24;
 
 type NewsArticle = {
   id: number;
@@ -35,6 +37,13 @@ type BlockedUserRow = {
 };
 
 type SearchDateFilter = "recent" | "week" | "month" | "all";
+
+type SearchNewsResponse = {
+  articles: NewsArticle[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
 
 const fallbackTrendingTerms = [
   "CNN",
@@ -316,6 +325,36 @@ function getSearchResultImage(article: NewsArticle) {
   return article.image ?? null;
 }
 
+function dedupeSearchArticles(articles: NewsArticle[]) {
+  const seen = new Set<string>();
+
+  return articles.filter((article) => {
+    const key = article.url?.trim()
+      ? `url:${article.url.trim().toLowerCase()}`
+      : `id:${article.id}:${article.title.trim().toLowerCase()}`;
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeSearchPayload(payload: NewsArticle[] | SearchNewsResponse) {
+  if (Array.isArray(payload)) {
+    return {
+      articles: payload,
+      hasMore: false,
+      page: 1,
+      pageSize: payload.length,
+    };
+  }
+
+  return payload;
+}
+
 export default function Search() {
   const [query, setQuery] = useState("");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -324,7 +363,12 @@ export default function Search() {
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [isLoadingMoreSearchResults, setIsLoadingMoreSearchResults] = useState(false);
   const [searchDateFilter, setSearchDateFilter] = useState<SearchDateFilter>("recent");
+  const [searchPage, setSearchPage] = useState(1);
+  const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
+  const loadMoreSearchSentinelRef = useRef<HTMLDivElement | null>(null);
+  const isFetchingNextSearchPageRef = useRef(false);
 
   useEffect(() => {
     async function loadSearchData() {
@@ -362,21 +406,29 @@ export default function Search() {
       setIsSearchLoading(true);
 
       try {
-        const response = await fetch(`/api/news?q=${encodeURIComponent(query.trim())}`);
+        const response = await fetch(
+          `/api/news?q=${encodeURIComponent(query.trim())}&page=1&pageSize=${SEARCH_PAGE_SIZE}`
+        );
 
         if (!response.ok) {
           throw new Error(`Search request failed with status ${response.status}`);
         }
 
-        const payload = (await response.json()) as NewsArticle[];
+        const payload = normalizeSearchPayload(
+          (await response.json()) as NewsArticle[] | SearchNewsResponse
+        );
 
         if (!isCancelled) {
-          setSearchArticles(payload);
+          setSearchArticles(dedupeSearchArticles(payload.articles));
+          setSearchPage(payload.page);
+          setHasMoreSearchResults(payload.hasMore);
         }
       } catch (error) {
         console.error("Error loading search articles:", error);
         if (!isCancelled) {
           setSearchArticles([]);
+          setSearchPage(1);
+          setHasMoreSearchResults(false);
         }
       } finally {
         if (!isCancelled) {
@@ -390,6 +442,102 @@ export default function Search() {
       window.clearTimeout(timer);
     };
   }, [normalizedQuery, query]);
+
+  useEffect(() => {
+    if (normalizedQuery) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSearchArticles([]);
+      setSearchPage(1);
+      setHasMoreSearchResults(false);
+      setIsSearchLoading(false);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [normalizedQuery]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSearchSentinelRef.current;
+
+    if (
+      !sentinel ||
+      !normalizedQuery ||
+      isSearchLoading ||
+      isLoadingMoreSearchResults ||
+      !hasMoreSearchResults
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+
+        if (
+          !entry?.isIntersecting ||
+          isSearchLoading ||
+          isLoadingMoreSearchResults ||
+          !hasMoreSearchResults ||
+          isFetchingNextSearchPageRef.current
+        ) {
+          return;
+        }
+
+        void (async () => {
+          isFetchingNextSearchPageRef.current = true;
+          setIsLoadingMoreSearchResults(true);
+
+          try {
+            const response = await fetch(
+              `/api/news?q=${encodeURIComponent(
+                query.trim()
+              )}&page=${searchPage + 1}&pageSize=${SEARCH_PAGE_SIZE}`
+            );
+
+            if (!response.ok) {
+              throw new Error(`Search request failed with status ${response.status}`);
+            }
+
+            const payload = normalizeSearchPayload(
+              (await response.json()) as NewsArticle[] | SearchNewsResponse
+            );
+
+            setSearchArticles((prev) =>
+              dedupeSearchArticles([...prev, ...payload.articles])
+            );
+            setSearchPage(payload.page);
+            setHasMoreSearchResults(payload.hasMore);
+          } catch (error) {
+            console.error("Error loading more search articles:", error);
+            setHasMoreSearchResults(false);
+          } finally {
+            isFetchingNextSearchPageRef.current = false;
+            setIsLoadingMoreSearchResults(false);
+          }
+        })();
+      },
+      {
+        rootMargin: "260px 0px",
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    hasMoreSearchResults,
+    isLoadingMoreSearchResults,
+    isSearchLoading,
+    normalizedQuery,
+    query,
+    searchPage,
+  ]);
 
   useEffect(() => {
     async function loadUserResults() {
@@ -770,6 +918,18 @@ export default function Search() {
                   </div>
                 </Link>
               ))}
+              {isLoadingMoreSearchResults ? (
+                <div className="search-inline-loading" role="status" aria-live="polite">
+                  Loading more articles...
+                </div>
+              ) : null}
+              {!isSearchLoading && hasMoreSearchResults ? (
+                <div
+                  ref={loadMoreSearchSentinelRef}
+                  className="feed-load-sentinel"
+                  aria-hidden="true"
+                />
+              ) : null}
             </div>
           )}
         </section>
