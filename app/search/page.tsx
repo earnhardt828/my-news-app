@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel } from "../../lib/categories";
-import { searchProfilesByUsername } from "../../lib/profile-identities";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -279,17 +278,13 @@ export default function Search() {
   const [userResults, setUserResults] = useState<UserProfileSearchResult[]>([]);
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
   const [isLoading, setIsLoading] = useState(true);
-  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
 
   useEffect(() => {
     async function loadSearchData() {
       setIsLoading(true);
 
       try {
-        const [response, userResult] = await Promise.all([
-          fetch("/api/news"),
-          supabase.auth.getUser(),
-        ]);
+        const response = await fetch("/api/news");
         const news = (await response.json()) as NewsArticle[];
         setArticles(news);
 
@@ -297,40 +292,6 @@ export default function Search() {
 
         if (derivedTerms.length > 0) {
           setTrendingTerms(derivedTerms);
-        }
-
-        const user = userResult.data.user;
-        console.log("currentUser.id", user?.id ?? null);
-        if (user?.id) {
-          const { data: blockedRowsData, error: blockedUsersError } = await supabase
-            .from("blocked_users")
-            .select("blocker_id, blocked_id")
-            .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`);
-
-          if (blockedUsersError) {
-            console.error("Error loading blocked users for search:", blockedUsersError);
-            setBlockedUserIds([]);
-          } else {
-            const blockedRows = ((blockedRowsData ?? []) as BlockedUserRow[]) ?? [];
-            console.log("blocked rows", blockedRows);
-
-            const hiddenUserIds = new Set<string>();
-
-            blockedRows.forEach((row) => {
-              if (row.blocker_id === user.id && row.blocked_id) {
-                hiddenUserIds.add(row.blocked_id);
-              }
-
-              if (row.blocked_id === user.id && row.blocker_id) {
-                hiddenUserIds.add(row.blocker_id);
-              }
-            });
-
-            console.log("hiddenUserIds", Array.from(hiddenUserIds));
-            setBlockedUserIds(Array.from(hiddenUserIds));
-          }
-        } else {
-          setBlockedUserIds([]);
         }
       } catch (error) {
         console.error("Error loading search data:", error);
@@ -351,12 +312,12 @@ export default function Search() {
         return;
       }
 
-      const { data, error } = await searchProfilesByUsername<UserProfileSearchResult>(
-        supabase,
-        `%${normalizedQuery}%`,
-        "id, user_id, username, avatar_url, bio",
-        8
-      );
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url, bio")
+        .ilike("username", `%${normalizedQuery}%`)
+        .not("username", "is", null)
+        .limit(8);
 
       if (error) {
         console.error("Error loading user search results:", error);
@@ -368,11 +329,53 @@ export default function Search() {
         (profile) => profile.username && profile.id
       );
 
-      console.log("users before filter", users);
+      console.log("USER SEARCH RAW RESULTS", users);
 
-      const filteredUsers = users
-        .filter((profile) => !blockedUserIds.includes(profile.id))
-        .sort((a, b) => {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      let filteredUsers = users;
+
+      if (currentUser?.id) {
+        console.log("currentUser.id", currentUser.id);
+
+        const { data: blockedRowsData, error: blockedFilterError } = await supabase
+          .from("blocked_users")
+          .select("blocker_id, blocked_id")
+          .or(`blocker_id.eq.${currentUser.id},blocked_id.eq.${currentUser.id}`);
+
+        if (blockedFilterError) {
+          console.log("BLOCKED FILTER ERROR", blockedFilterError);
+        } else {
+          const blockedRows = ((blockedRowsData ?? []) as BlockedUserRow[]) ?? [];
+          console.log("BLOCKED ROWS", blockedRows);
+
+          const hiddenUserIds = new Set<string>();
+
+          blockedRows.forEach((row) => {
+            if (row.blocker_id === currentUser.id && row.blocked_id) {
+              hiddenUserIds.add(row.blocked_id);
+            }
+
+            if (row.blocked_id === currentUser.id && row.blocker_id) {
+              hiddenUserIds.add(row.blocker_id);
+            }
+          });
+
+          console.log("HIDDEN USER IDS", Array.from(hiddenUserIds));
+
+          filteredUsers = users.filter((profile) => {
+            if (!profile.id) {
+              return true;
+            }
+
+            return !hiddenUserIds.has(profile.id);
+          });
+        }
+      }
+
+      filteredUsers = filteredUsers.sort((a, b) => {
           const aName = a.username?.toLowerCase() ?? "";
           const bName = b.username?.toLowerCase() ?? "";
 
@@ -395,12 +398,12 @@ export default function Search() {
           return aName.localeCompare(bName);
         });
 
-      console.log("users after filter", filteredUsers);
+      console.log("USER SEARCH FILTERED RESULTS", filteredUsers);
       setUserResults(filteredUsers);
     }
 
     void loadUserResults();
-  }, [blockedUserIds, normalizedQuery]);
+  }, [normalizedQuery]);
 
   const matchedSourceName = useMemo(() => {
     if (!normalizedQuery) {
