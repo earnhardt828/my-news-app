@@ -1219,6 +1219,14 @@ input {
   gap: 12px;
 }
 
+.search-inline-loading {
+  padding: 14px 4px;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .search-results-filter-row {
   display: flex;
   gap: 8px;
@@ -2302,7 +2310,7 @@ input {
 }
 
 .loading-screen-logo {
-  width: clamp(60px, 18vw, 80px);
+  width: clamp(86px, 24vw, 118px);
   height: auto;
   object-fit: contain;
   animation: loading-logo-fade 420ms ease-out both;
@@ -2327,7 +2335,7 @@ input {
 }
 
 .loading-screen-bottom-logo {
-  width: clamp(150px, 44vw, 220px);
+  width: clamp(124px, 34vw, 170px);
   height: auto;
   object-fit: contain;
   animation: loading-logo-fade 520ms ease-out both;

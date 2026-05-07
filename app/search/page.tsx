@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import LoadingScreen from "../components/loading-screen";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel } from "../../lib/categories";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
@@ -592,7 +591,9 @@ export default function Search() {
           </div>
 
           {isLoading ? (
-            <LoadingScreen label="Loading search trends" />
+            <div className="search-inline-loading" role="status" aria-live="polite">
+              Loading search trends...
+            </div>
           ) : (
             <div className="search-trending-list">
               {trendingTerms.map((item) => (
@@ -701,7 +702,9 @@ export default function Search() {
           </div>
 
           {isSearchLoading ? (
-            <LoadingScreen label="Searching recent articles" />
+            <div className="search-inline-loading" role="status" aria-live="polite">
+              Searching recent articles...
+            </div>
           ) : filteredResults.length === 0 ? (
             <div className="empty-state">
               <strong>No results found</strong>
