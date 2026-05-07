@@ -715,6 +715,25 @@ input {
   background: rgba(20, 33, 61, 0.08);
 }
 
+.article-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, white), var(--surface-muted));
+  color: var(--accent-strong);
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.article-image-placeholder span {
+  display: inline-block;
+  max-width: 20ch;
+}
+
 .article-image-lg {
   height: 280px;
 }

@@ -1,6 +1,8 @@
 type NewsApiArticle = {
   content?: string | null;
   description?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
   publishedAt?: string | null;
   title: string;
   url?: string | null;
@@ -22,6 +24,8 @@ type ApiArticle = {
   category: string;
   time: string;
   image?: string | null;
+  imageUrl?: string | null;
+  urlToImage?: string | null;
   description?: string | null;
   url?: string | null;
   publishedAt?: string | null;
@@ -234,6 +238,14 @@ function deterministicPopularitySeed(input: string) {
   return { likes, commentCount };
 }
 
+function getNormalizedArticleImage(article: {
+  urlToImage?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
+}) {
+  return article.urlToImage || article.image || article.imageUrl || null;
+}
+
 function buildFallbackArticles(page: number, pageSize: number) {
   const repeatedSeeds = Array.from({ length: 4 }, (_, cycleIndex) =>
     FALLBACK_ARTICLE_SEEDS.map((seed, seedIndex) => {
@@ -251,6 +263,8 @@ function buildFallbackArticles(page: number, pageSize: number) {
         category: seed.category,
         time: "Recent",
         image: null,
+        imageUrl: null,
+        urlToImage: null,
         description: seed.description,
         url: `https://graffiti.app/fallback/${hashArticleId(articleKey)}`,
         publishedAt,
@@ -381,6 +395,7 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArtic
       const articleKey =
         normalizedUrl || `${article.title}-${sourceName}-${category}-${queryIndex}`;
       const popularity = deterministicPopularitySeed(articleKey);
+      const normalizedImage = getNormalizedArticleImage(article);
 
       return {
         id: hashArticleId(articleKey),
@@ -388,7 +403,9 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArtic
         source: sourceName,
         category,
         time: "Recent",
-        image: article.urlToImage,
+        image: normalizedImage,
+        imageUrl: normalizedImage,
+        urlToImage: normalizedImage,
         description: article.description,
         url: normalizedUrl || article.url,
         publishedAt: article.publishedAt,

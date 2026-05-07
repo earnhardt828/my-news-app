@@ -61,6 +61,8 @@ type Article = {
   category: string;
   time: string;
   image?: string | null;
+  imageUrl?: string | null;
+  urlToImage?: string | null;
   description?: string | null;
   url?: string | null;
   publishedAt?: string | null;
@@ -152,6 +154,8 @@ const HOME_FALLBACK_ARTICLES: FeedArticlePayload[] = [
     category: "Politics",
     time: "Recent",
     image: null,
+    imageUrl: null,
+    urlToImage: null,
     description:
       "Lawmakers head back to Washington facing another week of negotiations on domestic priorities and international funding.",
     url: "https://graffiti.app/fallback/910001",
@@ -166,6 +170,8 @@ const HOME_FALLBACK_ARTICLES: FeedArticlePayload[] = [
     category: "Finance",
     time: "Recent",
     image: null,
+    imageUrl: null,
+    urlToImage: null,
     description:
       "Investors are tracking rates, commodities, and corporate outlooks as markets look for direction.",
     url: "https://graffiti.app/fallback/910002",
@@ -180,6 +186,8 @@ const HOME_FALLBACK_ARTICLES: FeedArticlePayload[] = [
     category: "Tech",
     time: "Recent",
     image: null,
+    imageUrl: null,
+    urlToImage: null,
     description:
       "The latest product rollouts arrive alongside policy questions about safety, transparency, and competition.",
     url: "https://graffiti.app/fallback/910003",
@@ -354,6 +362,14 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
   }
 
   return payload;
+}
+
+function getArticleCardImage(article: {
+  image?: string | null;
+  imageUrl?: string | null;
+  urlToImage?: string | null;
+}) {
+  return article.image || article.urlToImage || article.imageUrl || null;
 }
 
 function buildClientFallbackArticles() {
@@ -874,7 +890,7 @@ export default function Home() {
         category: article.category,
         time: article.time,
         url: article.url ?? null,
-        image: article.image ?? null,
+        image: getArticleCardImage(article),
         published_at: article.publishedAt ?? null,
       },
       {
@@ -1030,7 +1046,7 @@ export default function Home() {
       article_id: articleId,
       article_title: targetArticle?.title ?? null,
       article_source: targetArticle?.source ?? null,
-      article_image: targetArticle?.image ?? null,
+      article_image: targetArticle ? getArticleCardImage(targetArticle) : null,
       article_url: targetArticle?.url ?? null,
       text,
       user_id: userId,
@@ -1875,13 +1891,17 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {article.image ? (
+                      {getArticleCardImage(article) ? (
                         <img
-                          src={article.image}
+                          src={getArticleCardImage(article) as string}
                           alt={article.title}
                           className="article-image"
                         />
-                      ) : null}
+                      ) : (
+                        <div className="article-image article-image-placeholder" aria-hidden="true">
+                          <span>{article.source}</span>
+                        </div>
+                      )}
                     </div>
                   </Link>
 

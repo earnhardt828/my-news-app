@@ -17,6 +17,8 @@ type NewsArticle = {
   category: string;
   time: string;
   image?: string | null;
+  imageUrl?: string | null;
+  urlToImage?: string | null;
   description?: string | null;
   url?: string | null;
   publishedAt?: string | null;
@@ -322,7 +324,7 @@ function getMatchScore(article: NewsArticle, query: string) {
 }
 
 function getSearchResultImage(article: NewsArticle) {
-  return article.image ?? null;
+  return article.image || article.urlToImage || article.imageUrl || null;
 }
 
 function dedupeSearchArticles(articles: NewsArticle[]) {
