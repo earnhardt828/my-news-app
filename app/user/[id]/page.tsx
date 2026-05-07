@@ -15,9 +15,15 @@ import { supabase } from "../../../lib/supabase";
 
 type ProfileRecord = {
   id: string;
+  user_id?: string | null;
   username: string | null;
   avatar_url: string | null;
   bio: string | null;
+};
+
+type ProfileQueryResult = {
+  data: ProfileRecord | null;
+  error: { message?: string; code?: string } | null;
 };
 
 type DbComment = {
@@ -72,6 +78,58 @@ function formatRelativeTime(timestamp: string | null) {
   return `${diffDays}d ago`;
 }
 
+async function loadProfileByIdentifier(identifier: string): Promise<ProfileQueryResult> {
+  const usernameResult = await supabase
+    .from("profiles")
+    .select("id, user_id, username, avatar_url, bio")
+    .ilike("username", identifier)
+    .maybeSingle();
+
+  if (!usernameResult.error || usernameResult.error.code !== "42703") {
+    return {
+      data: (usernameResult.data as ProfileRecord | null) ?? null,
+      error: usernameResult.error,
+    };
+  }
+
+  const fallbackResult = await supabase
+    .from("profiles")
+    .select("id, username, avatar_url, bio")
+    .ilike("username", identifier)
+    .maybeSingle();
+
+  return {
+    data: (fallbackResult.data as ProfileRecord | null) ?? null,
+    error: fallbackResult.error,
+  };
+}
+
+async function loadProfileById(profileId: string): Promise<ProfileQueryResult> {
+  const idResult = await supabase
+    .from("profiles")
+    .select("id, user_id, username, avatar_url, bio")
+    .eq("id", profileId)
+    .maybeSingle();
+
+  if (!idResult.error || idResult.error.code !== "42703") {
+    return {
+      data: (idResult.data as ProfileRecord | null) ?? null,
+      error: idResult.error,
+    };
+  }
+
+  const fallbackResult = await supabase
+    .from("profiles")
+    .select("id, username, avatar_url, bio")
+    .eq("id", profileId)
+    .maybeSingle();
+
+  return {
+    data: (fallbackResult.data as ProfileRecord | null) ?? null,
+    error: fallbackResult.error,
+  };
+}
+
 export default function UserProfilePage() {
   const params = useParams<{ id: string }>();
   const routeIdentifier = decodeURIComponent(params.id ?? "");
@@ -104,11 +162,8 @@ export default function UserProfilePage() {
 
       let profileData: ProfileRecord | null = null;
 
-      const { data: usernameProfile, error: usernameProfileError } = await supabase
-        .from("profiles")
-        .select("id, username, avatar_url, bio")
-        .ilike("username", routeIdentifier)
-        .maybeSingle();
+      const { data: usernameProfile, error: usernameProfileError } =
+        await loadProfileByIdentifier(routeIdentifier);
 
       if (usernameProfileError) {
         console.error("Error loading user profile by username:", usernameProfileError);
@@ -117,11 +172,7 @@ export default function UserProfilePage() {
       profileData = (usernameProfile ?? null) as ProfileRecord | null;
 
       if (!profileData) {
-        const { data: idProfile, error: idProfileError } = await supabase
-          .from("profiles")
-          .select("id, username, avatar_url, bio")
-          .eq("id", routeIdentifier)
-          .maybeSingle();
+        const { data: idProfile, error: idProfileError } = await loadProfileById(routeIdentifier);
 
         if (idProfileError) {
           console.error("Error loading user profile by id:", idProfileError);
@@ -140,6 +191,8 @@ export default function UserProfilePage() {
         return;
       }
 
+      const profileAuthUserId = profileData.user_id ?? profileData.id;
+
       const [
         { data: blockedUsersData, error: blockedUsersError },
         { data: mutuallyHiddenUserIds, error: mutuallyHiddenUsersError },
@@ -154,7 +207,7 @@ export default function UserProfilePage() {
             .select(
               "id, article_id, article_title, article_url, text, username, user_id, created_at"
             )
-            .eq("user_id", profileData.id)
+            .eq("user_id", profileAuthUserId)
             .order("created_at", { ascending: false }),
         ]);
 
@@ -203,11 +256,11 @@ export default function UserProfilePage() {
         )
       );
       const mutuallyHiddenIds = new Set((mutuallyHiddenUserIds ?? []) as string[]);
-      const viewerBlockedProfile = blockedIds.has(profileData.id);
+      const viewerBlockedProfile = blockedIds.has(profileAuthUserId);
       const profileBlockedViewer =
-        Boolean(user?.id) && mutuallyHiddenIds.has(profileData.id) && !viewerBlockedProfile;
+        Boolean(user?.id) && mutuallyHiddenIds.has(profileAuthUserId) && !viewerBlockedProfile;
 
-      if (user?.id && mutuallyHiddenIds.has(profileData.id)) {
+      if (user?.id && mutuallyHiddenIds.has(profileAuthUserId)) {
         setProfile(profileData);
         setComments([]);
         setIsBlocked(viewerBlockedProfile);
@@ -248,7 +301,8 @@ export default function UserProfilePage() {
 
   const displayName = profile?.username ? `@${profile.username}` : "Graffiti user";
   const initials = (profile?.username ?? "G").charAt(0).toUpperCase();
-  const isOwnProfile = Boolean(viewerId && profile?.id && viewerId === profile.id);
+  const profileAuthUserId = profile?.user_id ?? profile?.id ?? null;
+  const isOwnProfile = Boolean(viewerId && profileAuthUserId && viewerId === profileAuthUserId);
   const blockButtonLabel = !viewerId
     ? "Log in to block users."
     : isBlocked
@@ -259,7 +313,7 @@ export default function UserProfilePage() {
   );
 
   const handleBlockToggle = async () => {
-    if (!profile?.id) {
+    if (!profileAuthUserId || !profile) {
       return;
     }
 
@@ -271,7 +325,7 @@ export default function UserProfilePage() {
       return;
     }
 
-    if (viewerId === profile.id) {
+    if (viewerId === profileAuthUserId) {
       setMessage({
         type: "error",
         text: "You cannot block yourself.",
@@ -291,7 +345,7 @@ export default function UserProfilePage() {
     setMessage(null);
 
     if (isBlocked) {
-      const result = await removeBlockedUser(supabase, viewerId, profile.id);
+      const result = await removeBlockedUser(supabase, viewerId, profileAuthUserId);
       setIsBlocking(false);
 
       if (result.error) {
@@ -303,11 +357,8 @@ export default function UserProfilePage() {
         return;
       }
     } else {
-      const { data: targetProfile, error: targetProfileError } = await supabase
-        .from("profiles")
-        .select("id, username")
-        .eq("id", profile.id)
-        .maybeSingle();
+      const { data: targetProfile, error: targetProfileError } =
+        await loadProfileById(profile.id);
 
       if (targetProfileError) {
         setIsBlocking(false);
@@ -319,7 +370,13 @@ export default function UserProfilePage() {
         return;
       }
 
-      if (!targetProfile?.id) {
+      const targetUserAuthId = targetProfile?.user_id ?? targetProfile?.id ?? null;
+
+      console.log("BLOCK CURRENT USER ID", viewerId);
+      console.log("BLOCK TARGET PROFILE", targetProfile);
+      console.log("BLOCK TARGET AUTH ID", targetUserAuthId);
+
+      if (!targetUserAuthId) {
         setIsBlocking(false);
         setMessage({
           type: "error",
@@ -328,15 +385,11 @@ export default function UserProfilePage() {
         return;
       }
 
-      console.log("currentUser.id", viewerId);
-      console.log("targetProfile.id", targetProfile.id);
-      console.log("targetProfile.username", targetProfile.username);
-
       const result = await createBlockedUser(
         supabase,
         viewerId,
-        targetProfile.id,
-        targetProfile.username ?? null
+        targetUserAuthId,
+        targetProfile?.username ?? null
       );
       setIsBlocking(false);
 
