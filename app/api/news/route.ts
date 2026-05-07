@@ -170,9 +170,9 @@ function diversifyArticles<T extends { source: string; category: string }>(artic
   return diversified;
 }
 
-export async function GET() {
+async function fetchNewsQueryBatch(queries: NewsQueryConfig[]) {
   const responses = await Promise.allSettled(
-    NEWS_QUERY_CONFIGS.map(async (query) => {
+    queries.map(async (query) => {
       const response = await fetch(query.url, {
         headers: {
           Authorization: NEWS_API_KEY,
@@ -252,6 +252,47 @@ export async function GET() {
       };
     })
   );
+
+  return articles;
+}
+
+function buildSearchQueries(rawQuery: string) {
+  const query = rawQuery.trim();
+  const encodedQuery = encodeURIComponent(query);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const oneHundredEightyDaysAgo = new Date(
+    Date.now() - 180 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  return [
+    {
+      url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&pageSize=40&from=${encodeURIComponent(thirtyDaysAgo)}`,
+      category: "Search",
+    },
+    {
+      url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&pageSize=20&from=${encodeURIComponent(oneHundredEightyDaysAgo)}`,
+      category: "Search",
+    },
+  ] satisfies NewsQueryConfig[];
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get("q")?.trim() ?? "";
+
+  if (query) {
+    const searchArticles = await fetchNewsQueryBatch(buildSearchQueries(query));
+
+    return Response.json(
+      searchArticles.sort((left, right) => {
+        const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+        const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+        return rightTime - leftTime;
+      })
+    );
+  }
+
+  const articles = await fetchNewsQueryBatch(NEWS_QUERY_CONFIGS);
 
   return Response.json(articles.slice(0, 60));
 }

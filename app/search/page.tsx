@@ -35,6 +35,8 @@ type BlockedUserRow = {
   blocked_id: string | null;
 };
 
+type SearchDateFilter = "recent" | "week" | "month" | "all";
+
 const fallbackTrendingTerms = [
   "CNN",
   "Markets",
@@ -129,6 +131,45 @@ function formatSearchDate(publishedAt?: string | null, fallback?: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
+  }).format(new Date(timestamp));
+}
+
+function getArticleTimestamp(article: NewsArticle) {
+  if (!article.publishedAt) {
+    return 0;
+  }
+
+  const timestamp = new Date(article.publishedAt).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function isArticleWithinDays(article: NewsArticle, days: number) {
+  const timestamp = getArticleTimestamp(article);
+
+  if (!timestamp) {
+    return false;
+  }
+
+  return Date.now() - timestamp <= days * 24 * 60 * 60 * 1000;
+}
+
+function formatSearchDateDetail(publishedAt?: string | null) {
+  if (!publishedAt) {
+    return "";
+  }
+
+  const timestamp = new Date(publishedAt).getTime();
+
+  if (Number.isNaN(timestamp)) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   }).format(new Date(timestamp));
 }
 
@@ -275,9 +316,12 @@ function getMatchScore(article: NewsArticle, query: string) {
 export default function Search() {
   const [query, setQuery] = useState("");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [searchArticles, setSearchArticles] = useState<NewsArticle[]>([]);
   const [userResults, setUserResults] = useState<UserProfileSearchResult[]>([]);
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [searchDateFilter, setSearchDateFilter] = useState<SearchDateFilter>("recent");
 
   useEffect(() => {
     async function loadSearchData() {
@@ -304,6 +348,45 @@ export default function Search() {
   }, []);
 
   const normalizedQuery = query.trim().toLowerCase();
+
+  useEffect(() => {
+    if (!normalizedQuery) {
+      return;
+    }
+
+    let isCancelled = false;
+    const timer = window.setTimeout(async () => {
+      setIsSearchLoading(true);
+
+      try {
+        const response = await fetch(`/api/news?q=${encodeURIComponent(query.trim())}`);
+
+        if (!response.ok) {
+          throw new Error(`Search request failed with status ${response.status}`);
+        }
+
+        const payload = (await response.json()) as NewsArticle[];
+
+        if (!isCancelled) {
+          setSearchArticles(payload);
+        }
+      } catch (error) {
+        console.error("Error loading search articles:", error);
+        if (!isCancelled) {
+          setSearchArticles([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsSearchLoading(false);
+        }
+      }
+    }, 180);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [normalizedQuery, query]);
 
   useEffect(() => {
     async function loadUserResults() {
@@ -410,7 +493,8 @@ export default function Search() {
       return null;
     }
 
-    const uniqueSources = Array.from(new Set(articles.map((article) => article.source))).sort();
+    const searchPool = searchArticles.length > 0 ? searchArticles : articles;
+    const uniqueSources = Array.from(new Set(searchPool.map((article) => article.source))).sort();
 
     const exactMatch =
       uniqueSources.find((source) => source.toLowerCase() === normalizedQuery) ?? null;
@@ -426,14 +510,15 @@ export default function Search() {
           normalizedQuery.includes(source.toLowerCase())
       ) ?? null
     );
-  }, [articles, normalizedQuery]);
+  }, [articles, normalizedQuery, searchArticles]);
 
   const filteredResults = useMemo(() => {
     if (!normalizedQuery) {
       return [];
     }
 
-    return [...articles]
+    const candidateArticles = searchArticles.length > 0 ? searchArticles : articles;
+    const rankedArticles = [...candidateArticles]
       .map((article) => ({
         article,
         score: getMatchScore(article, normalizedQuery),
@@ -453,8 +538,34 @@ export default function Search() {
 
         return timeB - timeA;
       })
-      .map(({ article }) => article);
-  }, [articles, normalizedQuery]);
+      .map(({ article, score }) => ({
+        article,
+        score,
+      }));
+
+    if (searchDateFilter === "week") {
+      return rankedArticles
+        .filter(({ article }) => isArticleWithinDays(article, 7))
+        .map(({ article }) => article);
+    }
+
+    if (searchDateFilter === "month") {
+      return rankedArticles
+        .filter(({ article }) => isArticleWithinDays(article, 30))
+        .map(({ article }) => article);
+    }
+
+    if (searchDateFilter === "all") {
+      return rankedArticles.map(({ article }) => article);
+    }
+
+    const recentArticles = rankedArticles.filter(({ article }) => isArticleWithinDays(article, 30));
+    const olderArticles = rankedArticles.filter(({ article }) => !isArticleWithinDays(article, 30));
+
+    return (recentArticles.length >= 5 ? recentArticles : [...recentArticles, ...olderArticles]).map(
+      ({ article }) => article
+    );
+  }, [articles, normalizedQuery, searchArticles, searchDateFilter]);
 
   return (
     <section className="page-shell search-shell">
@@ -569,7 +680,29 @@ export default function Search() {
             </Link>
           ) : null}
 
-          {filteredResults.length === 0 ? (
+          <div className="search-results-filter-row" role="tablist" aria-label="Search date filter">
+            {[
+              { value: "recent", label: "Recent" },
+              { value: "week", label: "Past week" },
+              { value: "month", label: "Past month" },
+              { value: "all", label: "All time" },
+            ].map((filterOption) => (
+              <button
+                key={filterOption.value}
+                type="button"
+                className={`chip search-filter-chip ${
+                  searchDateFilter === filterOption.value ? "search-filter-chip-active" : ""
+                }`}
+                onClick={() => setSearchDateFilter(filterOption.value as SearchDateFilter)}
+              >
+                {filterOption.label}
+              </button>
+            ))}
+          </div>
+
+          {isSearchLoading ? (
+            <LoadingScreen label="Searching recent articles" />
+          ) : filteredResults.length === 0 ? (
             <div className="empty-state">
               <strong>No results found</strong>
               <span>
@@ -599,6 +732,14 @@ export default function Search() {
                     <span className="trending-published-date">
                       {formatSearchDate(article.publishedAt, article.time)}
                     </span>
+                    {formatSearchDateDetail(article.publishedAt) ? (
+                      <span className="search-result-date-detail">
+                        {formatSearchDateDetail(article.publishedAt)}
+                      </span>
+                    ) : null}
+                    {!isArticleWithinDays(article, 30) ? (
+                      <span className="chip search-result-age-chip">Older</span>
+                    ) : null}
                   </div>
 
                   {article.description ? (

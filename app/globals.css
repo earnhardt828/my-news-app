@@ -1219,6 +1219,30 @@ input {
   gap: 12px;
 }
 
+.search-results-filter-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.search-results-filter-row::-webkit-scrollbar {
+  display: none;
+}
+
+.search-filter-chip {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.search-filter-chip-active {
+  background: var(--accent-faint);
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+
 .search-source-card {
   text-decoration: none;
   color: inherit;
@@ -1309,12 +1333,24 @@ input {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .search-result-description {
   margin: 0;
   color: var(--text-soft);
   line-height: 1.55;
+}
+
+.search-result-date-detail {
+  color: var(--text-soft);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.search-result-age-chip {
+  background: var(--surface-muted);
+  color: var(--text-soft);
 }
 
 .source-page-shell {
