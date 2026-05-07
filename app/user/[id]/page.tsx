@@ -303,11 +303,40 @@ export default function UserProfilePage() {
         return;
       }
     } else {
+      const { data: targetProfile, error: targetProfileError } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .eq("id", profile.id)
+        .maybeSingle();
+
+      if (targetProfileError) {
+        setIsBlocking(false);
+        console.error("Error loading target profile for blocking:", targetProfileError);
+        setMessage({
+          type: "error",
+          text: targetProfileError.message ?? "Could not block this user.",
+        });
+        return;
+      }
+
+      if (!targetProfile?.id) {
+        setIsBlocking(false);
+        setMessage({
+          type: "error",
+          text: "Could not block this user.",
+        });
+        return;
+      }
+
+      console.log("currentUser.id", viewerId);
+      console.log("targetProfile.id", targetProfile.id);
+      console.log("targetProfile.username", targetProfile.username);
+
       const result = await createBlockedUser(
         supabase,
         viewerId,
-        profile.id,
-        profile.username ?? null
+        targetProfile.id,
+        targetProfile.username ?? null
       );
       setIsBlocking(false);
 
