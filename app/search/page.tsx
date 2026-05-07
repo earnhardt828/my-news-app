@@ -294,7 +294,7 @@ export default function Search() {
         }
 
         const user = userResult.data.user;
-        console.log("CURRENT USER ID", user?.id ?? null);
+        console.log("CURRENT USER", user?.id ?? null);
         if (user?.id) {
           const { data: blockedUsersData, error: blockedUsersError } = await listMutuallyHiddenUserIds(
             supabase,
@@ -342,7 +342,7 @@ export default function Search() {
         return;
       }
 
-      const profiles = ((data ?? []) as UserProfileSearchResult[])
+      const filteredUsers = ((data ?? []) as UserProfileSearchResult[])
         .filter((profile) => profile.username)
         .filter((profile) => !blockedUserIds.includes(profile.id))
         .sort((a, b) => {
@@ -369,8 +369,8 @@ export default function Search() {
         });
 
       console.log("HIDDEN USER IDS", Array.from(blockedUserIds));
-      console.log("USER SEARCH RESULTS", profiles);
-      setUserResults(profiles);
+      console.log("FILTERED SEARCH USERS", filteredUsers);
+      setUserResults(filteredUsers);
     }
 
     void loadUserResults();

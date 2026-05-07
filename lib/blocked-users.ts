@@ -34,6 +34,8 @@ export async function listMutuallyHiddenUserIds(
   data: string[] | null;
   error: { message?: string; code?: string } | null;
 }> {
+  console.log("CURRENT USER", currentUserId);
+
   const { data, error } = await supabaseClient
     .from("blocked_users")
     .select("id, blocker_id, blocked_id, blocked_username, created_at")
@@ -41,6 +43,7 @@ export async function listMutuallyHiddenUserIds(
     .order("created_at", { ascending: false });
 
   const rows = ((data ?? []) as BlockedUserRow[]) ?? [];
+  console.log("BLOCK ROWS INVOLVING CURRENT USER", rows);
 
   const hiddenUserIds = new Set<string>();
 
@@ -55,7 +58,11 @@ export async function listMutuallyHiddenUserIds(
   });
 
   return {
-    data: Array.from(hiddenUserIds),
+    data: (() => {
+      const values = Array.from(hiddenUserIds);
+      console.log("HIDDEN USER IDS", Array.from(hiddenUserIds));
+      return values;
+    })(),
     error,
   };
 }
