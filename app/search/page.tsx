@@ -5,9 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import SourceBadge from "../components/source-badge";
-import { listMutuallyHiddenUserIds } from "../../lib/blocked-users";
 import { getCategoryLabel } from "../../lib/categories";
-import { getProfileIdentity, searchProfilesByUsername } from "../../lib/profile-identities";
+import { searchProfilesByUsername } from "../../lib/profile-identities";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -30,6 +29,11 @@ type UserProfileSearchResult = {
   username: string | null;
   avatar_url: string | null;
   bio: string | null;
+};
+
+type BlockedUserRow = {
+  blocker_id: string | null;
+  blocked_id: string | null;
 };
 
 const fallbackTrendingTerms = [
@@ -296,20 +300,35 @@ export default function Search() {
         }
 
         const user = userResult.data.user;
-        console.log("CURRENT USER", user?.id ?? null);
+        console.log("currentUser.id", user?.id ?? null);
         if (user?.id) {
-          const { data: blockedUsersData, error: blockedUsersError } = await listMutuallyHiddenUserIds(
-            supabase,
-            user.id
-          );
+          const { data: blockedRowsData, error: blockedUsersError } = await supabase
+            .from("blocked_users")
+            .select("blocker_id, blocked_id")
+            .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`);
 
           if (blockedUsersError) {
             console.error("Error loading blocked users for search:", blockedUsersError);
-          }
+            setBlockedUserIds([]);
+          } else {
+            const blockedRows = ((blockedRowsData ?? []) as BlockedUserRow[]) ?? [];
+            console.log("blocked rows", blockedRows);
 
-          setBlockedUserIds(
-            (blockedUsersData ?? []) as string[]
-          );
+            const hiddenUserIds = new Set<string>();
+
+            blockedRows.forEach((row) => {
+              if (row.blocker_id === user.id && row.blocked_id) {
+                hiddenUserIds.add(row.blocked_id);
+              }
+
+              if (row.blocked_id === user.id && row.blocker_id) {
+                hiddenUserIds.add(row.blocker_id);
+              }
+            });
+
+            console.log("hiddenUserIds", Array.from(hiddenUserIds));
+            setBlockedUserIds(Array.from(hiddenUserIds));
+          }
         } else {
           setBlockedUserIds([]);
         }
@@ -345,9 +364,14 @@ export default function Search() {
         return;
       }
 
-      const filteredUsers = ((data ?? []) as UserProfileSearchResult[])
-        .filter((profile) => profile.username)
-        .filter((profile) => !blockedUserIds.includes(getProfileIdentity(profile) ?? profile.id))
+      const users = ((data ?? []) as UserProfileSearchResult[]).filter(
+        (profile) => profile.username && profile.id
+      );
+
+      console.log("users before filter", users);
+
+      const filteredUsers = users
+        .filter((profile) => !blockedUserIds.includes(profile.id))
         .sort((a, b) => {
           const aName = a.username?.toLowerCase() ?? "";
           const bName = b.username?.toLowerCase() ?? "";
@@ -371,8 +395,7 @@ export default function Search() {
           return aName.localeCompare(bName);
         });
 
-      console.log("HIDDEN USER IDS", Array.from(blockedUserIds));
-      console.log("FILTERED SEARCH USERS", filteredUsers);
+      console.log("users after filter", filteredUsers);
       setUserResults(filteredUsers);
     }
 
