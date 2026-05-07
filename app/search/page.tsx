@@ -7,6 +7,7 @@ import LoadingScreen from "../components/loading-screen";
 import SourceBadge from "../components/source-badge";
 import { listMutuallyHiddenUserIds } from "../../lib/blocked-users";
 import { getCategoryLabel } from "../../lib/categories";
+import { getProfileIdentity, searchProfilesByUsername } from "../../lib/profile-identities";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -25,6 +26,7 @@ type NewsArticle = {
 
 type UserProfileSearchResult = {
   id: string;
+  user_id?: string | null;
   username: string | null;
   avatar_url: string | null;
   bio: string | null;
@@ -330,11 +332,12 @@ export default function Search() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, username, avatar_url, bio")
-        .ilike("username", `%${normalizedQuery}%`)
-        .limit(8);
+      const { data, error } = await searchProfilesByUsername<UserProfileSearchResult>(
+        supabase,
+        `%${normalizedQuery}%`,
+        "id, user_id, username, avatar_url, bio",
+        8
+      );
 
       if (error) {
         console.error("Error loading user search results:", error);
@@ -344,7 +347,7 @@ export default function Search() {
 
       const filteredUsers = ((data ?? []) as UserProfileSearchResult[])
         .filter((profile) => profile.username)
-        .filter((profile) => !blockedUserIds.includes(profile.id))
+        .filter((profile) => !blockedUserIds.includes(getProfileIdentity(profile) ?? profile.id))
         .sort((a, b) => {
           const aName = a.username?.toLowerCase() ?? "";
           const bName = b.username?.toLowerCase() ?? "";

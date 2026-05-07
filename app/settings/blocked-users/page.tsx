@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { listBlockedUsers, removeBlockedUser } from "../../../lib/blocked-users";
+import { fetchProfilesByIdentity, getProfileIdentity } from "../../../lib/profile-identities";
 import { supabase } from "../../../lib/supabase";
 
 type UserState = {
@@ -28,6 +29,7 @@ type DbBlockedUser = {
 
 type DbProfile = {
   id: string;
+  user_id?: string | null;
   username: string | null;
   avatar_url: string | null;
 };
@@ -79,10 +81,12 @@ export default function SettingsBlockedUsersPage() {
       }
 
       const blockedUserIds = blockedRecords.map((blockedUser) => blockedUser.blocked_id);
-      const { data: blockedProfilesData, error: blockedProfilesError } = await supabase
-        .from("profiles")
-        .select("id, username, avatar_url")
-        .in("id", blockedUserIds);
+      const { data: blockedProfilesData, error: blockedProfilesError } =
+        await fetchProfilesByIdentity<DbProfile>(
+          supabase,
+          blockedUserIds,
+          "id, user_id, username, avatar_url"
+        );
 
       if (blockedProfilesError) {
         console.error("Error loading blocked user profiles:", blockedProfilesError);
@@ -91,7 +95,7 @@ export default function SettingsBlockedUsersPage() {
       const blockedProfiles = (blockedProfilesData ?? []) as DbProfile[];
       const profileLookup = new Map(
         blockedProfiles.map((profile) => [
-          profile.id,
+          getProfileIdentity(profile) ?? profile.id,
           {
             username: profile.username,
             avatar_url: profile.avatar_url,

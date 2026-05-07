@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import ThemeToggle from "../components/theme-toggle";
 import { listBlockedUsers, removeBlockedUser } from "../../lib/blocked-users";
+import { fetchProfilesByIdentity, getProfileIdentity } from "../../lib/profile-identities";
 import { ensureProfileRow } from "../../lib/profile-store";
 import { supabase } from "../../lib/supabase";
 
@@ -31,6 +32,7 @@ type DbBlockedUser = {
 
 type DbProfile = {
   id: string;
+  user_id?: string | null;
   username: string | null;
   avatar_url: string | null;
 };
@@ -95,15 +97,16 @@ export default function SettingsPage() {
       }
 
       const blockedUserIds = blockedRecords.map((blockedUser) => blockedUser.blocked_id);
-      const { data: blockedProfilesData } = await supabase
-        .from("profiles")
-        .select("id, username, avatar_url")
-        .in("id", blockedUserIds);
+      const { data: blockedProfilesData } = await fetchProfilesByIdentity<DbProfile>(
+        supabase,
+        blockedUserIds,
+        "id, user_id, username, avatar_url"
+      );
 
       const blockedProfiles = (blockedProfilesData ?? []) as DbProfile[];
       const profileLookup = new Map(
         blockedProfiles.map((profile) => [
-          profile.id,
+          getProfileIdentity(profile) ?? profile.id,
           {
             username: profile.username,
             avatar_url: profile.avatar_url,
