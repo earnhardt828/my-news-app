@@ -3,7 +3,10 @@ type NewsApiArticle = {
   description?: string | null;
   image?: string | null;
   imageUrl?: string | null;
+  image_url?: string | null;
+  media?: string | { url?: string | null } | null;
   publishedAt?: string | null;
+  thumbnail?: string | null;
   title: string;
   url?: string | null;
   urlToImage?: string | null;
@@ -242,8 +245,26 @@ function getNormalizedArticleImage(article: {
   urlToImage?: string | null;
   image?: string | null;
   imageUrl?: string | null;
+  image_url?: string | null;
+  thumbnail?: string | null;
+  media?: string | { url?: string | null } | null;
 }) {
-  return article.urlToImage || article.image || article.imageUrl || null;
+  const mediaUrl =
+    typeof article.media === "string"
+      ? article.media
+      : article.media && typeof article.media === "object"
+        ? article.media.url ?? null
+        : null;
+
+  return (
+    article.urlToImage ||
+    article.image ||
+    article.image_url ||
+    article.thumbnail ||
+    mediaUrl ||
+    article.imageUrl ||
+    null
+  );
 }
 
 function buildFallbackArticles(page: number, pageSize: number) {
@@ -331,11 +352,13 @@ function buildHomeQueries(page: number) {
 }
 
 async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArticle[]> {
+  let hasLoggedRawNewsArticle = false;
+
   const responses = await Promise.allSettled(
     queries.map(async (query) => {
       const response = await fetch(query.url, {
         headers: {
-          Authorization: NEWS_API_KEY,
+          "X-Api-Key": NEWS_API_KEY,
         },
         next: { revalidate: 900 },
       });
@@ -345,6 +368,12 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArtic
       }
 
       const data = (await response.json()) as { articles?: NewsApiArticle[] };
+
+      if (!hasLoggedRawNewsArticle && (data.articles?.length ?? 0) > 0) {
+        console.log("RAW NEWS ARTICLE", data.articles?.[0] ?? null);
+        hasLoggedRawNewsArticle = true;
+      }
+
       return (data.articles ?? []).map((article, index) => ({
         article,
         category: query.category,
