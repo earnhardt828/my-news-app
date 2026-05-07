@@ -369,7 +369,7 @@ function getArticleCardImage(article: {
   imageUrl?: string | null;
   urlToImage?: string | null;
 }) {
-  return article.image || article.urlToImage || article.imageUrl || null;
+  return article.imageUrl || article.urlToImage || article.image || null;
 }
 
 function buildClientFallbackArticles() {
@@ -1899,7 +1899,7 @@ export default function Home() {
                         />
                       ) : (
                         <div className="article-image article-image-placeholder" aria-hidden="true">
-                          <span>{article.source}</span>
+                          <span>Photo unavailable</span>
                         </div>
                       )}
                     </div>

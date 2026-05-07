@@ -324,7 +324,7 @@ function getMatchScore(article: NewsArticle, query: string) {
 }
 
 function getSearchResultImage(article: NewsArticle) {
-  return article.image || article.urlToImage || article.imageUrl || null;
+  return article.imageUrl || article.urlToImage || article.image || null;
 }
 
 function dedupeSearchArticles(articles: NewsArticle[]) {

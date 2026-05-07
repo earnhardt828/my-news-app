@@ -719,12 +719,13 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, white);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, white), var(--surface-muted));
-  color: var(--accent-strong);
+    linear-gradient(135deg, color-mix(in srgb, var(--surface-muted) 88%, white), var(--surface));
+  color: var(--text-soft);
   font-size: 0.88rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: 0;
   text-align: center;
   padding: 0 20px;
 }
@@ -732,6 +733,7 @@ input {
 .article-image-placeholder span {
   display: inline-block;
   max-width: 20ch;
+  opacity: 0.92;
 }
 
 .article-image-lg {
