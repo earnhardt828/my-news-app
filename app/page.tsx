@@ -1853,6 +1853,12 @@ export default function Home() {
         <div className="stack">
           {displayedArticles.map((article, index) => {
             console.log("SOURCE NAME:", article.source);
+            console.log("TRENDING ARTICLE IMAGE FIELDS", {
+              title: article.title,
+              image: article.image,
+              imageUrl: article.imageUrl,
+              urlToImage: article.urlToImage,
+            });
 
             return (
               <div key={article.id} className="stack">

@@ -368,13 +368,14 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArtic
       }
 
       const data = (await response.json()) as { articles?: NewsApiArticle[] };
+      const rawArticles = data.articles ?? [];
 
-      if (!hasLoggedRawNewsArticle && (data.articles?.length ?? 0) > 0) {
-        console.log("RAW NEWS ARTICLE", data.articles?.[0] ?? null);
+      if (!hasLoggedRawNewsArticle && rawArticles.length > 0) {
+        console.log("RAW ARTICLE SAMPLE", rawArticles[0] ?? null);
         hasLoggedRawNewsArticle = true;
       }
 
-      return (data.articles ?? []).map((article, index) => ({
+      return rawArticles.map((article, index) => ({
         article,
         category: query.category,
         queryIndex: index,
@@ -417,7 +418,7 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArtic
     return true;
   });
 
-  const articles = diversifyArticles(
+  const normalizedArticles = diversifyArticles(
     dedupedArticles.map(({ article, category, queryIndex }) => {
       const normalizedUrl = normalizeUrl(article.url);
       const sourceName = article.source?.name ?? "Unknown";
@@ -445,7 +446,9 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArtic
     })
   );
 
-  return articles;
+  console.log("NORMALIZED ARTICLE SAMPLE", normalizedArticles[0] ?? null);
+
+  return normalizedArticles;
 }
 
 function buildSearchQueries(rawQuery: string, page: number, pageSize: number) {
