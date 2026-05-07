@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { listBlockedUsers, removeBlockedUser } from "../../../lib/blocked-users";
@@ -138,6 +139,13 @@ export default function SettingsBlockedUsersPage() {
     setMessage("Blocked user removed.");
   };
 
+  const formatBlockedDate = (value: string) =>
+    new Date(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
   return (
     <section className="page-shell">
       {isLoading ? (
@@ -153,20 +161,32 @@ export default function SettingsBlockedUsersPage() {
               <div className="settings-sublist">
                 {blockedUsers.map((blockedUser) => (
                   <div key={blockedUser.id} className="settings-subrow">
-                    <div className="settings-list-copy">
-                      <strong>
-                        {blockedUser.username
-                          ? `@${blockedUser.username}`
-                          : "Blocked account"}
-                      </strong>
-                      <span>
-                        Blocked on{" "}
-                        {new Date(blockedUser.created_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
+                    <div className="settings-blocked-user">
+                      <span className="avatar-shell settings-blocked-user-avatar">
+                        {blockedUser.avatar_url ? (
+                          <Image
+                            src={blockedUser.avatar_url}
+                            alt={blockedUser.username ?? "Blocked user avatar"}
+                            width={48}
+                            height={48}
+                            unoptimized
+                            className="source-avatar-image"
+                          />
+                        ) : (
+                          <span className="avatar-fallback">
+                            {(blockedUser.username ?? "G").charAt(0).toUpperCase()}
+                          </span>
+                        )}
                       </span>
+
+                      <div className="settings-list-copy">
+                        <strong>
+                          {blockedUser.username
+                            ? `@${blockedUser.username}`
+                            : "Blocked account"}
+                        </strong>
+                        <span>Blocked on {formatBlockedDate(blockedUser.created_at)}</span>
+                      </div>
                     </div>
                     <button
                       className="comment-action"
