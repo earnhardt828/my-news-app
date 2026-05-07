@@ -28,7 +28,7 @@ import {
   type VideoItem,
 } from "../lib/video-feed";
 
-const FEED_PAGE_SIZE = 24;
+const FEED_PAGE_SIZE = 30;
 
 type Comment = {
   id: number;
@@ -143,6 +143,51 @@ type PaginatedNewsResponse = {
   pageSize: number;
   hasMore: boolean;
 };
+
+const HOME_FALLBACK_ARTICLES: FeedArticlePayload[] = [
+  {
+    id: 910001,
+    title: "Congress returns with a packed agenda on budget, border, and aid talks",
+    source: "Associated Press",
+    category: "Politics",
+    time: "Recent",
+    image: null,
+    description:
+      "Lawmakers head back to Washington facing another week of negotiations on domestic priorities and international funding.",
+    url: "https://graffiti.app/fallback/910001",
+    publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    content:
+      "Lawmakers head back to Washington facing another week of negotiations on domestic priorities and international funding.",
+  },
+  {
+    id: 910002,
+    title: "Wall Street watches bond yields, oil prices, and earnings for fresh signals",
+    source: "Reuters",
+    category: "Finance",
+    time: "Recent",
+    image: null,
+    description:
+      "Investors are tracking rates, commodities, and corporate outlooks as markets look for direction.",
+    url: "https://graffiti.app/fallback/910002",
+    publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    content:
+      "Investors are tracking rates, commodities, and corporate outlooks as markets look for direction.",
+  },
+  {
+    id: 910003,
+    title: "Tech companies push new AI features while regulators weigh guardrails",
+    source: "Bloomberg",
+    category: "Tech",
+    time: "Recent",
+    image: null,
+    description:
+      "The latest product rollouts arrive alongside policy questions about safety, transparency, and competition.",
+    url: "https://graffiti.app/fallback/910003",
+    publishedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    content:
+      "The latest product rollouts arrive alongside policy questions about safety, transparency, and competition.",
+  },
+];
 
 function isMissingCommentMetadataColumnError(message: string | null | undefined) {
   if (!message) {
@@ -311,6 +356,17 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
   return payload;
 }
 
+function buildClientFallbackArticles() {
+  return HOME_FALLBACK_ARTICLES.map((article, index) => ({
+    ...article,
+    likes: 30 - index * 4,
+    likeUsers: [],
+    likedByCurrentUser: false,
+    comments: [],
+    saved: false,
+  }));
+}
+
 export default function Home() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -422,10 +478,19 @@ export default function Home() {
       }
 
       const newsRes = await fetch(`/api/news?page=${pageToLoad}&pageSize=${FEED_PAGE_SIZE}`);
+
+      if (!newsRes.ok) {
+        throw new Error(`Home feed request failed with status ${newsRes.status}`);
+      }
+
       const newsPayload = normalizeNewsPayload(
         (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse
       );
       const newsData = newsPayload.articles;
+
+      if (replace && newsData.length === 0) {
+        console.error("Home feed returned zero articles for page 1.", newsPayload);
+      }
 
       const { data: likesData } = await supabase
         .from("likes")
@@ -579,6 +644,11 @@ export default function Home() {
       );
     } catch (error) {
       console.error("Error loading feed articles:", error);
+      if (replace) {
+        setArticles(buildClientFallbackArticles());
+        setHasMoreArticles(false);
+        setFeedPage(1);
+      }
     } finally {
       isFetchingNextPageRef.current = false;
       setIsLoading(false);
