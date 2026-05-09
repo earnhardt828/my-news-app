@@ -716,24 +716,83 @@ input {
 }
 
 .article-image-placeholder {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--border) 88%, white);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--surface-muted) 88%, white), var(--surface));
+    linear-gradient(135deg, color-mix(in srgb, var(--surface-muted) 92%, white), var(--surface));
   color: var(--text-soft);
-  font-size: 0.88rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-align: center;
   padding: 0 20px;
 }
 
-.article-image-placeholder span {
-  display: inline-block;
-  max-width: 20ch;
-  opacity: 0.92;
+.article-image-placeholder-orb {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  filter: blur(6px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.article-image-placeholder-orb-left {
+  width: 132px;
+  height: 132px;
+  left: 18px;
+  bottom: -28px;
+  background: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+.article-image-placeholder-orb-right {
+  width: 108px;
+  height: 108px;
+  right: 22px;
+  top: -16px;
+  background: color-mix(in srgb, var(--accent-strong) 10%, white);
+}
+
+.article-image-placeholder-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.article-image-placeholder-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, white);
+  box-shadow: 0 10px 24px rgba(20, 33, 61, 0.08);
+  color: var(--foreground);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.article-image-placeholder-brand .source-avatar {
+  width: 30px;
+  height: 30px;
+}
+
+.article-image-placeholder-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-muted) 90%, white);
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
 }
 
 .article-image-lg {
