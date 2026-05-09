@@ -384,6 +384,14 @@ function buildClientFallbackArticles() {
   }));
 }
 
+function arraysShallowEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
+}
+
 export default function Home() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -399,6 +407,7 @@ export default function Home() {
   const [likedSources, setLikedSources] = useState<string[]>([]);
   const [dislikedSources, setDislikedSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialFeedLoading, setIsInitialFeedLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState("");
@@ -447,11 +456,16 @@ export default function Home() {
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextPageRef = useRef(false);
+  const categoriesRef = useRef<string[]>([]);
   const [replyTarget, setReplyTarget] = useState<{
     articleId: number;
     commentId: number;
     username: string | null;
   } | null>(null);
+
+  useEffect(() => {
+    categoriesRef.current = categories;
+  }, [categories]);
 
   const feedMode: "trending" | "latest" | "myfeed" = useMemo(() => {
     if (sortMode === "latest") {
@@ -467,6 +481,7 @@ export default function Home() {
 
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
+    const requestCategories = categoriesRef.current;
 
     if (!replace && isFetchingNextPageRef.current) {
       return;
@@ -476,7 +491,9 @@ export default function Home() {
       setIsLoading(true);
     } else {
       isFetchingNextPageRef.current = true;
-      setIsLoadingMoreArticles(true);
+      if (!replace) {
+        setIsLoadingMoreArticles(true);
+      }
     }
 
     try {
@@ -494,7 +511,10 @@ export default function Home() {
         }
 
         setUsername(profile?.username ?? null);
-        setCategories(profile?.categories ?? []);
+        const nextCategories = profile?.categories ?? [];
+        setCategories((prev) =>
+          arraysShallowEqual(prev, nextCategories) ? prev : nextCategories
+        );
         setPreferredSources(profile?.preferred_sources ?? []);
         setShowLessSources(profile?.show_less_sources ?? []);
       } else {
@@ -512,8 +532,8 @@ export default function Home() {
         pageSize: String(FEED_PAGE_SIZE),
       });
 
-      if (feedMode === "myfeed" && categories.length > 0) {
-        params.set("category", categories.join(","));
+      if (feedMode === "myfeed" && requestCategories.length > 0) {
+        params.set("category", requestCategories.join(","));
       }
 
       const newsRes = await fetch(`/api/news?${params.toString()}`);
@@ -681,19 +701,23 @@ export default function Home() {
       setArticles((prev) =>
         replace ? mergedArticles : mergeArticlesByIdentity(prev, mergedArticles)
       );
+      if (replace) {
+        setIsInitialFeedLoading(false);
+      }
     } catch (error) {
       console.error("Error loading feed articles:", error);
       if (replace) {
         setArticles(buildClientFallbackArticles());
         setHasMoreArticles(false);
         setFeedPage(1);
+        setIsInitialFeedLoading(false);
       }
     } finally {
       isFetchingNextPageRef.current = false;
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
-  }, [categories, feedMode]);
+  }, [feedMode]);
 
   useEffect(() => {
     if (sortMode === "my-feed" && categories.length === 0) {
@@ -702,6 +726,7 @@ export default function Home() {
         setFeedPage(1);
         setHasMoreArticles(false);
         setIsLoading(false);
+        setIsInitialFeedLoading(false);
       }, 0);
 
       return () => {
@@ -1869,7 +1894,7 @@ export default function Home() {
         </div>
       ) : null}
 
-      {isLoading ? (
+      {isInitialFeedLoading && isLoading ? (
         <LoadingScreen />
       ) : sortMode === "my-feed" && categories.length === 0 ? (
         <div className="empty-state">
