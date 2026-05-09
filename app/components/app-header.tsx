@@ -44,6 +44,14 @@ function getPageTitle(pathname: string) {
     return "Contact info";
   }
 
+  if (pathname === "/about") {
+    return "About";
+  }
+
+  if (pathname === "/contact") {
+    return "Contact";
+  }
+
   if (pathname === "/notifications") {
     return "Notifications";
   }
@@ -562,6 +570,58 @@ export default function AppHeader() {
     );
   }
 
+  if (pathname === "/about") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close about page"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/settings");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          About
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (pathname === "/contact") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close contact page"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/settings");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          Contact
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
   if (pathname === "/settings/blocked-users") {
     return (
       <div className="app-header-article-bar">
@@ -634,6 +694,32 @@ export default function AppHeader() {
         </button>
         <div className="app-header-article-source" aria-live="polite">
           Privacy
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (pathname === "/terms") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close terms page"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+              return;
+            }
+
+            router.push("/settings");
+          }}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          Terms
         </div>
         <span className="app-header-article-spacer" aria-hidden="true" />
       </div>

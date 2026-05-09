@@ -7,6 +7,7 @@ export const metadata = {
   title: "Graffiti",
   description:
     "A personalized social news feed with comments, profiles, and trending stories",
+  metadataBase: new URL("https://graffiti.news"),
 };
 
 export default function RootLayout({

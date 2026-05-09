@@ -376,6 +376,26 @@ export default function SettingsPage() {
           <section className="settings-list-section">
             <p className="settings-section-title">Legal</p>
             <div className="settings-list-card">
+              <Link href="/about" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>About Graffiti</strong>
+                  <span>Learn what the platform is built for and how it works.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
+
+              <Link href="/contact" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>Contact</strong>
+                  <span>Reach Graffiti for support, partnerships, or general questions.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
+
               <Link href="/privacy" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Privacy Policy</strong>

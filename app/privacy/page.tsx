@@ -1,75 +1,106 @@
-const LAST_UPDATED = "April 24, 2026";
+import type { Metadata } from "next";
+import TrustFooterLinks from "../components/trust-footer-links";
+
+const LAST_UPDATED = "May 9, 2026";
+
+export const metadata: Metadata = {
+  title: "Graffiti Privacy",
+  description:
+    "Read how Graffiti handles accounts, profiles, comments, analytics, safety tools, and data retention.",
+  alternates: {
+    canonical: "https://graffiti.news/privacy",
+  },
+};
 
 export default function PrivacyPage() {
   return (
     <section className="page-shell">
-      <section className="legal-reading">
+      <section className="trust-page-shell">
         <p className="legal-last-updated">Last updated {LAST_UPDATED}</p>
 
         <section className="legal-section">
-          <h2 className="legal-section-title">What data we collect</h2>
+          <h1 className="trust-page-title">Privacy</h1>
           <p className="legal-section-body">
-            When you create an account or use the app, we may collect your email
-            address, chosen username, profile image, category preferences,
-            comments, likes, and safety reports. We may also store technical
-            information needed to keep the app running, such as basic request logs
-            or service metadata.
+            Graffiti is built to help people discover and discuss current events while
+            keeping account, profile, and safety information handled with care.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2 className="legal-section-title">How we use your data</h2>
+          <h2 className="legal-section-title">Information collected</h2>
           <p className="legal-section-body">
-            We use this information to authenticate your account, personalize
-            feeds based on the categories you follow, display your profile,
-            support comments and likes, and review moderation or safety issues.
-            We may also use limited product data to improve performance,
-            reliability, and future features.
+            Graffiti may collect account information such as your email address,
+            username, profile image, category preferences, saved articles, and the
+            content you submit through comments, reports, or support messages.
+          </p>
+        </section>
+
+        <section className="legal-section">
+          <h2 className="legal-section-title">Accounts and profiles</h2>
+          <p className="legal-section-body">
+            Profile details like usernames, avatars, bios, and selected categories are
+            used to personalize the app and help other users recognize who is
+            participating in public conversations.
+          </p>
+        </section>
+
+        <section className="legal-section">
+          <h2 className="legal-section-title">Comments and public content</h2>
+          <p className="legal-section-body">
+            Comments, replies, hearts, and related moderation activity may be visible
+            inside Graffiti. If you choose to participate publicly, the information you
+            post can be seen by other users in the app.
+          </p>
+        </section>
+
+        <section className="legal-section">
+          <h2 className="legal-section-title">Analytics and app usage</h2>
+          <p className="legal-section-body">
+            Graffiti may store limited technical and usage information to keep the app
+            reliable, understand feature performance, and improve the feed, search, and
+            product experience over time.
           </p>
         </section>
 
         <section className="legal-section">
           <h2 className="legal-section-title">Third-party services</h2>
           <p className="legal-section-body">
-            The app currently relies on third-party infrastructure providers,
-            including Supabase for authentication, database, and storage, and
-            Vercel for hosting or deployment workflows. The app may also use
-            Google AdSense or other third-party advertising partners to display
-            sponsored placements. Those services may use cookies or similar
-            technologies to help deliver, measure, or personalize advertising.
+            Graffiti relies on third-party infrastructure and content sources, including
+            services for authentication, databases, hosting, analytics, and news
+            ingestion. Those providers may process limited data as needed to support the app.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2 className="legal-section-title">Profile images and public content</h2>
+          <h2 className="legal-section-title">Blocking and reporting tools</h2>
           <p className="legal-section-body">
-            Comments, usernames, and profile images may be visible to other users
-            inside the app. Uploaded avatars are stored using a public storage URL
-            so they can appear in your profile preview and other app surfaces
-            where your identity is shown.
+            Blocking, abuse reporting, and moderation workflows may store relevant user,
+            comment, and safety information so the app can enforce policies and respond
+            to issues responsibly.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2 className="legal-section-title">Safety, moderation, and support</h2>
+          <h2 className="legal-section-title">Data retention</h2>
           <p className="legal-section-body">
-            Reports and moderation actions may be reviewed to keep the app safe
-            and enforce the rules. If you have questions about your data or a
-            privacy concern, use the app&apos;s support or safety contact methods
-            when they become available.
+            Graffiti keeps account and content data for as long as it is needed to operate
+            the service, fulfill safety obligations, resolve disputes, or comply with
+            legal requirements. Retention periods may vary depending on the type of data.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2 className="legal-section-title">Advertising, cookies, and partners</h2>
+          <h2 className="legal-section-title">Contact</h2>
           <p className="legal-section-body">
-            If advertising is enabled, Google AdSense and future third-party ad
-            partners may place or read cookies and similar technologies to serve
-            ads, understand engagement, and improve ad delivery. Users should
-            review those providers&apos; policies for more information about how
-            ad-related data may be handled.
+            Questions about this policy can be sent to{" "}
+            <a className="trust-inline-link" href="mailto:support@graffiti.news">
+              support@graffiti.news
+            </a>
+            .
           </p>
         </section>
+
+        <TrustFooterLinks />
       </section>
     </section>
   );

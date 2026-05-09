@@ -3324,6 +3324,34 @@ input {
   gap: 22px;
 }
 
+.trust-page-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  display: grid;
+  gap: 26px;
+}
+
+.trust-hero {
+  display: grid;
+  gap: 14px;
+}
+
+.trust-page-title {
+  margin: 0;
+  font-size: clamp(1.9rem, 7vw, 2.8rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 900;
+  color: var(--foreground);
+}
+
+.trust-page-copy {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
 .legal-last-updated {
   margin: 0;
   color: var(--text-soft);
@@ -3351,6 +3379,82 @@ input {
   color: var(--text-soft);
   font-size: 0.98rem;
   line-height: 1.72;
+}
+
+.trust-inline-link {
+  color: var(--accent-strong);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.trust-inline-link:hover {
+  text-decoration: underline;
+}
+
+.trust-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.trust-form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.trust-field {
+  display: grid;
+  gap: 8px;
+}
+
+.trust-field-label {
+  color: var(--foreground);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.trust-textarea {
+  min-height: 154px;
+}
+
+.trust-form-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.trust-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+}
+
+.trust-footer-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.trust-footer-link:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
 }
 
 .danger-zone-card {
