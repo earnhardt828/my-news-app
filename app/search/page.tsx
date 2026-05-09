@@ -8,7 +8,7 @@ import { getCategoryLabel } from "../../lib/categories";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
-const SEARCH_PAGE_SIZE = 24;
+const SEARCH_PAGE_SIZE = 25;
 
 type NewsArticle = {
   id: number;
@@ -42,6 +42,7 @@ type SearchDateFilter = "recent" | "week" | "month" | "all";
 
 type SearchNewsResponse = {
   articles: NewsArticle[];
+  nextPage?: number | null;
   page: number;
   pageSize: number;
   hasMore: boolean;
@@ -377,8 +378,13 @@ export default function Search() {
       setIsLoading(true);
 
       try {
-        const response = await fetch("/api/news");
-        const news = (await response.json()) as NewsArticle[];
+        const response = await fetch(
+          `/api/news?mode=trending&page=1&pageSize=${SEARCH_PAGE_SIZE}`
+        );
+        const payload = normalizeSearchPayload(
+          (await response.json()) as NewsArticle[] | SearchNewsResponse
+        );
+        const news = payload.articles;
         setArticles(news);
 
         const derivedTerms = buildTrendingTerms(news);
@@ -409,7 +415,9 @@ export default function Search() {
 
       try {
         const response = await fetch(
-          `/api/news?q=${encodeURIComponent(query.trim())}&page=1&pageSize=${SEARCH_PAGE_SIZE}`
+          `/api/news?mode=search&query=${encodeURIComponent(
+            query.trim()
+          )}&page=1&pageSize=${SEARCH_PAGE_SIZE}`
         );
 
         if (!response.ok) {
@@ -495,7 +503,7 @@ export default function Search() {
 
           try {
             const response = await fetch(
-              `/api/news?q=${encodeURIComponent(
+              `/api/news?mode=search&query=${encodeURIComponent(
                 query.trim()
               )}&page=${searchPage + 1}&pageSize=${SEARCH_PAGE_SIZE}`
             );

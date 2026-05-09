@@ -1,186 +1,229 @@
-type NewsApiArticle = {
-  content?: string | null;
+type ProviderArticle = {
+  title?: string | null;
   description?: string | null;
+  content?: string | null;
+  url?: string | null;
   image?: string | null;
   imageUrl?: string | null;
   image_url?: string | null;
+  urlToImage?: string | null;
+  thumbnail?: string | null;
   media?: string | { url?: string | null } | null;
   publishedAt?: string | null;
-  thumbnail?: string | null;
-  title: string;
-  url?: string | null;
-  urlToImage?: string | null;
-  source: {
-    name: string;
-  };
+  pubDate?: string | null;
+  source?: {
+    name?: string | null;
+  } | null;
+  source_name?: string | null;
+  source_id?: string | null;
+  category?: string[] | string | null;
 };
 
-type NewsQueryConfig = {
-  url: string;
-  category: string;
-};
-
-type ApiArticle = {
+type NormalizedArticle = {
   id: number;
   title: string;
+  description: string | null;
+  content: string | null;
   source: string;
+  sourceName: string;
+  url: string | null;
+  image: string | null;
+  imageUrl: string | null;
+  urlToImage: string | null;
   category: string;
+  publishedAt: string | null;
   time: string;
-  image?: string | null;
-  imageUrl?: string | null;
-  urlToImage?: string | null;
-  description?: string | null;
-  url?: string | null;
-  publishedAt?: string | null;
-  content?: string | null;
   likes: number;
   comments: null[];
 };
 
-type FallbackSeed = {
-  title: string;
-  source: string;
-  category: string;
-  description: string;
+type NewsMode = "trending" | "latest" | "myfeed" | "search";
+
+type ProviderFetchParams = {
+  mode: NewsMode;
+  query: string;
+  categories: string[];
+  page: number;
+  pageSize: number;
 };
 
-const NEWS_API_KEY = "200bc3d2913541a6a40bbfc887d1d5f1";
+type ProviderResponse = {
+  articles: NormalizedArticle[];
+  hasMore: boolean;
+};
 
-const NEWS_QUERY_CONFIGS: NewsQueryConfig[] = [
+type CachedResponse = {
+  expiresAt: number;
+  payload: NewsRouteResponse;
+};
+
+type NewsRouteResponse = {
+  articles: NormalizedArticle[];
+  nextPage: number | null;
+  hasMore: boolean;
+  page: number;
+  pageSize: number;
+};
+
+type NewsDataApiResponse = {
+  nextPage?: string | null;
+  results?: Array<{
+    title?: string | null;
+    description?: string | null;
+    content?: string | null;
+    link?: string | null;
+    image_url?: string | null;
+    source_id?: string | null;
+    source_name?: string | null;
+    pubDate?: string | null;
+    category?: string[] | null;
+  }>;
+};
+
+type GNewsApiResponse = {
+  articles?: Array<{
+    title?: string | null;
+    description?: string | null;
+    content?: string | null;
+    url?: string | null;
+    image?: string | null;
+    publishedAt?: string | null;
+    source?: {
+      name?: string | null;
+    } | null;
+  }>;
+};
+
+type NewsApiResponse = {
+  articles?: Array<{
+    title?: string | null;
+    description?: string | null;
+    content?: string | null;
+    url?: string | null;
+    urlToImage?: string | null;
+    publishedAt?: string | null;
+    source?: {
+      name?: string | null;
+    } | null;
+  }>;
+};
+
+type RssFeedConfig = {
+  url: string;
+  source: string;
+  category: string;
+  tags: string[];
+};
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 30;
+const CACHE_TTL_MS = 7 * 60 * 1000;
+
+const NEWS_API_KEY = process.env.NEWS_API_KEY ?? process.env.NEXT_PUBLIC_NEWS_API_KEY ?? "";
+const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
+const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
+
+const responseCache = new Map<string, CachedResponse>();
+const newsDataTokenCache = new Map<string, string[]>();
+
+const CATEGORY_QUERY_MAP: Record<string, string> = {
+  "Breaking News": "breaking news OR developing story OR live updates",
+  Politics: "politics OR congress OR election OR white house",
+  World: "world news OR international OR global conflict",
+  Business: "business OR economy OR corporate",
+  Tech: "technology OR AI OR software OR startup",
+  Sports: "sports OR game OR season OR league",
+  Health: "health OR medicine OR hospital OR disease",
+  Science: "science OR research OR climate OR nasa",
+  Entertainment: "entertainment OR celebrity OR streaming OR movies",
+  Finance: "finance OR markets OR stocks OR federal reserve",
+  Crime: "crime OR police OR court",
+  Weather: "weather OR storm OR forecast",
+  Education: "education OR schools OR college",
+  "Local News": "\"local news\" OR city OR community",
+};
+
+const RSS_FEEDS: RssFeedConfig[] = [
   {
-    url: "https://newsapi.org/v2/top-headlines?country=us&pageSize=14",
+    url: "https://rss.cnn.com/rss/cnn_topstories.rss",
+    source: "CNN",
     category: "Breaking News",
+    tags: ["breaking", "politics", "world"],
   },
   {
-    url: "https://newsapi.org/v2/top-headlines?country=us&category=business&pageSize=8",
-    category: "Business",
-  },
-  {
-    url: "https://newsapi.org/v2/top-headlines?country=us&category=technology&pageSize=8",
-    category: "Tech",
-  },
-  {
-    url: "https://newsapi.org/v2/top-headlines?country=us&category=sports&pageSize=7",
-    category: "Sports",
-  },
-  {
-    url: "https://newsapi.org/v2/top-headlines?country=us&category=health&pageSize=6",
-    category: "Health",
-  },
-  {
-    url: "https://newsapi.org/v2/top-headlines?country=us&category=science&pageSize=6",
-    category: "Science",
-  },
-  {
-    url: "https://newsapi.org/v2/top-headlines?country=us&category=entertainment&pageSize=6",
-    category: "Entertainment",
-  },
-  {
-    url: "https://newsapi.org/v2/everything?q=politics%20OR%20election%20OR%20congress&language=en&sortBy=publishedAt&pageSize=7",
-    category: "Politics",
-  },
-  {
-    url: "https://newsapi.org/v2/everything?q=world%20OR%20international%20OR%20global&language=en&sortBy=publishedAt&pageSize=7",
+    url: "https://feeds.bbci.co.uk/news/world/rss.xml",
+    source: "BBC News",
     category: "World",
+    tags: ["world", "international", "conflict"],
   },
   {
-    url: "https://newsapi.org/v2/everything?q=finance%20OR%20markets%20OR%20wall%20street&language=en&sortBy=publishedAt&pageSize=6",
+    url: "https://feeds.bbci.co.uk/news/business/rss.xml",
+    source: "BBC News",
+    category: "Business",
+    tags: ["business", "economy", "markets"],
+  },
+  {
+    url: "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    source: "BBC News",
+    category: "Tech",
+    tags: ["technology", "ai", "startup"],
+  },
+  {
+    url: "https://feeds.npr.org/1001/rss.xml",
+    source: "NPR",
+    category: "Breaking News",
+    tags: ["breaking", "politics", "world"],
+  },
+  {
+    url: "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+    source: "CNBC",
     category: "Finance",
+    tags: ["finance", "markets", "business"],
   },
   {
-    url: "https://newsapi.org/v2/everything?q=%22local%20news%22%20OR%20community%20OR%20city&language=en&sortBy=publishedAt&pageSize=6",
-    category: "Local News",
+    url: "https://www.espn.com/espn/rss/news",
+    source: "ESPN",
+    category: "Sports",
+    tags: ["sports", "nfl", "nba", "mlb"],
   },
 ];
 
-const TITLE_STOP_WORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "at",
-  "for",
-  "from",
-  "in",
-  "of",
-  "on",
-  "or",
-  "the",
-  "to",
-  "with",
-]);
-
-const FALLBACK_ARTICLE_SEEDS: FallbackSeed[] = [
+const FALLBACK_ARTICLE_SEEDS = [
   {
     title: "Congress returns with a packed agenda on budget, border, and aid talks",
     source: "Associated Press",
     category: "Politics",
-    description: "Lawmakers head back to Washington facing another week of negotiations on domestic priorities and international funding.",
+    description:
+      "Lawmakers head back to Washington facing another week of negotiations on domestic priorities and international funding.",
   },
   {
     title: "Wall Street watches bond yields, oil prices, and earnings for fresh signals",
     source: "Reuters",
     category: "Finance",
-    description: "Investors are tracking rates, commodities, and corporate outlooks as markets look for direction.",
+    description:
+      "Investors are tracking rates, commodities, and corporate outlooks as markets look for direction.",
   },
   {
     title: "Tech companies push new AI features while regulators weigh guardrails",
     source: "Bloomberg",
     category: "Tech",
-    description: "The latest product rollouts arrive alongside policy questions about safety, transparency, and competition.",
-  },
-  {
-    title: "Health agencies monitor spring outbreak trends and hospital capacity",
-    source: "NBC News",
-    category: "Health",
-    description: "Officials say vaccination, testing, and local hospital readiness remain key factors in the weeks ahead.",
-  },
-  {
-    title: "Scientists unveil climate data showing rapid change across coastal regions",
-    source: "BBC News",
-    category: "Science",
-    description: "Researchers say updated measurements highlight growing pressure on infrastructure and ecosystems.",
-  },
-  {
-    title: "Major league contenders reshuffle rotations as the season intensifies",
-    source: "ESPN",
-    category: "Sports",
-    description: "Teams are adjusting lineups and workloads as injuries and standings start to shape strategy.",
-  },
-  {
-    title: "Studios bet on franchise releases and streaming bundles to drive summer demand",
-    source: "The Guardian",
-    category: "Entertainment",
-    description: "Media companies are balancing box office plans with subscription growth and advertising goals.",
-  },
-  {
-    title: "Local transit, housing, and school funding top city hall debates nationwide",
-    source: "Axios",
-    category: "Local News",
-    description: "Mayors and councils are weighing service cuts, tax choices, and long-term infrastructure needs.",
+    description:
+      "The latest product rollouts arrive alongside policy questions about safety, transparency, and competition.",
   },
   {
     title: "Global leaders renew ceasefire pressure as humanitarian corridors remain fragile",
     source: "Al Jazeera",
     category: "World",
-    description: "Diplomatic efforts continue as aid groups warn that access and supply routes remain uncertain.",
+    description:
+      "Diplomatic efforts continue as aid groups warn that access and supply routes remain uncertain.",
   },
   {
-    title: "Retail spending data offers mixed picture for consumer confidence this month",
-    source: "CBS News",
-    category: "Business",
-    description: "Analysts say shoppers are still spending selectively as prices and borrowing costs stay elevated.",
-  },
-  {
-    title: "Federal agencies expand weather alerts ahead of another severe storm stretch",
-    source: "CNN",
-    category: "Weather",
-    description: "Emergency managers are asking residents to monitor warnings closely as storms move across multiple regions.",
-  },
-  {
-    title: "Universities face renewed debate over tuition, aid, and campus speech rules",
-    source: "Washington Post",
-    category: "Education",
-    description: "Administrators and students are grappling with affordability and policy changes before the next term.",
+    title: "Major league contenders reshuffle rotations as the season intensifies",
+    source: "ESPN",
+    category: "Sports",
+    description:
+      "Teams are adjusting lineups and workloads as injuries and standings start to shape strategy.",
   },
 ];
 
@@ -192,6 +235,13 @@ function hashArticleId(value: string) {
   }
 
   return hash === 0 ? 1 : hash;
+}
+
+function deterministicPopularitySeed(input: string) {
+  const seed = hashArticleId(input);
+  const likes = 18 + (seed % 83);
+  const commentCount = (Math.floor(seed / 13) % 21) + 2;
+  return { likes, commentCount };
 }
 
 function normalizeUrl(url: string | null | undefined) {
@@ -229,75 +279,163 @@ function normalizeTitle(title: string | null | undefined) {
 function buildTitleFingerprint(title: string) {
   return normalizeTitle(title)
     .split(" ")
-    .filter((word) => word.length > 2 && !TITLE_STOP_WORDS.has(word))
+    .filter((word) => word.length > 2)
     .slice(0, 12)
     .join(" ");
 }
 
-function deterministicPopularitySeed(input: string) {
-  const seed = hashArticleId(input);
-  const likes = 18 + (seed % 83);
-  const commentCount = (Math.floor(seed / 13) % 21) + 2;
-  return { likes, commentCount };
+function decodeHtml(value: string | null | undefined) {
+  return (value ?? "")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 }
 
-function getNormalizedArticleImage(article: {
-  urlToImage?: string | null;
-  image?: string | null;
-  imageUrl?: string | null;
-  image_url?: string | null;
-  thumbnail?: string | null;
-  media?: string | { url?: string | null } | null;
-}) {
+function stripHtml(value: string | null | undefined) {
+  return decodeHtml(value)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getProviderImage(raw: ProviderArticle) {
   const mediaUrl =
-    typeof article.media === "string"
-      ? article.media
-      : article.media && typeof article.media === "object"
-        ? article.media.url ?? null
+    typeof raw.media === "string"
+      ? raw.media
+      : raw.media && typeof raw.media === "object"
+        ? raw.media.url ?? null
         : null;
 
   return (
-    article.urlToImage ||
-    article.image ||
-    article.image_url ||
-    article.thumbnail ||
+    raw.urlToImage ||
+    raw.image ||
+    raw.image_url ||
+    raw.thumbnail ||
     mediaUrl ||
-    article.imageUrl ||
+    raw.imageUrl ||
     null
   );
 }
 
-function buildFallbackArticles(page: number, pageSize: number) {
-  const repeatedSeeds = Array.from({ length: 4 }, (_, cycleIndex) =>
-    FALLBACK_ARTICLE_SEEDS.map((seed, seedIndex) => {
-      const articleKey = `${seed.title}-${seed.source}-${cycleIndex}-${seedIndex}`;
-      const popularity = deterministicPopularitySeed(articleKey);
-      const publishedAt = new Date(
-        Date.now() - (cycleIndex * FALLBACK_ARTICLE_SEEDS.length + seedIndex) * 90 * 60 * 1000
-      ).toISOString();
+function getPublishedIso(
+  value: string | null | undefined,
+  fallbackOffsetHours = 0
+) {
+  if (!value) {
+    return new Date(Date.now() - fallbackOffsetHours * 60 * 60 * 1000).toISOString();
+  }
 
-      return {
-        id: hashArticleId(articleKey),
-        title:
-          cycleIndex === 0 ? seed.title : `${seed.title} Live updates ${cycleIndex + 1}`,
-        source: seed.source,
-        category: seed.category,
-        time: "Recent",
-        image: null,
-        imageUrl: null,
-        urlToImage: null,
-        description: seed.description,
-        url: `https://graffiti.app/fallback/${hashArticleId(articleKey)}`,
-        publishedAt,
-        content: seed.description,
-        likes: popularity.likes,
-        comments: new Array(popularity.commentCount).fill(null),
-      } satisfies ApiArticle;
-    })
-  ).flat();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? new Date(Date.now() - fallbackOffsetHours * 60 * 60 * 1000).toISOString()
+    : parsed.toISOString();
+}
 
-  const startIndex = Math.max(0, (page - 1) * pageSize);
-  return repeatedSeeds.slice(startIndex, startIndex + pageSize);
+function buildNormalizedArticle(
+  raw: ProviderArticle,
+  fallback: {
+    source: string;
+    category: string;
+    uniqueSeed: string;
+    fallbackPublishedOffsetHours?: number;
+  }
+): NormalizedArticle | null {
+  const title = raw.title?.trim();
+  const normalizedUrl = normalizeUrl(raw.url);
+
+  if (!title || !normalizedUrl) {
+    return null;
+  }
+
+  const sourceName =
+    raw.source?.name?.trim() ||
+    raw.source_name?.trim() ||
+    raw.source_id?.trim() ||
+    fallback.source;
+  const category =
+    Array.isArray(raw.category) && raw.category[0]
+      ? raw.category[0]
+      : typeof raw.category === "string" && raw.category.trim()
+        ? raw.category.trim()
+        : fallback.category;
+  const imageUrl = getProviderImage(raw);
+  const publishedAt = getPublishedIso(
+    raw.publishedAt ?? raw.pubDate,
+    fallback.fallbackPublishedOffsetHours ?? 0
+  );
+  const popularity = deterministicPopularitySeed(`${normalizedUrl}-${sourceName}-${title}`);
+
+  return {
+    id: hashArticleId(`${normalizedUrl}-${fallback.uniqueSeed}`),
+    title,
+    description: raw.description?.trim() ?? null,
+    content: raw.content?.trim() ?? raw.description?.trim() ?? null,
+    source: sourceName,
+    sourceName,
+    url: normalizedUrl,
+    image: imageUrl,
+    imageUrl,
+    urlToImage: imageUrl,
+    category,
+    publishedAt,
+    time: "Recent",
+    likes: popularity.likes,
+    comments: new Array(popularity.commentCount).fill(null),
+  };
+}
+
+function getModeCategories(mode: NewsMode, categories: string[]) {
+  if (mode === "myfeed" && categories.length > 0) {
+    return categories.slice(0, 5);
+  }
+
+  if (categories.length > 0) {
+    return categories.slice(0, 5);
+  }
+
+  return ["Breaking News", "Politics", "World", "Business", "Tech", "Sports"];
+}
+
+function getCategoryQuery(category: string) {
+  return CATEGORY_QUERY_MAP[category] ?? category;
+}
+
+function getMatchScore(article: NormalizedArticle, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return 0;
+  }
+
+  const haystacks = [
+    article.title.toLowerCase(),
+    article.description?.toLowerCase() ?? "",
+    article.content?.toLowerCase() ?? "",
+    article.source.toLowerCase(),
+    article.category.toLowerCase(),
+  ];
+
+  let score = 0;
+
+  if (haystacks[0].includes(normalizedQuery)) score += 10;
+  if (haystacks[1].includes(normalizedQuery)) score += 5;
+  if (haystacks[2].includes(normalizedQuery)) score += 3;
+  if (haystacks[3].includes(normalizedQuery)) score += 2;
+  if (haystacks[4].includes(normalizedQuery)) score += 1;
+
+  normalizedQuery
+    .split(/\s+/)
+    .filter((token) => token.length > 2)
+    .forEach((token) => {
+      if (haystacks[0].includes(token)) score += 4;
+      if (haystacks[1].includes(token)) score += 2;
+      if (haystacks[2].includes(token)) score += 1;
+    });
+
+  return score;
 }
 
 function diversifyArticles<T extends { source: string; category: string }>(articles: T[]) {
@@ -333,69 +471,11 @@ function diversifyArticles<T extends { source: string; category: string }>(artic
   return diversified;
 }
 
-function withRequestPagination(url: string, page: number, pageSize?: number) {
-  const parsed = new URL(url);
-  parsed.searchParams.set("page", String(Math.max(1, page)));
-
-  if (pageSize) {
-    parsed.searchParams.set("pageSize", String(Math.min(100, Math.max(1, pageSize))));
-  }
-
-  return parsed.toString();
-}
-
-function buildHomeQueries(page: number) {
-  return NEWS_QUERY_CONFIGS.map((query) => ({
-    ...query,
-    url: withRequestPagination(query.url, page),
-  }));
-}
-
-async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArticle[]> {
-  let hasLoggedRawNewsArticle = false;
-
-  const responses = await Promise.allSettled(
-    queries.map(async (query) => {
-      const response = await fetch(query.url, {
-        headers: {
-          "X-Api-Key": NEWS_API_KEY,
-        },
-        next: { revalidate: 900 },
-      });
-
-      if (!response.ok) {
-        throw new Error(`News API request failed for ${query.category}`);
-      }
-
-      const data = (await response.json()) as { articles?: NewsApiArticle[] };
-      const rawArticles = data.articles ?? [];
-
-      if (!hasLoggedRawNewsArticle && rawArticles.length > 0) {
-        console.log("RAW ARTICLE SAMPLE", rawArticles[0] ?? null);
-        hasLoggedRawNewsArticle = true;
-      }
-
-      return rawArticles.map((article, index) => ({
-        article,
-        category: query.category,
-        queryIndex: index,
-      }));
-    })
-  );
-
-  const sourceArticles = responses.flatMap((result) => {
-    if (result.status === "fulfilled") {
-      return result.value;
-    }
-
-    console.error("News fetch failed:", result.reason);
-    return [];
-  });
-
+function dedupeArticles(articles: NormalizedArticle[]) {
   const seenUrls = new Set<string>();
-  const seenTitleFingerprints = new Set<string>();
+  const seenTitles = new Set<string>();
 
-  const dedupedArticles = sourceArticles.filter(({ article }) => {
+  return articles.filter((article) => {
     const normalizedUrl = normalizeUrl(article.url);
     const titleFingerprint = buildTitleFingerprint(article.title);
 
@@ -403,7 +483,7 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArtic
       return false;
     }
 
-    if (titleFingerprint && seenTitleFingerprints.has(titleFingerprint)) {
+    if (titleFingerprint && seenTitles.has(titleFingerprint)) {
       return false;
     }
 
@@ -412,137 +492,596 @@ async function fetchNewsQueryBatch(queries: NewsQueryConfig[]): Promise<ApiArtic
     }
 
     if (titleFingerprint) {
-      seenTitleFingerprints.add(titleFingerprint);
+      seenTitles.add(titleFingerprint);
     }
 
     return true;
   });
+}
 
-  const normalizedArticles = diversifyArticles(
-    dedupedArticles.map(({ article, category, queryIndex }) => {
-      const normalizedUrl = normalizeUrl(article.url);
-      const sourceName = article.source?.name ?? "Unknown";
-      const articleKey =
-        normalizedUrl || `${article.title}-${sourceName}-${category}-${queryIndex}`;
-      const popularity = deterministicPopularitySeed(articleKey);
-      const normalizedImage = getNormalizedArticleImage(article);
+function sortArticlesForMode(
+  articles: NormalizedArticle[],
+  params: Pick<ProviderFetchParams, "mode" | "query">
+) {
+  if (params.mode === "search") {
+    return [...articles].sort((left, right) => {
+      const scoreDiff = getMatchScore(right, params.query) - getMatchScore(left, params.query);
 
-      return {
-        id: hashArticleId(articleKey),
-        title: article.title,
-        source: sourceName,
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+
+      const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+      const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+  }
+
+  if (params.mode === "latest") {
+    return [...articles].sort((left, right) => {
+      const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+      const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+  }
+
+  return diversifyArticles(
+    [...articles].sort((left, right) => {
+      const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+      const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+      const leftScore = left.likes + left.comments.length * 2 + leftTime / 10000000;
+      const rightScore = right.likes + right.comments.length * 2 + rightTime / 10000000;
+      return rightScore - leftScore;
+    })
+  );
+}
+
+function buildFallbackArticles(params: ProviderFetchParams): ProviderResponse {
+  const repeated = Array.from({ length: 5 }, (_, cycleIndex) =>
+    FALLBACK_ARTICLE_SEEDS.map((seed, seedIndex) => {
+      const articleKey = `${seed.title}-${seed.source}-${cycleIndex}-${seedIndex}`;
+      return buildNormalizedArticle(
+        {
+          title: cycleIndex === 0 ? seed.title : `${seed.title} Update ${cycleIndex + 1}`,
+          description: seed.description,
+          content: seed.description,
+          url: `https://graffiti.app/fallback/${hashArticleId(articleKey)}`,
+        },
+        {
+          source: seed.source,
+          category: seed.category,
+          uniqueSeed: articleKey,
+          fallbackPublishedOffsetHours: cycleIndex * 5 + seedIndex,
+        }
+      );
+    }).filter(Boolean) as NormalizedArticle[]
+  ).flat();
+
+  const start = (params.page - 1) * params.pageSize;
+  const sliced = repeated.slice(start, start + params.pageSize);
+
+  return {
+    articles: sliced,
+    hasMore: repeated.length > start + params.pageSize,
+  };
+}
+
+function buildNewsApiUrls(params: ProviderFetchParams) {
+  const categories = getModeCategories(params.mode, params.categories);
+  const requests: Array<{ url: string; category: string }> = [];
+
+  if (params.mode === "search" && params.query.trim()) {
+    const encodedQuery = encodeURIComponent(params.query.trim());
+    const exactQuery = encodeURIComponent(`"${params.query.trim()}"`);
+    requests.push(
+      {
+        url: `https://newsapi.org/v2/everything?q=${exactQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
+          8,
+          Math.ceil(params.pageSize / 2)
+        )}`,
+        category: "Search",
+      },
+      {
+        url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
+          10,
+          params.pageSize
+        )}`,
+        category: "Search",
+      }
+    );
+    return requests;
+  }
+
+  const perCategoryPageSize = Math.max(4, Math.ceil(params.pageSize / Math.max(categories.length, 1)));
+  const categoryMap: Record<string, string> = {
+    Business: "business",
+    Entertainment: "entertainment",
+    Health: "health",
+    Science: "science",
+    Sports: "sports",
+    Tech: "technology",
+  };
+
+  categories.forEach((category) => {
+    const topHeadlineCategory = categoryMap[category];
+
+    if (topHeadlineCategory) {
+      requests.push({
+        url: `https://newsapi.org/v2/top-headlines?country=us&category=${topHeadlineCategory}&page=${params.page}&pageSize=${perCategoryPageSize}`,
         category,
-        time: "Recent",
-        image: normalizedImage,
-        imageUrl: normalizedImage,
-        urlToImage: normalizedImage,
-        description: article.description,
-        url: normalizedUrl || article.url,
-        publishedAt: article.publishedAt,
-        content: article.content,
-        likes: popularity.likes,
-        comments: new Array(popularity.commentCount).fill(null),
-      };
+      });
+      return;
+    }
+
+    requests.push({
+      url: `https://newsapi.org/v2/everything?q=${encodeURIComponent(
+        getCategoryQuery(category)
+      )}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${perCategoryPageSize}`,
+      category,
+    });
+  });
+
+  return requests;
+}
+
+async function fetchNewsApiArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  if (!NEWS_API_KEY) {
+    return { articles: [], hasMore: false };
+  }
+
+  const requests = buildNewsApiUrls(params);
+  let hasLoggedRawSample = false;
+
+  const responses = await Promise.allSettled(
+    requests.map(async ({ url, category }) => {
+      const response = await fetch(url, {
+        headers: {
+          "X-Api-Key": NEWS_API_KEY,
+        },
+        next: { revalidate: 600 },
+      });
+
+      if (!response.ok) {
+        throw new Error(`NewsAPI request failed for ${category} with status ${response.status}`);
+      }
+
+      const data = (await response.json()) as NewsApiResponse;
+      const rawArticles = data.articles ?? [];
+
+      if (!hasLoggedRawSample && rawArticles.length > 0) {
+        console.log("RAW ARTICLE SAMPLE", rawArticles[0] ?? null);
+        hasLoggedRawSample = true;
+      }
+
+      return rawArticles
+        .map((article, index) =>
+          buildNormalizedArticle(article, {
+            source: article.source?.name?.trim() || "NewsAPI",
+            category,
+            uniqueSeed: `newsapi-${category}-${params.page}-${index}`,
+            fallbackPublishedOffsetHours: index,
+          })
+        )
+        .filter(Boolean) as NormalizedArticle[];
     })
   );
 
+  const normalizedArticles = responses.flatMap((result) => {
+    if (result.status === "fulfilled") {
+      return result.value;
+    }
+
+    console.error("NewsAPI provider error:", result.reason);
+    return [];
+  });
+
   console.log("NORMALIZED ARTICLE SAMPLE", normalizedArticles[0] ?? null);
 
-  return normalizedArticles;
+  return {
+    articles: normalizedArticles,
+    hasMore: normalizedArticles.length >= params.pageSize,
+  };
 }
 
-function buildSearchQueries(rawQuery: string, page: number, pageSize: number) {
-  const query = rawQuery.trim();
-  const encodedQuery = encodeURIComponent(query);
-  const exactPhrase = encodeURIComponent(`"${query}"`);
-  const queryWords = query
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter((word) => word.length > 1);
-  const tokenQuery = encodeURIComponent(queryWords.join(" AND "));
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const oneHundredEightyDaysAgo = new Date(
-    Date.now() - 180 * 24 * 60 * 60 * 1000
-  ).toISOString();
+async function fetchGNewsArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  if (!GNEWS_API_KEY) {
+    return { articles: [], hasMore: false };
+  }
 
-  return [
-    {
-      url: withRequestPagination(
-        `https://newsapi.org/v2/everything?q=${exactPhrase}&language=en&sortBy=publishedAt&from=${encodeURIComponent(thirtyDaysAgo)}`,
-        page,
-        Math.max(20, Math.min(40, pageSize))
-      ),
+  const categories = getModeCategories(params.mode, params.categories);
+  const requests: Array<{ url: string; category: string }> = [];
+
+  if (params.mode === "search" && params.query.trim()) {
+    requests.push({
+      url: `https://gnews.io/api/v4/search?q=${encodeURIComponent(
+        params.query.trim()
+      )}&lang=en&country=us&max=${params.pageSize}&page=${params.page}&expand=content&token=${GNEWS_API_KEY}`,
       category: "Search",
-    },
-    {
-      url: withRequestPagination(
-        `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&from=${encodeURIComponent(thirtyDaysAgo)}`,
-        page,
-        Math.max(24, Math.min(50, pageSize + 10))
-      ),
-      category: "Search",
-    },
-    {
-      url: withRequestPagination(
-        `https://newsapi.org/v2/everything?q=${tokenQuery || encodedQuery}&language=en&sortBy=publishedAt&from=${encodeURIComponent(oneHundredEightyDaysAgo)}`,
-        page,
-        Math.max(18, Math.min(40, pageSize))
-      ),
-      category: "Search",
-    },
-  ] satisfies NewsQueryConfig[];
+    });
+  } else {
+    const perCategoryPageSize = Math.max(4, Math.ceil(params.pageSize / Math.max(categories.length, 1)));
+    categories.forEach((category) => {
+      requests.push({
+        url: `https://gnews.io/api/v4/top-headlines?category=${encodeURIComponent(
+          category === "Breaking News" ? "general" : category.toLowerCase()
+        )}&lang=en&country=us&max=${perCategoryPageSize}&page=${params.page}&token=${GNEWS_API_KEY}`,
+        category,
+      });
+    });
+  }
+
+  const responses = await Promise.allSettled(
+    requests.map(async ({ url, category }) => {
+      const response = await fetch(url, {
+        next: { revalidate: 600 },
+      });
+
+      if (!response.ok) {
+        throw new Error(`GNews request failed for ${category} with status ${response.status}`);
+      }
+
+      const data = (await response.json()) as GNewsApiResponse;
+
+      return (data.articles ?? [])
+        .map((article, index) =>
+          buildNormalizedArticle(article, {
+            source: article.source?.name?.trim() || "GNews",
+            category,
+            uniqueSeed: `gnews-${category}-${params.page}-${index}`,
+            fallbackPublishedOffsetHours: index,
+          })
+        )
+        .filter(Boolean) as NormalizedArticle[];
+    })
+  );
+
+  const normalizedArticles = responses.flatMap((result) => {
+    if (result.status === "fulfilled") {
+      return result.value;
+    }
+
+    console.error("GNews provider error:", result.reason);
+    return [];
+  });
+
+  return {
+    articles: normalizedArticles,
+    hasMore: normalizedArticles.length >= params.pageSize,
+  };
+}
+
+async function resolveNewsDataToken(baseKey: string, page: number, url: URL) {
+  if (page <= 1) {
+    return "";
+  }
+
+  const cachedTokens = newsDataTokenCache.get(baseKey) ?? [""];
+
+  if (cachedTokens[page - 1] !== undefined) {
+    return cachedTokens[page - 1] ?? "";
+  }
+
+  let nextToken = cachedTokens[cachedTokens.length - 1] ?? "";
+
+  for (let currentPage = cachedTokens.length; currentPage < page; currentPage += 1) {
+    if (!nextToken) {
+      return "";
+    }
+
+    const probeUrl = new URL(url.toString());
+    probeUrl.searchParams.set("page", nextToken);
+    const response = await fetch(probeUrl.toString(), {
+      next: { revalidate: 600 },
+    });
+
+    if (!response.ok) {
+      return "";
+    }
+
+    const data = (await response.json()) as NewsDataApiResponse;
+    cachedTokens[currentPage] = nextToken;
+    nextToken = data.nextPage ?? "";
+  }
+
+  newsDataTokenCache.set(baseKey, cachedTokens);
+  return cachedTokens[page - 1] ?? "";
+}
+
+async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  if (!NEWSDATA_API_KEY) {
+    return { articles: [], hasMore: false };
+  }
+
+  const categories = getModeCategories(params.mode, params.categories);
+  const baseUrl = new URL("https://newsdata.io/api/1/latest");
+  baseUrl.searchParams.set("apikey", NEWSDATA_API_KEY);
+  baseUrl.searchParams.set("language", "en");
+  baseUrl.searchParams.set("country", "us");
+
+  if (params.mode === "search" && params.query.trim()) {
+    baseUrl.searchParams.set("q", params.query.trim());
+  } else if (categories.length > 0) {
+    baseUrl.searchParams.set("q", getCategoryQuery(categories[0]));
+    baseUrl.searchParams.set("category", categories[0].toLowerCase().replace(/\s+/g, ","));
+  }
+
+  const tokenCacheKey = JSON.stringify({
+    mode: params.mode,
+    query: params.query,
+    categories,
+  });
+  const pageToken = await resolveNewsDataToken(tokenCacheKey, params.page, baseUrl);
+
+  if (params.page > 1 && !pageToken) {
+    return { articles: [], hasMore: false };
+  }
+
+  if (pageToken) {
+    baseUrl.searchParams.set("page", pageToken);
+  }
+
+  const response = await fetch(baseUrl.toString(), {
+    next: { revalidate: 600 },
+  });
+
+  if (!response.ok) {
+    console.error("NewsData.io provider error:", response.status, response.statusText);
+    return { articles: [], hasMore: false };
+  }
+
+  const data = (await response.json()) as NewsDataApiResponse;
+  const cachedTokens = newsDataTokenCache.get(tokenCacheKey) ?? [""];
+  cachedTokens[params.page] = data.nextPage ?? "";
+  newsDataTokenCache.set(tokenCacheKey, cachedTokens);
+
+  const normalizedArticles = (data.results ?? [])
+    .map((article, index) =>
+      buildNormalizedArticle(
+        {
+          title: article.title,
+          description: article.description,
+          content: article.content,
+          url: article.link,
+          image_url: article.image_url,
+          pubDate: article.pubDate,
+          source_name: article.source_name,
+          source_id: article.source_id,
+          category: article.category,
+        },
+        {
+          source: article.source_name?.trim() || article.source_id?.trim() || "NewsData.io",
+          category: Array.isArray(article.category) ? article.category[0] ?? "News" : "News",
+          uniqueSeed: `newsdata-${params.page}-${index}`,
+          fallbackPublishedOffsetHours: index,
+        }
+      )
+    )
+    .filter(Boolean) as NormalizedArticle[];
+
+  return {
+    articles: normalizedArticles,
+    hasMore: Boolean(data.nextPage),
+  };
+}
+
+function extractXmlTag(block: string, tagName: string) {
+  const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i");
+  return decodeHtml(block.match(regex)?.[1] ?? "");
+}
+
+function extractXmlAttr(block: string, tagName: string, attrName: string) {
+  const regex = new RegExp(`<${tagName}[^>]*${attrName}=["']([^"']+)["'][^>]*>`, "i");
+  return decodeHtml(block.match(regex)?.[1] ?? "");
+}
+
+function extractImageFromDescription(description: string) {
+  const srcMatch = description.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return srcMatch?.[1] ?? "";
+}
+
+function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
+  const itemMatches = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)];
+
+  return itemMatches
+    .map((match, index) => {
+      const block = match[0];
+      const description = extractXmlTag(block, "description");
+      const mediaUrl =
+        extractXmlAttr(block, "media:content", "url") ||
+        extractXmlAttr(block, "media:thumbnail", "url") ||
+        extractXmlAttr(block, "enclosure", "url") ||
+        extractImageFromDescription(description) ||
+        null;
+
+      return buildNormalizedArticle(
+        {
+          title: stripHtml(extractXmlTag(block, "title")),
+          description: stripHtml(description),
+          content: stripHtml(extractXmlTag(block, "content:encoded") || description),
+          url: extractXmlTag(block, "link"),
+          publishedAt: extractXmlTag(block, "pubDate"),
+          media: mediaUrl,
+          category: stripHtml(extractXmlTag(block, "category")) || fallbackFeed.category,
+          source_name: fallbackFeed.source,
+        },
+        {
+          source: fallbackFeed.source,
+          category: fallbackFeed.category,
+          uniqueSeed: `rss-${fallbackFeed.source}-${index}`,
+          fallbackPublishedOffsetHours: index,
+        }
+      );
+    })
+    .filter(Boolean) as NormalizedArticle[];
+}
+
+async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  const candidateFeeds =
+    params.mode === "search" && params.query.trim()
+      ? RSS_FEEDS
+      : RSS_FEEDS.filter((feed) => {
+          const modeCategories = getModeCategories(params.mode, params.categories);
+          return modeCategories.includes(feed.category);
+        });
+
+  const feedsToFetch = candidateFeeds.length > 0 ? candidateFeeds : RSS_FEEDS;
+
+  const responses = await Promise.allSettled(
+    feedsToFetch.slice(0, 5).map(async (feed) => {
+      const response = await fetch(feed.url, {
+        next: { revalidate: 600 },
+      });
+
+      if (!response.ok) {
+        throw new Error(`RSS request failed for ${feed.source} with status ${response.status}`);
+      }
+
+      const xml = await response.text();
+      return parseRssItems(xml, feed);
+    })
+  );
+
+  let articles = responses.flatMap((result) => {
+    if (result.status === "fulfilled") {
+      return result.value;
+    }
+
+    console.error("RSS provider error:", result.reason);
+    return [];
+  });
+
+  if (params.mode === "search" && params.query.trim()) {
+    articles = articles.filter((article) => getMatchScore(article, params.query) > 0);
+  }
+
+  articles.sort((left, right) => {
+    const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+    const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+    return rightTime - leftTime;
+  });
+
+  const start = (params.page - 1) * params.pageSize;
+  const sliced = articles.slice(start, start + params.pageSize);
+
+  return {
+    articles: sliced,
+    hasMore: articles.length > start + params.pageSize,
+  };
+}
+
+async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const cacheKey = JSON.stringify({
+    mode: params.mode,
+    query: params.query,
+    categories: params.categories,
+    page: params.page,
+    pageSize: params.pageSize,
+  });
+  const cached = responseCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.payload;
+  }
+
+  const providerResponses = await Promise.allSettled([
+    fetchNewsApiArticles(params),
+    fetchGNewsArticles(params),
+    fetchNewsDataArticles(params),
+    fetchRssArticles(params),
+  ]);
+
+  const combined = providerResponses.flatMap((result) => {
+    if (result.status === "fulfilled") {
+      return result.value.articles;
+    }
+
+    console.error("News provider pipeline error:", result.reason);
+    return [];
+  });
+
+  const deduped = dedupeArticles(combined);
+  const sorted = sortArticlesForMode(deduped, params);
+  const sliced = sorted.slice(0, params.pageSize);
+  const hasMore = providerResponses.some(
+    (result) => result.status === "fulfilled" && result.value.hasMore
+  ) || sorted.length > params.pageSize;
+
+  const payload =
+    sliced.length > 0
+      ? {
+          articles: sliced,
+          nextPage: hasMore ? params.page + 1 : null,
+          hasMore,
+          page: params.page,
+          pageSize: params.pageSize,
+        }
+      : {
+          ...buildFallbackArticles(params),
+          nextPage: params.page + 1,
+          page: params.page,
+          pageSize: params.pageSize,
+        };
+
+  responseCache.set(cacheKey, {
+    expiresAt: Date.now() + CACHE_TTL_MS,
+    payload,
+  });
+
+  return payload;
+}
+
+function parseMode(value: string | null): NewsMode {
+  if (value === "latest" || value === "myfeed" || value === "search") {
+    return value;
+  }
+
+  return "trending";
+}
+
+function parseCategories(value: string | null) {
+  return (value ?? "")
+    .split(",")
+    .map((category) => category.trim())
+    .filter(Boolean);
+}
+
+function shouldUseLegacyArrayResponse(searchParams: URLSearchParams) {
+  return !["page", "pageSize", "mode", "query", "q", "category"].some((key) =>
+    searchParams.has(key)
+  );
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get("q")?.trim() ?? "";
-  const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const isLegacyRequest = shouldUseLegacyArrayResponse(searchParams);
+  const mode = parseMode(searchParams.get("mode"));
+  const query = searchParams.get("query")?.trim() ?? searchParams.get("q")?.trim() ?? "";
+  const categories = parseCategories(searchParams.get("category"));
+  const page = Math.max(1, Number(searchParams.get("page") ?? DEFAULT_PAGE) || DEFAULT_PAGE);
   const pageSize = Math.min(
-    30,
-    Math.max(1, Number(searchParams.get("pageSize") ?? "30") || 30)
+    MAX_PAGE_SIZE,
+    Math.max(1, Number(searchParams.get("pageSize") ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE)
   );
-  const isPaginatedRequest =
-    Boolean(query) || searchParams.has("page") || searchParams.has("pageSize");
 
-  if (query) {
-    const searchArticles = await fetchNewsQueryBatch(buildSearchQueries(query, page, pageSize));
-    const sortedSearchArticles = searchArticles.sort((left, right) => {
-        const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
-        const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
-        return rightTime - leftTime;
-      });
-
-    return Response.json({
-      articles: sortedSearchArticles.slice(0, pageSize),
-      page,
-      pageSize,
-      hasMore: sortedSearchArticles.length >= pageSize,
+  if (isLegacyRequest) {
+    const legacyPayload = await collectArticles({
+      mode: "trending",
+      query: "",
+      categories: [],
+      page: 1,
+      pageSize: 60,
     });
+
+    return Response.json(legacyPayload.articles);
   }
 
-  const articles = await fetchNewsQueryBatch(
-    isPaginatedRequest ? buildHomeQueries(page) : NEWS_QUERY_CONFIGS
-  );
-  const fallbackArticles =
-    articles.length === 0 ? buildFallbackArticles(page, pageSize) : articles.slice(0, pageSize);
+  const payload = await collectArticles({
+    mode,
+    query,
+    categories,
+    page,
+    pageSize,
+  });
 
-  if (articles.length === 0) {
-    console.error(
-      "News feed returned zero live articles. Serving fallback stories instead.",
-      { page, pageSize, query: null }
-    );
-  }
-
-  if (isPaginatedRequest) {
-    return Response.json({
-      articles: fallbackArticles,
-      page,
-      pageSize,
-      hasMore: articles.length === 0 ? fallbackArticles.length >= pageSize : articles.length >= pageSize,
-    });
-  }
-
-  return Response.json(
-    articles.length === 0 ? buildFallbackArticles(1, 30) : articles.slice(0, 60)
-  );
+  return Response.json(payload);
 }

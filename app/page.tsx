@@ -28,7 +28,7 @@ import {
   type VideoItem,
 } from "../lib/video-feed";
 
-const FEED_PAGE_SIZE = 30;
+const FEED_PAGE_SIZE = 25;
 
 type Comment = {
   id: number;
@@ -141,6 +141,7 @@ type FeedArticlePayload = Omit<
 
 type PaginatedNewsResponse = {
   articles: FeedArticlePayload[];
+  nextPage?: number | null;
   page: number;
   pageSize: number;
   hasMore: boolean;
@@ -452,6 +453,18 @@ export default function Home() {
     username: string | null;
   } | null>(null);
 
+  const feedMode: "trending" | "latest" | "myfeed" = useMemo(() => {
+    if (sortMode === "latest") {
+      return "latest";
+    }
+
+    if (sortMode === "my-feed") {
+      return "myfeed";
+    }
+
+    return "trending";
+  }, [sortMode]);
+
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
 
@@ -493,7 +506,17 @@ export default function Home() {
         setDislikedSources([]);
       }
 
-      const newsRes = await fetch(`/api/news?page=${pageToLoad}&pageSize=${FEED_PAGE_SIZE}`);
+      const params = new URLSearchParams({
+        mode: feedMode,
+        page: String(pageToLoad),
+        pageSize: String(FEED_PAGE_SIZE),
+      });
+
+      if (feedMode === "myfeed" && categories.length > 0) {
+        params.set("category", categories.join(","));
+      }
+
+      const newsRes = await fetch(`/api/news?${params.toString()}`);
 
       if (!newsRes.ok) {
         throw new Error(`Home feed request failed with status ${newsRes.status}`);
@@ -670,9 +693,22 @@ export default function Home() {
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
-  }, []);
+  }, [categories, feedMode]);
 
   useEffect(() => {
+    if (sortMode === "my-feed" && categories.length === 0) {
+      const timeoutId = window.setTimeout(() => {
+        setArticles([]);
+        setFeedPage(1);
+        setHasMoreArticles(false);
+        setIsLoading(false);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
+    }
+
     const timeoutId = window.setTimeout(() => {
       void loadFeedPage(1, { replace: true });
     }, 0);
@@ -680,7 +716,7 @@ export default function Home() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [loadFeedPage]);
+  }, [categories, loadFeedPage, sortMode]);
 
   useEffect(() => {
     async function fetchVideos() {
@@ -1852,14 +1888,6 @@ export default function Home() {
       ) : (
         <div className="stack">
           {displayedArticles.map((article, index) => {
-            console.log("SOURCE NAME:", article.source);
-            console.log("TRENDING ARTICLE IMAGE FIELDS", {
-              title: article.title,
-              image: article.image,
-              imageUrl: article.imageUrl,
-              urlToImage: article.urlToImage,
-            });
-
             return (
               <div key={article.id} className="stack">
                 <article className="news-card">
