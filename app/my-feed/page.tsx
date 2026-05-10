@@ -10,6 +10,8 @@ import ShareButton from "../components/share-button";
 import { apiFetch } from "../../lib/api-base";
 import {
   getBestArticleImage,
+  isLikelyHighQualityArticleImage,
+  shouldUseLargeArticleImage,
   shouldSuppressLowQualityArticleImage,
 } from "../../lib/article-images";
 import { getCategoryLabel } from "../../lib/categories";
@@ -58,6 +60,9 @@ export default function MyFeed() {
   const [activeSourceName, setActiveSourceName] = useState<string | null>(null);
   const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, boolean>>({});
+  const [lowQualityArticleImages, setLowQualityArticleImages] = useState<Record<string, boolean>>(
+    {}
+  );
   const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
     type: "success" | "error";
     text: string;
@@ -320,8 +325,14 @@ export default function MyFeed() {
                 const imageFailureKey = imageSrc
                   ? `${article.id}:${imageSrc}`
                   : `${article.id}:none`;
-                const shouldShowImage =
-                  Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
+                const hasFailedImage = Boolean(failedArticleImages[imageFailureKey]);
+                const isLowQualityImage = Boolean(lowQualityArticleImages[imageFailureKey]);
+                const hasUsableImage = Boolean(imageSrc) && !hasFailedImage;
+                const shouldUseHeroImage =
+                  hasUsableImage &&
+                  !isLowQualityImage &&
+                  isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
+                const shouldUseThumbnail = hasUsableImage && !shouldUseHeroImage;
 
                 return (
                   <article className="news-card">
@@ -341,25 +352,73 @@ export default function MyFeed() {
                     <Link href={`/article/${article.id}`} className="article-link">
                       <div
                         className={`news-card-body ${
-                          shouldShowImage
-                            ? "news-card-body-with-thumb"
-                            : "news-card-body-text-only"
+                          shouldUseHeroImage
+                            ? "news-card-body-with-hero"
+                            : shouldUseThumbnail
+                              ? "news-card-body-with-thumb"
+                              : "news-card-body-text-only"
                         }`}
                       >
                         <div className="news-card-copy">
                           <div className="news-card-header">
                             <div className="news-meta">
-                              <span className="chip chip-accent">
-                                {getCategoryLabel(article.category)}
-                              </span>
                               <span>{article.publishedAt ?? article.time}</span>
                             </div>
                           </div>
 
+                          <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
+                            {getCategoryLabel(article.category)}
+                          </span>
+
                           <h3 className="article-title">{cleanDisplayText(article.title)}</h3>
+
+                          {shouldUseHeroImage ? (
+                            <div className="article-hero-shell">
+                              <img
+                                src={imageSrc as string}
+                                alt={cleanDisplayText(article.title)}
+                                className="article-image article-image-hero"
+                                loading="lazy"
+                                decoding="async"
+                                onLoad={(event) => {
+                                  const target = event.currentTarget;
+
+                                  if (
+                                    !shouldUseLargeArticleImage(
+                                      target.naturalWidth,
+                                      target.naturalHeight
+                                    )
+                                  ) {
+                                    setLowQualityArticleImages((prev) => {
+                                      if (prev[imageFailureKey]) {
+                                        return prev;
+                                      }
+
+                                      return {
+                                        ...prev,
+                                        [imageFailureKey]: true,
+                                      };
+                                    });
+                                  }
+                                }}
+                                onError={() => {
+                                  setFailedArticleImages((prev) => {
+                                    if (prev[imageFailureKey]) {
+                                      return prev;
+                                    }
+
+                                    return {
+                                      ...prev,
+                                      [imageFailureKey]: true,
+                                    };
+                                  });
+                                }}
+                              />
+                            </div>
+                          ) : null}
                         </div>
 
-                        {shouldShowImage ? (
+                        {shouldUseThumbnail ? (
                           <div className="article-thumb-shell">
                             <img
                               src={imageSrc as string}
@@ -378,6 +437,25 @@ export default function MyFeed() {
                                   )
                                 ) {
                                   setFailedArticleImages((prev) => {
+                                    if (prev[imageFailureKey]) {
+                                      return prev;
+                                    }
+
+                                    return {
+                                      ...prev,
+                                      [imageFailureKey]: true,
+                                    };
+                                  });
+                                  return;
+                                }
+
+                                if (
+                                  !shouldUseLargeArticleImage(
+                                    target.naturalWidth,
+                                    target.naturalHeight
+                                  )
+                                ) {
+                                  setLowQualityArticleImages((prev) => {
                                     if (prev[imageFailureKey]) {
                                       return prev;
                                     }

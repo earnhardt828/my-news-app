@@ -94,6 +94,25 @@ export function getBestArticleImage(article: ArticleImageFields) {
   };
 }
 
+export function isLikelyHighQualityArticleImage(
+  source: ArticleImageSource,
+  url: string | null
+) {
+  if (!url) {
+    return false;
+  }
+
+  if (looksLikeLowQualityImageUrl(url)) {
+    return false;
+  }
+
+  return source === "urlToImage" || source === "imageUrl" || source === "image";
+}
+
+export function shouldUseLargeArticleImage(width: number, height: number) {
+  return width >= 600 && height >= 300;
+}
+
 export function shouldSuppressLowQualityArticleImage(
   source: ArticleImageSource,
   width: number,

@@ -548,6 +548,11 @@ input {
   gap: 14px;
 }
 
+.news-card-body-with-hero {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
 .news-card-body-text-only {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -672,6 +677,11 @@ input {
   background: color-mix(in srgb, var(--accent) 10%, var(--surface-muted));
 }
 
+.trending-category-pill-inline {
+  justify-self: flex-start;
+  margin-top: -2px;
+}
+
 .trending-rank-badge {
   flex-shrink: 0;
   background: color-mix(in srgb, var(--accent) 16%, var(--surface-muted));
@@ -770,6 +780,14 @@ input {
   image-rendering: auto;
 }
 
+.article-hero-shell {
+  width: 100%;
+}
+
+.article-image-hero {
+  margin-top: 2px;
+}
+
 @media (max-width: 389px) {
   .news-card-body-with-thumb {
     grid-template-columns: minmax(0, 1fr) 88px;
@@ -866,6 +884,17 @@ input {
   max-height: 300px;
   max-width: 560px;
   margin: 0;
+}
+
+.article-detail-compact-media {
+  width: min(220px, 42vw);
+}
+
+.article-detail-compact-image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 18px;
 }
 
 .article-detail-hero {

@@ -17,6 +17,8 @@ import {
 import { apiFetch, buildApiUrl } from "../lib/api-base";
 import {
   getBestArticleImage,
+  isLikelyHighQualityArticleImage,
+  shouldUseLargeArticleImage,
   shouldSuppressLowQualityArticleImage,
 } from "../lib/article-images";
 import { cleanDisplayText } from "../lib/display-text";
@@ -590,6 +592,7 @@ export default function Home() {
     text: string;
   } | null>(null);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
+  const [lowQualityArticleImages, setLowQualityArticleImages] = useState<Record<string, true>>({});
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
@@ -2301,7 +2304,7 @@ export default function Home() {
 
       const shouldInsertVideo =
         rankedVideos.length > insertedVideos &&
-        ((index + 1) % 4 === 0 || (index === visibleArticles.length - 1 && items.length < 12));
+        ((index + 1) % 3 === 0 || index === visibleArticles.length - 1);
 
       if (shouldInsertVideo) {
         const nextVideo = rankedVideos[insertedVideos];
@@ -2314,7 +2317,7 @@ export default function Home() {
       }
     });
 
-    while (insertedVideos < rankedVideos.length && items.length < visibleArticles.length + 3) {
+    while (insertedVideos < rankedVideos.length) {
       const nextVideo = rankedVideos[insertedVideos];
       items.push({
         type: "video",
@@ -2365,7 +2368,14 @@ export default function Home() {
     const selectedImage = getBestArticleImage(article);
     const imageSrc = selectedImage.src;
     const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
-    const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
+    const hasFailedImage = Boolean(failedArticleImages[imageFailureKey]);
+    const isLowQualityImage = Boolean(lowQualityArticleImages[imageFailureKey]);
+    const hasUsableImage = Boolean(imageSrc) && !hasFailedImage;
+    const shouldUseHeroImage =
+      hasUsableImage &&
+      !isLowQualityImage &&
+      isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
+    const shouldUseThumbnail = hasUsableImage && !shouldUseHeroImage;
 
     return (
       <article
@@ -2391,10 +2401,18 @@ export default function Home() {
         <Link href={`/article/${article.id}`} className="article-link">
           <div
             className={`news-card-body ${
-              shouldShowImage ? "news-card-body-with-thumb" : "news-card-body-text-only"
+              shouldUseHeroImage
+                ? "news-card-body-with-hero"
+                : shouldUseThumbnail
+                  ? "news-card-body-with-thumb"
+                  : "news-card-body-text-only"
             }`}
           >
             <div className="news-card-copy">
+              <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
+                {getCategoryLabel(article.category)}
+              </span>
+
               <div className="trending-title-row">
                 <h3 className="trending-article-title">
                   {cleanDisplayText(article.title)}
@@ -2408,14 +2426,51 @@ export default function Home() {
                       ? formatFreshnessTime(article.publishedAt, article.time)
                       : formatPublishedDate(article.publishedAt, article.time)}
                   </span>
-                  <span className="chip chip-accent trending-category-pill">
-                    {getCategoryLabel(article.category)}
-                  </span>
                 </div>
               </div>
+
+              {shouldUseHeroImage ? (
+                <div className="article-hero-shell">
+                  <img
+                    src={imageSrc as string}
+                    alt={cleanDisplayText(article.title)}
+                    className="article-image article-image-hero"
+                    loading="lazy"
+                    decoding="async"
+                    onLoad={(event) => {
+                      const target = event.currentTarget;
+
+                      if (!shouldUseLargeArticleImage(target.naturalWidth, target.naturalHeight)) {
+                        setLowQualityArticleImages((prev) => {
+                          if (prev[imageFailureKey]) {
+                            return prev;
+                          }
+
+                          return {
+                            ...prev,
+                            [imageFailureKey]: true,
+                          };
+                        });
+                      }
+                    }}
+                    onError={() => {
+                      setFailedArticleImages((prev) => {
+                        if (prev[imageFailureKey]) {
+                          return prev;
+                        }
+
+                        return {
+                          ...prev,
+                          [imageFailureKey]: true,
+                        };
+                      });
+                    }}
+                  />
+                </div>
+              ) : null}
             </div>
 
-            {shouldShowImage ? (
+            {shouldUseThumbnail ? (
               <div className="article-thumb-shell">
                 <img
                   src={imageSrc as string}
@@ -2434,6 +2489,20 @@ export default function Home() {
                       )
                     ) {
                       setFailedArticleImages((prev) => {
+                        if (prev[imageFailureKey]) {
+                          return prev;
+                        }
+
+                        return {
+                          ...prev,
+                          [imageFailureKey]: true,
+                        };
+                      });
+                      return;
+                    }
+
+                    if (!shouldUseLargeArticleImage(target.naturalWidth, target.naturalHeight)) {
+                      setLowQualityArticleImages((prev) => {
                         if (prev[imageFailureKey]) {
                           return prev;
                         }
