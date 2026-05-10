@@ -765,9 +765,9 @@ export default function ArticleDetailPage() {
           const contextualResults = await Promise.allSettled(
             compareQueries.map((compareQuery) =>
               apiFetch(
-                `/api/news?mode=search&query=${encodeURIComponent(
+                `/api/news?mode=compare&query=${encodeURIComponent(
                   compareQuery
-                )}&page=1&pageSize=50`
+                )}&page=1&pageSize=100`
               ).then(async (response) =>
                 normalizeNewsPayload(
                   (await response.json()) as ArticleRecord[] | PaginatedNewsResponse
@@ -822,8 +822,9 @@ export default function ArticleDetailPage() {
         console.log("COMPARE CANDIDATES COUNT", compareCandidates.length);
         setCompareArticles(nextCompareArticles);
         setActiveCompareIndex(0);
+        console.log("COMPARE MATCH COUNT", Math.max(0, nextCompareArticles.length - 1));
         setCompareStatusMessage(
-          nextCompareArticles.length > 2 ? "" : "No other similar sources found yet."
+          nextCompareArticles.length > 2 ? "" : "No other sources found yet."
         );
         if (
           nextCompareArticles.length > 2 &&
@@ -838,7 +839,7 @@ export default function ArticleDetailPage() {
         setCompareArticles([]);
         setActiveCompareIndex(0);
         setShowCompareTutorial(false);
-        setCompareStatusMessage("No other similar sources found yet.");
+        setCompareStatusMessage("No other sources found yet.");
       }
 
       const legacyArticleId = targetArticle

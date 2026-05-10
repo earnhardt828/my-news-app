@@ -37,7 +37,7 @@ type NormalizedArticle = {
   comments: null[];
 };
 
-type NewsMode = "trending" | "latest" | "myfeed" | "search";
+type NewsMode = "trending" | "latest" | "myfeed" | "search" | "compare";
 
 type ProviderFetchParams = {
   mode: NewsMode;
@@ -118,6 +118,7 @@ type RssFeedConfig = {
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 30;
+const MAX_COMPARE_PAGE_SIZE = 150;
 const CACHE_TTL_MS = 7 * 60 * 1000;
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY ?? process.env.NEXT_PUBLIC_NEWS_API_KEY ?? "";
@@ -509,7 +510,7 @@ function sortArticlesForMode(
   articles: NormalizedArticle[],
   params: Pick<ProviderFetchParams, "mode" | "query">
 ) {
-  if (params.mode === "search") {
+  if (params.mode === "search" || params.mode === "compare") {
     return [...articles].sort((left, right) => {
       const scoreDiff = getMatchScore(right, params.query) - getMatchScore(left, params.query);
 
@@ -576,20 +577,20 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
   const categories = getModeCategories(params.mode, params.categories);
   const requests: Array<{ url: string; category: string }> = [];
 
-  if (params.mode === "search" && params.query.trim()) {
+  if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
     const encodedQuery = encodeURIComponent(params.query.trim());
     const exactQuery = encodeURIComponent(`"${params.query.trim()}"`);
     requests.push(
       {
         url: `https://newsapi.org/v2/everything?q=${exactQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
-          8,
+          params.mode === "compare" ? 20 : 8,
           Math.ceil(params.pageSize / 2)
         )}`,
         category: "Search",
       },
       {
         url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
-          10,
+          params.mode === "compare" ? 30 : 10,
           params.pageSize
         )}`,
         category: "Search",
@@ -697,11 +698,14 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
   const categories = getModeCategories(params.mode, params.categories);
   const requests: Array<{ url: string; category: string }> = [];
 
-  if (params.mode === "search" && params.query.trim()) {
+  if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
     requests.push({
       url: `https://gnews.io/api/v4/search?q=${encodeURIComponent(
         params.query.trim()
-      )}&lang=en&country=us&max=${params.pageSize}&page=${params.page}&expand=content&token=${GNEWS_API_KEY}`,
+      )}&lang=en&country=us&max=${Math.min(
+        params.mode === "compare" ? Math.max(params.pageSize, 50) : params.pageSize,
+        100
+      )}&page=${params.page}&expand=content&token=${GNEWS_API_KEY}`,
       category: "Search",
     });
   } else {
@@ -804,7 +808,7 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
   baseUrl.searchParams.set("language", "en");
   baseUrl.searchParams.set("country", "us");
 
-  if (params.mode === "search" && params.query.trim()) {
+  if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
     baseUrl.searchParams.set("q", params.query.trim());
   } else if (categories.length > 0) {
     baseUrl.searchParams.set("q", getCategoryQuery(categories[0]));
@@ -923,7 +927,7 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
 
 async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
   const candidateFeeds =
-    params.mode === "search" && params.query.trim()
+    (params.mode === "search" || params.mode === "compare") && params.query.trim()
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
           const modeCategories = getModeCategories(params.mode, params.categories);
@@ -933,7 +937,7 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
   const feedsToFetch = candidateFeeds.length > 0 ? candidateFeeds : RSS_FEEDS;
 
   const responses = await Promise.allSettled(
-    feedsToFetch.slice(0, 5).map(async (feed) => {
+    feedsToFetch.slice(0, params.mode === "compare" ? 7 : 5).map(async (feed) => {
       const response = await fetch(feed.url, {
         next: { revalidate: 600 },
       });
@@ -956,7 +960,7 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
     return [];
   });
 
-  if (params.mode === "search" && params.query.trim()) {
+  if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
     articles = articles.filter((article) => getMatchScore(article, params.query) > 0);
   }
 
@@ -1037,7 +1041,12 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 }
 
 function parseMode(value: string | null): NewsMode {
-  if (value === "latest" || value === "myfeed" || value === "search") {
+  if (
+    value === "latest" ||
+    value === "myfeed" ||
+    value === "search" ||
+    value === "compare"
+  ) {
     return value;
   }
 
@@ -1077,8 +1086,9 @@ export async function GET(request: Request) {
   const query = searchParams.get("query")?.trim() ?? searchParams.get("q")?.trim() ?? "";
   const categories = parseCategories(searchParams.get("category"));
   const page = Math.max(1, Number(searchParams.get("page") ?? DEFAULT_PAGE) || DEFAULT_PAGE);
+  const maxAllowedPageSize = mode === "compare" ? MAX_COMPARE_PAGE_SIZE : MAX_PAGE_SIZE;
   const pageSize = Math.min(
-    MAX_PAGE_SIZE,
+    maxAllowedPageSize,
     Math.max(1, Number(searchParams.get("pageSize") ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE)
   );
 
