@@ -66,6 +66,7 @@ type Article = {
   image?: string | null;
   imageUrl?: string | null;
   urlToImage?: string | null;
+  thumbnail?: string | null;
   description?: string | null;
   url?: string | null;
   publishedAt?: string | null;
@@ -452,8 +453,9 @@ function getArticleCardImage(article: {
   image?: string | null;
   imageUrl?: string | null;
   urlToImage?: string | null;
+  thumbnail?: string | null;
 }) {
-  return article.urlToImage || article.imageUrl || article.image || null;
+  return article.urlToImage || article.imageUrl || article.image || article.thumbnail || null;
 }
 
 function buildClientFallbackArticles() {
@@ -467,24 +469,29 @@ function buildClientFallbackArticles() {
   }));
 }
 
-function getTrendingArticleRank(articleIndex: number, hasInlineVideos: boolean) {
-  return articleIndex + 1 + (hasInlineVideos ? Math.floor(articleIndex / 3) : 0);
-}
-
-function getTrendingInlineVideoRank(articleIndex: number, hasInlineVideos: boolean) {
-  if (!hasInlineVideos) {
-    return null;
-  }
-
-  return articleIndex + 2 + Math.floor(articleIndex / 3);
-}
-
 function arraysShallowEqual(left: string[], right: string[]) {
   if (left.length !== right.length) {
     return false;
   }
 
   return left.every((value, index) => value === right[index]);
+}
+
+function getArticleEngagementScore(article: Article) {
+  return article.likes + article.comments.length;
+}
+
+function getVideoEngagementScore(video: VideoItem) {
+  return video.likes + video.comments;
+}
+
+function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
+  if (!publishedAt) {
+    return 0;
+  }
+
+  const timestamp = new Date(publishedAt).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 export default function Home() {
@@ -2105,9 +2112,183 @@ export default function Home() {
       ? fallbackDisplayArticles
       : displayedArticles;
 
+  const trendingFeedItems = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [];
+    }
+
+    const rankedArticles = visibleArticles.map((article) => ({
+      type: "article" as const,
+      key: `article:${article.id}:${article.url ?? ""}`,
+      article,
+      score: getArticleEngagementScore(article),
+      publishedAtMs: getPublishedAtTimestamp(article.publishedAt),
+    }));
+    const rankedVideos = videos.map((video) => ({
+      type: "video" as const,
+      key: `video:${video.id}`,
+      video,
+      score: getVideoEngagementScore(video),
+      publishedAtMs: getPublishedAtTimestamp(video.publishedAt),
+    }));
+
+    return [...rankedArticles, ...rankedVideos].sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return right.publishedAtMs - left.publishedAtMs;
+    });
+  }, [sortMode, videos, visibleArticles]);
+
   useEffect(() => {
-    console.log("TRENDING RENDER COUNT", visibleArticles.length);
-  }, [visibleArticles.length]);
+    console.log(
+      "TRENDING RENDER COUNT",
+      sortMode === "trending" ? trendingFeedItems.length : visibleArticles.length
+    );
+  }, [sortMode, trendingFeedItems.length, visibleArticles.length]);
+
+  const renderArticleFeedCard = (
+    article: Article,
+    options?: {
+      rankLabel?: string | null;
+      showFreshnessTime?: boolean;
+    }
+  ) => {
+    const imageSrc = getArticleCardImage(article);
+    const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
+    const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
+
+    return (
+      <article
+        className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}
+      >
+        {options?.rankLabel ? (
+          <span className="chip trending-rank-badge news-card-rank-badge">
+            {options.rankLabel}
+          </span>
+        ) : null}
+        <div className="trending-source-row">
+          <button
+            type="button"
+            className="source-trigger trending-source-button"
+            onClick={() => openSourcePreferenceSheet(article.source)}
+          >
+            <div className="trending-source-brand">
+              <SourceBadge sourceName={article.source} />
+              <span className="trending-source-name">{article.source}</span>
+            </div>
+          </button>
+        </div>
+        <Link href={`/article/${article.id}`} className="article-link">
+          <div className="news-card-body">
+            <div className="trending-title-row">
+              <h3 className="trending-article-title">
+                {cleanDisplayText(article.title)}
+              </h3>
+            </div>
+
+            <div className="news-card-header">
+              <div className="trending-meta-row">
+                <span className="trending-published-date">
+                  {options?.showFreshnessTime
+                    ? formatFreshnessTime(article.publishedAt, article.time)
+                    : formatPublishedDate(article.publishedAt, article.time)}
+                </span>
+                <span className="chip chip-accent trending-category-pill">
+                  {getCategoryLabel(article.category)}
+                </span>
+              </div>
+            </div>
+
+            {shouldShowImage ? (
+              <img
+                src={imageSrc as string}
+                alt={cleanDisplayText(article.title)}
+                className="article-image"
+                loading="lazy"
+                decoding="async"
+                onError={() => {
+                  setFailedArticleImages((prev) => {
+                    if (prev[imageFailureKey]) {
+                      return prev;
+                    }
+
+                    return {
+                      ...prev,
+                      [imageFailureKey]: true,
+                    };
+                  });
+                }}
+              />
+            ) : null}
+          </div>
+        </Link>
+
+        <div className="engagement-row trending-stats-row">
+          <button
+            className={`icon-action-pill ${
+              article.likedByCurrentUser ? "icon-action-pill-active" : ""
+            }`}
+            onClick={() => handleLike(article.id)}
+            aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
+          >
+            <span className="icon-action-glyph" aria-hidden="true">
+              <svg {...actionIconProps}>
+                <path
+                  d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                  fill={article.likedByCurrentUser ? "currentColor" : "none"}
+                />
+              </svg>
+            </span>
+            <span>{article.likes}</span>
+          </button>
+          <button
+            className="icon-action-pill"
+            onClick={() => {
+              router.push(`/article/${article.id}#comments`);
+            }}
+            aria-label="Open article comments"
+          >
+            <span className="icon-action-glyph" aria-hidden="true">
+              <svg {...actionIconProps}>
+                <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+              </svg>
+            </span>
+            <span>{article.comments.length}</span>
+          </button>
+          <ShareButton
+            path={`/article/${article.id}`}
+            title={cleanDisplayText(article.title)}
+            url={article.url}
+            iconOnly
+          />
+          <button
+            className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
+            onClick={() => handleToggleSaveArticle(article)}
+            disabled={activeSaveArticleId === article.id}
+            aria-label={article.saved ? "Remove bookmark" : "Save article"}
+          >
+            <span className="icon-action-glyph" aria-hidden="true">
+              {activeSaveArticleId === article.id ? (
+                <svg {...actionIconProps}>
+                  <path d="M12 5v7" />
+                  <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
+                </svg>
+              ) : (
+                <svg {...actionIconProps}>
+                  <path
+                    d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                    fill={article.saved ? "currentColor" : "none"}
+                  />
+                </svg>
+              )}
+            </span>
+          </button>
+        </div>
+      </article>
+    );
+  };
 
   return (
     <section className="page-shell">
@@ -2187,206 +2368,49 @@ export default function Home() {
               {feedLoadError}
             </div>
           ) : null}
-          {visibleArticles.map((article, index) => {
-            const imageSrc = getArticleCardImage(article);
-            const articleKey =
-              article.id || article.url || getArticleDeduplicationKey(article);
-            const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
-            const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
-            const hasInlineTrendingVideos =
-              sortMode === "trending" && videos.length > 0;
-            const articleRank = getTrendingArticleRank(index, hasInlineTrendingVideos);
-            const videoRank = getTrendingInlineVideoRank(index, hasInlineTrendingVideos);
-            const shouldShowArticleRankBadge =
-              sortMode === "trending" && articleRank <= 25;
-            const shouldShowInlineVideoRankBadge =
-              sortMode === "trending" &&
-              (index + 1) % 3 === 0 &&
-              videos.length > 0 &&
-              videoRank !== null &&
-              videoRank <= 25;
-
-            return (
-              <div key={articleKey} className="stack">
-                <article
-                  className={`news-card ${
-                    shouldShowArticleRankBadge ? "news-card-has-rank" : ""
-                  }`}
-                >
-                  {shouldShowArticleRankBadge ? (
-                    <span className="chip trending-rank-badge news-card-rank-badge">
-                      Top {articleRank}
-                    </span>
-                  ) : null}
-                  <div className="trending-source-row">
-                    <button
-                      type="button"
-                      className="source-trigger trending-source-button"
-                      onClick={() => openSourcePreferenceSheet(article.source)}
-                    >
-                      <div className="trending-source-brand">
-                        <SourceBadge sourceName={article.source} />
-                        <span className="trending-source-name">{article.source}</span>
-                      </div>
-                    </button>
-                  </div>
-                  <Link href={`/article/${article.id}`} className="article-link">
-                    <div className="news-card-body">
-                      <div className="trending-title-row">
-                        <h3 className="trending-article-title">
-                          {cleanDisplayText(article.title)}
-                        </h3>
-                      </div>
-
-                      <div className="news-card-header">
-                        <div className="trending-meta-row">
-                          <span className="trending-published-date">
-                            {sortMode === "latest"
-                              ? formatFreshnessTime(article.publishedAt, article.time)
-                              : formatPublishedDate(article.publishedAt, article.time)}
-                          </span>
-                          <span className="chip chip-accent trending-category-pill">
-                            {getCategoryLabel(article.category)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {shouldShowImage ? (
-                        <img
-                          src={imageSrc as string}
-                          alt={cleanDisplayText(article.title)}
-                          className="article-image"
-                          loading="lazy"
-                          decoding="async"
-                          onLoad={(event) => {
-                            const target = event.currentTarget;
-
-                            if (
-                              target.naturalWidth < 360 ||
-                              target.naturalHeight < 220
-                            ) {
-                              setFailedArticleImages((prev) => {
-                                if (prev[imageFailureKey]) {
-                                  return prev;
-                                }
-
-                                return {
-                                  ...prev,
-                                  [imageFailureKey]: true,
-                                };
-                              });
-                            }
-                          }}
-                          onError={() => {
-                            setFailedArticleImages((prev) => {
-                              if (prev[imageFailureKey]) {
-                                return prev;
-                              }
-
-                              return {
-                                ...prev,
-                                [imageFailureKey]: true,
-                              };
-                            });
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                  </Link>
-
-                  <div className="engagement-row trending-stats-row">
-                    <button
-                      className={`icon-action-pill ${
-                        article.likedByCurrentUser ? "icon-action-pill-active" : ""
-                      }`}
-                      onClick={() => handleLike(article.id)}
-                      aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
-                    >
-                      <span className="icon-action-glyph" aria-hidden="true">
-                        <svg {...actionIconProps}>
-                          <path
-                            d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                            fill={article.likedByCurrentUser ? "currentColor" : "none"}
-                          />
-                        </svg>
-                      </span>
-                      <span>{article.likes}</span>
-                    </button>
-                    <button
-                      className="icon-action-pill"
-                      onClick={() => {
-                        router.push(`/article/${article.id}#comments`);
-                      }}
-                      aria-label="Open article comments"
-                    >
-                      <span className="icon-action-glyph" aria-hidden="true">
-                        <svg {...actionIconProps}>
-                          <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-                        </svg>
-                      </span>
-                      <span>{article.comments.length}</span>
-                    </button>
-                    <ShareButton
-                      path={`/article/${article.id}`}
-                      title={cleanDisplayText(article.title)}
-                      url={article.url}
-                      iconOnly
+          {sortMode === "trending"
+            ? trendingFeedItems.map((item, index) => (
+                <div key={item.key} className="stack">
+                  {item.type === "article"
+                    ? renderArticleFeedCard(item.article, {
+                        rankLabel: index < 25 ? `Top ${index + 1}` : null,
+                      })
+                    : (
+                      <VideoFeedCard
+                        video={item.video}
+                        onToggleLike={handleToggleVideoLike}
+                        onToggleSave={handleToggleVideoSave}
+                        onOpenComments={(videoId) =>
+                          router.push(`/video/${videoId}#comments`)
+                        }
+                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
+                        label="Video"
+                        rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
+                        className="video-card-inline"
+                        variant="article"
+                      />
+                    )}
+                  {(index + 1) % 3 === 0 ? (
+                    <AdSlot
+                      title="Sponsored placement"
+                      copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
+                      cta="Learn more"
                     />
-                    <button
-                      className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
-                      onClick={() => handleToggleSaveArticle(article)}
-                      disabled={activeSaveArticleId === article.id}
-                      aria-label={article.saved ? "Remove bookmark" : "Save article"}
-                    >
-                      <span className="icon-action-glyph" aria-hidden="true">
-                        {activeSaveArticleId === article.id ? (
-                          <svg {...actionIconProps}>
-                            <path d="M12 5v7" />
-                            <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
-                          </svg>
-                        ) : (
-                          <svg {...actionIconProps}>
-                            <path
-                              d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
-                              fill={article.saved ? "currentColor" : "none"}
-                            />
-                          </svg>
-                        )}
-                      </span>
-                    </button>
+                  ) : null}
+                </div>
+              ))
+            : visibleArticles.map((article) => {
+                const articleKey =
+                  article.id || article.url || getArticleDeduplicationKey(article);
+
+                return (
+                  <div key={articleKey} className="stack">
+                    {renderArticleFeedCard(article, {
+                      showFreshnessTime: sortMode === "latest",
+                    })}
                   </div>
-                </article>
-
-                {(index + 1) % 3 === 0 ? (
-                  <AdSlot
-                    title="Sponsored placement"
-                    copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
-                    cta="Learn more"
-                  />
-                ) : null}
-
-                {sortMode === "trending" &&
-                (index + 1) % 3 === 0 &&
-                videos.length > 0 ? (
-                <VideoFeedCard
-                  video={videos[Math.floor((index + 1) / 3 - 1) % videos.length]}
-                  onToggleLike={handleToggleVideoLike}
-                  onToggleSave={handleToggleVideoSave}
-                  onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
-                  onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
-                  label="Video"
-                  rankBadgeLabel={
-                    shouldShowInlineVideoRankBadge && videoRank !== null
-                      ? `Top ${videoRank}`
-                      : null
-                  }
-                  className="video-card-inline"
-                  variant="article"
-                />
-              ) : null}
-              </div>
-            );
-          })}
+                );
+              })}
           {isLoadingMoreArticles ? (
             <div className="feed-inline-loading" role="status" aria-live="polite">
               Loading more stories...
