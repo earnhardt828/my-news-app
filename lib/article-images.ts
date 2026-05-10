@@ -24,7 +24,10 @@ function normalizeImageValue(value: string | null | undefined) {
 function looksLikeLowQualityImageUrl(url: string) {
   const normalizedUrl = url.toLowerCase();
 
-  if (/(^|[/?_.=-])(thumb|thumbnail|tiny|small)([/?_.=-]|$)/.test(normalizedUrl)) {
+  if (
+    /(^|[/?_.=-])(thumb|thumbnail|tiny|small)([/?_.=-]|$)/.test(normalizedUrl) ||
+    /(80x80|120x|150x|300x)/.test(normalizedUrl)
+  ) {
     return true;
   }
 
@@ -81,8 +84,8 @@ export function getBestArticleImage(article: ArticleImageFields) {
     usableCandidates.find(
       ([source, value]) => source !== "thumbnail" && !looksLikeLowQualityImageUrl(value)
     ) ??
-    usableCandidates.find(([source]) => source !== "thumbnail") ??
-    usableCandidates[0];
+    usableCandidates.find(([, value]) => !looksLikeLowQualityImageUrl(value)) ??
+    null;
 
   return {
     src: selected?.[1] ?? null,
