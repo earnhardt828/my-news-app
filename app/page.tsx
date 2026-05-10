@@ -1079,9 +1079,21 @@ export default function Home() {
     async function fetchVideos() {
       try {
         const response = await apiFetch("/api/videos");
+        if (!response.ok) {
+          const responseText = await response.text();
+          throw new Error(
+            `Trending videos request failed (${response.status}): ${responseText}`
+          );
+        }
         const data = (await response.json()) as {
           videos?: VideoApiItem[];
+          fallback?: boolean;
+          message?: string;
         };
+
+        if (data.fallback) {
+          console.error("Trending videos fallback used:", data.message ?? "Unknown reason");
+        }
 
         setVideos(normalizeVideoFeedItems(data.videos));
       } catch (error) {
@@ -2264,12 +2276,74 @@ export default function Home() {
     });
   }, [sortMode, videos, visibleArticles]);
 
+  const trendingRankMap = useMemo(() => {
+    const rankMap = new Map<string, number>();
+
+    trendingFeedItems.forEach((item, index) => {
+      rankMap.set(item.key, index + 1);
+    });
+
+    return rankMap;
+  }, [trendingFeedItems]);
+
+  const trendingRenderItems = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [];
+    }
+
+    const rankedVideos = [...videos].sort((left, right) => {
+      const leftRank = trendingRankMap.get(`video:${left.id}`) ?? Number.MAX_SAFE_INTEGER;
+      const rightRank = trendingRankMap.get(`video:${right.id}`) ?? Number.MAX_SAFE_INTEGER;
+      return leftRank - rightRank;
+    });
+    const items: Array<
+      | { type: "article"; key: string; article: Article }
+      | { type: "video"; key: string; video: VideoItem }
+    > = [];
+    let insertedVideos = 0;
+
+    visibleArticles.forEach((article, index) => {
+      const articleKey = `article:${article.id}:${article.url ?? ""}`;
+      items.push({
+        type: "article",
+        key: articleKey,
+        article,
+      });
+
+      const shouldInsertVideo =
+        rankedVideos.length > insertedVideos &&
+        ((index + 1) % 4 === 0 || (index === visibleArticles.length - 1 && items.length < 12));
+
+      if (shouldInsertVideo) {
+        const nextVideo = rankedVideos[insertedVideos];
+        items.push({
+          type: "video",
+          key: `video:${nextVideo.id}`,
+          video: nextVideo,
+        });
+        insertedVideos += 1;
+      }
+    });
+
+    while (insertedVideos < rankedVideos.length && items.length < visibleArticles.length + 3) {
+      const nextVideo = rankedVideos[insertedVideos];
+      items.push({
+        type: "video",
+        key: `video:${nextVideo.id}`,
+        video: nextVideo,
+      });
+      insertedVideos += 1;
+    }
+
+    return items;
+  }, [sortMode, trendingRankMap, videos, visibleArticles]);
+
   useEffect(() => {
     console.log(
       "TRENDING RENDER COUNT",
-      sortMode === "trending" ? trendingFeedItems.length : visibleArticles.length
+      sortMode === "trending" ? trendingRenderItems.length : visibleArticles.length
     );
-  }, [sortMode, trendingFeedItems.length, visibleArticles.length]);
+  }, [sortMode, trendingRenderItems.length, visibleArticles.length]);
 
   const renderArticleFeedCard = (
     article: Article,
@@ -2485,18 +2559,22 @@ export default function Home() {
           </span>
         </div>
       ) : (
-        <div className="stack">
+        <div className="stack feed-results-stack">
           {feedLoadError ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
               {feedLoadError}
             </div>
           ) : null}
           {sortMode === "trending"
-            ? trendingFeedItems.map((item, index) => (
+            ? trendingRenderItems.map((item, index) => (
                 <div key={item.key} className="stack">
                   {item.type === "article"
                     ? renderArticleFeedCard(item.article, {
-                        rankLabel: index < 25 ? `Top ${index + 1}` : null,
+                        rankLabel:
+                          (() => {
+                            const rank = trendingRankMap.get(item.key);
+                            return rank && rank <= 25 ? `Top ${rank}` : null;
+                          })(),
                       })
                     : (
                       <VideoFeedCard
@@ -2508,7 +2586,12 @@ export default function Home() {
                         }
                         onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
                         label="Video"
-                        rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
+                        rankBadgeLabel={
+                          (() => {
+                            const rank = trendingRankMap.get(item.key);
+                            return rank && rank <= 25 ? `Top ${rank}` : null;
+                          })()
+                        }
                         className="video-card-inline"
                         variant="article"
                       />
@@ -2537,6 +2620,11 @@ export default function Home() {
           {isLoadingMoreArticles ? (
             <div className="feed-inline-loading" role="status" aria-live="polite">
               Loading more stories...
+            </div>
+          ) : null}
+          {!isLoading && !isLoadingMoreArticles && !hasMoreArticles ? (
+            <div className="feed-inline-end" role="status" aria-live="polite">
+              You&apos;re caught up.
             </div>
           ) : null}
           {!isLoading && hasMoreArticles ? (
