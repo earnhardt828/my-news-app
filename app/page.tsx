@@ -661,6 +661,7 @@ export default function Home() {
       const newsPayload = normalizeNewsPayload(
         (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse
       );
+      console.log("NEWS API DATA", newsPayload);
       console.log("TRENDING FETCH RESPONSE", newsPayload);
 
       if (!isCurrentRequest()) {
@@ -832,9 +833,12 @@ export default function Home() {
       setFeedLoadError(null);
       setHasMoreArticles(newsPayload.hasMore);
       setFeedPage(pageToLoad);
-      setArticles((prev) =>
-        replace ? mergedArticles : mergeArticlesByIdentity(prev, mergedArticles)
-      );
+      setArticles((prev) => {
+        const nextArticles =
+          replace ? mergedArticles : mergeArticlesByIdentity(prev, mergedArticles);
+        console.log("ARTICLES USED", nextArticles);
+        return nextArticles;
+      });
       if (replace) {
         setIsInitialFeedLoading(false);
       }
@@ -1997,6 +2001,12 @@ export default function Home() {
     });
   };
 
+  const fallbackDisplayArticles = useMemo(() => buildClientFallbackArticles(), []);
+  const visibleArticles =
+    displayedArticles.length === 0 && sortMode !== "my-feed"
+      ? fallbackDisplayArticles
+      : displayedArticles;
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -2057,7 +2067,7 @@ export default function Home() {
           <strong>No categories selected</strong>
           <span>Choose categories in Profile to build your personalized feed.</span>
         </div>
-      ) : displayedArticles.length === 0 ? (
+      ) : visibleArticles.length === 0 ? (
         <div className="empty-state">
           <strong>{sortMode === "my-feed" ? "No articles found" : "No stories yet"}</strong>
           <span>
@@ -2065,7 +2075,7 @@ export default function Home() {
               ? feedLoadError
               : sortMode === "my-feed"
               ? "Try adding more categories or check back when new stories land."
-              : "When your API returns articles, they’ll show up here."}
+              : "Try again in a moment or explore the fallback stories below."}
           </span>
         </div>
       ) : (
@@ -2080,7 +2090,7 @@ export default function Home() {
               {feedLoadError}
             </div>
           ) : null}
-          {displayedArticles.map((article, index) => {
+          {visibleArticles.map((article, index) => {
             const imageSrc = getArticleCardImage(article);
             const articleKey =
               article.id || article.url || getArticleDeduplicationKey(article);
