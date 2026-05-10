@@ -21,7 +21,7 @@ function normalizeImageValue(value: string | null | undefined) {
   return trimmed ? trimmed : null;
 }
 
-function looksLikeLowQualityImageUrl(url: string) {
+export function looksLikeLowQualityImageUrl(url: string) {
   const normalizedUrl = url.toLowerCase();
 
   if (

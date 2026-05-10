@@ -1,4 +1,7 @@
-import { getBestArticleImage } from "../../../lib/article-images";
+import {
+  getBestArticleImage,
+  looksLikeLowQualityImageUrl,
+} from "../../../lib/article-images";
 
 type ProviderArticle = {
   title?: string | null;
@@ -68,6 +71,11 @@ type CachedResponse = {
   payload: NewsRouteResponse;
 };
 
+type EnrichedImageCacheEntry = {
+  expiresAt: number;
+  imageUrl: string | null;
+};
+
 type NewsRouteResponse = {
   articles: NormalizedArticle[];
   nextPage: number | null;
@@ -130,6 +138,8 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 30;
 const MAX_COMPARE_PAGE_SIZE = 150;
+const IMAGE_ENRICHMENT_CACHE_TTL_MS = 45 * 60 * 1000;
+const IMAGE_ENRICHMENT_TIMEOUT_MS = 2500;
 const CACHE_TTL_MS = 7 * 60 * 1000;
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY ?? process.env.NEXT_PUBLIC_NEWS_API_KEY ?? "";
@@ -137,6 +147,7 @@ const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
 
 const responseCache = new Map<string, CachedResponse>();
+const enrichedImageCache = new Map<string, EnrichedImageCacheEntry>();
 const newsDataTokenCache = new Map<string, string[]>();
 
 const CORS_HEADERS = {
@@ -532,6 +543,143 @@ function dedupeArticles(articles: NormalizedArticle[]) {
 
 function isFallbackArticle(article: NormalizedArticle) {
   return article.url?.includes("graffiti.app/fallback") ?? false;
+}
+
+function resolveArticleImageUrl(candidate: string | null | undefined, articleUrl: string) {
+  const trimmed = candidate?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmed, articleUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+async function enrichArticleImageFromDocument(article: NormalizedArticle) {
+  const articleUrl = article.url?.trim();
+
+  if (!articleUrl) {
+    return article;
+  }
+
+  const cached = enrichedImageCache.get(articleUrl);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    if (!cached.imageUrl) {
+      return article;
+    }
+
+    console.log("ENRICHED OG IMAGE", { title: article.title, imageUrl: cached.imageUrl });
+    return {
+      ...article,
+      image: cached.imageUrl,
+      imageUrl: cached.imageUrl,
+      urlToImage: cached.imageUrl,
+    };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, IMAGE_ENRICHMENT_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(articleUrl, {
+      signal: controller.signal,
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent":
+          "Mozilla/5.0 (compatible; GraffitiNewsBot/1.0; +https://graffiti.news)",
+      },
+      next: { revalidate: 3600 },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTML fetch failed with status ${response.status}`);
+    }
+
+    const html = await response.text();
+    const ogImage =
+      html.match(
+        /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i
+      )?.[1] ??
+      html.match(
+        /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i
+      )?.[1] ??
+      html.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i)?.[1] ??
+      null;
+    const resolvedImageUrl = resolveArticleImageUrl(ogImage, articleUrl);
+
+    if (!resolvedImageUrl || looksLikeLowQualityImageUrl(resolvedImageUrl)) {
+      enrichedImageCache.set(articleUrl, {
+        expiresAt: Date.now() + IMAGE_ENRICHMENT_CACHE_TTL_MS,
+        imageUrl: null,
+      });
+      return article;
+    }
+
+    enrichedImageCache.set(articleUrl, {
+      expiresAt: Date.now() + IMAGE_ENRICHMENT_CACHE_TTL_MS,
+      imageUrl: resolvedImageUrl,
+    });
+    console.log("ENRICHED OG IMAGE", {
+      title: article.title,
+      imageUrl: resolvedImageUrl,
+    });
+
+    return {
+      ...article,
+      image: resolvedImageUrl,
+      imageUrl: resolvedImageUrl,
+      urlToImage: resolvedImageUrl,
+    };
+  } catch (error) {
+    console.log("IMAGE ENRICHMENT FAILED", {
+      url: articleUrl,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    enrichedImageCache.set(articleUrl, {
+      expiresAt: Date.now() + IMAGE_ENRICHMENT_CACHE_TTL_MS,
+      imageUrl: null,
+    });
+    return article;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function enrichTrendingArticleImages(articles: NormalizedArticle[]) {
+  const candidates = articles.slice(0, 25).filter((article) => {
+    const bestImage = getBestArticleImage(article);
+    return !bestImage.src || looksLikeLowQualityImageUrl(bestImage.src);
+  });
+
+  if (candidates.length === 0) {
+    return articles;
+  }
+
+  const enrichmentResults = await Promise.allSettled(
+    candidates.map((article) => enrichArticleImageFromDocument(article))
+  );
+  const enrichedById = new Map<number, NormalizedArticle>();
+
+  enrichmentResults.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      enrichedById.set(candidates[index].id, result.value);
+      return;
+    }
+
+    console.log("IMAGE ENRICHMENT FAILED", {
+      url: candidates[index].url,
+      error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+    });
+  });
+
+  return articles.map((article) => enrichedById.get(article.id) ?? article);
 }
 
 function sortArticlesForMode(
@@ -1052,17 +1200,21 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const deduped = dedupeArticles(combined);
   const sorted = sortArticlesForMode(deduped, params);
   const realArticles = sorted.filter((article) => !isFallbackArticle(article));
-  const realSliced = realArticles.slice(0, params.pageSize);
+  const enrichedRealArticles =
+    params.mode === "trending" && params.page === 1
+      ? await enrichTrendingArticleImages(realArticles)
+      : realArticles;
+  const realSliced = enrichedRealArticles.slice(0, params.pageSize);
   const hasMore = providerResponses.some(
     (result) => result.status === "fulfilled" && result.value.hasMore
-  ) || realArticles.length > params.pageSize;
-  const fallbackUsed = realArticles.length === 0;
+  ) || enrichedRealArticles.length > params.pageSize;
+  const fallbackUsed = enrichedRealArticles.length === 0;
 
-  console.log("REAL ARTICLES COUNT", realArticles.length);
+  console.log("REAL ARTICLES COUNT", enrichedRealArticles.length);
   console.log("FALLBACK USED", fallbackUsed);
   console.log(
     "FIRST 5 IMAGE URLS",
-    realArticles.slice(0, 5).map((article) => ({
+    enrichedRealArticles.slice(0, 5).map((article) => ({
       title: article.title,
       image: article.image,
       imageUrl: article.imageUrl,
