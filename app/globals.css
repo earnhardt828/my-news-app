@@ -893,6 +893,15 @@ input {
   padding: 2px 0 2px;
 }
 
+.article-compare-status {
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 2px 0 4px;
+}
+
 .compare-sources-dots {
   display: flex;
   align-items: center;

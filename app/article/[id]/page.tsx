@@ -112,6 +112,14 @@ type SummaryItem = {
   text: string;
 };
 
+type PaginatedNewsResponse = {
+  articles: ArticleRecord[];
+  nextPage?: number | null;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
+
 const actionIconProps = {
   width: 20,
   height: 20,
@@ -124,6 +132,30 @@ const actionIconProps = {
 };
 
 const COMPARE_SOURCES_TUTORIAL_KEY = "reflekt-compare-sources-tutorial-seen";
+const ARTICLE_COMPARE_STOP_WORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "of",
+  "to",
+  "in",
+  "on",
+  "for",
+  "with",
+  "from",
+  "by",
+  "is",
+  "are",
+  "was",
+  "were",
+  "new",
+  "says",
+  "after",
+  "before",
+  "news",
+]);
 
 function formatRelativeTime(timestamp: string | null) {
   if (!timestamp) {
@@ -264,52 +296,134 @@ function isMissingCommentMetadataColumnError(message: string | null | undefined)
   return /article_title|article_source|article_image|article_url/i.test(message);
 }
 
-function getTitleTokens(value: string) {
+function normalizeNewsPayload(payload: ArticleRecord[] | PaginatedNewsResponse) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return payload.articles ?? [];
+}
+
+function getImportantTokens(value: string) {
   return new Set(
-    value
+    cleanDisplayText(value)
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, " ")
       .split(/\s+/)
-      .filter((token) => token.length > 2)
+      .filter(
+        (token) =>
+          token.length > 2 && !ARTICLE_COMPARE_STOP_WORDS.has(token)
+      )
   );
 }
 
+function countTokenOverlap(left: Set<string>, right: Set<string>) {
+  let overlap = 0;
+
+  left.forEach((token) => {
+    if (right.has(token)) {
+      overlap += 1;
+    }
+  });
+
+  return overlap;
+}
+
+function buildArticleCompareQuery(article: ArticleRecord) {
+  const titleTokens = [...getImportantTokens(article.title)].slice(0, 6);
+  const titleQuery = titleTokens.slice(0, 4).join(" ");
+
+  if (titleQuery) {
+    return titleQuery;
+  }
+
+  return cleanDisplayText(article.title).split(/\s+/).slice(0, 4).join(" ");
+}
+
 function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRecord[]) {
-  const baseTokens = getTitleTokens(baseArticle.title);
+  const baseTitleTokens = getImportantTokens(baseArticle.title);
+  const baseDescriptionTokens = getImportantTokens(baseArticle.description ?? "");
+  const baseTopicTokens = new Set([
+    ...baseTitleTokens,
+    ...baseDescriptionTokens,
+  ]);
 
   const rankedArticles = allArticles
     .filter((article) => article.id !== baseArticle.id)
     .map((article) => {
-      const candidateTokens = getTitleTokens(article.title);
-      let overlapScore = 0;
-
-      baseTokens.forEach((token) => {
-        if (candidateTokens.has(token)) {
-          overlapScore += 1;
-        }
-      });
-
-      const categoryBonus = article.category === baseArticle.category ? 2 : 0;
-      const sourcePenalty = article.source === baseArticle.source ? -2 : 0;
+      const candidateTitleTokens = getImportantTokens(article.title);
+      const candidateDescriptionTokens = getImportantTokens(article.description ?? "");
+      const candidateTopicTokens = new Set([
+        ...candidateTitleTokens,
+        ...candidateDescriptionTokens,
+      ]);
+      const titleOverlap = countTokenOverlap(baseTitleTokens, candidateTitleTokens);
+      const descriptionOverlap = countTokenOverlap(
+        baseDescriptionTokens,
+        candidateDescriptionTokens
+      );
+      const topicOverlap = countTokenOverlap(baseTopicTokens, candidateTopicTokens);
+      const categoryBonus = article.category === baseArticle.category ? 3 : 0;
+      const differentSourceBonus = article.source !== baseArticle.source ? 2 : 0;
+      const sourcePenalty = article.source === baseArticle.source ? -4 : 0;
+      const exactPhraseBonus = cleanDisplayText(article.title)
+        .toLowerCase()
+        .includes(cleanDisplayText(baseArticle.title).toLowerCase())
+        ? 2
+        : 0;
+      const score =
+        titleOverlap * 6 +
+        topicOverlap * 3 +
+        descriptionOverlap * 2 +
+        categoryBonus +
+        differentSourceBonus +
+        exactPhraseBonus +
+        sourcePenalty;
 
       return {
         article,
-        score: overlapScore * 4 + categoryBonus + sourcePenalty,
+        score,
+        titleOverlap,
+        descriptionOverlap,
+        topicOverlap,
       };
     })
+    .filter(
+      (entry) =>
+        entry.score > 0 &&
+        (entry.titleOverlap > 0 || entry.descriptionOverlap > 0 || entry.topicOverlap > 1)
+    )
     .sort((left, right) => right.score - left.score);
 
-  const strongMatches = rankedArticles
-    .filter((entry) => entry.score > 0)
-    .slice(0, 4)
-    .map((entry) => entry.article);
+  const selectedMatches: ArticleRecord[] = [];
+  const seenSources = new Set<string>([baseArticle.source]);
 
-  const fallbackMatches =
-    strongMatches.length >= 2
-      ? strongMatches
-      : rankedArticles.slice(0, 4).map((entry) => entry.article);
+  rankedArticles.forEach((entry) => {
+    if (selectedMatches.length >= 4) {
+      return;
+    }
 
-  return [baseArticle, ...fallbackMatches].slice(0, 5);
+    if (!seenSources.has(entry.article.source)) {
+      selectedMatches.push(entry.article);
+      seenSources.add(entry.article.source);
+    }
+  });
+
+  if (selectedMatches.length < 2) {
+    rankedArticles.forEach((entry) => {
+      if (selectedMatches.length >= 4) {
+        return;
+      }
+
+      if (selectedMatches.some((match) => match.id === entry.article.id)) {
+        return;
+      }
+
+      selectedMatches.push(entry.article);
+    });
+  }
+
+  return [baseArticle, ...selectedMatches].slice(0, 5);
 }
 
 function sortComments(
@@ -455,6 +569,7 @@ export default function ArticleDetailPage() {
   } | null>(null);
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
   const [commentActionTarget, setCommentActionTarget] = useState<ArticleComment | null>(null);
+  const [compareStatusMessage, setCompareStatusMessage] = useState("");
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const commentsSectionRef = useRef<HTMLElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
@@ -492,24 +607,73 @@ export default function ArticleDetailPage() {
         setDislikedSources([]);
       }
 
-      const newsRes = await apiFetch("/api/news");
+      const baseNewsRes = await apiFetch("/api/news?mode=trending&page=1&pageSize=60");
+      const baseNewsData = normalizeNewsPayload(
+        (await baseNewsRes.json()) as ArticleRecord[] | PaginatedNewsResponse
+      );
+      let contextualCandidates: ArticleRecord[] = [];
+      let targetArticle = baseNewsData.find((item) => item.id === articleId) ?? null;
 
-      if (!newsRes.ok) {
-        console.error("[Article detail] Failed to fetch news payload", {
-          articleId,
-          status: newsRes.status,
-        });
+      if (targetArticle) {
+        console.log("CURRENT ARTICLE FOR COMPARE", targetArticle);
+        const compareQuery = buildArticleCompareQuery(targetArticle);
+
+        if (compareQuery) {
+          try {
+            const contextualRes = await apiFetch(
+              `/api/news?mode=search&query=${encodeURIComponent(
+                compareQuery
+              )}&page=1&pageSize=60`
+            );
+            contextualCandidates = normalizeNewsPayload(
+              (await contextualRes.json()) as ArticleRecord[] | PaginatedNewsResponse
+            );
+          } catch (error) {
+            console.error("[Article detail] Failed to fetch contextual compare candidates", {
+              articleId,
+              query: compareQuery,
+              error,
+            });
+          }
+        }
       }
 
-      const newsData = (await newsRes.json()) as ArticleRecord[];
-      const targetArticle =
-        newsData.find((item) => item.id === articleId) ?? null;
+      const newsData = [...baseNewsData];
+
+      contextualCandidates.forEach((candidate) => {
+        if (
+          newsData.some(
+            (existingArticle) =>
+              existingArticle.id === candidate.id ||
+              (existingArticle.url && candidate.url && existingArticle.url === candidate.url)
+          )
+        ) {
+          return;
+        }
+
+        newsData.push(candidate);
+      });
+
+      targetArticle = targetArticle ?? newsData.find((item) => item.id === articleId) ?? null;
       console.log("ARTICLE LIVE MATCH", targetArticle);
 
       if (targetArticle) {
+        console.log("CURRENT ARTICLE FOR COMPARE", targetArticle);
         const nextCompareArticles = buildCompareArticles(targetArticle, newsData);
+        const compareCandidates = newsData.filter((item) => item.id !== targetArticle.id);
+        console.log("COMPARE CANDIDATES COUNT", compareCandidates.length);
+        console.log(
+          "COMPARE MATCHES",
+          nextCompareArticles.map((compareItem) => ({
+            title: compareItem.title,
+            source: compareItem.source,
+          }))
+        );
         setCompareArticles(nextCompareArticles);
         setActiveCompareIndex(0);
+        setCompareStatusMessage(
+          nextCompareArticles.length > 1 ? "" : "No other sources found yet."
+        );
         if (
           nextCompareArticles.length > 1 &&
           typeof window !== "undefined" &&
@@ -523,6 +687,7 @@ export default function ArticleDetailPage() {
         setCompareArticles([]);
         setActiveCompareIndex(0);
         setShowCompareTutorial(false);
+        setCompareStatusMessage("No other sources found yet.");
       }
 
       const legacyArticleId = targetArticle
@@ -1628,6 +1793,11 @@ export default function ArticleDetailPage() {
               />
             ))}
           </div>
+        </div>
+      ) : null}
+      {compareStatusMessage ? (
+        <div className="article-compare-status" role="status" aria-live="polite">
+          {compareStatusMessage}
         </div>
       ) : null}
 
