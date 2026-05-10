@@ -494,6 +494,44 @@ function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
+function getRecencyScore(publishedAt: string | null | undefined) {
+  const publishedAtTimestamp = getPublishedAtTimestamp(publishedAt);
+
+  if (!publishedAtTimestamp) {
+    return 0.2;
+  }
+
+  const ageHours = Math.max(0, (Date.now() - publishedAtTimestamp) / (1000 * 60 * 60));
+
+  if (ageHours <= 24) {
+    return 1 - (ageHours / 24) * 0.12;
+  }
+
+  if (ageHours <= 72) {
+    return 0.88 - ((ageHours - 24) / 48) * 0.48;
+  }
+
+  return Math.max(0.05, 0.4 * Math.exp(-(ageHours - 72) / 96));
+}
+
+function getSourceDiversityScore(sourceName: string, sourceCounts: Map<string, number>) {
+  const occurrences = sourceCounts.get(sourceName.trim().toLowerCase()) ?? 1;
+
+  if (occurrences <= 1) {
+    return 1;
+  }
+
+  if (occurrences === 2) {
+    return 0.72;
+  }
+
+  if (occurrences === 3) {
+    return 0.46;
+  }
+
+  return 0.24;
+}
+
 export default function Home() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -2117,20 +2155,78 @@ export default function Home() {
       return [];
     }
 
-    const rankedArticles = visibleArticles.map((article) => ({
-      type: "article" as const,
-      key: `article:${article.id}:${article.url ?? ""}`,
-      article,
-      score: getArticleEngagementScore(article),
-      publishedAtMs: getPublishedAtTimestamp(article.publishedAt),
-    }));
-    const rankedVideos = videos.map((video) => ({
-      type: "video" as const,
-      key: `video:${video.id}`,
-      video,
-      score: getVideoEngagementScore(video),
-      publishedAtMs: getPublishedAtTimestamp(video.publishedAt),
-    }));
+    const sourceCounts = new Map<string, number>();
+    visibleArticles.forEach((article) => {
+      const sourceKey = article.source.trim().toLowerCase();
+      sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
+    });
+    videos.forEach((video) => {
+      const sourceKey = video.creator.trim().toLowerCase();
+      sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
+    });
+
+    const maxArticleEngagement = Math.max(
+      1,
+      ...visibleArticles.map((article) => getArticleEngagementScore(article))
+    );
+    const maxVideoEngagement = Math.max(
+      1,
+      ...videos.map((video) => getVideoEngagementScore(video))
+    );
+    const totalGraffitiEngagement =
+      visibleArticles.reduce((sum, article) => sum + getArticleEngagementScore(article), 0) +
+      videos.reduce((sum, video) => sum + getVideoEngagementScore(video), 0);
+    const isLowEngagement = totalGraffitiEngagement < 200;
+    const articleCount = Math.max(1, visibleArticles.length);
+    const videoCount = Math.max(1, videos.length);
+
+    const rankedArticles = visibleArticles.map((article, index) => {
+      const recencyScore = getRecencyScore(article.publishedAt);
+      const externalPopularityScore =
+        articleCount === 1 ? 1 : 1 - index / Math.max(1, articleCount - 1);
+      const sourceDiversityScore = getSourceDiversityScore(article.source, sourceCounts);
+      const graffitiEngagementScore =
+        getArticleEngagementScore(article) / maxArticleEngagement;
+      const score = isLowEngagement
+        ? recencyScore * 0.45 +
+          externalPopularityScore * 0.45 +
+          sourceDiversityScore * 0.1
+        : recencyScore * 0.3 +
+          externalPopularityScore * 0.3 +
+          graffitiEngagementScore * 0.4;
+
+      return {
+        type: "article" as const,
+        key: `article:${article.id}:${article.url ?? ""}`,
+        article,
+        score,
+        publishedAtMs: getPublishedAtTimestamp(article.publishedAt),
+      };
+    });
+    const rankedVideos = videos.map((video, index) => {
+      const recencyScore = getRecencyScore(video.publishedAt);
+      const externalPopularityScore =
+        videoCount === 1
+          ? 1
+          : 1 - index / Math.max(1, videoCount - 1);
+      const sourceDiversityScore = getSourceDiversityScore(video.creator, sourceCounts);
+      const graffitiEngagementScore = getVideoEngagementScore(video) / maxVideoEngagement;
+      const score = isLowEngagement
+        ? recencyScore * 0.45 +
+          externalPopularityScore * 0.45 +
+          sourceDiversityScore * 0.1
+        : recencyScore * 0.3 +
+          externalPopularityScore * 0.3 +
+          graffitiEngagementScore * 0.4;
+
+      return {
+        type: "video" as const,
+        key: `video:${video.id}`,
+        video,
+        score,
+        publishedAtMs: getPublishedAtTimestamp(video.publishedAt),
+      };
+    });
 
     return [...rankedArticles, ...rankedVideos].sort((left, right) => {
       if (right.score !== left.score) {
