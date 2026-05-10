@@ -2238,27 +2238,7 @@ export default function Home() {
                             });
                           }}
                         />
-                      ) : (
-                        <div className="article-image article-image-placeholder">
-                          <span
-                            className="article-image-placeholder-orb article-image-placeholder-orb-left"
-                            aria-hidden="true"
-                          />
-                          <span
-                            className="article-image-placeholder-orb article-image-placeholder-orb-right"
-                            aria-hidden="true"
-                          />
-                          <div className="article-image-placeholder-content">
-                            <div className="article-image-placeholder-brand">
-                              <SourceBadge sourceName={article.source} />
-                              <span>{article.source}</span>
-                            </div>
-                            <span className="article-image-placeholder-kicker">
-                              {getCategoryLabel(article.category)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   </Link>
 
