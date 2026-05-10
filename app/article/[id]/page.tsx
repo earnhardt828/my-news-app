@@ -381,7 +381,7 @@ function hasStrongPhraseMatch(left: Set<string>, right: Set<string>) {
 }
 
 function buildArticleCompareQuery(article: ArticleRecord) {
-  const titleKeywords = [...extractImportantKeywords(article.title).keywords].slice(0, 8);
+  const titleKeywords = [...extractImportantKeywords(article.title).keywords].slice(0, 5);
   const titleQuery = titleKeywords.slice(0, 5).join(" ");
 
   if (titleQuery) {
@@ -398,6 +398,14 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
   const basePublishedAt = baseArticle.publishedAt
     ? new Date(baseArticle.publishedAt).getTime()
     : 0;
+  const baseBodyKeywords = new Set([
+    ...baseDescription.keywords,
+    ...baseContent.keywords,
+  ]);
+  const baseBodyPhrases = new Set([
+    ...baseDescription.phrases,
+    ...baseContent.phrases,
+  ]);
 
   const scoredCandidates = allArticles
     .filter((article) => article.id !== baseArticle.id)
@@ -405,16 +413,19 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
       const candidateTitle = extractImportantKeywords(article.title);
       const candidateDescription = extractImportantKeywords(article.description ?? "");
       const candidateContent = extractImportantKeywords(article.content ?? "");
+      const candidateBodyKeywords = new Set([
+        ...candidateDescription.keywords,
+        ...candidateContent.keywords,
+      ]);
+      const candidateBodyPhrases = new Set([
+        ...candidateDescription.phrases,
+        ...candidateContent.phrases,
+      ]);
 
       const titleShared = getSharedKeywords(baseTitle.keywords, candidateTitle.keywords);
-      const descriptionShared = getSharedKeywords(
-        new Set([...baseDescription.keywords, ...baseContent.keywords]),
-        new Set([...candidateDescription.keywords, ...candidateContent.keywords])
-      );
+      const descriptionShared = getSharedKeywords(baseBodyKeywords, candidateBodyKeywords);
       const titlePhraseMatch = hasStrongPhraseMatch(baseTitle.phrases, candidateTitle.phrases);
-      const bodyPhraseMatch =
-        hasStrongPhraseMatch(baseDescription.phrases, candidateDescription.phrases) ||
-        hasStrongPhraseMatch(baseContent.phrases, candidateContent.phrases);
+      const bodyPhraseMatch = hasStrongPhraseMatch(baseBodyPhrases, candidateBodyPhrases);
       const sharedKeywords = [...new Set([...titleShared, ...descriptionShared])];
       const candidatePublishedAt = article.publishedAt
         ? new Date(article.publishedAt).getTime()
@@ -424,14 +435,14 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
         Math.abs(basePublishedAt - candidatePublishedAt) <= 7 * 24 * 60 * 60 * 1000;
 
       let score = 0;
+      score += titlePhraseMatch ? 5 : 0;
       score += titleShared.length * 3;
       score += descriptionShared.length * 2;
       score += article.category === baseArticle.category ? 2 : 0;
       score += publishedWithinSevenDays ? 1 : 0;
-      score += article.source === baseArticle.source ? -2 : 0;
-      score += titlePhraseMatch || bodyPhraseMatch ? 4 : 0;
-      if (sharedKeywords.length === 0 && !titlePhraseMatch && !bodyPhraseMatch) {
-        score -= 5;
+      score += article.source !== baseArticle.source ? 2 : -10;
+      if (sharedKeywords.length < 2 && !titlePhraseMatch && !bodyPhraseMatch) {
+        score -= 10;
       }
 
       return {
@@ -441,11 +452,12 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
         titleSharedCount: titleShared.length,
         descriptionSharedCount: descriptionShared.length,
         strongPhraseMatch: titlePhraseMatch || bodyPhraseMatch,
+        sameSource: article.source === baseArticle.source,
       };
     })
     .filter(
       (candidate) =>
-        candidate.sharedKeywords.length >= 2 || candidate.strongPhraseMatch
+        candidate.titleSharedCount >= 2 || candidate.strongPhraseMatch
     )
     .sort((left, right) => right.score - left.score);
 
@@ -465,10 +477,16 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
     }))
   );
 
-  const selectedMatches: ArticleRecord[] = [];
+  const differentSourceCandidates = scoredCandidates.filter((candidate) => !candidate.sameSource);
+  const sameSourceCandidates = scoredCandidates.filter((candidate) => candidate.sameSource);
+  const selectedMatches: Array<{
+    article: ArticleRecord;
+    score: number;
+    sharedKeywords: string[];
+  }> = [];
   const usedSources = new Set<string>([baseArticle.source]);
 
-  scoredCandidates.forEach((candidate) => {
+  differentSourceCandidates.forEach((candidate) => {
     if (selectedMatches.length >= 5) {
       return;
     }
@@ -477,30 +495,40 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
       return;
     }
 
-    selectedMatches.push(candidate.article);
+    selectedMatches.push({
+      article: candidate.article,
+      score: candidate.score,
+      sharedKeywords: candidate.sharedKeywords,
+    });
     usedSources.add(candidate.article.source);
   });
 
-  if (selectedMatches.length < 2) {
-    scoredCandidates.forEach((candidate) => {
+  if (selectedMatches.length >= 2) {
+    sameSourceCandidates.forEach((candidate) => {
       if (selectedMatches.length >= 5) {
         return;
       }
 
-      if (selectedMatches.some((match) => match.id === candidate.article.id)) {
+      if (selectedMatches.some((match) => match.article.id === candidate.article.id)) {
         return;
       }
 
-      selectedMatches.push(candidate.article);
+      selectedMatches.push({
+        article: candidate.article,
+        score: candidate.score,
+        sharedKeywords: candidate.sharedKeywords,
+      });
     });
   }
 
-  const finalMatches = [baseArticle, ...selectedMatches].slice(0, 6);
+  const finalMatches = [baseArticle, ...selectedMatches.map((match) => match.article)].slice(0, 6);
   console.log(
     "COMPARE MATCHES",
-    finalMatches.map((match) => ({
-      title: match.title,
-      source: match.source,
+    selectedMatches.map((match) => ({
+      title: match.article.title,
+      source: match.article.source,
+      score: match.score,
+      sharedKeywords: match.sharedKeywords,
     }))
   );
   console.log(
@@ -701,7 +729,9 @@ export default function ArticleDetailPage() {
 
       if (targetArticle) {
         console.log("CURRENT ARTICLE FOR COMPARE", targetArticle);
+        console.log("CURRENT SOURCE", targetArticle.source);
         const compareQuery = buildArticleCompareQuery(targetArticle);
+        console.log("COMPARE QUERY", compareQuery);
 
         if (compareQuery) {
           try {
