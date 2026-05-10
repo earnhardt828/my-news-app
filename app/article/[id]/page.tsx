@@ -9,6 +9,7 @@ import SourceRatingSheet from "../../components/source-rating-sheet";
 import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
 import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
+import { cleanDisplayText } from "../../../lib/display-text";
 import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
 import { supabase } from "../../../lib/supabase";
@@ -339,8 +340,9 @@ function buildSummaryItems(
   description?: string | null,
   content?: string | null
 ): SummaryItem[] {
-  const normalizedDescription = trimToLastFullSentence(description ?? "");
-  const normalizedContent = trimToLastFullSentence(content ?? "");
+  const normalizedTitle = cleanDisplayText(title);
+  const normalizedDescription = trimToLastFullSentence(cleanDisplayText(description ?? ""));
+  const normalizedContent = trimToLastFullSentence(cleanDisplayText(content ?? ""));
   const descriptionDateline = extractDateline(normalizedDescription);
   const contentDateline = extractDateline(normalizedContent);
   const dateline = descriptionDateline.dateline ?? contentDateline.dateline;
@@ -369,7 +371,8 @@ function buildSummaryItems(
     }
   });
 
-  const titleFallback = cleanSummarySentence(title) || `${title}.`;
+  const titleFallback =
+    cleanSummarySentence(normalizedTitle) || `${normalizedTitle}.`;
 
   if (uniquePoints.length === 0) {
     uniquePoints.push(titleFallback);
@@ -991,7 +994,7 @@ export default function ArticleDetailPage() {
       {
         user_id: userId,
         article_id: article.id,
-        title: article.title,
+        title: cleanDisplayText(article.title),
         source: article.source,
         category: article.category,
         time: article.time,
@@ -1210,7 +1213,7 @@ export default function ArticleDetailPage() {
         : null) ?? null);
     const commentInsertPayload = {
       article_id: articleId,
-      article_title: currentCommentArticle?.title ?? null,
+      article_title: cleanDisplayText(currentCommentArticle?.title ?? null) || null,
       article_source: currentCommentArticle?.source ?? null,
       article_image: currentCommentArticleImage,
       article_url: currentCommentArticle?.url ?? null,
@@ -1579,7 +1582,7 @@ export default function ArticleDetailPage() {
     .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
   const summaryItems = buildSummaryItems(
-    compareArticle.title,
+    cleanDisplayText(compareArticle.title),
     rawDescription,
     cleanedContent
   );
@@ -1648,7 +1651,9 @@ export default function ArticleDetailPage() {
             </button>
             <span className="chip chip-accent">{compareArticle.category}</span>
           </div>
-          <h2 className="article-detail-title">{compareArticle.title}</h2>
+          <h2 className="article-detail-title">
+            {cleanDisplayText(compareArticle.title)}
+          </h2>
           <p className="article-detail-byline">
             Published: {formatPublishedTimestamp(article.publishedAt, article.time)}
           </p>
@@ -1657,7 +1662,7 @@ export default function ArticleDetailPage() {
         {article.image ? (
           <img
             src={article.image}
-            alt={article.title}
+            alt={cleanDisplayText(article.title)}
             className="article-image article-image-lg"
           />
         ) : null}
@@ -1696,7 +1701,7 @@ export default function ArticleDetailPage() {
           </button>
           <ShareButton
             path={`/article/${article.id}`}
-            title={article.title}
+            title={cleanDisplayText(article.title)}
             url={article.url}
             iconOnly
           />

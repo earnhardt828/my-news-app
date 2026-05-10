@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../lib/api-base";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel } from "../../lib/categories";
+import { cleanDisplayText } from "../../lib/display-text";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -894,7 +895,9 @@ export default function Search() {
                         <span className="chip chip-accent">{getCategoryLabel(article.category)}</span>
                       </div>
 
-                      <h3 className="search-result-title">{article.title}</h3>
+                      <h3 className="search-result-title">
+                        {cleanDisplayText(article.title)}
+                      </h3>
 
                       <div className="search-result-meta">
                         <span className="trending-published-date">
@@ -911,14 +914,16 @@ export default function Search() {
                       </div>
 
                       {article.description ? (
-                        <p className="search-result-description">{article.description}</p>
+                        <p className="search-result-description">
+                          {cleanDisplayText(article.description)}
+                        </p>
                       ) : null}
                     </div>
                     {getSearchResultImage(article) ? (
                       <div className="search-result-image-shell">
                         <Image
                           src={getSearchResultImage(article) as string}
-                          alt={article.title}
+                          alt={cleanDisplayText(article.title)}
                           width={112}
                           height={112}
                           unoptimized

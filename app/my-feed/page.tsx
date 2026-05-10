@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import ShareButton from "../components/share-button";
 import { apiFetch } from "../../lib/api-base";
 import { getCategoryLabel } from "../../lib/categories";
+import { cleanDisplayText } from "../../lib/display-text";
 import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { supabase } from "../../lib/supabase";
@@ -172,7 +173,7 @@ export default function MyFeed() {
       {
         user_id: userId,
         article_id: article.id,
-        title: article.title,
+        title: cleanDisplayText(article.title),
         source: article.source,
         category: article.category,
         time: article.time,
@@ -321,7 +322,7 @@ export default function MyFeed() {
                   {article.image ? (
                     <img
                       src={article.image}
-                      alt={article.title}
+                      alt={cleanDisplayText(article.title)}
                       className="article-image"
                     />
                   ) : null}
@@ -333,14 +334,17 @@ export default function MyFeed() {
                     </div>
                   </div>
 
-                  <h3 className="article-title">{article.title}</h3>
+                  <h3 className="article-title">{cleanDisplayText(article.title)}</h3>
                 </Link>
 
                 <div className="engagement-row">
-                  <ArticleReaderButton title={article.title} url={article.url} />
+                  <ArticleReaderButton
+                    title={cleanDisplayText(article.title)}
+                    url={article.url}
+                  />
                   <ShareButton
                     path={`/article/${article.id}`}
-                    title={article.title}
+                    title={cleanDisplayText(article.title)}
                     url={article.url}
                   />
                   <button

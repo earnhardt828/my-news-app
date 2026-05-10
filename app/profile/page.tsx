@@ -18,6 +18,7 @@ import {
   type AppProfileRecord,
 } from "../../lib/profile-store";
 import { getCategoryLabel } from "../../lib/categories";
+import { cleanDisplayText } from "../../lib/display-text";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
@@ -99,9 +100,11 @@ function resolveCommentArticleTitle(
   const normalizedArticleId = normalizeArticleId(comment.article_id);
 
   return (
-    normalizedStoredTitle ||
-    (normalizedArticleId !== null ? articleTitleLookup.get(normalizedArticleId) : null) ||
-    (normalizedArticleUrl ? articleUrlLookup.get(normalizedArticleUrl) : null) ||
+    cleanDisplayText(normalizedStoredTitle) ||
+    cleanDisplayText(
+      normalizedArticleId !== null ? articleTitleLookup.get(normalizedArticleId) : null
+    ) ||
+    cleanDisplayText(normalizedArticleUrl ? articleUrlLookup.get(normalizedArticleUrl) : null) ||
     "Article"
   );
 }
@@ -1189,7 +1192,9 @@ export default function Profile() {
                       className="comment-card profile-saved-article-card"
                     >
                       <div className="profile-saved-article-copy">
-                        <strong className="profile-saved-article-title">{article.title}</strong>
+                        <strong className="profile-saved-article-title">
+                          {cleanDisplayText(article.title)}
+                        </strong>
                         <div className="comment-meta">
                           {article.category} · {article.source} · {article.time}
                         </div>
@@ -1198,7 +1203,7 @@ export default function Profile() {
                         <div
                           className="profile-saved-article-thumb"
                           role="img"
-                          aria-label={article.title}
+                          aria-label={cleanDisplayText(article.title)}
                           style={{ backgroundImage: `url(${article.image})` }}
                         />
                       ) : (

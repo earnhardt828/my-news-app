@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { apiFetch } from "../../../lib/api-base";
+import { cleanDisplayText } from "../../../lib/display-text";
 import { supabase } from "../../../lib/supabase";
 import { extractVideoIdFromUrl } from "../../../lib/video-feed";
 
@@ -61,9 +62,11 @@ function resolveCommentArticleTitle(
   const normalizedArticleId = normalizeArticleId(comment.article_id);
 
   return (
-    normalizedStoredTitle ||
-    (normalizedArticleId !== null ? articleTitleLookup.get(normalizedArticleId) : null) ||
-    (normalizedArticleUrl ? articleUrlLookup.get(normalizedArticleUrl) : null) ||
+    cleanDisplayText(normalizedStoredTitle) ||
+    cleanDisplayText(
+      normalizedArticleId !== null ? articleTitleLookup.get(normalizedArticleId) : null
+    ) ||
+    cleanDisplayText(normalizedArticleUrl ? articleUrlLookup.get(normalizedArticleUrl) : null) ||
     "Article"
   );
 }
@@ -329,7 +332,7 @@ export default function ProfileCommentsPage() {
               >
                 <div className="profile-comment-toprow">
                   <strong className="profile-comment-article-title">
-                    {comment.article_title}
+                    {cleanDisplayText(comment.article_title)}
                   </strong>
                 </div>
                 <div className="comment-body">

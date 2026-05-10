@@ -521,6 +521,7 @@ input {
 }
 
 .news-card {
+  position: relative;
   display: grid;
   gap: 16px;
   padding: 14px;
@@ -659,6 +660,20 @@ input {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface-muted));
   color: var(--accent-strong);
   box-shadow: 0 8px 18px rgba(20, 33, 61, 0.1);
+}
+
+.news-card-rank-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 0.74rem;
+  z-index: 1;
+}
+
+.news-card-has-rank .trending-source-row {
+  padding-right: 76px;
 }
 
 .news-meta {

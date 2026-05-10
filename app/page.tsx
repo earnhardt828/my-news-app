@@ -15,6 +15,7 @@ import {
   listMutuallyHiddenUserIds,
 } from "../lib/blocked-users";
 import { apiFetch, buildApiUrl } from "../lib/api-base";
+import { cleanDisplayText } from "../lib/display-text";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
 import { supabase } from "../lib/supabase";
@@ -1193,7 +1194,7 @@ export default function Home() {
       {
         user_id: userId,
         article_id: article.id,
-        title: article.title,
+        title: cleanDisplayText(article.title),
         source: article.source,
         category: article.category,
         time: article.time,
@@ -1352,7 +1353,7 @@ export default function Home() {
 
     const fullCommentPayload = {
       article_id: articleId,
-      article_title: targetArticle?.title ?? null,
+      article_title: cleanDisplayText(targetArticle?.title ?? null) || null,
       article_source: targetArticle?.source ?? null,
       article_image: targetArticle ? getArticleCardImage(targetArticle) : null,
       article_url: targetArticle?.url ?? null,
@@ -2183,7 +2184,16 @@ export default function Home() {
 
             return (
               <div key={articleKey} className="stack">
-                <article className="news-card">
+                <article
+                  className={`news-card ${
+                    sortMode === "trending" && index < 10 ? "news-card-has-rank" : ""
+                  }`}
+                >
+                  {sortMode === "trending" && index < 10 ? (
+                    <span className="chip trending-rank-badge news-card-rank-badge">
+                      Top {index + 1}
+                    </span>
+                  ) : null}
                   <div className="trending-source-row">
                     <button
                       type="button"
@@ -2195,14 +2205,13 @@ export default function Home() {
                         <span className="trending-source-name">{article.source}</span>
                       </div>
                     </button>
-                    {sortMode === "trending" && index < 3 ? (
-                      <span className="chip trending-rank-badge">Top {index + 1}</span>
-                    ) : null}
                   </div>
                   <Link href={`/article/${article.id}`} className="article-link">
                     <div className="news-card-body">
                       <div className="trending-title-row">
-                        <h3 className="trending-article-title">{article.title}</h3>
+                        <h3 className="trending-article-title">
+                          {cleanDisplayText(article.title)}
+                        </h3>
                       </div>
 
                       <div className="news-card-header">
@@ -2221,7 +2230,7 @@ export default function Home() {
                       {shouldShowImage ? (
                         <img
                           src={imageSrc as string}
-                          alt={article.title}
+                          alt={cleanDisplayText(article.title)}
                           className="article-image"
                           loading="lazy"
                           decoding="async"
@@ -2276,7 +2285,7 @@ export default function Home() {
                     </button>
                     <ShareButton
                       path={`/article/${article.id}`}
-                      title={article.title}
+                      title={cleanDisplayText(article.title)}
                       url={article.url}
                       iconOnly
                     />

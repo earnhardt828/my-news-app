@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
+import { cleanDisplayText } from "../../../lib/display-text";
 import { supabase } from "../../../lib/supabase";
 
 type SavedArticle = {
@@ -120,7 +121,9 @@ export default function ProfileBookmarksPage() {
                 className="comment-card profile-saved-article-card"
               >
                 <div className="profile-saved-article-copy">
-                  <strong className="profile-saved-article-title">{article.title}</strong>
+                  <strong className="profile-saved-article-title">
+                    {cleanDisplayText(article.title)}
+                  </strong>
                   <div className="comment-meta">
                     {article.source} · {formatSavedArticleDate(article)}
                   </div>
@@ -129,7 +132,7 @@ export default function ProfileBookmarksPage() {
                   <div
                     className="profile-saved-article-thumb"
                     role="img"
-                    aria-label={article.title}
+                    aria-label={cleanDisplayText(article.title)}
                     style={{ backgroundImage: `url(${article.image})` }}
                   />
                 ) : (
