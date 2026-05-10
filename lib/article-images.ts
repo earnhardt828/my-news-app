@@ -21,6 +21,49 @@ function normalizeImageValue(value: string | null | undefined) {
   return trimmed ? trimmed : null;
 }
 
+function looksLikeLowQualityImageUrl(url: string) {
+  const normalizedUrl = url.toLowerCase();
+
+  if (/(^|[/?_.=-])(thumb|thumbnail|tiny|small)([/?_.=-]|$)/.test(normalizedUrl)) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const dimensionParams = [
+      "w",
+      "width",
+      "h",
+      "height",
+      "mw",
+      "mh",
+      "maxwidth",
+      "maxheight",
+      "size",
+      "sz",
+    ];
+
+    const tinyDimensionRequested = dimensionParams.some((key) => {
+      const value = parsed.searchParams.get(key);
+
+      if (!value) {
+        return false;
+      }
+
+      const numericValue = Number(value);
+      return Number.isFinite(numericValue) && numericValue > 0 && numericValue <= 480;
+    });
+
+    if (tinyDimensionRequested) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 export function getBestArticleImage(article: ArticleImageFields) {
   const candidates: Array<[ArticleImageSource, string | null]> = [
     ["urlToImage", normalizeImageValue(article.urlToImage)],
@@ -31,7 +74,15 @@ export function getBestArticleImage(article: ArticleImageFields) {
     ["thumbnail", normalizeImageValue(article.thumbnail)],
   ];
 
-  const selected = candidates.find(([, value]) => Boolean(value));
+  const usableCandidates = candidates.filter(([, value]) => Boolean(value)) as Array<
+    [ArticleImageSource, string]
+  >;
+  const selected =
+    usableCandidates.find(
+      ([source, value]) => source !== "thumbnail" && !looksLikeLowQualityImageUrl(value)
+    ) ??
+    usableCandidates.find(([source]) => source !== "thumbnail") ??
+    usableCandidates[0];
 
   return {
     src: selected?.[1] ?? null,

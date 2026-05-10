@@ -2351,6 +2351,7 @@ export default function Home() {
   ) => {
     const selectedImage = getBestArticleImage(article);
     const imageSrc = selectedImage.src;
+    console.log("ARTICLE IMAGE URL USED", imageSrc);
     const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
     const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
 

@@ -1910,6 +1910,7 @@ export default function ArticleDetailPage() {
   const compareArticle = activeCompareArticle ?? article;
   const selectedArticleImage = compareArticle ? getBestArticleImage(compareArticle) : null;
   const articleImageSrc = selectedArticleImage?.src ?? null;
+  console.log("ARTICLE IMAGE URL USED", articleImageSrc);
   const articleImageFailureKey = articleImageSrc
     ? `${compareArticle?.id ?? article.id}:${articleImageSrc}`
     : `${compareArticle?.id ?? article.id}:none`;
