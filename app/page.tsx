@@ -457,7 +457,6 @@ export default function Home() {
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
   const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
-  const [loadingScreenMessage, setLoadingScreenMessage] = useState("Loading feed...");
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextPageRef = useRef(false);
@@ -504,7 +503,7 @@ export default function Home() {
       ? "Loading your feed..."
       : sortMode === "latest"
         ? "Loading latest stories..."
-        : "Loading trending stories...";
+        : "Loading fresh stories...";
 
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
@@ -524,14 +523,11 @@ export default function Home() {
     if (replace) {
       setIsLoading(true);
       setFeedLoadError(null);
-      setLoadingScreenMessage("Loading feed...");
       if (typeof window !== "undefined") {
         initialLoadWarningTimeoutId = window.setTimeout(() => {
           if (!isCurrentRequest()) {
             return;
           }
-
-          setLoadingScreenMessage("Loading took too long. Showing fallback feed.");
         }, INITIAL_FEED_WARNING_MS);
 
         initialLoadTimeoutId = window.setTimeout(() => {
@@ -546,7 +542,7 @@ export default function Home() {
             pageToLoad,
             timeoutMs: INITIAL_FEED_TIMEOUT_MS,
           });
-          setFeedLoadError("Couldn't load live articles. Showing fallback feed.");
+          setFeedLoadError("Couldn't load live stories. Showing fallback feed.");
           setArticles(buildClientFallbackArticles());
           setHasMoreArticles(false);
           setFeedPage(1);
@@ -676,7 +672,7 @@ export default function Home() {
       if (replace && newsData.length === 0) {
         const emptyResponseError = new Error("Trending returned zero articles.");
         console.log("TRENDING FETCH ERROR", emptyResponseError);
-        setFeedLoadError("Couldn't load live articles. Showing fallback feed.");
+        setFeedLoadError("Couldn't load live stories. Showing fallback feed.");
         setArticles(buildClientFallbackArticles());
         setHasMoreArticles(false);
         setFeedPage(1);
@@ -834,7 +830,6 @@ export default function Home() {
           .map((rating) => rating.source_name)
       );
       setFeedLoadError(null);
-      setLoadingScreenMessage("Loading feed...");
       setHasMoreArticles(newsPayload.hasMore);
       setFeedPage(pageToLoad);
       setArticles((prev) =>
@@ -851,8 +846,7 @@ export default function Home() {
       console.log("TRENDING FETCH ERROR", error);
       console.error("INITIAL APP LOAD FAILED", error);
       if (replace) {
-        setFeedLoadError("Couldn't load live articles. Showing fallback feed.");
-        setLoadingScreenMessage("Loading took too long. Showing fallback feed.");
+        setFeedLoadError("Couldn't load live stories. Showing fallback feed.");
         setArticles(buildClientFallbackArticles());
         setHasMoreArticles(false);
         setFeedPage(1);
@@ -2062,11 +2056,6 @@ export default function Home() {
         <div className="empty-state">
           <strong>No categories selected</strong>
           <span>Choose categories in Profile to build your personalized feed.</span>
-        </div>
-      ) : isLoading && displayedArticles.length === 0 ? (
-        <div className="loading-state">
-          <strong>{homeLoadingHeading}</strong>
-          <span>{loadingScreenMessage}</span>
         </div>
       ) : displayedArticles.length === 0 ? (
         <div className="empty-state">
