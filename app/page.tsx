@@ -453,7 +453,7 @@ function getArticleCardImage(article: {
   imageUrl?: string | null;
   urlToImage?: string | null;
 }) {
-  return article.imageUrl || article.urlToImage || article.image || null;
+  return article.urlToImage || article.imageUrl || article.image || null;
 }
 
 function buildClientFallbackArticles() {
@@ -2258,6 +2258,25 @@ export default function Home() {
                           className="article-image"
                           loading="lazy"
                           decoding="async"
+                          onLoad={(event) => {
+                            const target = event.currentTarget;
+
+                            if (
+                              target.naturalWidth < 360 ||
+                              target.naturalHeight < 220
+                            ) {
+                              setFailedArticleImages((prev) => {
+                                if (prev[imageFailureKey]) {
+                                  return prev;
+                                }
+
+                                return {
+                                  ...prev,
+                                  [imageFailureKey]: true,
+                                };
+                              });
+                            }
+                          }}
                           onError={() => {
                             setFailedArticleImages((prev) => {
                               if (prev[imageFailureKey]) {

@@ -318,11 +318,11 @@ function getProviderImage(raw: ProviderArticle) {
 
   return (
     raw.urlToImage ||
+    raw.imageUrl ||
     raw.image ||
     raw.image_url ||
-    raw.thumbnail ||
     mediaUrl ||
-    raw.imageUrl ||
+    raw.thumbnail ||
     null
   );
 }
