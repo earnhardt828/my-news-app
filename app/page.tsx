@@ -530,6 +530,40 @@ function getSourceDiversityScore(sourceName: string, sourceCounts: Map<string, n
   return 0.24;
 }
 
+function getCategoryVarietyScore(categoryName: string, categoryCounts: Map<string, number>) {
+  const occurrences = categoryCounts.get(categoryName.trim().toLowerCase()) ?? 1;
+
+  if (occurrences <= 1) {
+    return 1;
+  }
+
+  if (occurrences === 2) {
+    return 0.82;
+  }
+
+  if (occurrences === 3) {
+    return 0.64;
+  }
+
+  return 0.42;
+}
+
+function getTrendingSourceName(
+  item:
+    | { type: "article"; key: string; article: Article; score: number; publishedAtMs: number }
+    | { type: "video"; key: string; video: VideoItem; score: number; publishedAtMs: number }
+) {
+  return item.type === "article" ? item.article.source : item.video.creator;
+}
+
+function getTrendingCategoryName(
+  item:
+    | { type: "article"; key: string; article: Article; score: number; publishedAtMs: number }
+    | { type: "video"; key: string; video: VideoItem; score: number; publishedAtMs: number }
+) {
+  return item.type === "article" ? item.article.category : "videos";
+}
+
 export default function Home() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -2193,13 +2227,17 @@ export default function Home() {
     }
 
     const sourceCounts = new Map<string, number>();
+    const categoryCounts = new Map<string, number>();
     visibleArticles.forEach((article) => {
       const sourceKey = article.source.trim().toLowerCase();
+      const categoryKey = article.category.trim().toLowerCase();
       sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
+      categoryCounts.set(categoryKey, (categoryCounts.get(categoryKey) ?? 0) + 1);
     });
     videos.forEach((video) => {
       const sourceKey = video.creator.trim().toLowerCase();
       sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
+      categoryCounts.set("videos", (categoryCounts.get("videos") ?? 0) + 1);
     });
 
     const maxArticleEngagement = Math.max(
@@ -2222,15 +2260,19 @@ export default function Home() {
       const externalPopularityScore =
         articleCount === 1 ? 1 : 1 - index / Math.max(1, articleCount - 1);
       const sourceDiversityScore = getSourceDiversityScore(article.source, sourceCounts);
+      const categoryVarietyScore = getCategoryVarietyScore(article.category, categoryCounts);
       const graffitiEngagementScore =
         getArticleEngagementScore(article) / maxArticleEngagement;
       const score = isLowEngagement
         ? recencyScore * 0.45 +
-          externalPopularityScore * 0.45 +
-          sourceDiversityScore * 0.1
-        : recencyScore * 0.3 +
-          externalPopularityScore * 0.3 +
-          graffitiEngagementScore * 0.4;
+          externalPopularityScore * 0.35 +
+          sourceDiversityScore * 0.1 +
+          categoryVarietyScore * 0.1
+        : recencyScore * 0.28 +
+          externalPopularityScore * 0.28 +
+          graffitiEngagementScore * 0.34 +
+          sourceDiversityScore * 0.05 +
+          categoryVarietyScore * 0.05;
 
       return {
         type: "article" as const,
@@ -2247,14 +2289,18 @@ export default function Home() {
           ? 1
           : 1 - index / Math.max(1, videoCount - 1);
       const sourceDiversityScore = getSourceDiversityScore(video.creator, sourceCounts);
+      const categoryVarietyScore = getCategoryVarietyScore("videos", categoryCounts);
       const graffitiEngagementScore = getVideoEngagementScore(video) / maxVideoEngagement;
       const score = isLowEngagement
         ? recencyScore * 0.45 +
-          externalPopularityScore * 0.45 +
-          sourceDiversityScore * 0.1
-        : recencyScore * 0.3 +
-          externalPopularityScore * 0.3 +
-          graffitiEngagementScore * 0.4;
+          externalPopularityScore * 0.35 +
+          sourceDiversityScore * 0.1 +
+          categoryVarietyScore * 0.1
+        : recencyScore * 0.28 +
+          externalPopularityScore * 0.28 +
+          graffitiEngagementScore * 0.34 +
+          sourceDiversityScore * 0.05 +
+          categoryVarietyScore * 0.05;
 
       return {
         type: "video" as const,
@@ -2265,13 +2311,69 @@ export default function Home() {
       };
     });
 
-    return [...rankedArticles, ...rankedVideos].sort((left, right) => {
+    const sortedItems = [...rankedArticles, ...rankedVideos].sort((left, right) => {
       if (right.score !== left.score) {
         return right.score - left.score;
       }
 
       return right.publishedAtMs - left.publishedAtMs;
     });
+
+    const prioritizedItems = [...sortedItems];
+    const diversifiedTopItems: typeof sortedItems = [];
+    const articleSourceUsage = new Map<string, number>();
+    const selectedCategoryUsage = new Map<string, number>();
+
+    while (diversifiedTopItems.length < 25 && prioritizedItems.length > 0) {
+      let selectedIndex = -1;
+
+      for (let index = 0; index < prioritizedItems.length; index += 1) {
+        const item = prioritizedItems[index];
+        const sourceKey = getTrendingSourceName(item).trim().toLowerCase();
+        const categoryKey = getTrendingCategoryName(item).trim().toLowerCase();
+        const sourceUseCount = articleSourceUsage.get(sourceKey) ?? 0;
+        const categoryUseCount = selectedCategoryUsage.get(categoryKey) ?? 0;
+        const otherArticleSourceAvailable = prioritizedItems.some((candidate, candidateIndex) => {
+          if (candidateIndex === index || candidate.type !== "article") {
+            return false;
+          }
+
+          const candidateSourceKey = candidate.article.source.trim().toLowerCase();
+          return (articleSourceUsage.get(candidateSourceKey) ?? 0) < 2;
+        });
+
+        const exceedsArticleSourceCap =
+          item.type === "article" && sourceUseCount >= 2 && otherArticleSourceAvailable;
+        const exceedsCategorySoftCap =
+          categoryUseCount >= 4 &&
+          prioritizedItems.some((candidate, candidateIndex) => {
+            if (candidateIndex === index) {
+              return false;
+            }
+
+            const candidateCategoryKey = getTrendingCategoryName(candidate).trim().toLowerCase();
+            return (selectedCategoryUsage.get(candidateCategoryKey) ?? 0) < 3;
+          });
+
+        if (!exceedsArticleSourceCap && !exceedsCategorySoftCap) {
+          selectedIndex = index;
+          break;
+        }
+      }
+
+      const nextItem = prioritizedItems.splice(selectedIndex >= 0 ? selectedIndex : 0, 1)[0];
+      diversifiedTopItems.push(nextItem);
+
+      if (nextItem.type === "article") {
+        const sourceKey = nextItem.article.source.trim().toLowerCase();
+        articleSourceUsage.set(sourceKey, (articleSourceUsage.get(sourceKey) ?? 0) + 1);
+      }
+
+      const categoryKey = getTrendingCategoryName(nextItem).trim().toLowerCase();
+      selectedCategoryUsage.set(categoryKey, (selectedCategoryUsage.get(categoryKey) ?? 0) + 1);
+    }
+
+    return [...diversifiedTopItems, ...prioritizedItems];
   }, [sortMode, videos, visibleArticles]);
 
   const trendingRenderItems = useMemo(() => {
@@ -2368,11 +2470,16 @@ export default function Home() {
         <article
           className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}
         >
-          {options?.rankLabel ? (
-            <span className="chip trending-rank-badge news-card-rank-badge">
-              {options.rankLabel}
+          <div className="news-card-top-row">
+            <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
+              {getCategoryLabel(article.category)}
             </span>
-          ) : null}
+            {options?.rankLabel ? (
+              <span className="chip trending-rank-badge news-card-rank-badge">
+                {options.rankLabel}
+              </span>
+            ) : null}
+          </div>
           <div className="trending-source-row">
             <button
               type="button"
@@ -2392,10 +2499,6 @@ export default function Home() {
               }`}
             >
               <div className="news-card-copy">
-                <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
-                  {getCategoryLabel(article.category)}
-                </span>
-
                 <div className="trending-title-row">
                   <h3 className="trending-article-title">
                     {cleanDisplayText(article.title)}
@@ -2507,11 +2610,16 @@ export default function Home() {
 
       return (
         <article className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}>
-          {options?.rankLabel ? (
-            <span className="chip trending-rank-badge news-card-rank-badge">
-              {options.rankLabel}
+          <div className="news-card-top-row">
+            <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
+              {getCategoryLabel(article.category)}
             </span>
-          ) : null}
+            {options?.rankLabel ? (
+              <span className="chip trending-rank-badge news-card-rank-badge">
+                {options.rankLabel}
+              </span>
+            ) : null}
+          </div>
           <div className="trending-source-row">
             <div className="trending-source-brand">
               <SourceBadge sourceName={article.source} />
@@ -2521,9 +2629,6 @@ export default function Home() {
           <Link href={`/article/${article.id}`} className="article-link">
             <div className="news-card-body news-card-body-text-only">
               <div className="news-card-copy">
-                <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
-                  {getCategoryLabel(article.category)}
-                </span>
                 <h3 className="trending-article-title">{cleanDisplayText(article.title)}</h3>
                 <span className="trending-published-date">
                   {options?.showFreshnessTime
@@ -2571,6 +2676,11 @@ export default function Home() {
             </div>
           </div>
         </div>
+        {sortMode === "trending" ? (
+          <p className="trending-explainer">
+            Trending ranks recent stories using freshness, source variety, and activity.
+          </p>
+        ) : null}
       </div>
 
       {sortMode === "my-feed" ? (
