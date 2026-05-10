@@ -456,6 +456,10 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
   return payload;
 }
 
+function isFallbackFeedArticle(article: FeedArticlePayload) {
+  return article.url?.includes("graffiti.app/fallback") ?? false;
+}
+
 function buildClientFallbackArticles() {
   return HOME_FALLBACK_ARTICLES.map((article, index) => ({
     ...article,
@@ -680,6 +684,7 @@ export default function Home() {
     activeFeedRequestIdRef.current = requestId;
 
     const isCurrentRequest = () => activeFeedRequestIdRef.current === requestId;
+    let hasLiveNewsResponse = false;
     let initialLoadTimeoutId: number | null = null;
     let initialLoadWarningTimeoutId: number | null = null;
     let articleFetchTimeoutId: number | null = null;
@@ -837,6 +842,7 @@ export default function Home() {
       }
 
       const newsData = newsPayload.articles;
+      hasLiveNewsResponse = true;
       console.log("NEWS API ARTICLE COUNT", newsData.length);
       console.log("FIRST ARTICLE IMAGE FIELDS", {
         title: newsData[0]?.title,
@@ -844,6 +850,9 @@ export default function Home() {
         imageUrl: newsData[0]?.imageUrl,
         urlToImage: newsData[0]?.urlToImage,
       });
+
+      const receivedFallbackFeed =
+        newsData.length > 0 && newsData.every((article) => isFallbackFeedArticle(article));
 
       if (replace && newsData.length === 0) {
         const emptyResponseError = new Error("Trending returned zero articles.");
@@ -1031,7 +1040,11 @@ export default function Home() {
           .filter((rating) => rating.rating === "dislike")
           .map((rating) => rating.source_name)
       );
-      setFeedLoadError(null);
+      setFeedLoadError(
+        replace && receivedFallbackFeed
+          ? "Couldn't load live stories. Showing fallback feed."
+          : null
+      );
       setHasMoreArticles(newsPayload.hasMore);
       setFeedPage(pageToLoad);
       setArticles((prev) => {
@@ -1051,12 +1064,14 @@ export default function Home() {
 
       console.log("TRENDING FETCH ERROR", error);
       console.error("INITIAL APP LOAD FAILED", error);
-      if (replace) {
+      if (replace && !hasLiveNewsResponse) {
         setFeedLoadError("Couldn't load live stories. Showing fallback feed.");
         setArticles(buildClientFallbackArticles());
         setHasMoreArticles(false);
         setFeedPage(1);
         setIsInitialFeedLoading(false);
+      } else {
+        console.error("Home feed enrichment failed after live stories loaded", error);
       }
     } finally {
       if (initialLoadWarningTimeoutId) {

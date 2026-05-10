@@ -146,6 +146,10 @@ const NEWS_API_KEY = process.env.NEWS_API_KEY ?? process.env.NEXT_PUBLIC_NEWS_AP
 const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
 
+function logProviderSkip(providerName: string, reason: string) {
+  console.warn(`[api/news] Skipping ${providerName}: ${reason}`);
+}
+
 const responseCache = new Map<string, CachedResponse>();
 const enrichedImageCache = new Map<string, EnrichedImageCacheEntry>();
 const newsDataTokenCache = new Map<string, string[]>();
@@ -814,6 +818,7 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
 
 async function fetchNewsApiArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
   if (!NEWS_API_KEY) {
+    logProviderSkip("NewsAPI", "NEWS_API_KEY is missing");
     return { articles: [], hasMore: false };
   }
 
@@ -875,6 +880,7 @@ async function fetchNewsApiArticles(params: ProviderFetchParams): Promise<Provid
 
 async function fetchGNewsArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
   if (!GNEWS_API_KEY) {
+    logProviderSkip("GNews", "GNEWS_API_KEY is missing");
     return { articles: [], hasMore: false };
   }
 
@@ -982,6 +988,7 @@ async function resolveNewsDataToken(baseKey: string, page: number, url: URL) {
 
 async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
   if (!NEWSDATA_API_KEY) {
+    logProviderSkip("NewsData.io", "NEWSDATA_API_KEY is missing");
     return { articles: [], hasMore: false };
   }
 
@@ -1136,6 +1143,10 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
   const responses = await Promise.allSettled(
     feedsToFetch.slice(0, params.mode === "compare" ? 7 : 5).map(async (feed) => {
       const response = await fetch(feed.url, {
+        headers: {
+          Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+          "User-Agent": "GraffitiNews/1.0 (+https://graffiti.news)",
+        },
         next: { revalidate: 600 },
       });
 
@@ -1190,21 +1201,65 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     return cached.payload;
   }
 
-  const providerResponses = await Promise.allSettled([
-    fetchNewsApiArticles(params),
-    fetchGNewsArticles(params),
-    fetchNewsDataArticles(params),
-    fetchRssArticles(params),
-  ]);
+  const providerFetchers = [
+    { name: "NewsAPI", run: () => fetchNewsApiArticles(params) },
+    { name: "GNews", run: () => fetchGNewsArticles(params) },
+    { name: "NewsData.io", run: () => fetchNewsDataArticles(params) },
+    { name: "RSS", run: () => fetchRssArticles(params) },
+  ] as const;
+  const providerResponses = await Promise.allSettled(
+    providerFetchers.map((provider) => provider.run())
+  );
 
-  const combined = providerResponses.flatMap((result) => {
+  const providerDiagnostics = providerResponses.map((result, index) => {
+    const providerName = providerFetchers[index].name;
+
     if (result.status === "fulfilled") {
-      return result.value.articles;
+      return {
+        provider: providerName,
+        ok: true,
+        articleCount: result.value.articles.length,
+        hasMore: result.value.hasMore,
+      };
     }
 
-    console.error("News provider pipeline error:", result.reason);
-    return [];
+    console.error("News provider pipeline error:", {
+      provider: providerName,
+      error: result.reason,
+    });
+
+    return {
+      provider: providerName,
+      ok: false,
+      articleCount: 0,
+      hasMore: false,
+      error:
+        result.reason instanceof Error
+          ? {
+              name: result.reason.name,
+              message: result.reason.message,
+            }
+          : String(result.reason),
+    };
   });
+
+  console.log("[api/news] Provider diagnostics", {
+    mode: params.mode,
+    page: params.page,
+    pageSize: params.pageSize,
+    query: params.query,
+    configuredProviders: {
+      newsApi: Boolean(NEWS_API_KEY),
+      gnews: Boolean(GNEWS_API_KEY),
+      newsData: Boolean(NEWSDATA_API_KEY),
+      rss: true,
+    },
+    providers: providerDiagnostics,
+  });
+
+  const combined = providerResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.articles : []
+  );
   console.log("RAW PROVIDER COUNT", combined.length);
 
   const deduped = dedupeArticles(combined);
@@ -1219,6 +1274,16 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     (result) => result.status === "fulfilled" && result.value.hasMore
   ) || enrichedRealArticles.length > params.pageSize;
   const fallbackUsed = enrichedRealArticles.length === 0;
+
+  if (fallbackUsed) {
+    console.error("[api/news] All live providers returned zero usable articles", {
+      mode: params.mode,
+      page: params.page,
+      pageSize: params.pageSize,
+      query: params.query,
+      providerDiagnostics,
+    });
+  }
 
   console.log("REAL ARTICLES COUNT", enrichedRealArticles.length);
   console.log("FALLBACK USED", fallbackUsed);
