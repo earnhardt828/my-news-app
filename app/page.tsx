@@ -467,6 +467,18 @@ function buildClientFallbackArticles() {
   }));
 }
 
+function getTrendingArticleRank(articleIndex: number, hasInlineVideos: boolean) {
+  return articleIndex + 1 + (hasInlineVideos ? Math.floor(articleIndex / 3) : 0);
+}
+
+function getTrendingInlineVideoRank(articleIndex: number, hasInlineVideos: boolean) {
+  if (!hasInlineVideos) {
+    return null;
+  }
+
+  return articleIndex + 2 + Math.floor(articleIndex / 3);
+}
+
 function arraysShallowEqual(left: string[], right: string[]) {
   if (left.length !== right.length) {
     return false;
@@ -2181,17 +2193,29 @@ export default function Home() {
               article.id || article.url || getArticleDeduplicationKey(article);
             const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
             const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
+            const hasInlineTrendingVideos =
+              sortMode === "trending" && videos.length > 0;
+            const articleRank = getTrendingArticleRank(index, hasInlineTrendingVideos);
+            const videoRank = getTrendingInlineVideoRank(index, hasInlineTrendingVideos);
+            const shouldShowArticleRankBadge =
+              sortMode === "trending" && articleRank <= 25;
+            const shouldShowInlineVideoRankBadge =
+              sortMode === "trending" &&
+              (index + 1) % 3 === 0 &&
+              videos.length > 0 &&
+              videoRank !== null &&
+              videoRank <= 25;
 
             return (
               <div key={articleKey} className="stack">
                 <article
                   className={`news-card ${
-                    sortMode === "trending" && index < 10 ? "news-card-has-rank" : ""
+                    shouldShowArticleRankBadge ? "news-card-has-rank" : ""
                   }`}
                 >
-                  {sortMode === "trending" && index < 10 ? (
+                  {shouldShowArticleRankBadge ? (
                     <span className="chip trending-rank-badge news-card-rank-badge">
-                      Top {index + 1}
+                      Top {articleRank}
                     </span>
                   ) : null}
                   <div className="trending-source-row">
@@ -2332,6 +2356,11 @@ export default function Home() {
                   onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
                   onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
                   label="Video"
+                  rankBadgeLabel={
+                    shouldShowInlineVideoRankBadge && videoRank !== null
+                      ? `Top ${videoRank}`
+                      : null
+                  }
                   className="video-card-inline"
                   variant="article"
                 />

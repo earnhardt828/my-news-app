@@ -19,6 +19,7 @@ type VideoFeedCardProps = {
   onOpenPlayer: (videoId: string) => void;
   frameRef?: (node: HTMLDivElement | null) => void;
   label?: string;
+  rankBadgeLabel?: string | null;
   className?: string;
   variant?: "default" | "article";
 };
@@ -44,6 +45,7 @@ export default function VideoFeedCard({
   onOpenPlayer,
   frameRef,
   label,
+  rankBadgeLabel = null,
   className = "",
   variant = "default",
 }: VideoFeedCardProps) {
@@ -92,7 +94,17 @@ export default function VideoFeedCard({
 
   if (isArticleVariant) {
     return (
-      <article id={`video-${video.id}`} className={`video-card video-card-article ${className}`.trim()}>
+      <article
+        id={`video-${video.id}`}
+        className={`video-card video-card-article ${
+          rankBadgeLabel ? "news-card-has-rank" : ""
+        } ${className}`.trim()}
+      >
+        {rankBadgeLabel ? (
+          <span className="chip trending-rank-badge news-card-rank-badge">
+            {rankBadgeLabel}
+          </span>
+        ) : null}
         <div className="trending-source-row video-card-article-source-row">
           <div className="trending-source-brand">
             <SourceBadge sourceName={video.creator} />

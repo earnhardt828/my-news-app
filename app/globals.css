@@ -3789,6 +3789,7 @@ input {
 }
 
 .video-card {
+  position: relative;
   display: grid;
   gap: 14px;
   padding: 16px;
