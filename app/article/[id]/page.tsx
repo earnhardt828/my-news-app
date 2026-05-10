@@ -138,6 +138,7 @@ const ARTICLE_COMPARE_STOP_WORDS = new Set([
   "an",
   "and",
   "or",
+  "but",
   "of",
   "to",
   "in",
@@ -146,15 +147,31 @@ const ARTICLE_COMPARE_STOP_WORDS = new Set([
   "with",
   "from",
   "by",
+  "at",
+  "as",
   "is",
   "are",
   "was",
   "were",
+  "be",
+  "been",
+  "being",
+  "this",
+  "that",
+  "these",
+  "those",
+  "it",
+  "its",
+  "into",
   "new",
   "says",
+  "said",
   "after",
   "before",
   "news",
+  "more",
+  "will",
+  "can",
 ]);
 
 function formatRelativeTime(timestamp: string | null) {
@@ -304,34 +321,68 @@ function normalizeNewsPayload(payload: ArticleRecord[] | PaginatedNewsResponse) 
   return payload.articles ?? [];
 }
 
-function getImportantTokens(value: string) {
-  return new Set(
-    cleanDisplayText(value)
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter(
-        (token) =>
-          token.length > 2 && !ARTICLE_COMPARE_STOP_WORDS.has(token)
-      )
-  );
+function normalizeCompareText(value: string | null | undefined) {
+  return cleanDisplayText(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function countTokenOverlap(left: Set<string>, right: Set<string>) {
-  let overlap = 0;
+function extractImportantKeywords(value: string | null | undefined) {
+  const normalized = normalizeCompareText(value);
 
-  left.forEach((token) => {
-    if (right.has(token)) {
-      overlap += 1;
+  if (!normalized) {
+    return {
+      keywords: new Set<string>(),
+      phrases: new Set<string>(),
+    };
+  }
+
+  const words = normalized
+    .split(" ")
+    .filter(
+      (word) => word.length >= 3 && !ARTICLE_COMPARE_STOP_WORDS.has(word)
+    );
+  const keywords = new Set(words);
+  const phraseCounts = new Map<string, number>();
+
+  for (let start = 0; start < words.length; start += 1) {
+    for (let size = 2; size <= 4; size += 1) {
+      const phraseWords = words.slice(start, start + size);
+
+      if (phraseWords.length !== size) {
+        continue;
+      }
+
+      const phrase = phraseWords.join(" ");
+      phraseCounts.set(phrase, (phraseCounts.get(phrase) ?? 0) + 1);
     }
-  });
+  }
 
-  return overlap;
+  const phrases = new Set<string>(
+    [...phraseCounts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([phrase]) => phrase)
+  );
+
+  return {
+    keywords,
+    phrases,
+  };
+}
+
+function getSharedKeywords(left: Set<string>, right: Set<string>) {
+  return [...left].filter((token) => right.has(token));
+}
+
+function hasStrongPhraseMatch(left: Set<string>, right: Set<string>) {
+  return [...left].some((phrase) => right.has(phrase));
 }
 
 function buildArticleCompareQuery(article: ArticleRecord) {
-  const titleTokens = [...getImportantTokens(article.title)].slice(0, 6);
-  const titleQuery = titleTokens.slice(0, 4).join(" ");
+  const titleKeywords = [...extractImportantKeywords(article.title).keywords].slice(0, 8);
+  const titleQuery = titleKeywords.slice(0, 5).join(" ");
 
   if (titleQuery) {
     return titleQuery;
@@ -341,89 +392,123 @@ function buildArticleCompareQuery(article: ArticleRecord) {
 }
 
 function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRecord[]) {
-  const baseTitleTokens = getImportantTokens(baseArticle.title);
-  const baseDescriptionTokens = getImportantTokens(baseArticle.description ?? "");
-  const baseTopicTokens = new Set([
-    ...baseTitleTokens,
-    ...baseDescriptionTokens,
-  ]);
+  const baseTitle = extractImportantKeywords(baseArticle.title);
+  const baseDescription = extractImportantKeywords(baseArticle.description ?? "");
+  const baseContent = extractImportantKeywords(baseArticle.content ?? "");
+  const basePublishedAt = baseArticle.publishedAt
+    ? new Date(baseArticle.publishedAt).getTime()
+    : 0;
 
-  const rankedArticles = allArticles
+  const scoredCandidates = allArticles
     .filter((article) => article.id !== baseArticle.id)
     .map((article) => {
-      const candidateTitleTokens = getImportantTokens(article.title);
-      const candidateDescriptionTokens = getImportantTokens(article.description ?? "");
-      const candidateTopicTokens = new Set([
-        ...candidateTitleTokens,
-        ...candidateDescriptionTokens,
-      ]);
-      const titleOverlap = countTokenOverlap(baseTitleTokens, candidateTitleTokens);
-      const descriptionOverlap = countTokenOverlap(
-        baseDescriptionTokens,
-        candidateDescriptionTokens
+      const candidateTitle = extractImportantKeywords(article.title);
+      const candidateDescription = extractImportantKeywords(article.description ?? "");
+      const candidateContent = extractImportantKeywords(article.content ?? "");
+
+      const titleShared = getSharedKeywords(baseTitle.keywords, candidateTitle.keywords);
+      const descriptionShared = getSharedKeywords(
+        new Set([...baseDescription.keywords, ...baseContent.keywords]),
+        new Set([...candidateDescription.keywords, ...candidateContent.keywords])
       );
-      const topicOverlap = countTokenOverlap(baseTopicTokens, candidateTopicTokens);
-      const categoryBonus = article.category === baseArticle.category ? 3 : 0;
-      const differentSourceBonus = article.source !== baseArticle.source ? 2 : 0;
-      const sourcePenalty = article.source === baseArticle.source ? -4 : 0;
-      const exactPhraseBonus = cleanDisplayText(article.title)
-        .toLowerCase()
-        .includes(cleanDisplayText(baseArticle.title).toLowerCase())
-        ? 2
+      const titlePhraseMatch = hasStrongPhraseMatch(baseTitle.phrases, candidateTitle.phrases);
+      const bodyPhraseMatch =
+        hasStrongPhraseMatch(baseDescription.phrases, candidateDescription.phrases) ||
+        hasStrongPhraseMatch(baseContent.phrases, candidateContent.phrases);
+      const sharedKeywords = [...new Set([...titleShared, ...descriptionShared])];
+      const candidatePublishedAt = article.publishedAt
+        ? new Date(article.publishedAt).getTime()
         : 0;
-      const score =
-        titleOverlap * 6 +
-        topicOverlap * 3 +
-        descriptionOverlap * 2 +
-        categoryBonus +
-        differentSourceBonus +
-        exactPhraseBonus +
-        sourcePenalty;
+      const publishedWithinSevenDays =
+        Boolean(basePublishedAt && candidatePublishedAt) &&
+        Math.abs(basePublishedAt - candidatePublishedAt) <= 7 * 24 * 60 * 60 * 1000;
+
+      let score = 0;
+      score += titleShared.length * 3;
+      score += descriptionShared.length * 2;
+      score += article.category === baseArticle.category ? 2 : 0;
+      score += publishedWithinSevenDays ? 1 : 0;
+      score += article.source === baseArticle.source ? -2 : 0;
+      score += titlePhraseMatch || bodyPhraseMatch ? 4 : 0;
+      if (sharedKeywords.length === 0 && !titlePhraseMatch && !bodyPhraseMatch) {
+        score -= 5;
+      }
 
       return {
         article,
         score,
-        titleOverlap,
-        descriptionOverlap,
-        topicOverlap,
+        sharedKeywords,
+        titleSharedCount: titleShared.length,
+        descriptionSharedCount: descriptionShared.length,
+        strongPhraseMatch: titlePhraseMatch || bodyPhraseMatch,
       };
     })
     .filter(
-      (entry) =>
-        entry.score > 0 &&
-        (entry.titleOverlap > 0 || entry.descriptionOverlap > 0 || entry.topicOverlap > 1)
+      (candidate) =>
+        candidate.sharedKeywords.length >= 2 || candidate.strongPhraseMatch
     )
     .sort((left, right) => right.score - left.score);
 
-  const selectedMatches: ArticleRecord[] = [];
-  const seenSources = new Set<string>([baseArticle.source]);
+  console.log("COMPARE KEYWORDS", {
+    title: [...baseTitle.keywords],
+    description: [...baseDescription.keywords],
+    content: [...baseContent.keywords],
+    phrases: [...new Set([...baseTitle.phrases, ...baseDescription.phrases, ...baseContent.phrases])],
+  });
+  console.log(
+    "COMPARE SCORES",
+    scoredCandidates.map((candidate) => ({
+      title: candidate.article.title,
+      source: candidate.article.source,
+      score: candidate.score,
+      shared: candidate.sharedKeywords,
+    }))
+  );
 
-  rankedArticles.forEach((entry) => {
-    if (selectedMatches.length >= 4) {
+  const selectedMatches: ArticleRecord[] = [];
+  const usedSources = new Set<string>([baseArticle.source]);
+
+  scoredCandidates.forEach((candidate) => {
+    if (selectedMatches.length >= 5) {
       return;
     }
 
-    if (!seenSources.has(entry.article.source)) {
-      selectedMatches.push(entry.article);
-      seenSources.add(entry.article.source);
+    if (usedSources.has(candidate.article.source)) {
+      return;
     }
+
+    selectedMatches.push(candidate.article);
+    usedSources.add(candidate.article.source);
   });
 
   if (selectedMatches.length < 2) {
-    rankedArticles.forEach((entry) => {
-      if (selectedMatches.length >= 4) {
+    scoredCandidates.forEach((candidate) => {
+      if (selectedMatches.length >= 5) {
         return;
       }
 
-      if (selectedMatches.some((match) => match.id === entry.article.id)) {
+      if (selectedMatches.some((match) => match.id === candidate.article.id)) {
         return;
       }
 
-      selectedMatches.push(entry.article);
+      selectedMatches.push(candidate.article);
     });
   }
 
-  return [baseArticle, ...selectedMatches].slice(0, 5);
+  const finalMatches = [baseArticle, ...selectedMatches].slice(0, 6);
+  console.log(
+    "COMPARE MATCHES",
+    finalMatches.map((match) => ({
+      title: match.title,
+      source: match.source,
+    }))
+  );
+  console.log(
+    "FINAL COMPARE MATCHES",
+    finalMatches.map((match) => match.title)
+  );
+
+  return finalMatches;
 }
 
 function sortComments(
@@ -662,20 +747,13 @@ export default function ArticleDetailPage() {
         const nextCompareArticles = buildCompareArticles(targetArticle, newsData);
         const compareCandidates = newsData.filter((item) => item.id !== targetArticle.id);
         console.log("COMPARE CANDIDATES COUNT", compareCandidates.length);
-        console.log(
-          "COMPARE MATCHES",
-          nextCompareArticles.map((compareItem) => ({
-            title: compareItem.title,
-            source: compareItem.source,
-          }))
-        );
         setCompareArticles(nextCompareArticles);
         setActiveCompareIndex(0);
         setCompareStatusMessage(
-          nextCompareArticles.length > 1 ? "" : "No other sources found yet."
+          nextCompareArticles.length > 2 ? "" : "No other similar sources found yet."
         );
         if (
-          nextCompareArticles.length > 1 &&
+          nextCompareArticles.length > 2 &&
           typeof window !== "undefined" &&
           window.localStorage.getItem(COMPARE_SOURCES_TUTORIAL_KEY) !== "true"
         ) {
@@ -687,7 +765,7 @@ export default function ArticleDetailPage() {
         setCompareArticles([]);
         setActiveCompareIndex(0);
         setShowCompareTutorial(false);
-        setCompareStatusMessage("No other sources found yet.");
+        setCompareStatusMessage("No other similar sources found yet.");
       }
 
       const legacyArticleId = targetArticle
@@ -1666,7 +1744,7 @@ export default function ArticleDetailPage() {
   };
 
   const handleCompareSwipe = (direction: "left" | "right") => {
-    if (compareArticles.length <= 1) {
+    if (compareArticles.length <= 2) {
       return;
     }
 
@@ -1781,7 +1859,7 @@ export default function ArticleDetailPage() {
         </div>
       ) : null}
 
-      {compareArticles.length > 1 ? (
+      {compareArticles.length > 2 ? (
         <div className="compare-sources-top-row" aria-hidden="true">
           <div className="compare-sources-dots">
             {compareArticles.map((compareItem, index) => (
