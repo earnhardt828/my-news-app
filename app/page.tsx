@@ -824,70 +824,98 @@ export default function Home() {
         return;
       }
 
-      const { data: likesData } = await supabase
-        .from("likes")
-        .select("id, article_id, user_id");
-
-      const { data: commentsData } = await supabase
-        .from("comments")
-        .select("id, article_id, text, username, user_id, created_at");
-
-      const { data: commentReactionsData } = await supabase
-        .from("comment_reactions")
-        .select("id, comment_id, user_id, reaction_type");
-
-      const { data: commentRepliesData } = await supabase
-        .from("comment_replies")
-        .select("id, comment_id, article_id, text, username, user_id, created_at");
-
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("id, avatar_url, username");
-
-      const { data: savedArticlesData } = userData.user?.id
-        ? await supabase
-            .from("saved_articles")
-            .select("article_id")
-            .eq("user_id", userData.user.id)
-        : { data: [] as DbSavedArticle[] };
-
-      const { data: blockedUsersData, error: blockedUsersError } = userData.user?.id
-        ? await listMutuallyHiddenUserIds(supabase, userData.user.id)
-        : { data: [] as string[], error: null };
-      const { data: ownBlockedUsersData, error: ownBlockedUsersError } = userData.user?.id
-        ? await listBlockedUsers(supabase, userData.user.id)
-        : { data: [] as DbBlockedUser[], error: null };
-
-      if (blockedUsersError) {
-        console.error("Error loading blocked users:", blockedUsersError);
-      }
-
-      if (ownBlockedUsersError) {
-        console.error("Error loading own blocked users:", ownBlockedUsersError);
-      }
-
-      const { data: sourceRatingsData } = userData.user?.id
-        ? await supabase
-            .from("source_ratings")
-            .select("id, user_id, source_name, rating")
-            .eq("user_id", userData.user.id)
-        : { data: [] as DbSourceRating[] };
+      const [
+        likesResult,
+        commentsResult,
+        commentReactionsResult,
+        commentRepliesResult,
+        profilesResult,
+        savedArticlesResult,
+        blockedUsersResult,
+        ownBlockedUsersResult,
+        sourceRatingsResult,
+      ] = await Promise.allSettled([
+        supabase.from("likes").select("id, article_id, user_id"),
+        supabase
+          .from("comments")
+          .select("id, article_id, text, username, user_id, created_at"),
+        supabase
+          .from("comment_reactions")
+          .select("id, comment_id, user_id, reaction_type"),
+        supabase
+          .from("comment_replies")
+          .select("id, comment_id, article_id, text, username, user_id, created_at"),
+        supabase.from("profiles").select("id, avatar_url, username"),
+        userData.user?.id
+          ? supabase
+              .from("saved_articles")
+              .select("article_id")
+              .eq("user_id", userData.user.id)
+          : Promise.resolve({ data: [] as DbSavedArticle[], error: null }),
+        userData.user?.id
+          ? listMutuallyHiddenUserIds(supabase, userData.user.id)
+          : Promise.resolve({ data: [] as string[], error: null }),
+        userData.user?.id
+          ? listBlockedUsers(supabase, userData.user.id)
+          : Promise.resolve({ data: [] as DbBlockedUser[], error: null }),
+        userData.user?.id
+          ? supabase
+              .from("source_ratings")
+              .select("id, user_id, source_name, rating")
+              .eq("user_id", userData.user.id)
+          : Promise.resolve({ data: [] as DbSourceRating[], error: null }),
+      ]);
 
       if (!isCurrentRequest()) {
         return;
       }
 
-      const likes = (likesData ?? []) as DbLike[];
-      const comments = (commentsData ?? []) as DbComment[];
-      const commentReactions = (commentReactionsData ?? []) as DbCommentReaction[];
-      const commentReplies = (commentRepliesData ?? []) as DbCommentReply[];
-      const profiles = (profilesData ?? []) as DbProfile[];
-      const sourceRatings = (sourceRatingsData ?? []) as DbSourceRating[];
-      const blockedIds = new Set((blockedUsersData ?? []) as string[]);
+      const readSettledData = <T,>(
+        label: string,
+        result: PromiseSettledResult<{ data: T; error: { message?: string } | null }>
+      ): T => {
+        if (result.status === "rejected") {
+          console.error(`Error loading ${label}:`, result.reason);
+          return ([] as unknown) as T;
+        }
+
+        if (result.value.error) {
+          console.error(`Error loading ${label}:`, result.value.error);
+        }
+
+        return result.value.data;
+      };
+
+      const likes = (readSettledData("likes", likesResult) ?? []) as DbLike[];
+      const comments = (readSettledData("comments", commentsResult) ?? []) as DbComment[];
+      const commentReactions = (readSettledData(
+        "comment reactions",
+        commentReactionsResult
+      ) ?? []) as DbCommentReaction[];
+      const commentReplies = (readSettledData(
+        "comment replies",
+        commentRepliesResult
+      ) ?? []) as DbCommentReply[];
+      const profiles = (readSettledData("profiles", profilesResult) ?? []) as DbProfile[];
+      const sourceRatings = (readSettledData(
+        "source ratings",
+        sourceRatingsResult
+      ) ?? []) as DbSourceRating[];
+      const blockedUsersData = (readSettledData(
+        "blocked users",
+        blockedUsersResult
+      ) ?? []) as string[];
+      const ownBlockedUsersData = (readSettledData(
+        "own blocked users",
+        ownBlockedUsersResult
+      ) ?? []) as DbBlockedUser[];
+      const savedArticlesData = (readSettledData(
+        "saved articles",
+        savedArticlesResult
+      ) ?? []) as DbSavedArticle[];
+      const blockedIds = new Set(blockedUsersData);
       const savedArticleIds = new Set(
-        ((savedArticlesData ?? []) as DbSavedArticle[]).map(
-          (savedArticle) => savedArticle.article_id
-        )
+        savedArticlesData.map((savedArticle) => savedArticle.article_id)
       );
       const avatarLookup = new Map(profiles.map((profile) => [profile.id, profile.avatar_url]));
       const usernameLookup = new Map(profiles.map((profile) => [profile.id, profile.username]));
@@ -959,9 +987,7 @@ export default function Home() {
       });
 
       setBlockedUserIds(
-        ((ownBlockedUsersData ?? []) as DbBlockedUser[]).map(
-          (blockedUser) => blockedUser.blocked_id
-        )
+        ownBlockedUsersData.map((blockedUser) => blockedUser.blocked_id)
       );
       setLikedSources(
         sourceRatings
@@ -980,6 +1006,7 @@ export default function Home() {
         const nextArticles =
           replace ? mergedArticles : mergeArticlesByIdentity(prev, mergedArticles);
         console.log("ARTICLES USED", nextArticles);
+        console.log("TRENDING FINAL COUNT", nextArticles.length);
         return nextArticles;
       });
       if (replace) {

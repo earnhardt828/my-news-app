@@ -9,6 +9,10 @@ type ProviderArticle = {
   urlToImage?: string | null;
   thumbnail?: string | null;
   media?: string | { url?: string | null } | null;
+  enclosure?: {
+    url?: string | null;
+  } | null;
+  ogImage?: string | null;
   publishedAt?: string | null;
   pubDate?: string | null;
   source?: {
@@ -315,14 +319,18 @@ function getProviderImage(raw: ProviderArticle) {
       : raw.media && typeof raw.media === "object"
         ? raw.media.url ?? null
         : null;
+  const enclosureUrl =
+    raw.enclosure && typeof raw.enclosure === "object" ? raw.enclosure.url ?? null : null;
 
   return (
     raw.urlToImage ||
     raw.imageUrl ||
     raw.image ||
     raw.image_url ||
+    enclosureUrl ||
     mediaUrl ||
     raw.thumbnail ||
+    raw.ogImage ||
     null
   );
 }
@@ -506,6 +514,10 @@ function dedupeArticles(articles: NormalizedArticle[]) {
   });
 }
 
+function isFallbackArticle(article: NormalizedArticle) {
+  return article.url?.includes("graffiti.app/fallback") ?? false;
+}
+
 function sortArticlesForMode(
   articles: NormalizedArticle[],
   params: Pick<ProviderFetchParams, "mode" | "query">
@@ -682,6 +694,8 @@ async function fetchNewsApiArticles(params: ProviderFetchParams): Promise<Provid
     return [];
   });
 
+  console.log("NEWSAPI REQUEST COUNT", requests.length);
+  console.log("NORMALIZED COUNT", normalizedArticles.length);
   console.log("NORMALIZED ARTICLE SAMPLE", normalizedArticles[0] ?? null);
 
   return {
@@ -896,21 +910,30 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
     .map((match, index) => {
       const block = match[0];
       const description = extractXmlTag(block, "description");
+      const mediaContentUrl = extractXmlAttr(block, "media:content", "url");
+      const enclosureUrl = extractXmlAttr(block, "enclosure", "url");
+      const mediaThumbnailUrl = extractXmlAttr(block, "media:thumbnail", "url");
+      const descriptionImageUrl = extractImageFromDescription(description) || null;
       const mediaUrl =
-        extractXmlAttr(block, "media:content", "url") ||
-        extractXmlAttr(block, "media:thumbnail", "url") ||
-        extractXmlAttr(block, "enclosure", "url") ||
-        extractImageFromDescription(description) ||
+        mediaContentUrl || enclosureUrl || mediaThumbnailUrl || descriptionImageUrl || null;
+      const contentEncoded = extractXmlTag(block, "content:encoded");
+      const ogImage =
+        contentEncoded.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
+        description.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
         null;
 
       return buildNormalizedArticle(
         {
           title: stripHtml(extractXmlTag(block, "title")),
           description: stripHtml(description),
-          content: stripHtml(extractXmlTag(block, "content:encoded") || description),
+          content: stripHtml(contentEncoded || description),
           url: extractXmlTag(block, "link"),
           publishedAt: extractXmlTag(block, "pubDate"),
           media: mediaUrl,
+          enclosure: enclosureUrl ? { url: enclosureUrl } : null,
+          thumbnail: mediaThumbnailUrl,
+          imageUrl: descriptionImageUrl,
+          ogImage,
           category: stripHtml(extractXmlTag(block, "category")) || fallbackFeed.category,
           source_name: fallbackFeed.source,
         },
@@ -1008,18 +1031,33 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     console.error("News provider pipeline error:", result.reason);
     return [];
   });
+  console.log("RAW PROVIDER COUNT", combined.length);
 
   const deduped = dedupeArticles(combined);
   const sorted = sortArticlesForMode(deduped, params);
-  const sliced = sorted.slice(0, params.pageSize);
+  const realArticles = sorted.filter((article) => !isFallbackArticle(article));
+  const realSliced = realArticles.slice(0, params.pageSize);
   const hasMore = providerResponses.some(
     (result) => result.status === "fulfilled" && result.value.hasMore
-  ) || sorted.length > params.pageSize;
+  ) || realArticles.length > params.pageSize;
+  const fallbackUsed = realArticles.length === 0;
+
+  console.log("REAL ARTICLES COUNT", realArticles.length);
+  console.log("FALLBACK USED", fallbackUsed);
+  console.log(
+    "FIRST 5 IMAGE URLS",
+    realArticles.slice(0, 5).map((article) => ({
+      title: article.title,
+      image: article.image,
+      imageUrl: article.imageUrl,
+      urlToImage: article.urlToImage,
+    }))
+  );
 
   const payload =
-    sliced.length > 0
+    realSliced.length > 0
       ? {
-          articles: sliced,
+          articles: realSliced,
           nextPage: hasMore ? params.page + 1 : null,
           hasMore,
           page: params.page,
