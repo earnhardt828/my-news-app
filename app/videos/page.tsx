@@ -5,7 +5,6 @@ import Image from "next/image";
 import { apiFetch } from "../../lib/api-base";
 import ShareButton from "../components/share-button";
 import SourceBadge from "../components/source-badge";
-import { VIDEO_CATEGORIES, getCategoryLabel } from "../../lib/categories";
 import {
   buildVideoEmbedUrl,
   initialVideos,
@@ -26,22 +25,8 @@ const actionIconProps = {
   "aria-hidden": true,
 };
 
-function rankVideos(
-  videos: VideoItem[],
-  options: { prioritizeRecency?: boolean } = {}
-) {
-  const { prioritizeRecency = false } = options;
-
+function rankVideos(videos: VideoItem[]) {
   return [...videos].sort((a, b) => {
-    if (prioritizeRecency) {
-      const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-      const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-
-      if (timeB !== timeA) {
-        return timeB - timeA;
-      }
-    }
-
     const popularityDifference =
       (b.views ?? 0) - (a.views ?? 0) ||
       b.likes - a.likes ||
@@ -57,121 +42,39 @@ function rankVideos(
   });
 }
 
-function filterVideosLocally(videos: VideoItem[], searchTerm: string, category: string) {
-  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
-  const prioritizeRecency = category !== "Trending" || normalizedSearchTerm.length > 0;
-
-  return rankVideos(
-    videos.filter((video) => {
-      const matchesCategory =
-        category === "Trending" ||
-        video.category.toLowerCase() === category.toLowerCase();
-
-      if (!matchesCategory) {
-        return false;
-      }
-
-      if (!normalizedSearchTerm) {
-        return true;
-      }
-
-      const haystack = `${video.title} ${video.creator} ${video.category}`.toLowerCase();
-        return haystack.includes(normalizedSearchTerm);
-    }),
-    { prioritizeRecency }
-  );
-}
-
 export default function VideosPage() {
-  const [baseVideos, setBaseVideos] = useState<VideoItem[]>(initialVideos);
   const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
   );
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [autoplayVideoId, setAutoplayVideoId] = useState<string | null>(null);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] =
-    useState<(typeof VIDEO_CATEGORIES)[number]>("Trending");
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const videoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const baseVideosRef = useRef<VideoItem[]>(initialVideos);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const hasLoadedOnceRef = useRef(false);
-  const debouncedSearchTerm = useMemo(() => searchTerm.trim(), [searchTerm]);
 
   useEffect(() => {
-    const isDefaultFeed =
-      selectedCategory === "Trending" && debouncedSearchTerm.length === 0;
-
     async function loadVideos() {
       const shouldBlockScreen = !hasLoadedOnceRef.current;
-      const prioritizeRecency =
-        selectedCategory !== "Trending" || debouncedSearchTerm.length > 0;
       setIsLoading(true);
 
       try {
-        const params = new URLSearchParams();
-
-        if (selectedCategory !== "Trending") {
-          params.set("category", selectedCategory);
-        }
-
-        if (debouncedSearchTerm) {
-          params.set("q", debouncedSearchTerm);
-        }
-
-        const response = await apiFetch(
-          `/api/videos${params.toString() ? `?${params.toString()}` : ""}`
-        );
+        const response = await apiFetch("/api/videos");
         const data = (await response.json()) as {
           videos?: VideoApiItem[];
           fallback?: boolean;
           message?: string;
         };
 
-        const normalizedVideos = rankVideos(normalizeVideoFeedItems(data.videos), {
-          prioritizeRecency,
-        });
-
-        if (isDefaultFeed) {
-          setBaseVideos(normalizedVideos);
-        }
-
-        if (data.fallback && !isDefaultFeed) {
-          setVideos(
-            filterVideosLocally(
-              baseVideosRef.current,
-              debouncedSearchTerm,
-              selectedCategory
-            )
-          );
-          setStatusMessage(
-            data.message ?? "Video search is using the current feed as a fallback."
-          );
-        } else {
-          setVideos(normalizedVideos);
-          setStatusMessage(data.fallback ? data.message ?? "" : "");
-        }
+        const normalizedVideos = rankVideos(normalizeVideoFeedItems(data.videos));
+        setVideos(normalizedVideos);
+        setStatusMessage(data.fallback ? data.message ?? "" : "");
       } catch (error) {
         console.error("Error loading video feed:", error);
-        const fallbackVideos = isDefaultFeed
-          ? rankVideos(initialVideos)
-          : filterVideosLocally(
-              baseVideosRef.current,
-              debouncedSearchTerm,
-              selectedCategory
-            );
-
-        if (isDefaultFeed) {
-          setBaseVideos(fallbackVideos);
-        }
-
-        setVideos(fallbackVideos);
-        setStatusMessage("Could not load channel feed results, so the current video feed is shown instead.");
+        setVideos(rankVideos(initialVideos));
+        setStatusMessage("Could not load live videos, so the current feed is shown instead.");
       } finally {
         setIsLoading(false);
         if (shouldBlockScreen) {
@@ -182,47 +85,7 @@ export default function VideosPage() {
     }
 
     void loadVideos();
-  }, [debouncedSearchTerm, selectedCategory]);
-
-  useEffect(() => {
-    baseVideosRef.current = baseVideos;
-  }, [baseVideos]);
-
-  useEffect(() => {
-    if (isSearchOpen) {
-      searchInputRef.current?.focus();
-    }
-  }, [isSearchOpen]);
-
-  useEffect(() => {
-    const handleToggleVideoSearch = () => {
-      setIsSearchOpen((current) => {
-        if (current) {
-          setSearchTerm("");
-        }
-
-        return !current;
-      });
-    };
-
-    window.addEventListener("reflekt:toggle-video-search", handleToggleVideoSearch);
-
-    return () => {
-      window.removeEventListener("reflekt:toggle-video-search", handleToggleVideoSearch);
-    };
   }, []);
-
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("reflekt:video-search-state", { detail: isSearchOpen })
-    );
-
-    return () => {
-      window.dispatchEvent(
-        new CustomEvent("reflekt:video-search-state", { detail: false })
-      );
-    };
-  }, [isSearchOpen]);
 
   useEffect(() => {
     const playableVideos = videos.filter(
@@ -305,7 +168,6 @@ export default function VideosPage() {
           : video
       );
 
-    setBaseVideos((prev) => updateVideos(prev));
     setVideos((prev) =>
       updateVideos(prev)
     );
@@ -317,7 +179,6 @@ export default function VideosPage() {
         video.id === videoId ? { ...video, saved: !video.saved } : video
       );
 
-    setBaseVideos((prev) => updateVideos(prev));
     setVideos((prev) =>
       updateVideos(prev)
     );
@@ -325,46 +186,6 @@ export default function VideosPage() {
 
   return (
     <section className="reels-shell videos-page-shell">
-      <div className="videos-toolbar">
-        {isSearchOpen ? (
-          <label className="search-input-shell videos-search-shell" htmlFor="videos-search-input">
-            <span className="search-input-icon" aria-hidden="true">
-              ⌕
-            </span>
-            <input
-              ref={searchInputRef}
-              id="videos-search-input"
-              className="search-input search-input-with-icon"
-              type="search"
-              placeholder="Search videos"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-          </label>
-        ) : null}
-
-        <div className="videos-category-tabs" role="tablist" aria-label="Video categories">
-          {VIDEO_CATEGORIES.map((category) => (
-            <button
-              key={category}
-              type="button"
-              role="tab"
-              aria-selected={selectedCategory === category}
-              className={`videos-category-tab ${
-                selectedCategory === category ? "videos-category-tab-active" : ""
-              }`}
-              onClick={() => {
-                setSelectedCategory(category);
-                setActiveVideoId(null);
-                setActiveCommentsVideoId(null);
-              }}
-            >
-              {category === "Trending" ? "Trending 📈" : getCategoryLabel(category)}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
       {isLoading && hasLoadedOnce ? (
         <div className="muted reels-inline-status">Refreshing videos...</div>

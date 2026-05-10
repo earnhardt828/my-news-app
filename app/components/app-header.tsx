@@ -95,7 +95,6 @@ export default function AppHeader() {
   const [articleHeaderSource, setArticleHeaderSource] = useState("Article");
   const [articleHeaderUrl, setArticleHeaderUrl] = useState<string | null>(null);
   const [videoHeaderSource, setVideoHeaderSource] = useState("Video");
-  const [isVideoSearchOpen, setIsVideoSearchOpen] = useState(false);
   const [sourceHeaderTitle, setSourceHeaderTitle] = useState<string | null>(null);
   const [userHeaderTitle, setUserHeaderTitle] = useState<string | null>(null);
   const sourcePathSegments = pathname.split("/");
@@ -206,29 +205,6 @@ export default function AppHeader() {
     return () => {
       window.removeEventListener("reflekt:user-title", handleUserTitle as EventListener);
       setUserHeaderTitle(null);
-    };
-  }, [pathname]);
-
-  useEffect(() => {
-    if (pathname !== "/videos") {
-      return;
-    }
-
-    const handleVideoSearchState = (event: Event) => {
-      const customEvent = event as CustomEvent<boolean>;
-      setIsVideoSearchOpen(Boolean(customEvent.detail));
-    };
-
-    window.addEventListener(
-      "reflekt:video-search-state",
-      handleVideoSearchState as EventListener
-    );
-
-    return () => {
-      window.removeEventListener(
-        "reflekt:video-search-state",
-        handleVideoSearchState as EventListener
-      );
     };
   }, [pathname]);
 
@@ -729,21 +705,10 @@ export default function AppHeader() {
   if (pathname !== "/") {
     if (pathname === "/videos") {
       return (
-        <div className="app-header-title-wrap app-header-title-wrap-center">
+        <div className="app-header-title-wrap app-header-title-wrap-center app-header-videos-wrap">
           <span className="app-header-side-spacer" aria-hidden="true" />
-          <h1 className="brand-title">Videos</h1>
-          <button
-            type="button"
-            className="header-icon-button app-header-search-button"
-            aria-label={isVideoSearchOpen ? "Close video search" : "Open video search"}
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent("reflekt:toggle-video-search"));
-            }}
-          >
-            <span className="header-icon-glyph header-icon-glyph-large" aria-hidden="true">
-              {isVideoSearchOpen ? "✕" : "⌕"}
-            </span>
-          </button>
+          <h1 className="brand-title app-header-videos-title">Videos</h1>
+          <span className="app-header-side-spacer" aria-hidden="true" />
         </div>
       );
     }

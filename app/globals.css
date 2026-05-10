@@ -228,6 +228,17 @@ input {
   gap: 12px;
 }
 
+.app-header-videos-wrap {
+  position: relative;
+  z-index: 20;
+  padding-top: env(safe-area-inset-top);
+  background: transparent;
+}
+
+.app-header-videos-title {
+  color: white;
+}
+
 .app-header-side-spacer {
   width: 44px;
   height: 44px;
@@ -3654,48 +3665,9 @@ input {
 }
 
 .videos-page-shell {
-  grid-template-rows: auto auto 1fr;
-  min-height: calc(100svh - 148px);
-}
-
-.videos-toolbar {
-  display: grid;
-  gap: 6px;
-  padding: 0 20px;
-}
-
-.videos-search-shell {
-  width: 100%;
-}
-
-.videos-category-tabs {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.videos-category-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.videos-category-tab {
-  flex: 0 0 auto;
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--button-secondary-bg);
-  color: var(--foreground);
-  font-weight: 700;
-}
-
-.videos-category-tab-active {
-  background: color-mix(in srgb, var(--accent) 18%, var(--button-secondary-bg));
-  color: var(--accent-strong);
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  grid-template-rows: auto 1fr;
+  min-height: 100svh;
+  margin-top: calc(-1 * (var(--header-height, 72px) + env(safe-area-inset-top)));
 }
 
 .reels-status {
@@ -3708,12 +3680,14 @@ input {
 }
 
 .reels-feed {
-  height: calc(100svh - 236px);
+  height: 100svh;
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  padding-top: calc(var(--header-height, 72px) + env(safe-area-inset-top));
+  padding-bottom: calc(92px + env(safe-area-inset-bottom));
 }
 
 .reels-feed::-webkit-scrollbar {
@@ -3722,7 +3696,7 @@ input {
 
 .reel-card {
   position: relative;
-  min-height: calc(100svh - 236px);
+  min-height: 100svh;
   scroll-snap-align: start;
   scroll-snap-stop: always;
   background: #06080f;
@@ -3793,7 +3767,7 @@ input {
   position: absolute;
   left: 18px;
   right: 92px;
-  bottom: calc(104px + env(safe-area-inset-bottom));
+  bottom: calc(112px + env(safe-area-inset-bottom));
   z-index: 2;
   display: grid;
   gap: 8px;
