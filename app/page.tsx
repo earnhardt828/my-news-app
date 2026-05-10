@@ -2498,8 +2498,11 @@ export default function Home() {
           <div className="trending-source-row">
             <button
               type="button"
-              className="source-trigger trending-source-button"
-              onClick={() => openSourcePreferenceSheet(article.source)}
+              className="source-trigger source-trigger-tight trending-source-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                openSourcePreferenceSheet(article.source);
+              }}
             >
               <div className="trending-source-brand">
                 <SourceBadge sourceName={article.source} />

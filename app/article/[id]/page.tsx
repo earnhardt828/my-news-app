@@ -1985,8 +1985,9 @@ export default function ArticleDetailPage() {
           <div className="article-detail-kicker-row">
             <button
               type="button"
-              className="source-trigger article-detail-source-wrap"
-              onClick={() => {
+              className="source-trigger source-trigger-tight article-detail-source-wrap"
+              onClick={(event) => {
+                event.stopPropagation();
                 setIsSourceSheetOpen(true);
                 setSourceRatingStatus(null);
               }}

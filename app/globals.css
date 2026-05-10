@@ -608,6 +608,13 @@ input {
   transform: none;
 }
 
+.source-trigger-tight {
+  width: auto;
+  max-width: fit-content;
+  display: inline-flex;
+  align-self: flex-start;
+}
+
 .trending-tabs-wrap {
   display: flex;
   justify-content: center;

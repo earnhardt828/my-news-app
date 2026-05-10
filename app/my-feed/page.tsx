@@ -338,8 +338,9 @@ export default function MyFeed() {
                   <article className="news-card">
                     <button
                       type="button"
-                      className="source-trigger my-feed-source-trigger"
-                      onClick={() => {
+                      className="source-trigger source-trigger-tight my-feed-source-trigger"
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setActiveSourceName(article.source);
                         setSourcePreferenceStatus(null);
                       }}
