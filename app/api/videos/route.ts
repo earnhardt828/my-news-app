@@ -221,7 +221,23 @@ function inferVideoCategory(title: string, creator: string, fallbackCategory?: s
   return "Trending";
 }
 
-function inferVideoOrientation(width?: number | null, height?: number | null) {
+function inferVideoOrientation(
+  width?: number | null,
+  height?: number | null,
+  options?: {
+    title?: string | null;
+    thumbnailUrl?: string | null;
+    watchUrl?: string | null;
+  }
+) {
+  const orientationHint = `${options?.title ?? ""} ${options?.thumbnailUrl ?? ""} ${
+    options?.watchUrl ?? ""
+  }`.toLowerCase();
+
+  if (/(^|\W)(shorts?|reels?|tiktok)(\W|$)/.test(orientationHint)) {
+    return "vertical";
+  }
+
   if (width && height) {
     return height > width ? "vertical" : "horizontal";
   }
@@ -314,7 +330,12 @@ function filterAndSortVideos(
       category: inferredCategory,
       orientation: inferVideoOrientation(
         entry.thumbnailWidth,
-        entry.thumbnailHeight
+        entry.thumbnailHeight,
+        {
+          title: entry.title,
+          thumbnailUrl: entry.thumbnailUrl,
+          watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+        }
       ),
       views: 0,
       likes: 0,

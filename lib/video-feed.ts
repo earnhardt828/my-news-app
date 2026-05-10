@@ -185,8 +185,21 @@ export function buildVideoEmbedUrl(youtubeId: string, autoplay: boolean) {
 
 export function inferVideoOrientation(
   width?: number | null,
-  height?: number | null
+  height?: number | null,
+  options?: {
+    title?: string | null;
+    watchUrl?: string | null;
+    thumbnailUrl?: string | null;
+  }
 ) {
+  const orientationHint = `${options?.title ?? ""} ${options?.watchUrl ?? ""} ${
+    options?.thumbnailUrl ?? ""
+  }`.toLowerCase();
+
+  if (/(^|\W)(shorts?|reels?|tiktok)(\W|$)/.test(orientationHint)) {
+    return "vertical";
+  }
+
   if (width && height) {
     return height > width ? "vertical" : "horizontal";
   }
@@ -201,11 +214,21 @@ export function normalizeVideoFeedItems(videos?: VideoApiItem[]) {
     "video-card-theme-sunset",
   ];
 
-  return (videos ?? initialVideos).map((video, index) => ({
-    ...video,
-    title: cleanVideoTitle(video.title),
-    saved: video.saved ?? false,
-    liked: video.liked ?? false,
-    theme: video.theme ?? themes[index % themes.length],
-  }));
+  return (videos ?? initialVideos).map((video, index) => {
+    const inferredOrientation = inferVideoOrientation(undefined, undefined, {
+      title: video.title,
+      watchUrl: video.watchUrl,
+      thumbnailUrl: video.thumbnailUrl,
+    });
+
+    return {
+      ...video,
+      title: cleanVideoTitle(video.title),
+      orientation:
+        inferredOrientation === "vertical" ? "vertical" : video.orientation,
+      saved: video.saved ?? false,
+      liked: video.liked ?? false,
+      theme: video.theme ?? themes[index % themes.length],
+    };
+  });
 }

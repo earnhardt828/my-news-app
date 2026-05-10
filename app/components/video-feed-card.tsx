@@ -7,6 +7,7 @@ import SourceBadge from "./source-badge";
 import {
   buildVideoEmbedUrl,
   formatVideoPublishedDate,
+  inferVideoOrientation,
   type VideoItem,
 } from "../../lib/video-feed";
 
@@ -50,9 +51,20 @@ export default function VideoFeedCard({
   variant = "default",
 }: VideoFeedCardProps) {
   const isArticleVariant = variant === "article";
-  const [resolvedOrientation, setResolvedOrientation] = useState<
-    "vertical" | "horizontal"
-  >(video.orientation);
+  const defaultTrendingOrientation = inferVideoOrientation(undefined, undefined, {
+    title: video.title,
+    watchUrl: video.watchUrl,
+    thumbnailUrl: video.thumbnailUrl,
+  });
+  const baseOrientation =
+    defaultTrendingOrientation === "vertical" ? "vertical" : video.orientation;
+  const [probedOrientation, setProbedOrientation] = useState<{
+    thumbnailUrl: string | null;
+    value: "vertical" | "horizontal" | null;
+  }>({
+    thumbnailUrl: video.thumbnailUrl,
+    value: null,
+  });
 
   useEffect(() => {
     if (
@@ -67,16 +79,33 @@ export default function VideoFeedCard({
     const probeImage = new window.Image();
 
     probeImage.onload = () => {
-      if (probeImage.naturalHeight > probeImage.naturalWidth) {
-        setResolvedOrientation("vertical");
+      if (defaultTrendingOrientation === "vertical") {
+        setProbedOrientation({
+          thumbnailUrl: video.thumbnailUrl,
+          value: "vertical",
+        });
         return;
       }
 
-      setResolvedOrientation("horizontal");
+      if (probeImage.naturalHeight > probeImage.naturalWidth) {
+        setProbedOrientation({
+          thumbnailUrl: video.thumbnailUrl,
+          value: "vertical",
+        });
+        return;
+      }
+
+      setProbedOrientation({
+        thumbnailUrl: video.thumbnailUrl,
+        value: "horizontal",
+      });
     };
 
     probeImage.onerror = () => {
-      setResolvedOrientation(video.orientation);
+      setProbedOrientation({
+        thumbnailUrl: video.thumbnailUrl,
+        value: null,
+      });
     };
 
     probeImage.src = video.thumbnailUrl;
@@ -85,7 +114,17 @@ export default function VideoFeedCard({
       probeImage.onload = null;
       probeImage.onerror = null;
     };
-  }, [isArticleVariant, video.fallback, video.orientation, video.thumbnailUrl]);
+  }, [
+    defaultTrendingOrientation,
+    isArticleVariant,
+    video.fallback,
+    video.orientation,
+    video.thumbnailUrl,
+  ]);
+  const resolvedOrientation =
+    probedOrientation.thumbnailUrl === video.thumbnailUrl && probedOrientation.value
+      ? probedOrientation.value
+      : baseOrientation;
 
   const articleFrameClass =
     resolvedOrientation === "vertical"
