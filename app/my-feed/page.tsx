@@ -8,6 +8,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import ShareButton from "../components/share-button";
 import { apiFetch } from "../../lib/api-base";
+import {
+  getBestArticleImage,
+  shouldSuppressLowQualityArticleImage,
+} from "../../lib/article-images";
 import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
@@ -21,6 +25,11 @@ type FeedArticle = {
   category: string;
   time: string;
   image?: string | null;
+  imageUrl?: string | null;
+  urlToImage?: string | null;
+  mediaContent?: string | null;
+  enclosureUrl?: string | null;
+  thumbnail?: string | null;
   description?: string | null;
   url?: string | null;
   publishedAt?: string | null;
@@ -48,6 +57,7 @@ export default function MyFeed() {
   const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
   const [activeSourceName, setActiveSourceName] = useState<string | null>(null);
   const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
+  const [failedArticleImages, setFailedArticleImages] = useState<Record<string, boolean>>({});
   const [sourcePreferenceStatus, setSourcePreferenceStatus] = useState<{
     type: "success" | "error";
     text: string;
@@ -178,7 +188,7 @@ export default function MyFeed() {
         category: article.category,
         time: article.time,
         url: article.url ?? null,
-        image: article.image ?? null,
+        image: getBestArticleImage(article).src,
         published_at: article.publishedAt ?? null,
       },
       {
@@ -304,62 +314,124 @@ export default function MyFeed() {
         <div className="stack">
           {articles.map((article, index) => (
             <div key={article.id} className="stack">
-              <article className="news-card">
-                <button
-                  type="button"
-                  className="source-trigger my-feed-source-trigger"
-                  onClick={() => {
-                    setActiveSourceName(article.source);
-                    setSourcePreferenceStatus(null);
-                  }}
-                >
-                  <div className="trending-source-brand">
-                    <SourceBadge sourceName={article.source} />
-                    <span className="trending-source-name">{article.source}</span>
-                  </div>
-                </button>
-                <Link href={`/article/${article.id}`} className="article-link">
-                  {article.image ? (
-                    <img
-                      src={article.image}
-                      alt={cleanDisplayText(article.title)}
-                      className="article-image"
-                    />
-                  ) : null}
+              {(() => {
+                const selectedImage = getBestArticleImage(article);
+                const imageSrc = selectedImage.src;
+                const imageFailureKey = imageSrc
+                  ? `${article.id}:${imageSrc}`
+                  : `${article.id}:none`;
+                const shouldShowImage =
+                  Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
 
-                  <div className="news-card-header">
-                    <div className="news-meta">
-                      <span className="chip chip-accent">{getCategoryLabel(article.category)}</span>
-                      <span>{article.publishedAt ?? article.time}</span>
+                return (
+                  <article className="news-card">
+                    <button
+                      type="button"
+                      className="source-trigger my-feed-source-trigger"
+                      onClick={() => {
+                        setActiveSourceName(article.source);
+                        setSourcePreferenceStatus(null);
+                      }}
+                    >
+                      <div className="trending-source-brand">
+                        <SourceBadge sourceName={article.source} />
+                        <span className="trending-source-name">{article.source}</span>
+                      </div>
+                    </button>
+                    <Link href={`/article/${article.id}`} className="article-link">
+                      <div
+                        className={`news-card-body ${
+                          shouldShowImage
+                            ? "news-card-body-with-thumb"
+                            : "news-card-body-text-only"
+                        }`}
+                      >
+                        <div className="news-card-copy">
+                          <div className="news-card-header">
+                            <div className="news-meta">
+                              <span className="chip chip-accent">
+                                {getCategoryLabel(article.category)}
+                              </span>
+                              <span>{article.publishedAt ?? article.time}</span>
+                            </div>
+                          </div>
+
+                          <h3 className="article-title">{cleanDisplayText(article.title)}</h3>
+                        </div>
+
+                        {shouldShowImage ? (
+                          <div className="article-thumb-shell">
+                            <img
+                              src={imageSrc as string}
+                              alt={cleanDisplayText(article.title)}
+                              className="article-thumb-image"
+                              loading="lazy"
+                              decoding="async"
+                              onLoad={(event) => {
+                                const target = event.currentTarget;
+
+                                if (
+                                  shouldSuppressLowQualityArticleImage(
+                                    selectedImage.source,
+                                    target.naturalWidth,
+                                    target.naturalHeight
+                                  )
+                                ) {
+                                  setFailedArticleImages((prev) => {
+                                    if (prev[imageFailureKey]) {
+                                      return prev;
+                                    }
+
+                                    return {
+                                      ...prev,
+                                      [imageFailureKey]: true,
+                                    };
+                                  });
+                                }
+                              }}
+                              onError={() => {
+                                setFailedArticleImages((prev) => {
+                                  if (prev[imageFailureKey]) {
+                                    return prev;
+                                  }
+
+                                  return {
+                                    ...prev,
+                                    [imageFailureKey]: true,
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    </Link>
+
+                    <div className="engagement-row">
+                      <ArticleReaderButton
+                        title={cleanDisplayText(article.title)}
+                        url={article.url}
+                      />
+                      <ShareButton
+                        path={`/article/${article.id}`}
+                        title={cleanDisplayText(article.title)}
+                        url={article.url}
+                      />
+                      <button
+                        className="button button-secondary"
+                        onClick={() => handleToggleSaveArticle(article)}
+                        disabled={activeSaveArticleId === article.id}
+                      >
+                        {activeSaveArticleId === article.id
+                          ? "Saving..."
+                          : article.saved
+                            ? "Unsave"
+                            : "Save"}
+                      </button>
                     </div>
-                  </div>
-
-                  <h3 className="article-title">{cleanDisplayText(article.title)}</h3>
-                </Link>
-
-                <div className="engagement-row">
-                  <ArticleReaderButton
-                    title={cleanDisplayText(article.title)}
-                    url={article.url}
-                  />
-                  <ShareButton
-                    path={`/article/${article.id}`}
-                    title={cleanDisplayText(article.title)}
-                    url={article.url}
-                  />
-                  <button
-                    className="button button-secondary"
-                    onClick={() => handleToggleSaveArticle(article)}
-                    disabled={activeSaveArticleId === article.id}
-                  >
-                    {activeSaveArticleId === article.id
-                      ? "Saving..."
-                      : article.saved
-                        ? "Unsave"
-                        : "Save"}
-                  </button>
-                </div>
-              </article>
+                  </article>
+                );
+              })()}
 
               {(index + 1) % 3 === 0 ? (
                 <AdSlot

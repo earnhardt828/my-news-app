@@ -2389,43 +2389,63 @@ export default function Home() {
           </button>
         </div>
         <Link href={`/article/${article.id}`} className="article-link">
-          <div className="news-card-body">
-            <div className="trending-title-row">
-              <h3 className="trending-article-title">
-                {cleanDisplayText(article.title)}
-              </h3>
-            </div>
+          <div
+            className={`news-card-body ${
+              shouldShowImage ? "news-card-body-with-thumb" : "news-card-body-text-only"
+            }`}
+          >
+            <div className="news-card-copy">
+              <div className="trending-title-row">
+                <h3 className="trending-article-title">
+                  {cleanDisplayText(article.title)}
+                </h3>
+              </div>
 
-            <div className="news-card-header">
-              <div className="trending-meta-row">
-                <span className="trending-published-date">
-                  {options?.showFreshnessTime
-                    ? formatFreshnessTime(article.publishedAt, article.time)
-                    : formatPublishedDate(article.publishedAt, article.time)}
-                </span>
-                <span className="chip chip-accent trending-category-pill">
-                  {getCategoryLabel(article.category)}
-                </span>
+              <div className="news-card-header">
+                <div className="trending-meta-row">
+                  <span className="trending-published-date">
+                    {options?.showFreshnessTime
+                      ? formatFreshnessTime(article.publishedAt, article.time)
+                      : formatPublishedDate(article.publishedAt, article.time)}
+                  </span>
+                  <span className="chip chip-accent trending-category-pill">
+                    {getCategoryLabel(article.category)}
+                  </span>
+                </div>
               </div>
             </div>
 
             {shouldShowImage ? (
-              <img
-                src={imageSrc as string}
-                alt={cleanDisplayText(article.title)}
-                className="article-image"
-                loading="lazy"
-                decoding="async"
-                onLoad={(event) => {
-                  const target = event.currentTarget;
+              <div className="article-thumb-shell">
+                <img
+                  src={imageSrc as string}
+                  alt={cleanDisplayText(article.title)}
+                  className="article-thumb-image"
+                  loading="lazy"
+                  decoding="async"
+                  onLoad={(event) => {
+                    const target = event.currentTarget;
 
-                  if (
-                    shouldSuppressLowQualityArticleImage(
-                      selectedImage.source,
-                      target.naturalWidth,
-                      target.naturalHeight
-                    )
-                  ) {
+                    if (
+                      shouldSuppressLowQualityArticleImage(
+                        selectedImage.source,
+                        target.naturalWidth,
+                        target.naturalHeight
+                      )
+                    ) {
+                      setFailedArticleImages((prev) => {
+                        if (prev[imageFailureKey]) {
+                          return prev;
+                        }
+
+                        return {
+                          ...prev,
+                          [imageFailureKey]: true,
+                        };
+                      });
+                    }
+                  }}
+                  onError={() => {
                     setFailedArticleImages((prev) => {
                       if (prev[imageFailureKey]) {
                         return prev;
@@ -2436,21 +2456,9 @@ export default function Home() {
                         [imageFailureKey]: true,
                       };
                     });
-                  }
-                }}
-                onError={() => {
-                  setFailedArticleImages((prev) => {
-                    if (prev[imageFailureKey]) {
-                      return prev;
-                    }
-
-                    return {
-                      ...prev,
-                      [imageFailureKey]: true,
-                    };
-                  });
-                }}
-              />
+                  }}
+                />
+              </div>
             ) : null}
           </div>
         </Link>

@@ -376,6 +376,7 @@ export default function Search() {
   const [searchDateFilter, setSearchDateFilter] = useState<SearchDateFilter>("recent");
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
+  const [failedSearchImages, setFailedSearchImages] = useState<Record<string, boolean>>({});
   const loadMoreSearchSentinelRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextSearchPageRef = useRef(false);
 
@@ -884,59 +885,83 @@ export default function Search() {
           ) : (
             <div className="search-results-list">
               {filteredResults.map((article) => (
-                <Link
-                  key={article.id}
-                  href={`/article/${article.id}`}
-                  className="section-card search-result-card"
-                >
-                  <div className="search-result-layout">
-                    <div className="search-result-copy">
-                      <div className="search-result-source-row">
-                        <div className="trending-source-brand">
-                          <SourceBadge sourceName={article.source} />
-                          <span className="trending-source-name">{article.source}</span>
+                (() => {
+                  const imageSrc = getSearchResultImage(article);
+                  const imageFailureKey = imageSrc
+                    ? `${article.id}:${imageSrc}`
+                    : `${article.id}:none`;
+                  const shouldShowImage =
+                    Boolean(imageSrc) && !failedSearchImages[imageFailureKey];
+
+                  return (
+                    <Link
+                      key={article.id}
+                      href={`/article/${article.id}`}
+                      className="section-card search-result-card"
+                    >
+                      <div className="search-result-layout">
+                        <div className="search-result-copy">
+                          <div className="search-result-source-row">
+                            <div className="trending-source-brand">
+                              <SourceBadge sourceName={article.source} />
+                              <span className="trending-source-name">{article.source}</span>
+                            </div>
+                            <span className="chip chip-accent">
+                              {getCategoryLabel(article.category)}
+                            </span>
+                          </div>
+
+                          <h3 className="search-result-title">
+                            {cleanDisplayText(article.title)}
+                          </h3>
+
+                          <div className="search-result-meta">
+                            <span className="trending-published-date">
+                              {formatSearchDate(article.publishedAt, article.time)}
+                            </span>
+                            {formatSearchDateDetail(article.publishedAt) ? (
+                              <span className="search-result-date-detail">
+                                {formatSearchDateDetail(article.publishedAt)}
+                              </span>
+                            ) : null}
+                            {!isArticleWithinDays(article, 30) ? (
+                              <span className="chip search-result-age-chip">Older</span>
+                            ) : null}
+                          </div>
+
+                          {article.description ? (
+                            <p className="search-result-description">
+                              {cleanDisplayText(article.description)}
+                            </p>
+                          ) : null}
                         </div>
-                        <span className="chip chip-accent">{getCategoryLabel(article.category)}</span>
-                      </div>
+                        {shouldShowImage ? (
+                          <div className="search-result-image-shell">
+                            <img
+                              src={imageSrc as string}
+                              alt={cleanDisplayText(article.title)}
+                              className="search-result-image"
+                              loading="lazy"
+                              decoding="async"
+                              onError={() => {
+                                setFailedSearchImages((prev) => {
+                                  if (prev[imageFailureKey]) {
+                                    return prev;
+                                  }
 
-                      <h3 className="search-result-title">
-                        {cleanDisplayText(article.title)}
-                      </h3>
-
-                      <div className="search-result-meta">
-                        <span className="trending-published-date">
-                          {formatSearchDate(article.publishedAt, article.time)}
-                        </span>
-                        {formatSearchDateDetail(article.publishedAt) ? (
-                          <span className="search-result-date-detail">
-                            {formatSearchDateDetail(article.publishedAt)}
-                          </span>
+                                  return {
+                                    ...prev,
+                                    [imageFailureKey]: true,
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
                         ) : null}
-                        {!isArticleWithinDays(article, 30) ? (
-                          <span className="chip search-result-age-chip">Older</span>
-                        ) : null}
                       </div>
-
-                      {article.description ? (
-                        <p className="search-result-description">
-                          {cleanDisplayText(article.description)}
-                        </p>
-                      ) : null}
-                    </div>
-                    {getSearchResultImage(article) ? (
-                      <div className="search-result-image-shell">
-                        <Image
-                          src={getSearchResultImage(article) as string}
-                          alt={cleanDisplayText(article.title)}
-                          width={112}
-                          height={112}
-                          unoptimized
-                          className="search-result-image"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </Link>
+                    </Link>
+                  );
+                })()
               ))}
               {isLoadingMoreSearchResults ? (
                 <div className="search-inline-loading" role="status" aria-live="polite">
