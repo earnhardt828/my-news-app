@@ -91,6 +91,10 @@ export default function VideoFeedCard({
     resolvedOrientation === "vertical"
       ? "video-frame-article-vertical"
       : "video-frame-article-horizontal";
+  const articleOrientationClass =
+    resolvedOrientation === "vertical"
+      ? "video-card-article-vertical"
+      : "video-card-article-horizontal";
 
   if (isArticleVariant) {
     return (
@@ -98,7 +102,7 @@ export default function VideoFeedCard({
         id={`video-${video.id}`}
         className={`video-card video-card-article ${
           rankBadgeLabel ? "news-card-has-rank" : ""
-        } ${className}`.trim()}
+        } ${articleOrientationClass} ${className}`.trim()}
       >
         {rankBadgeLabel ? (
           <span className="chip trending-rank-badge news-card-rank-badge">
