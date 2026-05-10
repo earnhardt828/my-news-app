@@ -1,3 +1,5 @@
+import { getBestArticleImage } from "../../../lib/article-images";
+
 type ProviderArticle = {
   title?: string | null;
   description?: string | null;
@@ -9,9 +11,11 @@ type ProviderArticle = {
   urlToImage?: string | null;
   thumbnail?: string | null;
   media?: string | { url?: string | null } | null;
+  mediaContent?: string | null;
   enclosure?: {
     url?: string | null;
   } | null;
+  enclosureUrl?: string | null;
   ogImage?: string | null;
   publishedAt?: string | null;
   pubDate?: string | null;
@@ -34,6 +38,9 @@ type NormalizedArticle = {
   image: string | null;
   imageUrl: string | null;
   urlToImage: string | null;
+  mediaContent: string | null;
+  enclosureUrl: string | null;
+  thumbnail: string | null;
   category: string;
   publishedAt: string | null;
   time: string;
@@ -314,25 +321,31 @@ function stripHtml(value: string | null | undefined) {
 
 function getProviderImage(raw: ProviderArticle) {
   const mediaUrl =
-    typeof raw.media === "string"
+    raw.mediaContent ||
+    (typeof raw.media === "string"
       ? raw.media
       : raw.media && typeof raw.media === "object"
         ? raw.media.url ?? null
-        : null;
+        : null);
   const enclosureUrl =
-    raw.enclosure && typeof raw.enclosure === "object" ? raw.enclosure.url ?? null : null;
+    raw.enclosureUrl ||
+    (raw.enclosure && typeof raw.enclosure === "object" ? raw.enclosure.url ?? null : null);
+  const thumbnail = raw.thumbnail ?? null;
+  const preferredImage = getBestArticleImage({
+    urlToImage: raw.urlToImage,
+    imageUrl: raw.imageUrl || raw.image_url || raw.ogImage || null,
+    image: raw.image,
+    mediaContent: mediaUrl,
+    enclosureUrl,
+    thumbnail,
+  });
 
-  return (
-    raw.urlToImage ||
-    raw.imageUrl ||
-    raw.image ||
-    raw.image_url ||
-    enclosureUrl ||
-    mediaUrl ||
-    raw.thumbnail ||
-    raw.ogImage ||
-    null
-  );
+  return {
+    src: preferredImage.src,
+    mediaContent: mediaUrl,
+    enclosureUrl,
+    thumbnail,
+  };
 }
 
 function getPublishedIso(
@@ -376,7 +389,7 @@ function buildNormalizedArticle(
       : typeof raw.category === "string" && raw.category.trim()
         ? raw.category.trim()
         : fallback.category;
-  const imageUrl = getProviderImage(raw);
+  const providerImage = getProviderImage(raw);
   const publishedAt = getPublishedIso(
     raw.publishedAt ?? raw.pubDate,
     fallback.fallbackPublishedOffsetHours ?? 0
@@ -391,9 +404,12 @@ function buildNormalizedArticle(
     source: sourceName,
     sourceName,
     url: normalizedUrl,
-    image: imageUrl,
-    imageUrl,
-    urlToImage: imageUrl,
+    image: providerImage.src,
+    imageUrl: providerImage.src,
+    urlToImage: providerImage.src,
+    mediaContent: providerImage.mediaContent,
+    enclosureUrl: providerImage.enclosureUrl,
+    thumbnail: providerImage.thumbnail,
     category,
     publishedAt,
     time: "Recent",

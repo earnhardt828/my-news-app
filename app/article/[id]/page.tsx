@@ -8,6 +8,10 @@ import ShareButton from "../../components/share-button";
 import SourceRatingSheet from "../../components/source-rating-sheet";
 import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
+import {
+  getBestArticleImage,
+  shouldSuppressLowQualityArticleImage,
+} from "../../../lib/article-images";
 import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { cleanDisplayText } from "../../../lib/display-text";
 import { ensureProfileRow } from "../../../lib/profile-store";
@@ -21,6 +25,11 @@ type ArticleRecord = {
   category: string;
   time: string;
   image?: string | null;
+  imageUrl?: string | null;
+  urlToImage?: string | null;
+  mediaContent?: string | null;
+  enclosureUrl?: string | null;
+  thumbnail?: string | null;
   description?: string | null;
   url?: string | null;
   publishedAt?: string | null;
@@ -689,6 +698,7 @@ export default function ArticleDetailPage() {
   const [compareArticles, setCompareArticles] = useState<ArticleRecord[]>([]);
   const [activeCompareIndex, setActiveCompareIndex] = useState(0);
   const [showCompareTutorial, setShowCompareTutorial] = useState(false);
+  const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isSavingSourceRating, setIsSavingSourceRating] = useState(false);
   const [sourceRatingStatus, setSourceRatingStatus] = useState<{
@@ -946,6 +956,14 @@ export default function ArticleDetailPage() {
                 storedBookmarkMetadata?.time?.trim() ||
                 (storedBookmarkMetadata?.published_at ? "Archived story" : "Stored story"),
               image:
+                storedCommentMetadata?.article_image?.trim() ||
+                storedBookmarkMetadata?.image?.trim() ||
+                null,
+              imageUrl:
+                storedCommentMetadata?.article_image?.trim() ||
+                storedBookmarkMetadata?.image?.trim() ||
+                null,
+              urlToImage:
                 storedCommentMetadata?.article_image?.trim() ||
                 storedBookmarkMetadata?.image?.trim() ||
                 null,
@@ -1316,7 +1334,7 @@ export default function ArticleDetailPage() {
         category: article.category,
         time: article.time,
         url: article.url ?? null,
-        image: article.image ?? null,
+        image: getBestArticleImage(article).src,
         published_at: article.publishedAt ?? null,
       },
       {
@@ -1523,11 +1541,9 @@ export default function ArticleDetailPage() {
     }
 
     const currentCommentArticle = compareArticle ?? article;
-    const currentCommentArticleImage =
-      currentCommentArticle?.image ??
-      (("urlToImage" in (currentCommentArticle ?? {})
-        ? (currentCommentArticle as { urlToImage?: string | null }).urlToImage
-        : null) ?? null);
+    const currentCommentArticleImage = currentCommentArticle
+      ? getBestArticleImage(currentCommentArticle).src
+      : null;
     const commentInsertPayload = {
       article_id: articleId,
       article_title: cleanDisplayText(currentCommentArticle?.title ?? null) || null,
@@ -1892,6 +1908,13 @@ export default function ArticleDetailPage() {
   }
 
   const compareArticle = activeCompareArticle ?? article;
+  const selectedArticleImage = compareArticle ? getBestArticleImage(compareArticle) : null;
+  const articleImageSrc = selectedArticleImage?.src ?? null;
+  const articleImageFailureKey = articleImageSrc
+    ? `${compareArticle?.id ?? article.id}:${articleImageSrc}`
+    : `${compareArticle?.id ?? article.id}:none`;
+  const shouldShowArticleImage =
+    Boolean(articleImageSrc) && !failedArticleImages[articleImageFailureKey];
   const rawContent = compareArticle.content?.trim() ?? "";
   const rawDescription = compareArticle.description?.trim() ?? "";
   const cleanedContent = rawContent
@@ -1981,11 +2004,47 @@ export default function ArticleDetailPage() {
           </p>
         </div>
 
-        {article.image ? (
+        {shouldShowArticleImage ? (
           <img
-            src={article.image}
-            alt={cleanDisplayText(article.title)}
+            src={articleImageSrc as string}
+            alt={cleanDisplayText(compareArticle.title)}
             className="article-image article-image-lg"
+            loading="lazy"
+            decoding="async"
+            onLoad={(event) => {
+              const target = event.currentTarget;
+
+              if (
+                shouldSuppressLowQualityArticleImage(
+                  selectedArticleImage?.source ?? null,
+                  target.naturalWidth,
+                  target.naturalHeight
+                )
+              ) {
+                setFailedArticleImages((prev) => {
+                  if (prev[articleImageFailureKey]) {
+                    return prev;
+                  }
+
+                  return {
+                    ...prev,
+                    [articleImageFailureKey]: true,
+                  };
+                });
+              }
+            }}
+            onError={() => {
+              setFailedArticleImages((prev) => {
+                if (prev[articleImageFailureKey]) {
+                  return prev;
+                }
+
+                return {
+                  ...prev,
+                  [articleImageFailureKey]: true,
+                };
+              });
+            }}
           />
         ) : null}
 

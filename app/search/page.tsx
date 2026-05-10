@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../lib/api-base";
+import { getBestArticleImage } from "../../lib/article-images";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
@@ -21,6 +22,8 @@ type NewsArticle = {
   image?: string | null;
   imageUrl?: string | null;
   urlToImage?: string | null;
+  mediaContent?: string | null;
+  enclosureUrl?: string | null;
   thumbnail?: string | null;
   description?: string | null;
   url?: string | null;
@@ -328,7 +331,7 @@ function getMatchScore(article: NewsArticle, query: string) {
 }
 
 function getSearchResultImage(article: NewsArticle) {
-  return article.urlToImage || article.imageUrl || article.image || article.thumbnail || null;
+  return getBestArticleImage(article).src;
 }
 
 function dedupeSearchArticles(articles: NewsArticle[]) {

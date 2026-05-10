@@ -731,6 +731,7 @@ input {
   margin: 0 auto;
   border-radius: 18px;
   object-fit: cover;
+  filter: none;
   background: rgba(20, 33, 61, 0.08);
 }
 
@@ -815,7 +816,8 @@ input {
 }
 
 .article-image-lg {
-  height: 280px;
+  min-height: 0;
+  max-height: 420px;
 }
 
 .article-detail-hero {

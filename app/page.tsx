@@ -15,6 +15,10 @@ import {
   listMutuallyHiddenUserIds,
 } from "../lib/blocked-users";
 import { apiFetch, buildApiUrl } from "../lib/api-base";
+import {
+  getBestArticleImage,
+  shouldSuppressLowQualityArticleImage,
+} from "../lib/article-images";
 import { cleanDisplayText } from "../lib/display-text";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
@@ -66,6 +70,8 @@ type Article = {
   image?: string | null;
   imageUrl?: string | null;
   urlToImage?: string | null;
+  mediaContent?: string | null;
+  enclosureUrl?: string | null;
   thumbnail?: string | null;
   description?: string | null;
   url?: string | null;
@@ -447,15 +453,6 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
   }
 
   return payload;
-}
-
-function getArticleCardImage(article: {
-  image?: string | null;
-  imageUrl?: string | null;
-  urlToImage?: string | null;
-  thumbnail?: string | null;
-}) {
-  return article.urlToImage || article.imageUrl || article.image || article.thumbnail || null;
 }
 
 function buildClientFallbackArticles() {
@@ -1295,7 +1292,7 @@ export default function Home() {
         category: article.category,
         time: article.time,
         url: article.url ?? null,
-        image: getArticleCardImage(article),
+        image: getBestArticleImage(article).src,
         published_at: article.publishedAt ?? null,
       },
       {
@@ -1451,7 +1448,7 @@ export default function Home() {
       article_id: articleId,
       article_title: cleanDisplayText(targetArticle?.title ?? null) || null,
       article_source: targetArticle?.source ?? null,
-      article_image: targetArticle ? getArticleCardImage(targetArticle) : null,
+      article_image: targetArticle ? getBestArticleImage(targetArticle).src : null,
       article_url: targetArticle?.url ?? null,
       text,
       user_id: userId,
@@ -2352,7 +2349,8 @@ export default function Home() {
       showFreshnessTime?: boolean;
     }
   ) => {
-    const imageSrc = getArticleCardImage(article);
+    const selectedImage = getBestArticleImage(article);
+    const imageSrc = selectedImage.src;
     const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
     const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
 
@@ -2405,6 +2403,28 @@ export default function Home() {
                 className="article-image"
                 loading="lazy"
                 decoding="async"
+                onLoad={(event) => {
+                  const target = event.currentTarget;
+
+                  if (
+                    shouldSuppressLowQualityArticleImage(
+                      selectedImage.source,
+                      target.naturalWidth,
+                      target.naturalHeight
+                    )
+                  ) {
+                    setFailedArticleImages((prev) => {
+                      if (prev[imageFailureKey]) {
+                        return prev;
+                      }
+
+                      return {
+                        ...prev,
+                        [imageFailureKey]: true,
+                      };
+                    });
+                  }
+                }}
                 onError={() => {
                   setFailedArticleImages((prev) => {
                     if (prev[imageFailureKey]) {
