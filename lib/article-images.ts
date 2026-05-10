@@ -4,6 +4,8 @@ export type ArticleImageFields = {
   image?: string | null;
   mediaContent?: string | null;
   enclosureUrl?: string | null;
+  ogImage?: string | null;
+  twitterImage?: string | null;
   thumbnail?: string | null;
 };
 
@@ -13,6 +15,8 @@ export type ArticleImageSource =
   | "image"
   | "mediaContent"
   | "enclosureUrl"
+  | "ogImage"
+  | "twitterImage"
   | "thumbnail"
   | null;
 
@@ -74,18 +78,15 @@ export function getBestArticleImage(article: ArticleImageFields) {
     ["image", normalizeImageValue(article.image)],
     ["mediaContent", normalizeImageValue(article.mediaContent)],
     ["enclosureUrl", normalizeImageValue(article.enclosureUrl)],
+    ["ogImage", normalizeImageValue(article.ogImage)],
+    ["twitterImage", normalizeImageValue(article.twitterImage)],
     ["thumbnail", normalizeImageValue(article.thumbnail)],
   ];
 
   const usableCandidates = candidates.filter(([, value]) => Boolean(value)) as Array<
     [ArticleImageSource, string]
   >;
-  const selected =
-    usableCandidates.find(
-      ([source, value]) => source !== "thumbnail" && !looksLikeLowQualityImageUrl(value)
-    ) ??
-    usableCandidates.find(([, value]) => !looksLikeLowQualityImageUrl(value)) ??
-    null;
+  const selected = usableCandidates[0] ?? null;
 
   return {
     src: selected?.[1] ?? null,

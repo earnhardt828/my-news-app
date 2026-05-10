@@ -1,7 +1,4 @@
-import {
-  getBestArticleImage,
-  looksLikeLowQualityImageUrl,
-} from "../../../lib/article-images";
+import { looksLikeLowQualityImageUrl } from "../../../lib/article-images";
 
 type ProviderArticle = {
   title?: string | null;
@@ -20,6 +17,7 @@ type ProviderArticle = {
   } | null;
   enclosureUrl?: string | null;
   ogImage?: string | null;
+  twitterImage?: string | null;
   publishedAt?: string | null;
   pubDate?: string | null;
   source?: {
@@ -43,6 +41,8 @@ type NormalizedArticle = {
   urlToImage: string | null;
   mediaContent: string | null;
   enclosureUrl: string | null;
+  ogImage: string | null;
+  twitterImage: string | null;
   thumbnail: string | null;
   category: string;
   publishedAt: string | null;
@@ -341,21 +341,16 @@ function getProviderImage(raw: ProviderArticle) {
   const enclosureUrl =
     raw.enclosureUrl ||
     (raw.enclosure && typeof raw.enclosure === "object" ? raw.enclosure.url ?? null : null);
-  const thumbnail = raw.thumbnail ?? null;
-  const preferredImage = getBestArticleImage({
-    urlToImage: raw.urlToImage,
-    imageUrl: raw.imageUrl || raw.image_url || raw.ogImage || null,
-    image: raw.image,
-    mediaContent: mediaUrl,
-    enclosureUrl,
-    thumbnail,
-  });
 
   return {
-    src: preferredImage.src,
+    urlToImage: raw.urlToImage ?? null,
+    imageUrl: raw.imageUrl || raw.image_url || null,
+    image: raw.image ?? null,
     mediaContent: mediaUrl,
     enclosureUrl,
-    thumbnail,
+    ogImage: raw.ogImage ?? null,
+    twitterImage: raw.twitterImage ?? null,
+    thumbnail: raw.thumbnail ?? null,
   };
 }
 
@@ -415,11 +410,13 @@ function buildNormalizedArticle(
     source: sourceName,
     sourceName,
     url: normalizedUrl,
-    image: providerImage.src,
-    imageUrl: providerImage.src,
-    urlToImage: providerImage.src,
+    image: providerImage.image,
+    imageUrl: providerImage.imageUrl,
+    urlToImage: providerImage.urlToImage,
     mediaContent: providerImage.mediaContent,
     enclosureUrl: providerImage.enclosureUrl,
+    ogImage: providerImage.ogImage,
+    twitterImage: providerImage.twitterImage,
     thumbnail: providerImage.thumbnail,
     category,
     publishedAt,
@@ -576,9 +573,7 @@ async function enrichArticleImageFromDocument(article: NormalizedArticle) {
     console.log("ENRICHED OG IMAGE", { title: article.title, imageUrl: cached.imageUrl });
     return {
       ...article,
-      image: cached.imageUrl,
-      imageUrl: cached.imageUrl,
-      urlToImage: cached.imageUrl,
+      ogImage: cached.imageUrl,
     };
   }
 
@@ -606,13 +601,17 @@ async function enrichArticleImageFromDocument(article: NormalizedArticle) {
     const ogImage =
       html.match(
         /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i
-      )?.[1] ??
+      )?.[1] ?? null;
+    const twitterImage =
       html.match(
         /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i
-      )?.[1] ??
-      html.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i)?.[1] ??
-      null;
-    const resolvedImageUrl = resolveArticleImageUrl(ogImage, articleUrl);
+      )?.[1] ?? null;
+    const imageSrcLink =
+      html.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i)?.[1] ?? null;
+    const resolvedImageUrl =
+      resolveArticleImageUrl(ogImage, articleUrl) ||
+      resolveArticleImageUrl(twitterImage, articleUrl) ||
+      resolveArticleImageUrl(imageSrcLink, articleUrl);
 
     if (!resolvedImageUrl || looksLikeLowQualityImageUrl(resolvedImageUrl)) {
       enrichedImageCache.set(articleUrl, {
@@ -633,9 +632,10 @@ async function enrichArticleImageFromDocument(article: NormalizedArticle) {
 
     return {
       ...article,
-      image: resolvedImageUrl,
-      imageUrl: resolvedImageUrl,
-      urlToImage: resolvedImageUrl,
+      ogImage: resolveArticleImageUrl(ogImage, articleUrl),
+      twitterImage:
+        resolveArticleImageUrl(twitterImage, articleUrl) ||
+        resolveArticleImageUrl(imageSrcLink, articleUrl),
     };
   } catch (error) {
     console.log("IMAGE ENRICHMENT FAILED", {
@@ -654,8 +654,13 @@ async function enrichArticleImageFromDocument(article: NormalizedArticle) {
 
 async function enrichTrendingArticleImages(articles: NormalizedArticle[]) {
   const candidates = articles.slice(0, 25).filter((article) => {
-    const bestImage = getBestArticleImage(article);
-    return !bestImage.src || looksLikeLowQualityImageUrl(bestImage.src);
+    return !(
+      article.urlToImage ||
+      article.imageUrl ||
+      article.image ||
+      article.mediaContent ||
+      article.enclosureUrl
+    );
   });
 
   if (candidates.length === 0) {
@@ -1085,6 +1090,10 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
         contentEncoded.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
         description.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
         null;
+      const twitterImage =
+        contentEncoded.match(/name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
+        description.match(/name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
+        null;
 
       return buildNormalizedArticle(
         {
@@ -1098,6 +1107,7 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
           thumbnail: mediaThumbnailUrl,
           imageUrl: descriptionImageUrl,
           ogImage,
+          twitterImage,
           category: stripHtml(extractXmlTag(block, "category")) || fallbackFeed.category,
           source_name: fallbackFeed.source,
         },

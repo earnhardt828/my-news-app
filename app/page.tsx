@@ -72,6 +72,8 @@ type Article = {
   urlToImage?: string | null;
   mediaContent?: string | null;
   enclosureUrl?: string | null;
+  ogImage?: string | null;
+  twitterImage?: string | null;
   thumbnail?: string | null;
   description?: string | null;
   url?: string | null;
@@ -2273,26 +2275,16 @@ export default function Home() {
     });
   }, [sortMode, videos, visibleArticles]);
 
-  const trendingRankMap = useMemo(() => {
-    const rankMap = new Map<string, number>();
-
-    trendingFeedItems.forEach((item, index) => {
-      rankMap.set(item.key, index + 1);
-    });
-
-    return rankMap;
-  }, [trendingFeedItems]);
-
   const trendingRenderItems = useMemo(() => {
     if (sortMode !== "trending") {
       return [];
     }
 
-    const rankedVideos = [...videos].sort((left, right) => {
-      const leftRank = trendingRankMap.get(`video:${left.id}`) ?? Number.MAX_SAFE_INTEGER;
-      const rightRank = trendingRankMap.get(`video:${right.id}`) ?? Number.MAX_SAFE_INTEGER;
-      return leftRank - rightRank;
-    });
+    const rankedVideos = trendingFeedItems
+      .filter((item): item is Extract<(typeof trendingFeedItems)[number], { type: "video" }> =>
+        item.type === "video"
+      )
+      .map((item) => item.video);
     const items: Array<
       | { type: "article"; key: string; article: Article }
       | { type: "video"; key: string; video: VideoItem }
@@ -2333,7 +2325,7 @@ export default function Home() {
     }
 
     return items;
-  }, [sortMode, trendingRankMap, videos, visibleArticles]);
+  }, [sortMode, trendingFeedItems, visibleArticles]);
 
   useEffect(() => {
     console.log(
@@ -2341,6 +2333,27 @@ export default function Home() {
       sortMode === "trending" ? trendingRenderItems.length : visibleArticles.length
     );
   }, [sortMode, trendingRenderItems.length, visibleArticles.length]);
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      return;
+    }
+
+    trendingRenderItems
+      .filter((item): item is Extract<(typeof trendingRenderItems)[number], { type: "article" }> =>
+        item.type === "article"
+      )
+      .slice(0, 10)
+      .forEach((item) => {
+        const selectedImage = getBestArticleImage(item.article);
+        console.log("TRENDING IMAGE SELECTED", {
+          title: item.article.title,
+          source: item.article.source,
+          imageUrl: selectedImage.src,
+          selectedFrom: selectedImage.source,
+        });
+      });
+  }, [sortMode, trendingRenderItems]);
 
   const renderArticleFeedCard = (
     article: Article,
@@ -2351,7 +2364,6 @@ export default function Home() {
   ) => {
     const selectedImage = getBestArticleImage(article);
     const imageSrc = selectedImage.src;
-    console.log("IMAGE URL USED", imageSrc);
     const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
     const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
 
@@ -2591,11 +2603,7 @@ export default function Home() {
                 <div key={item.key} className="stack">
                   {item.type === "article"
                     ? renderArticleFeedCard(item.article, {
-                        rankLabel:
-                          (() => {
-                            const rank = trendingRankMap.get(item.key);
-                            return rank && rank <= 25 ? `Top ${rank}` : null;
-                          })(),
+                        rankLabel: index < 25 ? `Top ${index + 1}` : null,
                       })
                     : (
                       <VideoFeedCard
@@ -2607,12 +2615,7 @@ export default function Home() {
                         }
                         onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
                         label="Video"
-                        rankBadgeLabel={
-                          (() => {
-                            const rank = trendingRankMap.get(item.key);
-                            return rank && rank <= 25 ? `Top ${rank}` : null;
-                          })()
-                        }
+                        rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
                         className="video-card-inline"
                         variant="article"
                       />
