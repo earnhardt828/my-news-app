@@ -17,9 +17,6 @@ import {
 import { apiFetch, buildApiUrl } from "../lib/api-base";
 import {
   getBestArticleImage,
-  isLikelyHighQualityArticleImage,
-  shouldUseLargeArticleImage,
-  shouldSuppressLowQualityArticleImage,
 } from "../lib/article-images";
 import { cleanDisplayText } from "../lib/display-text";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
@@ -592,7 +589,6 @@ export default function Home() {
     text: string;
   } | null>(null);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
-  const [lowQualityArticleImages, setLowQualityArticleImages] = useState<Record<string, true>>({});
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
@@ -2287,7 +2283,11 @@ export default function Home() {
       .filter((item): item is Extract<(typeof trendingFeedItems)[number], { type: "video" }> =>
         item.type === "video"
       )
-      .map((item) => item.video);
+      .map((item) => item.video)
+      .filter(
+        (video): video is VideoItem =>
+          Boolean(video?.id) && Boolean(video?.title) && Boolean(video?.creator)
+      );
     const items: Array<
       | { type: "article"; key: string; article: Article }
       | { type: "video"; key: string; video: VideoItem }
@@ -2302,12 +2302,13 @@ export default function Home() {
         article,
       });
 
-      const shouldInsertVideo =
-        rankedVideos.length > insertedVideos &&
-        ((index + 1) % 3 === 0 || index === visibleArticles.length - 1);
+      const shouldInsertVideo = rankedVideos.length > insertedVideos && (index + 1) % 3 === 0;
 
       if (shouldInsertVideo) {
         const nextVideo = rankedVideos[insertedVideos];
+        if (!nextVideo) {
+          return;
+        }
         items.push({
           type: "video",
           key: `video:${nextVideo.id}`,
@@ -2317,15 +2318,7 @@ export default function Home() {
       }
     });
 
-    while (insertedVideos < rankedVideos.length) {
-      const nextVideo = rankedVideos[insertedVideos];
-      items.push({
-        type: "video",
-        key: `video:${nextVideo.id}`,
-        video: nextVideo,
-      });
-      insertedVideos += 1;
-    }
+    console.log("TRENDING ITEMS COUNT", items.length);
 
     return items;
   }, [sortMode, trendingFeedItems, visibleArticles]);
@@ -2365,94 +2358,69 @@ export default function Home() {
       showFreshnessTime?: boolean;
     }
   ) => {
-    const selectedImage = getBestArticleImage(article);
-    const imageSrc = selectedImage.src;
-    const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
-    const hasFailedImage = Boolean(failedArticleImages[imageFailureKey]);
-    const isLowQualityImage = Boolean(lowQualityArticleImages[imageFailureKey]);
-    const hasUsableImage = Boolean(imageSrc) && !hasFailedImage;
-    const shouldUseHeroImage =
-      hasUsableImage &&
-      !isLowQualityImage &&
-      isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
-    const shouldUseThumbnail = hasUsableImage && !shouldUseHeroImage;
+    try {
+      const selectedImage = getBestArticleImage(article);
+      const imageSrc = selectedImage.src;
+      const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
+      const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
 
-    return (
-      <article
-        className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}
-      >
-        {options?.rankLabel ? (
-          <span className="chip trending-rank-badge news-card-rank-badge">
-            {options.rankLabel}
-          </span>
-        ) : null}
-        <div className="trending-source-row">
-          <button
-            type="button"
-            className="source-trigger trending-source-button"
-            onClick={() => openSourcePreferenceSheet(article.source)}
-          >
-            <div className="trending-source-brand">
-              <SourceBadge sourceName={article.source} />
-              <span className="trending-source-name">{article.source}</span>
-            </div>
-          </button>
-        </div>
-        <Link href={`/article/${article.id}`} className="article-link">
-          <div
-            className={`news-card-body ${
-              shouldUseHeroImage
-                ? "news-card-body-with-hero"
-                : shouldUseThumbnail
-                  ? "news-card-body-with-thumb"
-                  : "news-card-body-text-only"
-            }`}
-          >
-            <div className="news-card-copy">
-              <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
-                {getCategoryLabel(article.category)}
-              </span>
-
-              <div className="trending-title-row">
-                <h3 className="trending-article-title">
-                  {cleanDisplayText(article.title)}
-                </h3>
+      return (
+        <article
+          className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}
+        >
+          {options?.rankLabel ? (
+            <span className="chip trending-rank-badge news-card-rank-badge">
+              {options.rankLabel}
+            </span>
+          ) : null}
+          <div className="trending-source-row">
+            <button
+              type="button"
+              className="source-trigger trending-source-button"
+              onClick={() => openSourcePreferenceSheet(article.source)}
+            >
+              <div className="trending-source-brand">
+                <SourceBadge sourceName={article.source} />
+                <span className="trending-source-name">{article.source}</span>
               </div>
+            </button>
+          </div>
+          <Link href={`/article/${article.id}`} className="article-link">
+            <div
+              className={`news-card-body ${
+                shouldShowImage ? "news-card-body-with-thumb" : "news-card-body-text-only"
+              }`}
+            >
+              <div className="news-card-copy">
+                <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
+                  {getCategoryLabel(article.category)}
+                </span>
 
-              <div className="news-card-header">
-                <div className="trending-meta-row">
-                  <span className="trending-published-date">
-                    {options?.showFreshnessTime
-                      ? formatFreshnessTime(article.publishedAt, article.time)
-                      : formatPublishedDate(article.publishedAt, article.time)}
-                  </span>
+                <div className="trending-title-row">
+                  <h3 className="trending-article-title">
+                    {cleanDisplayText(article.title)}
+                  </h3>
+                </div>
+
+                <div className="news-card-header">
+                  <div className="trending-meta-row">
+                    <span className="trending-published-date">
+                      {options?.showFreshnessTime
+                        ? formatFreshnessTime(article.publishedAt, article.time)
+                        : formatPublishedDate(article.publishedAt, article.time)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {shouldUseHeroImage ? (
-                <div className="article-hero-shell">
+              {shouldShowImage ? (
+                <div className="article-thumb-shell">
                   <img
                     src={imageSrc as string}
                     alt={cleanDisplayText(article.title)}
-                    className="article-image article-image-hero"
+                    className="article-thumb-image"
                     loading="lazy"
                     decoding="async"
-                    onLoad={(event) => {
-                      const target = event.currentTarget;
-
-                      if (!shouldUseLargeArticleImage(target.naturalWidth, target.naturalHeight)) {
-                        setLowQualityArticleImages((prev) => {
-                          if (prev[imageFailureKey]) {
-                            return prev;
-                          }
-
-                          return {
-                            ...prev,
-                            [imageFailureKey]: true,
-                          };
-                        });
-                      }
-                    }}
                     onError={() => {
                       setFailedArticleImages((prev) => {
                         if (prev[imageFailureKey]) {
@@ -2469,132 +2437,105 @@ export default function Home() {
                 </div>
               ) : null}
             </div>
+          </Link>
 
-            {shouldUseThumbnail ? (
-              <div className="article-thumb-shell">
-                <img
-                  src={imageSrc as string}
-                  alt={cleanDisplayText(article.title)}
-                  className="article-thumb-image"
-                  loading="lazy"
-                  decoding="async"
-                  onLoad={(event) => {
-                    const target = event.currentTarget;
-
-                    if (
-                      shouldSuppressLowQualityArticleImage(
-                        selectedImage.source,
-                        target.naturalWidth,
-                        target.naturalHeight
-                      )
-                    ) {
-                      setFailedArticleImages((prev) => {
-                        if (prev[imageFailureKey]) {
-                          return prev;
-                        }
-
-                        return {
-                          ...prev,
-                          [imageFailureKey]: true,
-                        };
-                      });
-                      return;
-                    }
-
-                    if (!shouldUseLargeArticleImage(target.naturalWidth, target.naturalHeight)) {
-                      setLowQualityArticleImages((prev) => {
-                        if (prev[imageFailureKey]) {
-                          return prev;
-                        }
-
-                        return {
-                          ...prev,
-                          [imageFailureKey]: true,
-                        };
-                      });
-                    }
-                  }}
-                  onError={() => {
-                    setFailedArticleImages((prev) => {
-                      if (prev[imageFailureKey]) {
-                        return prev;
-                      }
-
-                      return {
-                        ...prev,
-                        [imageFailureKey]: true,
-                      };
-                    });
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-        </Link>
-
-        <div className="engagement-row trending-stats-row">
-          <button
-            className={`icon-action-pill ${
-              article.likedByCurrentUser ? "icon-action-pill-active" : ""
-            }`}
-            onClick={() => handleLike(article.id)}
-            aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
-          >
-            <span className="icon-action-glyph" aria-hidden="true">
-              <svg {...actionIconProps}>
-                <path
-                  d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                  fill={article.likedByCurrentUser ? "currentColor" : "none"}
-                />
-              </svg>
-            </span>
-            <span>{article.likes}</span>
-          </button>
-          <button
-            className="icon-action-pill"
-            onClick={() => {
-              router.push(`/article/${article.id}#comments`);
-            }}
-            aria-label="Open article comments"
-          >
-            <span className="icon-action-glyph" aria-hidden="true">
-              <svg {...actionIconProps}>
-                <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-              </svg>
-            </span>
-            <span>{article.comments.length}</span>
-          </button>
-          <ShareButton
-            path={`/article/${article.id}`}
-            title={cleanDisplayText(article.title)}
-            url={article.url}
-            iconOnly
-          />
-          <button
-            className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
-            onClick={() => handleToggleSaveArticle(article)}
-            disabled={activeSaveArticleId === article.id}
-            aria-label={article.saved ? "Remove bookmark" : "Save article"}
-          >
-            <span className="icon-action-glyph" aria-hidden="true">
-              {activeSaveArticleId === article.id ? (
-                <svg {...actionIconProps}>
-                  <path d="M12 5v7" />
-                  <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
-                </svg>
-              ) : (
+          <div className="engagement-row trending-stats-row">
+            <button
+              className={`icon-action-pill ${
+                article.likedByCurrentUser ? "icon-action-pill-active" : ""
+              }`}
+              onClick={() => handleLike(article.id)}
+              aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
                 <svg {...actionIconProps}>
                   <path
-                    d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
-                    fill={article.saved ? "currentColor" : "none"}
+                    d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                    fill={article.likedByCurrentUser ? "currentColor" : "none"}
                   />
                 </svg>
-              )}
+              </span>
+              <span>{article.likes}</span>
+            </button>
+            <button
+              className="icon-action-pill"
+              onClick={() => {
+                router.push(`/article/${article.id}#comments`);
+              }}
+              aria-label="Open article comments"
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg {...actionIconProps}>
+                  <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                </svg>
+              </span>
+              <span>{article.comments.length}</span>
+            </button>
+            <ShareButton
+              path={`/article/${article.id}`}
+              title={cleanDisplayText(article.title)}
+              url={article.url}
+              iconOnly
+            />
+            <button
+              className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
+              onClick={() => handleToggleSaveArticle(article)}
+              disabled={activeSaveArticleId === article.id}
+              aria-label={article.saved ? "Remove bookmark" : "Save article"}
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                {activeSaveArticleId === article.id ? (
+                  <svg {...actionIconProps}>
+                    <path d="M12 5v7" />
+                    <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
+                  </svg>
+                ) : (
+                  <svg {...actionIconProps}>
+                    <path
+                      d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                      fill={article.saved ? "currentColor" : "none"}
+                    />
+                  </svg>
+                )}
+              </span>
+            </button>
+          </div>
+        </article>
+      );
+    } catch (error) {
+      console.error("TRENDING CARD RENDER ERROR", error);
+
+      return (
+        <article className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}>
+          {options?.rankLabel ? (
+            <span className="chip trending-rank-badge news-card-rank-badge">
+              {options.rankLabel}
             </span>
-          </button>
-        </div>
-      </article>
-    );
+          ) : null}
+          <div className="trending-source-row">
+            <div className="trending-source-brand">
+              <SourceBadge sourceName={article.source} />
+              <span className="trending-source-name">{article.source}</span>
+            </div>
+          </div>
+          <Link href={`/article/${article.id}`} className="article-link">
+            <div className="news-card-body news-card-body-text-only">
+              <div className="news-card-copy">
+                <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
+                  {getCategoryLabel(article.category)}
+                </span>
+                <h3 className="trending-article-title">{cleanDisplayText(article.title)}</h3>
+                <span className="trending-published-date">
+                  {options?.showFreshnessTime
+                    ? formatFreshnessTime(article.publishedAt, article.time)
+                    : formatPublishedDate(article.publishedAt, article.time)}
+                </span>
+              </div>
+            </div>
+          </Link>
+        </article>
+      );
+    }
   };
 
   return (

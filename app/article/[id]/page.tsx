@@ -10,9 +10,6 @@ import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
 import {
   getBestArticleImage,
-  isLikelyHighQualityArticleImage,
-  shouldUseLargeArticleImage,
-  shouldSuppressLowQualityArticleImage,
 } from "../../../lib/article-images";
 import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { cleanDisplayText } from "../../../lib/display-text";
@@ -701,7 +698,6 @@ export default function ArticleDetailPage() {
   const [activeCompareIndex, setActiveCompareIndex] = useState(0);
   const [showCompareTutorial, setShowCompareTutorial] = useState(false);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
-  const [lowQualityArticleImages, setLowQualityArticleImages] = useState<Record<string, true>>({});
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isSavingSourceRating, setIsSavingSourceRating] = useState(false);
   const [sourceRatingStatus, setSourceRatingStatus] = useState<{
@@ -1917,15 +1913,8 @@ export default function ArticleDetailPage() {
   const articleImageFailureKey = articleImageSrc
     ? `${compareArticle?.id ?? article.id}:${articleImageSrc}`
     : `${compareArticle?.id ?? article.id}:none`;
-  const hasFailedArticleImage = Boolean(failedArticleImages[articleImageFailureKey]);
-  const isLowQualityArticleImage = Boolean(lowQualityArticleImages[articleImageFailureKey]);
-  const hasUsableArticleImage = Boolean(articleImageSrc) && !hasFailedArticleImage;
-  const shouldUseLargeArticleImageLayout =
-    hasUsableArticleImage &&
-    !isLowQualityArticleImage &&
-    isLikelyHighQualityArticleImage(selectedArticleImage?.source ?? null, articleImageSrc);
-  const shouldUseCompactArticleImageLayout =
-    hasUsableArticleImage && !shouldUseLargeArticleImageLayout;
+  const shouldShowArticleImage =
+    Boolean(articleImageSrc) && !failedArticleImages[articleImageFailureKey];
   const rawContent = compareArticle.content?.trim() ?? "";
   const rawDescription = compareArticle.description?.trim() ?? "";
   const cleanedContent = rawContent
@@ -2015,63 +2004,7 @@ export default function ArticleDetailPage() {
           </p>
         </div>
 
-        {shouldUseLargeArticleImageLayout ? (
-          <img
-            src={articleImageSrc as string}
-            alt={cleanDisplayText(compareArticle.title)}
-            className="article-image article-image-lg"
-            loading="lazy"
-            decoding="async"
-            onLoad={(event) => {
-              const target = event.currentTarget;
-
-              if (
-                shouldSuppressLowQualityArticleImage(
-                  selectedArticleImage?.source ?? null,
-                  target.naturalWidth,
-                  target.naturalHeight
-                )
-              ) {
-                setFailedArticleImages((prev) => {
-                  if (prev[articleImageFailureKey]) {
-                    return prev;
-                  }
-
-                  return {
-                    ...prev,
-                    [articleImageFailureKey]: true,
-                  };
-                });
-                return;
-              }
-
-              if (!shouldUseLargeArticleImage(target.naturalWidth, target.naturalHeight)) {
-                setLowQualityArticleImages((prev) => {
-                  if (prev[articleImageFailureKey]) {
-                    return prev;
-                  }
-
-                  return {
-                    ...prev,
-                    [articleImageFailureKey]: true,
-                  };
-                });
-              }
-            }}
-            onError={() => {
-              setFailedArticleImages((prev) => {
-                if (prev[articleImageFailureKey]) {
-                  return prev;
-                }
-
-                return {
-                  ...prev,
-                  [articleImageFailureKey]: true,
-                };
-              });
-            }}
-          />
-        ) : shouldUseCompactArticleImageLayout ? (
+        {shouldShowArticleImage ? (
           <div className="article-detail-compact-media">
             <img
               src={articleImageSrc as string}
@@ -2079,28 +2012,6 @@ export default function ArticleDetailPage() {
               className="article-thumb-image article-detail-compact-image"
               loading="lazy"
               decoding="async"
-              onLoad={(event) => {
-                const target = event.currentTarget;
-
-                if (
-                  shouldSuppressLowQualityArticleImage(
-                    selectedArticleImage?.source ?? null,
-                    target.naturalWidth,
-                    target.naturalHeight
-                  )
-                ) {
-                  setFailedArticleImages((prev) => {
-                    if (prev[articleImageFailureKey]) {
-                      return prev;
-                    }
-
-                    return {
-                      ...prev,
-                      [articleImageFailureKey]: true,
-                    };
-                  });
-                }
-              }}
               onError={() => {
                 setFailedArticleImages((prev) => {
                   if (prev[articleImageFailureKey]) {
