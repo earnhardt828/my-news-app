@@ -380,15 +380,23 @@ function hasStrongPhraseMatch(left: Set<string>, right: Set<string>) {
   return [...left].some((phrase) => right.has(phrase));
 }
 
-function buildArticleCompareQuery(article: ArticleRecord) {
-  const titleKeywords = [...extractImportantKeywords(article.title).keywords].slice(0, 5);
-  const titleQuery = titleKeywords.slice(0, 5).join(" ");
+function buildArticleCompareQueries(article: ArticleRecord) {
+  const titleKeywords = [...extractImportantKeywords(article.title).keywords].slice(0, 6);
+  const titlePhrases = [...extractImportantKeywords(article.title).phrases].slice(0, 2);
+  const queries = [
+    titleKeywords.slice(0, 5).join(" "),
+    titlePhrases[0] ?? "",
+    titleKeywords.slice(0, 3).join(" "),
+    titleKeywords.slice(3, 6).join(" "),
+  ]
+    .map((query) => query.trim())
+    .filter(Boolean);
 
-  if (titleQuery) {
-    return titleQuery;
+  if (queries.length > 0) {
+    return [...new Set(queries)].slice(0, 4);
   }
 
-  return cleanDisplayText(article.title).split(/\s+/).slice(0, 4).join(" ");
+  return [cleanDisplayText(article.title).split(/\s+/).slice(0, 4).join(" ")];
 }
 
 function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRecord[]) {
@@ -461,6 +469,20 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
     )
     .sort((left, right) => right.score - left.score);
 
+  const strictCandidates = scoredCandidates.filter(
+    (candidate) => candidate.titleSharedCount >= 2 || candidate.strongPhraseMatch
+  );
+  const relaxedCandidates = scoredCandidates.filter(
+    (candidate) =>
+      candidate.titleSharedCount >= 1 ||
+      candidate.descriptionSharedCount >= 2 ||
+      candidate.strongPhraseMatch
+  );
+  const candidatePool =
+    strictCandidates.filter((candidate) => !candidate.sameSource).length >= 2
+      ? strictCandidates
+      : relaxedCandidates;
+
   console.log("COMPARE KEYWORDS", {
     title: [...baseTitle.keywords],
     description: [...baseDescription.keywords],
@@ -469,16 +491,22 @@ function buildCompareArticles(baseArticle: ArticleRecord, allArticles: ArticleRe
   });
   console.log(
     "COMPARE SCORES",
-    scoredCandidates.map((candidate) => ({
+    candidatePool.map((candidate) => ({
       title: candidate.article.title,
       source: candidate.article.source,
       score: candidate.score,
       shared: candidate.sharedKeywords,
     }))
   );
+  console.log("COMPARE FILTERED COUNTS", {
+    scored: scoredCandidates.length,
+    strict: strictCandidates.length,
+    relaxed: relaxedCandidates.length,
+    using: candidatePool === strictCandidates ? "strict" : "relaxed",
+  });
 
-  const differentSourceCandidates = scoredCandidates.filter((candidate) => !candidate.sameSource);
-  const sameSourceCandidates = scoredCandidates.filter((candidate) => candidate.sameSource);
+  const differentSourceCandidates = candidatePool.filter((candidate) => !candidate.sameSource);
+  const sameSourceCandidates = candidatePool.filter((candidate) => candidate.sameSource);
   const selectedMatches: Array<{
     article: ArticleRecord;
     score: number;
@@ -720,40 +748,54 @@ export default function ArticleDetailPage() {
         setDislikedSources([]);
       }
 
-      const baseNewsRes = await apiFetch("/api/news?mode=trending&page=1&pageSize=60");
+      const baseNewsRes = await apiFetch("/api/news?mode=trending&page=1&pageSize=75");
       const baseNewsData = normalizeNewsPayload(
         (await baseNewsRes.json()) as ArticleRecord[] | PaginatedNewsResponse
       );
-      let contextualCandidates: ArticleRecord[] = [];
+      const contextualCandidates: ArticleRecord[] = [];
       let targetArticle = baseNewsData.find((item) => item.id === articleId) ?? null;
 
       if (targetArticle) {
         console.log("CURRENT ARTICLE FOR COMPARE", targetArticle);
         console.log("CURRENT SOURCE", targetArticle.source);
-        const compareQuery = buildArticleCompareQuery(targetArticle);
-        console.log("COMPARE QUERY", compareQuery);
+        const compareQueries = buildArticleCompareQueries(targetArticle);
+        console.log("COMPARE QUERY", compareQueries);
 
-        if (compareQuery) {
-          try {
-            const contextualRes = await apiFetch(
-              `/api/news?mode=search&query=${encodeURIComponent(
-                compareQuery
-              )}&page=1&pageSize=60`
-            );
-            contextualCandidates = normalizeNewsPayload(
-              (await contextualRes.json()) as ArticleRecord[] | PaginatedNewsResponse
-            );
-          } catch (error) {
+        if (compareQueries.length > 0) {
+          const contextualResults = await Promise.allSettled(
+            compareQueries.map((compareQuery) =>
+              apiFetch(
+                `/api/news?mode=search&query=${encodeURIComponent(
+                  compareQuery
+                )}&page=1&pageSize=50`
+              ).then(async (response) =>
+                normalizeNewsPayload(
+                  (await response.json()) as ArticleRecord[] | PaginatedNewsResponse
+                )
+              )
+            )
+          );
+
+          contextualResults.forEach((result, index) => {
+            if (result.status === "fulfilled") {
+              contextualCandidates.push(...result.value);
+              return;
+            }
+
             console.error("[Article detail] Failed to fetch contextual compare candidates", {
               articleId,
-              query: compareQuery,
-              error,
+              query: compareQueries[index],
+              error: result.reason,
             });
-          }
+          });
         }
       }
 
       const newsData = [...baseNewsData];
+      console.log("COMPARE CANDIDATE COUNTS", {
+        base: baseNewsData.length,
+        contextual: contextualCandidates.length,
+      });
 
       contextualCandidates.forEach((candidate) => {
         if (
@@ -770,6 +812,7 @@ export default function ArticleDetailPage() {
       });
 
       targetArticle = targetArticle ?? newsData.find((item) => item.id === articleId) ?? null;
+      console.log("COMPARE TOTAL CANDIDATES", newsData.length);
       console.log("ARTICLE LIVE MATCH", targetArticle);
 
       if (targetArticle) {
