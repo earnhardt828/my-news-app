@@ -198,6 +198,86 @@ const HOME_FALLBACK_ARTICLES: FeedArticlePayload[] = [
     content:
       "The latest product rollouts arrive alongside policy questions about safety, transparency, and competition.",
   },
+  {
+    id: 910004,
+    title: "Global leaders renew ceasefire pressure as humanitarian routes remain fragile",
+    source: "Al Jazeera",
+    category: "World",
+    time: "Recent",
+    image: null,
+    imageUrl: null,
+    urlToImage: null,
+    description:
+      "Diplomatic efforts continue as aid groups warn that access and supply routes remain uncertain.",
+    url: "https://graffiti.app/fallback/910004",
+    publishedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    content:
+      "Diplomatic efforts continue as aid groups warn that access and supply routes remain uncertain.",
+  },
+  {
+    id: 910005,
+    title: "Major league contenders reshuffle rotations as the season intensifies",
+    source: "ESPN",
+    category: "Sports",
+    time: "Recent",
+    image: null,
+    imageUrl: null,
+    urlToImage: null,
+    description:
+      "Teams are adjusting lineups and workloads as injuries and standings start to shape strategy.",
+    url: "https://graffiti.app/fallback/910005",
+    publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    content:
+      "Teams are adjusting lineups and workloads as injuries and standings start to shape strategy.",
+  },
+  {
+    id: 910006,
+    title: "Hospitals prepare for a busy summer as public health agencies track new trends",
+    source: "NPR",
+    category: "Health",
+    time: "Recent",
+    image: null,
+    imageUrl: null,
+    urlToImage: null,
+    description:
+      "Health systems are watching staffing, vaccination, and regional outbreak data ahead of travel season.",
+    url: "https://graffiti.app/fallback/910006",
+    publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    content:
+      "Health systems are watching staffing, vaccination, and regional outbreak data ahead of travel season.",
+  },
+  {
+    id: 910007,
+    title: "Scientists release fresh climate measurements as coastal cities plan upgrades",
+    source: "BBC News",
+    category: "Science",
+    time: "Recent",
+    image: null,
+    imageUrl: null,
+    urlToImage: null,
+    description:
+      "New research is informing infrastructure plans, flood readiness, and energy resilience.",
+    url: "https://graffiti.app/fallback/910007",
+    publishedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+    content:
+      "New research is informing infrastructure plans, flood readiness, and energy resilience.",
+  },
+  {
+    id: 910008,
+    title: "Streaming platforms race for summer audiences with sequels, sports, and live events",
+    source: "Variety",
+    category: "Entertainment",
+    time: "Recent",
+    image: null,
+    imageUrl: null,
+    urlToImage: null,
+    description:
+      "Studios and streamers are leaning on major releases and event programming to hold subscribers.",
+    url: "https://graffiti.app/fallback/910008",
+    publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+    content:
+      "Studios and streamers are leaning on major releases and event programming to hold subscribers.",
+  },
 ];
 
 function isMissingCommentMetadataColumnError(message: string | null | undefined) {
@@ -498,12 +578,10 @@ export default function Home() {
     return "trending";
   }, [sortMode]);
 
-  const homeLoadingHeading =
-    sortMode === "my-feed"
-      ? "Loading your feed..."
-      : sortMode === "latest"
-        ? "Loading latest stories..."
-        : "Loading fresh stories...";
+  const categoryReloadKey =
+    sortMode === "my-feed" ? categories.join("|") : "__ignore-categories__";
+  const isMyFeedWithoutCategories =
+    sortMode === "my-feed" && categories.length === 0;
 
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
@@ -669,6 +747,13 @@ export default function Home() {
       }
 
       const newsData = newsPayload.articles;
+      console.log("NEWS API ARTICLE COUNT", newsData.length);
+      console.log("FIRST ARTICLE IMAGE FIELDS", {
+        title: newsData[0]?.title,
+        image: newsData[0]?.image,
+        imageUrl: newsData[0]?.imageUrl,
+        urlToImage: newsData[0]?.urlToImage,
+      });
 
       if (replace && newsData.length === 0) {
         const emptyResponseError = new Error("Trending returned zero articles.");
@@ -881,7 +966,7 @@ export default function Home() {
   }, [feedMode]);
 
   useEffect(() => {
-    if (sortMode === "my-feed" && categories.length === 0) {
+    if (isMyFeedWithoutCategories) {
       const timeoutId = window.setTimeout(() => {
         setArticles([]);
         setFeedPage(1);
@@ -903,7 +988,7 @@ export default function Home() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [categories, loadFeedPage, sortMode]);
+  }, [categoryReloadKey, isMyFeedWithoutCategories, loadFeedPage, sortMode]);
 
   useEffect(() => {
     async function fetchVideos() {
@@ -2007,6 +2092,10 @@ export default function Home() {
       ? fallbackDisplayArticles
       : displayedArticles;
 
+  useEffect(() => {
+    console.log("TRENDING RENDER COUNT", visibleArticles.length);
+  }, [visibleArticles.length]);
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -2080,11 +2169,6 @@ export default function Home() {
         </div>
       ) : (
         <div className="stack">
-          {isLoading ? (
-            <div className="feed-inline-loading" role="status" aria-live="polite">
-              {homeLoadingHeading}
-            </div>
-          ) : null}
           {feedLoadError ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
               {feedLoadError}
