@@ -2,12 +2,12 @@
 
 import AdSlot from "../components/ad-slot";
 import ArticleReaderButton from "../components/article-reader-button";
-import LoadingScreen from "../components/loading-screen";
 import SourceBadge from "../components/source-badge";
 import SourcePreferenceSheet from "../components/source-preference-sheet";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ShareButton from "../components/share-button";
+import { apiFetch } from "../../lib/api-base";
 import { getCategoryLabel } from "../../lib/categories";
 import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
@@ -35,10 +35,6 @@ type DbSourceRating = {
   source_name: string;
   rating: "like" | "dislike";
 };
-
-function FeedSkeleton() {
-  return <LoadingScreen />;
-}
 
 export default function MyFeed() {
   const [articles, setArticles] = useState<FeedArticle[]>([]);
@@ -90,7 +86,7 @@ export default function MyFeed() {
       setPreferredSources(profile?.preferred_sources ?? []);
       setShowLessSources(profile?.show_less_sources ?? []);
 
-      const res = await fetch("/api/news");
+      const res = await apiFetch("/api/news");
       const news = (await res.json()) as Omit<FeedArticle, "saved">[];
 
       const { data: savedArticlesData } = await supabase
@@ -294,7 +290,10 @@ export default function MyFeed() {
       </div>
 
       {isLoading ? (
-        <FeedSkeleton />
+        <div className="loading-state">
+          <strong>Loading your feed...</strong>
+          <span>Pulling in stories for your selected categories.</span>
+        </div>
       ) : articles.length === 0 ? (
         <div className="empty-state">
           <strong>No articles found</strong>

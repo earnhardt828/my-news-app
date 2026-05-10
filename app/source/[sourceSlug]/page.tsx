@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import SourceBadge from "../../components/source-badge";
+import { apiFetch } from "../../../lib/api-base";
 import { getCategoryLabel } from "../../../lib/categories";
 import {
   getSourceNameFromSlug,
@@ -77,7 +78,7 @@ export default function SourcePage({
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        const response = await fetch("/api/news");
+        const response = await apiFetch("/api/news");
         const news = (await response.json()) as SourceArticle[];
         const { data: ratingsData, error: ratingsError } = await supabase
           .from("source_ratings")

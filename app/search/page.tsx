@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch } from "../../lib/api-base";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel } from "../../lib/categories";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
@@ -378,7 +379,7 @@ export default function Search() {
       setIsLoading(true);
 
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/news?mode=trending&page=1&pageSize=${SEARCH_PAGE_SIZE}`
         );
         const payload = normalizeSearchPayload(
@@ -414,7 +415,7 @@ export default function Search() {
       setIsSearchLoading(true);
 
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/news?mode=search&query=${encodeURIComponent(
             query.trim()
           )}&page=1&pageSize=${SEARCH_PAGE_SIZE}`
@@ -502,7 +503,7 @@ export default function Search() {
           setIsLoadingMoreSearchResults(true);
 
           try {
-            const response = await fetch(
+            const response = await apiFetch(
               `/api/news?mode=search&query=${encodeURIComponent(
                 query.trim()
               )}&page=${searchPage + 1}&pageSize=${SEARCH_PAGE_SIZE}`

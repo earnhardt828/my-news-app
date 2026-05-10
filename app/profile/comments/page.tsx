@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
+import { apiFetch } from "../../../lib/api-base";
 import { supabase } from "../../../lib/supabase";
 import { extractVideoIdFromUrl } from "../../../lib/video-feed";
 
@@ -195,7 +196,7 @@ export default function ProfileCommentsPage() {
           return response;
         })(),
         supabase.from("comment_reactions").select("comment_id, reaction_type"),
-        fetch("/api/news"),
+        apiFetch("/api/news"),
       ]);
 
       if (!isMounted) {

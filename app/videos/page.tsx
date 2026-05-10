@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import LoadingScreen from "../components/loading-screen";
+import { apiFetch } from "../../lib/api-base";
 import ShareButton from "../components/share-button";
 import SourceBadge from "../components/source-badge";
 import { VIDEO_CATEGORIES, getCategoryLabel } from "../../lib/categories";
@@ -124,7 +124,7 @@ export default function VideosPage() {
           params.set("q", debouncedSearchTerm);
         }
 
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/videos${params.toString() ? `?${params.toString()}` : ""}`
         );
         const data = (await response.json()) as {
@@ -371,10 +371,14 @@ export default function VideosPage() {
       ) : null}
 
       {isLoading && !hasLoadedOnce ? (
-        <LoadingScreen />
-      ) : (
-        <div className="reels-feed">
-          {videos.map((video) => {
+        <div className="loading-state">
+          <strong>Loading videos...</strong>
+          <span>{statusMessage || "Fetching the latest channel feed."}</span>
+        </div>
+      ) : null}
+
+      <div className="reels-feed">
+        {videos.map((video) => {
             const isAutoplaying = autoplayVideoId === video.id && !video.fallback;
 
             return (
@@ -504,8 +508,7 @@ export default function VideosPage() {
               </article>
             );
           })}
-        </div>
-      )}
+      </div>
 
       {activeCommentsVideo ? (
         <div

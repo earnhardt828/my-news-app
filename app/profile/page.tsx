@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import LoadingScreen from "../components/loading-screen";
+import { apiFetch } from "../../lib/api-base";
 import {
   ensureProfileRow,
   saveProfilePatch,
@@ -301,7 +301,7 @@ export default function Profile() {
       supabase
         .from("comment_reactions")
         .select("comment_id, reaction_type"),
-      fetch("/api/news"),
+      apiFetch("/api/news"),
     ]);
 
     if (savedRes.status === "rejected") {
@@ -870,7 +870,10 @@ export default function Profile() {
   return (
     <section className="page-shell">
       {isLoading ? (
-        <LoadingScreen />
+        <div className="loading-state">
+          <strong>Loading profile...</strong>
+          <span>Checking your account and saved activity.</span>
+        </div>
       ) : !isSignedIn ? (
         <div className="profile-auth-shell">
           <section className="section-card stack profile-auth-card">

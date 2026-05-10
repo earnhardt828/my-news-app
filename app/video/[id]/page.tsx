@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
 import SourceBadge from "../../components/source-badge";
+import { apiFetch } from "../../../lib/api-base";
 import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import {
   buildVideoEmbedUrl,
@@ -187,7 +188,7 @@ export default function VideoDetailPage() {
 
       const [videosRes, commentsRes, reactionsRes, repliesRes, profilesRes] =
         await Promise.allSettled([
-          fetch("/api/videos"),
+          apiFetch("/api/videos"),
           supabase
             .from("comments")
             .select("id, article_id, user_id, username, text, created_at")

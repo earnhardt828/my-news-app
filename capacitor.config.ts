@@ -1,11 +1,11 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "app.mirur.news",
+  appId: "app.graffiti.news",
   appName: "Graffiti",
   webDir: "out",
   server: {
-    url: "https://my-news-app-omega-orpin.vercel.app",
+    url: "https://graffiti.news",
     cleartext: false,
   },
 };

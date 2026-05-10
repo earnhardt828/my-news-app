@@ -1,7 +1,6 @@
 "use client";
 
 import AdSlot from "./components/ad-slot";
-import LoadingScreen from "./components/loading-screen";
 import SourceRatingSheet from "./components/source-rating-sheet";
 import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
@@ -15,6 +14,7 @@ import {
   listBlockedUsers,
   listMutuallyHiddenUserIds,
 } from "../lib/blocked-users";
+import { apiFetch, buildApiUrl } from "../lib/api-base";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
 import { supabase } from "../lib/supabase";
@@ -29,6 +29,8 @@ import {
 } from "../lib/video-feed";
 
 const FEED_PAGE_SIZE = 25;
+const INITIAL_FEED_WARNING_MS = 4200;
+const INITIAL_FEED_TIMEOUT_MS = 5000;
 
 type Comment = {
   id: number;
@@ -407,7 +409,7 @@ export default function Home() {
   const [likedSources, setLikedSources] = useState<string[]>([]);
   const [dislikedSources, setDislikedSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isInitialFeedLoading, setIsInitialFeedLoading] = useState(true);
+  const [, setIsInitialFeedLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState("");
@@ -450,12 +452,16 @@ export default function Home() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
+  const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
+  const [loadingScreenMessage, setLoadingScreenMessage] = useState("Loading feed...");
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextPageRef = useRef(false);
+  const activeFeedRequestIdRef = useRef(0);
   const categoriesRef = useRef<string[]>([]);
   const [replyTarget, setReplyTarget] = useState<{
     articleId: number;
@@ -466,6 +472,20 @@ export default function Home() {
   useEffect(() => {
     categoriesRef.current = categories;
   }, [categories]);
+
+  useEffect(() => {
+    console.log("APP RENDERED");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      console.log("FOUND LOADING ARTICLES COMPONENT");
+      console.log("CURRENT ROUTE", window.location.pathname);
+    }
+    console.log("TRENDING LOADING STATE", isLoading);
+    console.log("ARTICLES COUNT", articles.length);
+    console.log("LOADING STATE", isLoading);
+  }, [articles.length, isLoading]);
 
   const feedMode: "trending" | "latest" | "myfeed" = useMemo(() => {
     if (sortMode === "latest") {
@@ -479,9 +499,23 @@ export default function Home() {
     return "trending";
   }, [sortMode]);
 
+  const homeLoadingHeading =
+    sortMode === "my-feed"
+      ? "Loading your feed..."
+      : sortMode === "latest"
+        ? "Loading latest stories..."
+        : "Loading trending stories...";
+
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
     const requestCategories = categoriesRef.current;
+    const requestId = activeFeedRequestIdRef.current + 1;
+    activeFeedRequestIdRef.current = requestId;
+
+    const isCurrentRequest = () => activeFeedRequestIdRef.current === requestId;
+    let initialLoadTimeoutId: number | null = null;
+    let initialLoadWarningTimeoutId: number | null = null;
+    let articleFetchTimeoutId: number | null = null;
 
     if (!replace && isFetchingNextPageRef.current) {
       return;
@@ -489,6 +523,39 @@ export default function Home() {
 
     if (replace) {
       setIsLoading(true);
+      setFeedLoadError(null);
+      setLoadingScreenMessage("Loading feed...");
+      if (typeof window !== "undefined") {
+        initialLoadWarningTimeoutId = window.setTimeout(() => {
+          if (!isCurrentRequest()) {
+            return;
+          }
+
+          setLoadingScreenMessage("Loading took too long. Showing fallback feed.");
+        }, INITIAL_FEED_WARNING_MS);
+
+        initialLoadTimeoutId = window.setTimeout(() => {
+          if (!isCurrentRequest()) {
+            return;
+          }
+
+          activeFeedRequestIdRef.current += 1;
+          console.error("INITIAL APP LOAD FAILED", {
+            reason: "timeout",
+            feedMode,
+            pageToLoad,
+            timeoutMs: INITIAL_FEED_TIMEOUT_MS,
+          });
+          setFeedLoadError("Couldn't load live articles. Showing fallback feed.");
+          setArticles(buildClientFallbackArticles());
+          setHasMoreArticles(false);
+          setFeedPage(1);
+          setIsInitialFeedLoading(false);
+          isFetchingNextPageRef.current = false;
+          setIsLoading(false);
+          setIsLoadingMoreArticles(false);
+        }, INITIAL_FEED_TIMEOUT_MS);
+      }
     } else {
       isFetchingNextPageRef.current = true;
       if (!replace) {
@@ -497,17 +564,51 @@ export default function Home() {
     }
 
     try {
-      const { data: userData } = await supabase.auth.getUser();
+      let userData: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"] = {
+        user: null,
+      };
+
+      try {
+        const authResponse = await supabase.auth.getUser();
+        userData = authResponse.data;
+      } catch (error) {
+        console.error("INITIAL APP LOAD FAILED", error);
+        userData = { user: null };
+      }
+
+      if (!isCurrentRequest()) {
+        return;
+      }
+
       setUserId(userData.user?.id ?? null);
 
       if (userData.user?.id) {
-        const { data: profile, error: profileError } = await ensureProfileRow({
-          id: userData.user.id,
-          email: userData.user.email ?? null,
-        });
+        let profile:
+          | Awaited<ReturnType<typeof ensureProfileRow>>["data"]
+          | null
+          | undefined = null;
+        let profileError: Awaited<ReturnType<typeof ensureProfileRow>>["error"] | null =
+          null;
+
+        try {
+          const profileResponse = await ensureProfileRow({
+            id: userData.user.id,
+            email: userData.user.email ?? null,
+          });
+          profile = profileResponse.data;
+          profileError = profileResponse.error;
+        } catch (error) {
+          console.error("INITIAL APP LOAD FAILED", error);
+          profile = null;
+          profileError = null;
+        }
 
         if (profileError) {
           console.error("Error loading home profile:", profileError);
+        }
+
+        if (!isCurrentRequest()) {
+          return;
         }
 
         setUsername(profile?.username ?? null);
@@ -536,7 +637,26 @@ export default function Home() {
         params.set("category", requestCategories.join(","));
       }
 
-      const newsRes = await fetch(`/api/news?${params.toString()}`);
+      const newsPath = `/api/news?${params.toString()}`;
+      const newsUrl = buildApiUrl(newsPath);
+      console.log("TRENDING FETCH URL", newsUrl);
+
+      const articleFetchController =
+        replace && typeof AbortController !== "undefined" ? new AbortController() : null;
+
+      if (replace && typeof window !== "undefined" && articleFetchController) {
+        articleFetchTimeoutId = window.setTimeout(() => {
+          articleFetchController.abort();
+        }, INITIAL_FEED_TIMEOUT_MS);
+      }
+
+      const newsRes = await apiFetch(newsPath, {
+        signal: articleFetchController?.signal,
+      });
+
+      if (!isCurrentRequest()) {
+        return;
+      }
 
       if (!newsRes.ok) {
         throw new Error(`Home feed request failed with status ${newsRes.status}`);
@@ -545,10 +665,23 @@ export default function Home() {
       const newsPayload = normalizeNewsPayload(
         (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse
       );
+      console.log("TRENDING FETCH RESPONSE", newsPayload);
+
+      if (!isCurrentRequest()) {
+        return;
+      }
+
       const newsData = newsPayload.articles;
 
       if (replace && newsData.length === 0) {
-        console.error("Home feed returned zero articles for page 1.", newsPayload);
+        const emptyResponseError = new Error("Trending returned zero articles.");
+        console.log("TRENDING FETCH ERROR", emptyResponseError);
+        setFeedLoadError("Couldn't load live articles. Showing fallback feed.");
+        setArticles(buildClientFallbackArticles());
+        setHasMoreArticles(false);
+        setFeedPage(1);
+        setIsInitialFeedLoading(false);
+        return;
       }
 
       const { data: likesData } = await supabase
@@ -599,6 +732,10 @@ export default function Home() {
             .select("id, user_id, source_name, rating")
             .eq("user_id", userData.user.id)
         : { data: [] as DbSourceRating[] };
+
+      if (!isCurrentRequest()) {
+        return;
+      }
 
       const likes = (likesData ?? []) as DbLike[];
       const comments = (commentsData ?? []) as DbComment[];
@@ -696,6 +833,8 @@ export default function Home() {
           .filter((rating) => rating.rating === "dislike")
           .map((rating) => rating.source_name)
       );
+      setFeedLoadError(null);
+      setLoadingScreenMessage("Loading feed...");
       setHasMoreArticles(newsPayload.hasMore);
       setFeedPage(pageToLoad);
       setArticles((prev) =>
@@ -705,15 +844,39 @@ export default function Home() {
         setIsInitialFeedLoading(false);
       }
     } catch (error) {
-      console.error("Error loading feed articles:", error);
+      if (!isCurrentRequest()) {
+        return;
+      }
+
+      console.log("TRENDING FETCH ERROR", error);
+      console.error("INITIAL APP LOAD FAILED", error);
       if (replace) {
+        setFeedLoadError("Couldn't load live articles. Showing fallback feed.");
+        setLoadingScreenMessage("Loading took too long. Showing fallback feed.");
         setArticles(buildClientFallbackArticles());
         setHasMoreArticles(false);
         setFeedPage(1);
         setIsInitialFeedLoading(false);
       }
     } finally {
+      if (initialLoadWarningTimeoutId) {
+        window.clearTimeout(initialLoadWarningTimeoutId);
+      }
+
+      if (initialLoadTimeoutId) {
+        window.clearTimeout(initialLoadTimeoutId);
+      }
+
+      if (articleFetchTimeoutId) {
+        window.clearTimeout(articleFetchTimeoutId);
+      }
+
+      if (!isCurrentRequest()) {
+        return;
+      }
+
       isFetchingNextPageRef.current = false;
+      console.log("SETTING LOADING FALSE");
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
@@ -725,6 +888,7 @@ export default function Home() {
         setArticles([]);
         setFeedPage(1);
         setHasMoreArticles(false);
+        setFeedLoadError(null);
         setIsLoading(false);
         setIsInitialFeedLoading(false);
       }, 0);
@@ -746,7 +910,7 @@ export default function Home() {
   useEffect(() => {
     async function fetchVideos() {
       try {
-        const response = await fetch("/api/videos");
+        const response = await apiFetch("/api/videos");
         const data = (await response.json()) as {
           videos?: VideoApiItem[];
         };
@@ -1894,27 +2058,48 @@ export default function Home() {
         </div>
       ) : null}
 
-      {isInitialFeedLoading && isLoading ? (
-        <LoadingScreen />
-      ) : sortMode === "my-feed" && categories.length === 0 ? (
+      {sortMode === "my-feed" && categories.length === 0 ? (
         <div className="empty-state">
           <strong>No categories selected</strong>
           <span>Choose categories in Profile to build your personalized feed.</span>
+        </div>
+      ) : isLoading && displayedArticles.length === 0 ? (
+        <div className="loading-state">
+          <strong>{homeLoadingHeading}</strong>
+          <span>{loadingScreenMessage}</span>
         </div>
       ) : displayedArticles.length === 0 ? (
         <div className="empty-state">
           <strong>{sortMode === "my-feed" ? "No articles found" : "No stories yet"}</strong>
           <span>
-            {sortMode === "my-feed"
+            {feedLoadError
+              ? feedLoadError
+              : sortMode === "my-feed"
               ? "Try adding more categories or check back when new stories land."
               : "When your API returns articles, they’ll show up here."}
           </span>
         </div>
       ) : (
         <div className="stack">
+          {isLoading ? (
+            <div className="feed-inline-loading" role="status" aria-live="polite">
+              {homeLoadingHeading}
+            </div>
+          ) : null}
+          {feedLoadError ? (
+            <div className="feed-inline-error" role="status" aria-live="polite">
+              {feedLoadError}
+            </div>
+          ) : null}
           {displayedArticles.map((article, index) => {
+            const imageSrc = getArticleCardImage(article);
+            const articleKey =
+              article.id || article.url || getArticleDeduplicationKey(article);
+            const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
+            const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
+
             return (
-              <div key={article.id} className="stack">
+              <div key={articleKey} className="stack">
                 <article className="news-card">
                   <div className="trending-source-row">
                     <button
@@ -1950,11 +2135,25 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {getArticleCardImage(article) ? (
+                      {shouldShowImage ? (
                         <img
-                          src={getArticleCardImage(article) as string}
+                          src={imageSrc as string}
                           alt={article.title}
                           className="article-image"
+                          loading="lazy"
+                          decoding="async"
+                          onError={() => {
+                            setFailedArticleImages((prev) => {
+                              if (prev[imageFailureKey]) {
+                                return prev;
+                              }
+
+                              return {
+                                ...prev,
+                                [imageFailureKey]: true,
+                              };
+                            });
+                          }}
                         />
                       ) : (
                         <div className="article-image article-image-placeholder">

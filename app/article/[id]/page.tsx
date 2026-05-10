@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import ShareButton from "../../components/share-button";
 import SourceRatingSheet from "../../components/source-rating-sheet";
 import SourceBadge from "../../components/source-badge";
+import { apiFetch } from "../../../lib/api-base";
 import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
@@ -488,7 +489,7 @@ export default function ArticleDetailPage() {
         setDislikedSources([]);
       }
 
-      const newsRes = await fetch("/api/news");
+      const newsRes = await apiFetch("/api/news");
 
       if (!newsRes.ok) {
         console.error("[Article detail] Failed to fetch news payload", {

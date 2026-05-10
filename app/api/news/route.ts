@@ -127,6 +127,12 @@ const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
 const responseCache = new Map<string, CachedResponse>();
 const newsDataTokenCache = new Map<string, string[]>();
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+} as const;
+
 const CATEGORY_QUERY_MAP: Record<string, string> = {
   "Breaking News": "breaking news OR developing story OR live updates",
   Politics: "politics OR congress OR election OR white house",
@@ -1051,6 +1057,19 @@ function shouldUseLegacyArrayResponse(searchParams: URLSearchParams) {
   );
 }
 
+function jsonResponse(payload: NewsRouteResponse | NormalizedArticle[]) {
+  return Response.json(payload, {
+    headers: CORS_HEADERS,
+  });
+}
+
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const isLegacyRequest = shouldUseLegacyArrayResponse(searchParams);
@@ -1072,7 +1091,7 @@ export async function GET(request: Request) {
       pageSize: 60,
     });
 
-    return Response.json(legacyPayload.articles);
+    return jsonResponse(legacyPayload.articles);
   }
 
   const payload = await collectArticles({
@@ -1083,5 +1102,5 @@ export async function GET(request: Request) {
     pageSize,
   });
 
-  return Response.json(payload);
+  return jsonResponse(payload);
 }

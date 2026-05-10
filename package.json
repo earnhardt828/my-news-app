@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npm run prepare:capacitor-web",
+    "prepare:capacitor-web": "node scripts/prepare-capacitor-web.mjs",
     "start": "next start",
     "lint": "eslint",
     "cap:sync": "npx cap sync",

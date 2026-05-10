@@ -2,10 +2,12 @@ import Image from "next/image";
 
 type LoadingScreenProps = {
   label?: string;
+  message?: string;
 };
 
 export default function LoadingScreen({
   label = "Loading Graffiti",
+  message,
 }: LoadingScreenProps) {
   return (
     <div className="loading-screen" role="status" aria-live="polite" aria-label={label}>
@@ -27,6 +29,7 @@ export default function LoadingScreen({
           className="loading-screen-logo branding-image-dark"
         />
       </div>
+      <p className="loading-screen-status-text">{message ?? label}</p>
       <div className="loading-screen-bottom-wrap">
         <Image
           src="/branding/graffiti-loading-bottom.png"
