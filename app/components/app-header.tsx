@@ -726,7 +726,26 @@ export default function AppHeader() {
     if (pathname === "/profile") {
       return (
         <div className="app-header-title-wrap app-header-title-wrap-center">
-          <span className="app-header-side-spacer" aria-hidden="true" />
+          <Link
+            href="/profile/bookmarks"
+            className="header-icon-button"
+            aria-label="Open bookmarked articles"
+          >
+            <span className="header-icon-glyph" aria-hidden="true">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z" />
+              </svg>
+            </span>
+          </Link>
           <h1 className="brand-title">Profile</h1>
           <Link
             href="/notifications"
@@ -774,9 +793,9 @@ export default function AppHeader() {
   return (
     <div className="app-header-logo-wrap">
       <Link
-        href="/profile/bookmarks"
+        href="/source-rankings"
         className="header-icon-button"
-        aria-label="Open bookmarked articles"
+        aria-label="Open source rankings"
       >
         <span className="header-icon-glyph" aria-hidden="true">
           <svg
@@ -789,7 +808,10 @@ export default function AppHeader() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z" />
+            <path d="M4 20h16" />
+            <path d="M7 16v-4" />
+            <path d="M12 16V7" />
+            <path d="M17 16v-7" />
           </svg>
         </span>
       </Link>
