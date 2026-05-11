@@ -10,6 +10,7 @@ import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
 import {
   getBestArticleImage,
+  looksLikeLowQualityImageUrl,
 } from "../../../lib/article-images";
 import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { cleanDisplayText } from "../../../lib/display-text";
@@ -665,10 +666,10 @@ function buildSummaryItems(
   }
 
   const labels = [
-    "What happened",
-    "Why it matters",
-    "Key detail",
-    "What’s next",
+    "🧠 Key point",
+    "⚠️ Why it matters",
+    "📍 Context",
+    "🔎 What to watch",
   ];
 
   return uniquePoints
@@ -1915,6 +1916,12 @@ export default function ArticleDetailPage() {
     : `${compareArticle?.id ?? article.id}:none`;
   const shouldShowArticleImage =
     Boolean(articleImageSrc) && !failedArticleImages[articleImageFailureKey];
+  const shouldUseProminentArticleImage =
+    shouldShowArticleImage &&
+    !looksLikeLowQualityImageUrl(articleImageSrc as string) &&
+    ["urlToImage", "imageUrl", "image", "mediaContent", "enclosureUrl", "ogImage", "twitterImage"].includes(
+      selectedArticleImage?.source ?? ""
+    );
   const rawContent = compareArticle.content?.trim() ?? "";
   const rawDescription = compareArticle.description?.trim() ?? "";
   const cleanedContent = rawContent
@@ -1981,53 +1988,69 @@ export default function ArticleDetailPage() {
         onTouchStart={handleCompareTouchStart}
         onTouchEnd={handleCompareTouchEnd}
       >
-        <div className="stack" style={{ gap: "10px" }}>
-          <div className="article-detail-kicker-row">
-            <button
-              type="button"
-              className="source-trigger source-trigger-tight article-detail-source-wrap"
-              onClick={(event) => {
-                event.stopPropagation();
-                setIsSourceSheetOpen(true);
-                setSourceRatingStatus(null);
-              }}
+        <div
+          className={`article-detail-hero-layout ${
+            shouldShowArticleImage ? "article-detail-hero-layout-with-image" : ""
+          }`}
+        >
+          <div className="stack article-detail-hero-copy" style={{ gap: "10px" }}>
+            <div className="article-detail-kicker-row">
+              <button
+                type="button"
+                className="source-trigger source-trigger-tight article-detail-source-wrap"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsSourceSheetOpen(true);
+                  setSourceRatingStatus(null);
+                }}
+              >
+                <SourceBadge sourceName={compareArticle.source} />
+                <span className="article-detail-source">{compareArticle.source}</span>
+              </button>
+              <span className="chip chip-accent">{compareArticle.category}</span>
+            </div>
+            <h2 className="article-detail-title">
+              {cleanDisplayText(compareArticle.title)}
+            </h2>
+            <p className="article-detail-byline">
+              Published: {formatPublishedTimestamp(article.publishedAt, article.time)}
+            </p>
+          </div>
+
+          {shouldShowArticleImage ? (
+            <div
+              className={`article-detail-compact-media ${
+                shouldUseProminentArticleImage
+                  ? "article-detail-media-prominent"
+                  : "article-detail-media-compact"
+              }`}
             >
-              <SourceBadge sourceName={compareArticle.source} />
-              <span className="article-detail-source">{compareArticle.source}</span>
-            </button>
-            <span className="chip chip-accent">{compareArticle.category}</span>
-          </div>
-          <h2 className="article-detail-title">
-            {cleanDisplayText(compareArticle.title)}
-          </h2>
-          <p className="article-detail-byline">
-            Published: {formatPublishedTimestamp(article.publishedAt, article.time)}
-          </p>
+              <img
+                src={articleImageSrc as string}
+                alt={cleanDisplayText(compareArticle.title)}
+                className={`article-thumb-image article-detail-compact-image ${
+                  shouldUseProminentArticleImage
+                    ? "article-detail-compact-image-prominent"
+                    : "article-detail-compact-image-small"
+                }`}
+                loading="lazy"
+                decoding="async"
+                onError={() => {
+                  setFailedArticleImages((prev) => {
+                    if (prev[articleImageFailureKey]) {
+                      return prev;
+                    }
+
+                    return {
+                      ...prev,
+                      [articleImageFailureKey]: true,
+                    };
+                  });
+                }}
+              />
+            </div>
+          ) : null}
         </div>
-
-        {shouldShowArticleImage ? (
-          <div className="article-detail-compact-media">
-            <img
-              src={articleImageSrc as string}
-              alt={cleanDisplayText(compareArticle.title)}
-              className="article-thumb-image article-detail-compact-image"
-              loading="lazy"
-              decoding="async"
-              onError={() => {
-                setFailedArticleImages((prev) => {
-                  if (prev[articleImageFailureKey]) {
-                    return prev;
-                  }
-
-                  return {
-                    ...prev,
-                    [articleImageFailureKey]: true,
-                  };
-                });
-              }}
-            />
-          </div>
-        ) : null}
 
         <div className="engagement-row article-detail-actions trending-stats-row article-detail-stats-row">
           <button
@@ -2090,7 +2113,8 @@ export default function ArticleDetailPage() {
             <ul className="article-summary-list">
               {summaryItems.map((item) => (
                 <li key={`${item.label}-${item.text}`} className="article-summary-item">
-                  <strong>{item.label}:</strong> {item.text}
+                  <strong className="article-summary-item-label">{item.label}</strong>
+                  <span>{item.text}</span>
                 </li>
               ))}
             </ul>

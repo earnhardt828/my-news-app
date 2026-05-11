@@ -2694,11 +2694,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-        {sortMode === "trending" ? (
-          <p className="trending-explainer">
-            Trending ranks recent stories using freshness, source variety, and activity.
-          </p>
-        ) : null}
       </div>
 
       {sortMode === "my-feed" ? (
