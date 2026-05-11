@@ -15,16 +15,16 @@ export default function LoadingScreen({
         <Image
           src="/branding/graffiti-loading-center.png"
           alt="Graffiti"
-          width={96}
-          height={96}
+          width={92}
+          height={92}
           priority
           className="loading-screen-logo branding-image-light"
         />
         <Image
           src="/branding/graffiti-loading-center-dark.png"
           alt="Graffiti"
-          width={96}
-          height={96}
+          width={92}
+          height={92}
           priority
           className="loading-screen-logo branding-image-dark"
         />
@@ -34,16 +34,16 @@ export default function LoadingScreen({
         <Image
           src="/branding/graffiti-loading-bottom.png"
           alt="Graffiti"
-          width={150}
-          height={30}
+          width={158}
+          height={32}
           priority
           className="loading-screen-bottom-logo branding-image-light"
         />
         <Image
           src="/branding/graffiti-loading-bottom-dark.png"
           alt="Graffiti"
-          width={150}
-          height={30}
+          width={158}
+          height={32}
           priority
           className="loading-screen-bottom-logo branding-image-dark"
         />

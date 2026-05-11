@@ -1,6 +1,7 @@
 "use client";
 
 import AdSlot from "./components/ad-slot";
+import LoadingScreen from "./components/loading-screen";
 import SourceRatingSheet from "./components/source-rating-sheet";
 import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
@@ -157,137 +158,6 @@ type PaginatedNewsResponse = {
   pageSize: number;
   hasMore: boolean;
 };
-
-const HOME_FALLBACK_ARTICLES: FeedArticlePayload[] = [
-  {
-    id: 910001,
-    title: "Congress returns with a packed agenda on budget, border, and aid talks",
-    source: "Associated Press",
-    category: "Politics",
-    time: "Recent",
-    image: null,
-    imageUrl: null,
-    urlToImage: null,
-    description:
-      "Lawmakers head back to Washington facing another week of negotiations on domestic priorities and international funding.",
-    url: "https://graffiti.app/fallback/910001",
-    publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    content:
-      "Lawmakers head back to Washington facing another week of negotiations on domestic priorities and international funding.",
-  },
-  {
-    id: 910002,
-    title: "Wall Street watches bond yields, oil prices, and earnings for fresh signals",
-    source: "Reuters",
-    category: "Finance",
-    time: "Recent",
-    image: null,
-    imageUrl: null,
-    urlToImage: null,
-    description:
-      "Investors are tracking rates, commodities, and corporate outlooks as markets look for direction.",
-    url: "https://graffiti.app/fallback/910002",
-    publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    content:
-      "Investors are tracking rates, commodities, and corporate outlooks as markets look for direction.",
-  },
-  {
-    id: 910003,
-    title: "Tech companies push new AI features while regulators weigh guardrails",
-    source: "Bloomberg",
-    category: "Tech",
-    time: "Recent",
-    image: null,
-    imageUrl: null,
-    urlToImage: null,
-    description:
-      "The latest product rollouts arrive alongside policy questions about safety, transparency, and competition.",
-    url: "https://graffiti.app/fallback/910003",
-    publishedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    content:
-      "The latest product rollouts arrive alongside policy questions about safety, transparency, and competition.",
-  },
-  {
-    id: 910004,
-    title: "Global leaders renew ceasefire pressure as humanitarian routes remain fragile",
-    source: "Al Jazeera",
-    category: "World",
-    time: "Recent",
-    image: null,
-    imageUrl: null,
-    urlToImage: null,
-    description:
-      "Diplomatic efforts continue as aid groups warn that access and supply routes remain uncertain.",
-    url: "https://graffiti.app/fallback/910004",
-    publishedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    content:
-      "Diplomatic efforts continue as aid groups warn that access and supply routes remain uncertain.",
-  },
-  {
-    id: 910005,
-    title: "Major league contenders reshuffle rotations as the season intensifies",
-    source: "ESPN",
-    category: "Sports",
-    time: "Recent",
-    image: null,
-    imageUrl: null,
-    urlToImage: null,
-    description:
-      "Teams are adjusting lineups and workloads as injuries and standings start to shape strategy.",
-    url: "https://graffiti.app/fallback/910005",
-    publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    content:
-      "Teams are adjusting lineups and workloads as injuries and standings start to shape strategy.",
-  },
-  {
-    id: 910006,
-    title: "Hospitals prepare for a busy summer as public health agencies track new trends",
-    source: "NPR",
-    category: "Health",
-    time: "Recent",
-    image: null,
-    imageUrl: null,
-    urlToImage: null,
-    description:
-      "Health systems are watching staffing, vaccination, and regional outbreak data ahead of travel season.",
-    url: "https://graffiti.app/fallback/910006",
-    publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    content:
-      "Health systems are watching staffing, vaccination, and regional outbreak data ahead of travel season.",
-  },
-  {
-    id: 910007,
-    title: "Scientists release fresh climate measurements as coastal cities plan upgrades",
-    source: "BBC News",
-    category: "Science",
-    time: "Recent",
-    image: null,
-    imageUrl: null,
-    urlToImage: null,
-    description:
-      "New research is informing infrastructure plans, flood readiness, and energy resilience.",
-    url: "https://graffiti.app/fallback/910007",
-    publishedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
-    content:
-      "New research is informing infrastructure plans, flood readiness, and energy resilience.",
-  },
-  {
-    id: 910008,
-    title: "Streaming platforms race for summer audiences with sequels, sports, and live events",
-    source: "Variety",
-    category: "Entertainment",
-    time: "Recent",
-    image: null,
-    imageUrl: null,
-    urlToImage: null,
-    description:
-      "Studios and streamers are leaning on major releases and event programming to hold subscribers.",
-    url: "https://graffiti.app/fallback/910008",
-    publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-    content:
-      "Studios and streamers are leaning on major releases and event programming to hold subscribers.",
-  },
-];
 
 function isMissingCommentMetadataColumnError(message: string | null | undefined) {
   if (!message) {
@@ -460,17 +330,6 @@ function isFallbackFeedArticle(article: FeedArticlePayload) {
   return article.url?.includes("graffiti.app/fallback") ?? false;
 }
 
-function buildClientFallbackArticles() {
-  return HOME_FALLBACK_ARTICLES.map((article, index) => ({
-    ...article,
-    likes: 30 - index * 4,
-    likeUsers: [],
-    likedByCurrentUser: false,
-    comments: [],
-    saved: false,
-  }));
-}
-
 function arraysShallowEqual(left: string[], right: string[]) {
   if (left.length !== right.length) {
     return false;
@@ -583,7 +442,7 @@ export default function Home() {
   const [likedSources, setLikedSources] = useState<string[]>([]);
   const [dislikedSources, setDislikedSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [, setIsInitialFeedLoading] = useState(true);
+  const [isInitialFeedLoading, setIsInitialFeedLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState("");
@@ -696,6 +555,7 @@ export default function Home() {
     if (replace) {
       setIsLoading(true);
       setFeedLoadError(null);
+      setIsInitialFeedLoading(feedMode === "trending" && pageToLoad === 1);
       if (typeof window !== "undefined") {
         initialLoadWarningTimeoutId = window.setTimeout(() => {
           if (!isCurrentRequest()) {
@@ -715,8 +575,8 @@ export default function Home() {
             pageToLoad,
             timeoutMs: INITIAL_FEED_TIMEOUT_MS,
           });
-          setFeedLoadError("Couldn't load live stories. Showing fallback feed.");
-          setArticles(buildClientFallbackArticles());
+          setFeedLoadError("Couldn't load live stories right now.");
+          setArticles([]);
           setHasMoreArticles(false);
           setFeedPage(1);
           setIsInitialFeedLoading(false);
@@ -857,8 +717,8 @@ export default function Home() {
       if (replace && newsData.length === 0) {
         const emptyResponseError = new Error("Trending returned zero articles.");
         console.log("TRENDING FETCH ERROR", emptyResponseError);
-        setFeedLoadError("Couldn't load live stories. Showing fallback feed.");
-        setArticles(buildClientFallbackArticles());
+        setFeedLoadError("Couldn't load live stories right now.");
+        setArticles([]);
         setHasMoreArticles(false);
         setFeedPage(1);
         setIsInitialFeedLoading(false);
@@ -1040,15 +900,13 @@ export default function Home() {
           .filter((rating) => rating.rating === "dislike")
           .map((rating) => rating.source_name)
       );
-      setFeedLoadError(
-        replace && receivedFallbackFeed
-          ? "Couldn't load live stories. Showing fallback feed."
-          : null
-      );
-      setHasMoreArticles(newsPayload.hasMore);
+      setFeedLoadError(replace && receivedFallbackFeed ? "Couldn't load live stories right now." : null);
+      setHasMoreArticles(receivedFallbackFeed ? false : newsPayload.hasMore);
       setFeedPage(pageToLoad);
       setArticles((prev) => {
-        const nextArticles =
+        const nextArticles = receivedFallbackFeed && replace
+          ? []
+          :
           replace ? mergedArticles : mergeArticlesByIdentity(prev, mergedArticles);
         console.log("ARTICLES USED", nextArticles);
         console.log("TRENDING FINAL COUNT", nextArticles.length);
@@ -1065,8 +923,8 @@ export default function Home() {
       console.log("TRENDING FETCH ERROR", error);
       console.error("INITIAL APP LOAD FAILED", error);
       if (replace && !hasLiveNewsResponse) {
-        setFeedLoadError("Couldn't load live stories. Showing fallback feed.");
-        setArticles(buildClientFallbackArticles());
+        setFeedLoadError("Couldn't load live stories right now.");
+        setArticles([]);
         setHasMoreArticles(false);
         setFeedPage(1);
         setIsInitialFeedLoading(false);
@@ -1096,6 +954,10 @@ export default function Home() {
       setIsLoadingMoreArticles(false);
     }
   }, [feedMode]);
+
+  const handleRetryFeedLoad = useCallback(() => {
+    void loadFeedPage(1, { replace: true });
+  }, [loadFeedPage]);
 
   useEffect(() => {
     if (isMyFeedWithoutCategories) {
@@ -2230,11 +2092,7 @@ export default function Home() {
     });
   };
 
-  const fallbackDisplayArticles = useMemo(() => buildClientFallbackArticles(), []);
-  const visibleArticles =
-    displayedArticles.length === 0 && sortMode !== "my-feed"
-      ? fallbackDisplayArticles
-      : displayedArticles;
+  const visibleArticles = displayedArticles;
 
   const trendingFeedItems = useMemo(() => {
     if (sortMode !== "trending") {
@@ -2661,6 +2519,15 @@ export default function Home() {
     }
   };
 
+  if (
+    sortMode === "trending" &&
+    isInitialFeedLoading &&
+    visibleArticles.length === 0 &&
+    !feedLoadError
+  ) {
+    return <LoadingScreen label="Loading Graffiti" message="Loading live stories..." />;
+  }
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -2723,20 +2590,40 @@ export default function Home() {
         </div>
       ) : visibleArticles.length === 0 ? (
         <div className="empty-state">
-          <strong>{sortMode === "my-feed" ? "No articles found" : "No stories yet"}</strong>
+          <strong>
+            {feedLoadError
+              ? "Live stories unavailable"
+              : sortMode === "my-feed"
+              ? "No articles found"
+              : "No stories yet"}
+          </strong>
           <span>
             {feedLoadError
               ? feedLoadError
               : sortMode === "my-feed"
               ? "Try adding more categories or check back when new stories land."
-              : "Try again in a moment or explore the fallback stories below."}
+              : "Check back in a moment for fresh stories."}
           </span>
+          {feedLoadError && sortMode === "trending" ? (
+            <button className="button button-secondary" onClick={handleRetryFeedLoad}>
+              Retry
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className="stack feed-results-stack">
           {feedLoadError ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
-              {feedLoadError}
+              <div className="stack" style={{ gap: "10px" }}>
+                <span>{feedLoadError}</span>
+                {sortMode === "trending" ? (
+                  <div>
+                    <button className="button button-secondary" onClick={handleRetryFeedLoad}>
+                      Retry
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
           {sortMode === "trending"

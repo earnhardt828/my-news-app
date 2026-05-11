@@ -2622,7 +2622,7 @@ input {
 }
 
 .loading-screen-logo {
-  width: clamp(86px, 24vw, 118px);
+  width: clamp(82px, 23vw, 112px);
   height: auto;
   object-fit: contain;
   animation: loading-logo-fade 420ms ease-out both;
@@ -2661,7 +2661,7 @@ input {
 }
 
 .loading-screen-bottom-logo {
-  width: clamp(124px, 34vw, 170px);
+  width: clamp(132px, 36vw, 178px);
   height: auto;
   object-fit: contain;
   animation: loading-logo-fade 520ms ease-out both;
