@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../lib/api-base";
 import { getBestArticleImage } from "../../lib/article-images";
 import SourceBadge from "../components/source-badge";
@@ -42,13 +43,6 @@ type UserProfileSearchResult = {
 type BlockedUserRow = {
   blocker_id: string | null;
   blocked_id: string | null;
-};
-
-type SourceRatingRow = {
-  id: string;
-  user_id: string;
-  source_name: string;
-  rating: "like" | "dislike";
 };
 
 type SearchDateFilter = "recent" | "week" | "month" | "all";
@@ -372,13 +366,11 @@ function normalizeSearchPayload(payload: NewsArticle[] | SearchNewsResponse) {
 }
 
 export default function Search() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [searchArticles, setSearchArticles] = useState<NewsArticle[]>([]);
   const [userResults, setUserResults] = useState<UserProfileSearchResult[]>([]);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [sourceRatings, setSourceRatings] = useState<SourceRatingRow[]>([]);
-  const [isSavingSourceRating, setIsSavingSourceRating] = useState(false);
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
@@ -395,9 +387,6 @@ export default function Search() {
       setIsLoading(true);
 
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
         const response = await apiFetch(
           `/api/news?mode=trending&page=1&pageSize=${SEARCH_PAGE_SIZE}`
         );
@@ -405,23 +394,6 @@ export default function Search() {
           (await response.json()) as NewsArticle[] | SearchNewsResponse
         );
         const news = payload.articles;
-        let ratings: SourceRatingRow[] = [];
-
-        if (user?.id) {
-          const { data: ratingsData, error: ratingsError } = await supabase
-            .from("source_ratings")
-            .select("id, user_id, source_name, rating")
-            .eq("user_id", user.id);
-
-          if (ratingsError) {
-            console.error("Error loading search source ratings:", ratingsError);
-          } else {
-            ratings = (ratingsData ?? []) as SourceRatingRow[];
-          }
-        }
-
-        setCurrentUserId(user?.id ?? null);
-        setSourceRatings(ratings);
         setArticles(news);
 
         const derivedTerms = buildTrendingTerms(news);
@@ -438,80 +410,6 @@ export default function Search() {
 
     void loadSearchData();
   }, []);
-
-  const handleSourceRating = async (
-    event: MouseEvent<HTMLButtonElement>,
-    sourceName: string,
-    rating: "like" | "dislike"
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (!currentUserId) {
-      alert("Log in to rate sources.");
-      return;
-    }
-
-    const existingRating =
-      sourceRatings.find(
-        (currentRating) =>
-          currentRating.user_id === currentUserId &&
-          currentRating.source_name === sourceName
-      ) ?? null;
-
-    setIsSavingSourceRating(true);
-
-    if (existingRating?.rating === rating) {
-      const { error } = await supabase
-        .from("source_ratings")
-        .delete()
-        .eq("id", existingRating.id)
-        .eq("user_id", currentUserId);
-
-      setIsSavingSourceRating(false);
-
-      if (error) {
-        console.error("Error clearing source rating from search:", error);
-        return;
-      }
-
-      setSourceRatings((prev) =>
-        prev.filter((currentRating) => currentRating.id !== existingRating.id)
-      );
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("source_ratings")
-      .upsert(
-        {
-          user_id: currentUserId,
-          source_name: sourceName,
-          rating,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "user_id,source_name",
-        }
-      )
-      .select("id, user_id, source_name, rating")
-      .single();
-
-    setIsSavingSourceRating(false);
-
-    if (error) {
-      console.error("Error saving source rating from search:", error);
-      return;
-    }
-
-    setSourceRatings((prev) => {
-      const next = prev.filter(
-        (currentRating) =>
-          !(currentRating.user_id === currentUserId && currentRating.source_name === sourceName)
-      );
-      return [...next, data as SourceRatingRow];
-    });
-  };
 
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -784,18 +682,6 @@ export default function Search() {
     );
   }, [articles, normalizedQuery, searchArticles]);
 
-  const matchedSourceRating = useMemo(
-    () =>
-      matchedSourceName
-        ? sourceRatings.find(
-            (rating) =>
-              rating.user_id === currentUserId &&
-              rating.source_name === matchedSourceName
-          )?.rating ?? null
-        : null,
-    [currentUserId, matchedSourceName, sourceRatings]
-  );
-
   const filteredResults = useMemo(() => {
     if (!normalizedQuery) {
       return [];
@@ -959,48 +845,6 @@ export default function Search() {
                     <span className="search-source-kind">News source</span>
                   </div>
                 </div>
-                <div
-                  className="source-rating-inline"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                >
-                  <button
-                    type="button"
-                    className={`source-rating-inline-button ${
-                      matchedSourceRating === "like"
-                        ? "source-rating-inline-button-active-like"
-                        : ""
-                    }`}
-                    aria-label={`Like ${matchedSourceName}`}
-                    disabled={isSavingSourceRating}
-                    onClick={(event) =>
-                      void handleSourceRating(event, matchedSourceName, "like")
-                    }
-                  >
-                    <span className="icon-action-glyph" aria-hidden="true">
-                      ♥
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`source-rating-inline-button ${
-                      matchedSourceRating === "dislike"
-                        ? "source-rating-inline-button-active-dislike"
-                        : ""
-                    }`}
-                    aria-label={`Dislike ${matchedSourceName}`}
-                    disabled={isSavingSourceRating}
-                    onClick={(event) =>
-                      void handleSourceRating(event, matchedSourceName, "dislike")
-                    }
-                  >
-                    <span className="icon-action-glyph" aria-hidden="true">
-                      👎
-                    </span>
-                  </button>
-                </div>
                 <span className="search-trending-icon" aria-hidden="true">
                   ↗
                 </span>
@@ -1060,10 +904,20 @@ export default function Search() {
                       <div className="search-result-layout">
                         <div className="search-result-copy">
                           <div className="search-result-source-row">
-                            <div className="trending-source-brand">
-                              <SourceBadge sourceName={article.source} />
-                              <span className="trending-source-name">{article.source}</span>
-                            </div>
+                            <button
+                              type="button"
+                              className="source-trigger source-trigger-tight trending-source-button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                router.push(`/source/${slugifySourceName(article.source)}`);
+                              }}
+                            >
+                              <div className="trending-source-brand">
+                                <SourceBadge sourceName={article.source} />
+                                <span className="trending-source-name">{article.source}</span>
+                              </div>
+                            </button>
                             <span className="chip chip-accent">
                               {getCategoryLabel(article.category)}
                             </span>

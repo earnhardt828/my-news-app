@@ -2,13 +2,12 @@
 
 import AdSlot from "./components/ad-slot";
 import LoadingScreen from "./components/loading-screen";
-import SourceRatingSheet from "./components/source-rating-sheet";
 import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShareButton from "./components/share-button";
 import {
   createBlockedUser,
@@ -22,6 +21,7 @@ import {
 import { cleanDisplayText } from "../lib/display-text";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
+import { slugifySourceName } from "../lib/source-logos";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
 import { CATEGORY_OPTIONS, getCategoryLabel } from "../lib/categories";
@@ -479,12 +479,6 @@ export default function Home() {
     text: string;
   } | null>(null);
   const [isSavingCategories, setIsSavingCategories] = useState(false);
-  const [activeSourceName, setActiveSourceName] = useState<string | null>(null);
-  const [isSavingSourceRating, setIsSavingSourceRating] = useState(false);
-  const [sourceRatingStatus, setSourceRatingStatus] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
@@ -1986,128 +1980,6 @@ export default function Home() {
     }, 900);
   };
 
-  const openSourcePreferenceSheet = (sourceName: string) => {
-    setActiveSourceName(sourceName);
-    setSourceRatingStatus(null);
-  };
-
-  const closeSourcePreferenceSheet = () => {
-    if (isSavingSourceRating) {
-      return;
-    }
-
-    setActiveSourceName(null);
-    setSourceRatingStatus(null);
-  };
-
-  const handleSaveSourceRating = async (
-    sourceName: string,
-    rating: "like" | "dislike"
-  ) => {
-    if (!userId) {
-      setSourceRatingStatus({
-        type: "error",
-        text: "Log in to rate sources.",
-      });
-      return;
-    }
-
-    const currentRating = likedSources.includes(sourceName)
-      ? "like"
-      : dislikedSources.includes(sourceName)
-        ? "dislike"
-        : null;
-    const isFirstRating = currentRating === null;
-
-    setIsSavingSourceRating(true);
-    setSourceRatingStatus(null);
-
-    if (currentRating === rating) {
-      const { error } = await supabase
-        .from("source_ratings")
-        .delete()
-        .eq("user_id", userId)
-        .eq("source_name", sourceName);
-
-      setIsSavingSourceRating(false);
-
-      if (error) {
-        console.error("Error clearing source rating:", error);
-        setSourceRatingStatus({
-          type: "error",
-          text: error.message ?? "Could not update source rating.",
-        });
-        return;
-      }
-
-      setLikedSources((prev) => prev.filter((current) => current !== sourceName));
-      setDislikedSources((prev) => prev.filter((current) => current !== sourceName));
-      setSourceRatingStatus({
-        type: "success",
-        text: "Source rating cleared.",
-      });
-      return;
-    }
-
-    const { error } = await supabase.from("source_ratings").upsert(
-      {
-        user_id: userId,
-        source_name: sourceName,
-        rating,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "user_id,source_name",
-      }
-    );
-
-    setIsSavingSourceRating(false);
-
-    if (error) {
-      console.error("Error saving source rating:", error);
-      setSourceRatingStatus({
-        type: "error",
-        text: error.message ?? "Could not save source rating.",
-      });
-      return;
-    }
-
-    setLikedSources((prev) =>
-      rating === "like"
-        ? [...prev.filter((current) => current !== sourceName), sourceName]
-        : prev.filter((current) => current !== sourceName)
-    );
-    setDislikedSources((prev) =>
-      rating === "dislike"
-        ? [...prev.filter((current) => current !== sourceName), sourceName]
-        : prev.filter((current) => current !== sourceName)
-    );
-    setSourceRatingStatus({
-      type: "success",
-      text: isFirstRating
-        ? rating === "dislike"
-          ? "We'll show you less from this source in My Feed."
-          : "We'll keep showing this source in My Feed."
-        : "Source rating updated.",
-    });
-  };
-
-  const handleInlineSourceRating = async (
-    event: MouseEvent<HTMLButtonElement>,
-    sourceName: string,
-    rating: "like" | "dislike"
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (!userId) {
-      alert("Log in to rate sources");
-      return;
-    }
-
-    await handleSaveSourceRating(sourceName, rating);
-  };
-
   const visibleArticles = displayedArticles;
 
   const trendingFeedItems = useMemo(() => {
@@ -2349,7 +2221,6 @@ export default function Home() {
     options?: {
       rankLabel?: string | null;
       showFreshnessTime?: boolean;
-      showSourceRatings?: boolean;
     }
   ) => {
     try {
@@ -2374,69 +2245,18 @@ export default function Home() {
           </div>
           <div className="trending-source-row">
             <div className="trending-source-main">
-              <button
-                type="button"
+              <Link
+                href={`/source/${slugifySourceName(article.source)}`}
                 className="source-trigger source-trigger-tight trending-source-button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  openSourcePreferenceSheet(article.source);
                 }}
               >
                 <div className="trending-source-brand">
                   <SourceBadge sourceName={article.source} />
                   <span className="trending-source-name">{article.source}</span>
                 </div>
-              </button>
-              {options?.showSourceRatings ? (
-                <div
-                  className="source-rating-inline"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                >
-                  <button
-                    type="button"
-                    className={`source-rating-inline-button ${
-                      likedSources.includes(article.source)
-                        ? "source-rating-inline-button-active-like"
-                        : ""
-                    }`}
-                    aria-label={`Like ${article.source}`}
-                    onClick={(event) =>
-                      void handleInlineSourceRating(event, article.source, "like")
-                    }
-                  >
-                    <span className="icon-action-glyph" aria-hidden="true">
-                      <svg {...actionIconProps}>
-                        <path
-                          d="M12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                          fill={likedSources.includes(article.source) ? "currentColor" : "none"}
-                        />
-                      </svg>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`source-rating-inline-button ${
-                      dislikedSources.includes(article.source)
-                        ? "source-rating-inline-button-active-dislike"
-                        : ""
-                    }`}
-                    aria-label={`Dislike ${article.source}`}
-                    onClick={(event) =>
-                      void handleInlineSourceRating(event, article.source, "dislike")
-                    }
-                  >
-                    <span className="icon-action-glyph" aria-hidden="true">
-                      <svg {...actionIconProps}>
-                        <path d="M10 14V4.8c0-.9-.7-1.6-1.6-1.6H6.9C6 3.2 5.2 3.9 5.2 4.8v8.3c0 .4.1.8.4 1.1l2.2 3c.3.4.4.8.4 1.3V20" />
-                        <path d="M14 10h4.4c1 0 1.8.9 1.6 1.9l-.9 5.7c-.1.8-.8 1.4-1.6 1.4H10" />
-                      </svg>
-                    </span>
-                  </button>
-                </div>
-              ) : null}
+              </Link>
             </div>
           </div>
           <Link href={`/article/${article.id}`} className="article-link">
@@ -2703,7 +2523,6 @@ export default function Home() {
                   {item.type === "article"
                     ? renderArticleFeedCard(item.article, {
                         rankLabel: index < 25 ? `Top ${index + 1}` : null,
-                        showSourceRatings: true,
                       })
                     : (
                       <VideoFeedCard
@@ -2756,33 +2575,6 @@ export default function Home() {
           ) : null}
         </div>
       )}
-
-      <SourceRatingSheet
-        sourceName={activeSourceName}
-        isOpen={activeSourceName !== null}
-        currentRating={
-          activeSourceName
-            ? likedSources.includes(activeSourceName)
-              ? "like"
-              : dislikedSources.includes(activeSourceName)
-                ? "dislike"
-                : null
-            : null
-        }
-        isSaving={isSavingSourceRating}
-        status={sourceRatingStatus}
-        onLike={() => {
-          if (activeSourceName) {
-            void handleSaveSourceRating(activeSourceName, "like");
-          }
-        }}
-        onDislike={() => {
-          if (activeSourceName) {
-            void handleSaveSourceRating(activeSourceName, "dislike");
-          }
-        }}
-        onClose={closeSourcePreferenceSheet}
-      />
 
       {isCategorySheetOpen ? (
         <div

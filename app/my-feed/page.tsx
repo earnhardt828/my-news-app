@@ -18,6 +18,7 @@ import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
+import { slugifySourceName } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
 type FeedArticle = {
@@ -336,20 +337,18 @@ export default function MyFeed() {
 
                 return (
                   <article className="news-card">
-                    <button
-                      type="button"
+                    <Link
+                      href={`/source/${slugifySourceName(article.source)}`}
                       className="source-trigger source-trigger-tight my-feed-source-trigger"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setActiveSourceName(article.source);
-                        setSourcePreferenceStatus(null);
                       }}
                     >
                       <div className="trending-source-brand">
                         <SourceBadge sourceName={article.source} />
                         <span className="trending-source-name">{article.source}</span>
                       </div>
-                    </button>
+                    </Link>
                     <Link href={`/article/${article.id}`} className="article-link">
                       <div
                         className={`news-card-body ${

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import ShareButton from "../../components/share-button";
-import SourceRatingSheet from "../../components/source-rating-sheet";
 import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
 import {
@@ -16,6 +15,7 @@ import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { cleanDisplayText } from "../../../lib/display-text";
 import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
+import { slugifySourceName } from "../../../lib/source-logos";
 import { supabase } from "../../../lib/supabase";
 
 type ArticleRecord = {
@@ -693,18 +693,10 @@ export default function ArticleDetailPage() {
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
   const [likedByCurrentUser, setLikedByCurrentUser] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [likedSources, setLikedSources] = useState<string[]>([]);
-  const [dislikedSources, setDislikedSources] = useState<string[]>([]);
   const [compareArticles, setCompareArticles] = useState<ArticleRecord[]>([]);
   const [activeCompareIndex, setActiveCompareIndex] = useState(0);
   const [showCompareTutorial, setShowCompareTutorial] = useState(false);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
-  const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
-  const [isSavingSourceRating, setIsSavingSourceRating] = useState(false);
-  const [sourceRatingStatus, setSourceRatingStatus] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
   const [commentSortMode, setCommentSortMode] = useState<"top" | "newest">("top");
   const [isCommentSortSheetOpen, setIsCommentSortSheetOpen] = useState(false);
   const [commentInput, setCommentInput] = useState("");
@@ -755,8 +747,6 @@ export default function ArticleDetailPage() {
         setUsername(profile?.username ?? null);
       } else {
         setUsername(null);
-        setLikedSources([]);
-        setDislikedSources([]);
       }
 
       const baseNewsRes = await apiFetch("/api/news?mode=trending&page=1&pageSize=75");
@@ -1027,13 +1017,6 @@ export default function ArticleDetailPage() {
       if (blockedUsersError) {
         console.error("Error loading blocked users:", blockedUsersError);
       }
-      const { data: sourceRatingsData } = currentUserId
-        ? await supabase
-            .from("source_ratings")
-            .select("source_name, rating")
-            .eq("user_id", currentUserId)
-        : { data: [] as { source_name: string; rating: "like" | "dislike" }[] };
-
       const likes = (likesRes.data ?? []) as DbLike[];
       const commentReactions = (reactionsRes.data ?? []) as DbCommentReaction[];
       const commentReplies = (repliesRes.data ?? []) as DbCommentReply[];
@@ -1044,27 +1027,12 @@ export default function ArticleDetailPage() {
       const avatarLookup = new Map(
         profiles.map((profile) => [profile.id, profile.avatar_url])
       );
-      const sourceRatings = (sourceRatingsData ?? []) as {
-        source_name: string;
-        rating: "like" | "dislike";
-      }[];
-
       setArticle(storedArticle);
       setLikesCount(likes.length);
       setLikedByCurrentUser(
         likes.some((like) => like.user_id && like.user_id === currentUserId)
       );
       setIsSaved(Boolean(savedArticlesData));
-      setLikedSources(
-        sourceRatings
-          .filter((rating) => rating.rating === "like")
-          .map((rating) => rating.source_name)
-      );
-      setDislikedSources(
-        sourceRatings
-          .filter((rating) => rating.rating === "dislike")
-          .map((rating) => rating.source_name)
-      );
       setComments(
         rawComments
           .filter(
@@ -1366,97 +1334,6 @@ export default function ArticleDetailPage() {
     const minutes = `${date.getMinutes()}`.padStart(2, "0");
 
     return `${month}/${day}/${year} ${hours}:${minutes}`;
-  };
-
-  const handleSaveSourceRating = async (rating: "like" | "dislike") => {
-    const activeSourceName = activeCompareArticle?.source ?? article?.source;
-
-    if (!activeSourceName) {
-      return;
-    }
-
-    if (!userId) {
-      setSourceRatingStatus({
-        type: "error",
-        text: "Log in to rate sources.",
-      });
-      return;
-    }
-
-    const sourceName = activeSourceName;
-    const currentRating = likedSources.includes(sourceName)
-      ? "like"
-      : dislikedSources.includes(sourceName)
-        ? "dislike"
-        : null;
-
-    setIsSavingSourceRating(true);
-    setSourceRatingStatus(null);
-
-    if (currentRating === rating) {
-      const { error } = await supabase
-        .from("source_ratings")
-        .delete()
-        .eq("user_id", userId)
-        .eq("source_name", sourceName);
-
-      setIsSavingSourceRating(false);
-
-      if (error) {
-        console.error("Error clearing source rating:", error);
-        setSourceRatingStatus({
-          type: "error",
-          text: error.message ?? "Could not update source rating.",
-        });
-        return;
-      }
-
-      setLikedSources((prev) => prev.filter((current) => current !== sourceName));
-      setDislikedSources((prev) => prev.filter((current) => current !== sourceName));
-      setSourceRatingStatus({
-        type: "success",
-        text: "Source rating cleared.",
-      });
-      return;
-    }
-
-    const { error } = await supabase.from("source_ratings").upsert(
-      {
-        user_id: userId,
-        source_name: sourceName,
-        rating,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "user_id,source_name",
-      }
-    );
-
-    setIsSavingSourceRating(false);
-
-    if (error) {
-      console.error("Error saving source rating:", error);
-      setSourceRatingStatus({
-        type: "error",
-        text: error.message ?? "Could not save source rating.",
-      });
-      return;
-    }
-
-    setLikedSources((prev) =>
-      rating === "like"
-        ? [...prev.filter((current) => current !== sourceName), sourceName]
-        : prev.filter((current) => current !== sourceName)
-    );
-    setDislikedSources((prev) =>
-      rating === "dislike"
-        ? [...prev.filter((current) => current !== sourceName), sourceName]
-        : prev.filter((current) => current !== sourceName)
-    );
-    setSourceRatingStatus({
-      type: "success",
-      text: "Source rating updated.",
-    });
   };
 
   const handleAddComment = async () => {
@@ -1995,18 +1872,16 @@ export default function ArticleDetailPage() {
         <div className="article-detail-hero-layout">
           <div className="stack article-detail-hero-copy" style={{ gap: "10px" }}>
             <div className="article-detail-kicker-row">
-              <button
-                type="button"
+              <Link
+                href={`/source/${slugifySourceName(compareArticle.source)}`}
                 className="source-trigger source-trigger-tight article-detail-source-wrap"
                 onClick={(event) => {
                   event.stopPropagation();
-                  setIsSourceSheetOpen(true);
-                  setSourceRatingStatus(null);
                 }}
               >
                 <SourceBadge sourceName={compareArticle.source} />
                 <span className="article-detail-source">{compareArticle.source}</span>
-              </button>
+              </Link>
               <span className="chip chip-accent">{compareArticle.category}</span>
             </div>
             <h2 className="article-detail-title">
@@ -2364,34 +2239,6 @@ export default function ArticleDetailPage() {
           </div>
         </div>
       ) : null}
-
-      <SourceRatingSheet
-        sourceName={compareArticle.source}
-        isOpen={isSourceSheetOpen}
-        currentRating={
-          likedSources.includes(compareArticle.source)
-            ? "like"
-            : dislikedSources.includes(compareArticle.source)
-              ? "dislike"
-              : null
-        }
-        isSaving={isSavingSourceRating}
-        status={sourceRatingStatus}
-        onLike={() => {
-          void handleSaveSourceRating("like");
-        }}
-        onDislike={() => {
-          void handleSaveSourceRating("dislike");
-        }}
-        onClose={() => {
-          if (isSavingSourceRating) {
-            return;
-          }
-
-          setIsSourceSheetOpen(false);
-          setSourceRatingStatus(null);
-        }}
-      />
 
       {commentActionTarget ? (
         <div

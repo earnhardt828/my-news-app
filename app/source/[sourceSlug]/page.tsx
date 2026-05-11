@@ -197,9 +197,9 @@ export default function SourcePage({
   );
   const netScore = likeCount - dislikeCount;
 
-  const handleRateSource = async (rating: "like" | "dislike") => {
+  const handleToggleHeart = async () => {
     if (!userId) {
-      alert("Log in to rate sources.");
+      alert("Log in to heart sources.");
       return;
     }
 
@@ -210,7 +210,7 @@ export default function SourcePage({
         currentRating.user_id === userId && currentRating.source_name === sourceName
     );
 
-    if (existingRating?.rating === rating) {
+    if (existingRating?.rating === "like") {
       const { error } = await supabase
         .from("source_ratings")
         .delete()
@@ -234,7 +234,7 @@ export default function SourcePage({
         {
           user_id: userId,
           source_name: sourceName,
-          rating,
+          rating: "like",
           updated_at: new Date().toISOString(),
         },
         {
@@ -268,12 +268,11 @@ export default function SourcePage({
             <SourceBadge sourceName={sourceName} />
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="search-source-name">{sourceName}</strong>
-              <span className="search-source-kind">Recent coverage</span>
+              <span className="search-source-kind">News source</span>
             </div>
           </div>
           <div className="source-rating-summary">
-            <span>👍 {likeCount}</span>
-            <span>👎 {dislikeCount}</span>
+            <span>❤️ {likeCount}</span>
             <strong>{netScore >= 0 ? `+${netScore}` : netScore}</strong>
           </div>
         </div>
@@ -284,22 +283,11 @@ export default function SourcePage({
             className={`icon-action-pill ${
               userRating === "like" ? "icon-action-pill-active" : ""
             }`}
-            onClick={() => void handleRateSource("like")}
+            onClick={() => void handleToggleHeart()}
             disabled={isSavingRating}
           >
-            <span>👍</span>
-            <span>Like</span>
-          </button>
-          <button
-            type="button"
-            className={`icon-action-pill ${
-              userRating === "dislike" ? "icon-action-pill-active" : ""
-            }`}
-            onClick={() => void handleRateSource("dislike")}
-            disabled={isSavingRating}
-          >
-            <span>👎</span>
-            <span>Dislike</span>
+            <span>♥</span>
+            <span>{userRating === "like" ? "Hearted" : "Heart"}</span>
           </button>
         </div>
       </section>

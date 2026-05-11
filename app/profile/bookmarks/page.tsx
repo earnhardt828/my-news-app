@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { cleanDisplayText } from "../../../lib/display-text";
+import { slugifySourceName } from "../../../lib/source-logos";
 import { supabase } from "../../../lib/supabase";
 
 type SavedArticle = {
@@ -40,6 +42,7 @@ function formatSavedArticleDate(article: SavedArticle) {
 }
 
 export default function ProfileBookmarksPage() {
+  const router = useRouter();
   const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -125,7 +128,19 @@ export default function ProfileBookmarksPage() {
                     {cleanDisplayText(article.title)}
                   </strong>
                   <div className="comment-meta">
-                    {article.source} · {formatSavedArticleDate(article)}
+                    <button
+                      type="button"
+                      className="source-trigger source-trigger-tight profile-saved-source-link"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        router.push(`/source/${slugifySourceName(article.source)}`);
+                      }}
+                    >
+                      {article.source}
+                    </button>
+                    {" · "}
+                    {formatSavedArticleDate(article)}
                   </div>
                 </div>
                 {article.image ? (

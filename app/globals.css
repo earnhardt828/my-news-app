@@ -659,6 +659,13 @@ input {
   align-self: flex-start;
 }
 
+.profile-saved-source-link {
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  line-height: inherit;
+}
+
 .trending-tabs-wrap {
   display: flex;
   justify-content: center;

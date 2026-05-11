@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -17,6 +18,7 @@ import {
   saveProfilePatch,
   type AppProfileRecord,
 } from "../../lib/profile-store";
+import { slugifySourceName } from "../../lib/source-logos";
 import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { isUsernameAllowed } from "../../lib/moderation";
@@ -110,6 +112,7 @@ function resolveCommentArticleTitle(
 }
 
 export default function Profile() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -1196,7 +1199,19 @@ export default function Profile() {
                           {cleanDisplayText(article.title)}
                         </strong>
                         <div className="comment-meta">
-                          {article.category} · {article.source} · {article.time}
+                          {article.category} ·{" "}
+                          <button
+                            type="button"
+                            className="source-trigger source-trigger-tight profile-saved-source-link"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              router.push(`/source/${slugifySourceName(article.source)}`);
+                            }}
+                          >
+                            {article.source}
+                          </button>{" "}
+                          · {article.time}
                         </div>
                       </div>
                       {article.image ? (
