@@ -880,7 +880,7 @@ export default function Profile() {
       ) : !isSignedIn ? (
         <div className="profile-auth-shell">
           <section className="section-card stack profile-auth-card">
-            <div className="stack" style={{ gap: "8px" }}>
+            <div className="stack profile-auth-brand">
               <Image
                 src="/branding/graffiti-name-logo-transparent.png"
                 alt="Graffiti"

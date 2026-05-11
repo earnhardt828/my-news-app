@@ -2818,10 +2818,17 @@ input {
   box-shadow: 0 20px 48px rgba(20, 33, 61, 0.12);
 }
 
+.profile-auth-brand {
+  gap: 4px;
+  justify-items: center;
+}
+
 .profile-auth-helper {
   margin: 0;
+  margin-top: -4px;
   max-width: 32ch;
   line-height: 1.55;
+  text-align: center;
 }
 
 .profile-auth-logo {
