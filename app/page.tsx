@@ -2,6 +2,7 @@
 
 import AdSlot from "./components/ad-slot";
 import LoadingScreen from "./components/loading-screen";
+import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
@@ -19,6 +20,13 @@ import {
   getBestArticleImage,
 } from "../lib/article-images";
 import { cleanDisplayText } from "../lib/display-text";
+import {
+  applyPollVoteUpdate,
+  getPollTrendingScore,
+  hydratePolls,
+  type PollRecord,
+  type PollWithResults,
+} from "../lib/polls";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import { isCommentAllowed } from "../lib/moderation";
 import { slugifySourceName } from "../lib/source-logos";
@@ -415,16 +423,34 @@ function getTrendingSourceName(
   item:
     | { type: "article"; key: string; article: Article; score: number; publishedAtMs: number }
     | { type: "video"; key: string; video: VideoItem; score: number; publishedAtMs: number }
+    | { type: "poll"; key: string; poll: PollWithResults; score: number; publishedAtMs: number }
 ) {
-  return item.type === "article" ? item.article.source : item.video.creator;
+  if (item.type === "article") {
+    return item.article.source;
+  }
+
+  if (item.type === "video") {
+    return item.video.creator;
+  }
+
+  return `poll:${item.poll.username ?? item.poll.user_id}`;
 }
 
 function getTrendingCategoryName(
   item:
     | { type: "article"; key: string; article: Article; score: number; publishedAtMs: number }
     | { type: "video"; key: string; video: VideoItem; score: number; publishedAtMs: number }
+    | { type: "poll"; key: string; poll: PollWithResults; score: number; publishedAtMs: number }
 ) {
-  return item.type === "article" ? item.article.category : "videos";
+  if (item.type === "article") {
+    return item.article.category;
+  }
+
+  if (item.type === "video") {
+    return "videos";
+  }
+
+  return item.poll.category;
 }
 
 export default function Home() {
@@ -468,6 +494,9 @@ export default function Home() {
   >("top");
   const [isCommentSortMenuOpen, setIsCommentSortMenuOpen] = useState(false);
   const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
+  const [trendingPolls, setTrendingPolls] = useState<PollWithResults[]>([]);
+  const [myFeedPolls, setMyFeedPolls] = useState<PollWithResults[]>([]);
+  const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
@@ -1007,6 +1036,126 @@ export default function Home() {
 
     fetchVideos();
   }, []);
+
+  useEffect(() => {
+    async function loadPolls() {
+      const { data: trendingPollRows, error: trendingPollsError } = await supabase
+        .from("polls")
+        .select(
+          "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
+        )
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(40);
+
+      if (trendingPollsError) {
+        console.error("Error loading trending polls:", trendingPollsError);
+        setTrendingPolls([]);
+      } else {
+        const hydratedTrendingPolls = await hydratePolls(
+          supabase,
+          ((trendingPollRows ?? []) as PollRecord[]),
+          userId
+        );
+        setTrendingPolls(
+          [...hydratedTrendingPolls].sort(
+            (left, right) => getPollTrendingScore(right) - getPollTrendingScore(left)
+          )
+        );
+      }
+
+      if (!userId) {
+        setMyFeedPolls([]);
+        return;
+      }
+
+      const { data: followRowsData, error: followRowsError } = await supabase
+        .from("user_follows")
+        .select("following_id")
+        .eq("follower_id", userId);
+
+      if (followRowsError) {
+        console.error("Error loading follows for My Feed polls:", followRowsError);
+        setMyFeedPolls([]);
+        return;
+      }
+
+      const pollUserIds = Array.from(
+        new Set([
+          userId,
+          ...(((followRowsData ?? []) as { following_id: string }[]).map(
+            (followRow) => followRow.following_id
+          )),
+        ])
+      );
+
+      const { data: myFeedPollRows, error: myFeedPollsError } = pollUserIds.length
+        ? await supabase
+            .from("polls")
+            .select(
+              "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
+            )
+            .eq("status", "active")
+            .in("user_id", pollUserIds)
+            .order("created_at", { ascending: false })
+            .limit(30)
+        : { data: [], error: null };
+
+      if (myFeedPollsError) {
+        console.error("Error loading My Feed polls:", myFeedPollsError);
+        setMyFeedPolls([]);
+        return;
+      }
+
+      const hydratedMyFeedPolls = await hydratePolls(
+        supabase,
+        ((myFeedPollRows ?? []) as PollRecord[]),
+        userId
+      );
+      setMyFeedPolls(
+        [...hydratedMyFeedPolls].sort(
+          (left, right) => getPollTrendingScore(right) - getPollTrendingScore(left)
+        )
+      );
+    }
+
+    void loadPolls();
+  }, [userId]);
+
+  const handleVoteOnPoll = async (pollId: string, optionId: string) => {
+    if (!userId) {
+      alert("Log in to vote in polls.");
+      return;
+    }
+
+    const currentPoll =
+      trendingPolls.find((poll) => poll.id === pollId) ??
+      myFeedPolls.find((poll) => poll.id === pollId) ??
+      null;
+
+    if (!currentPoll || currentPoll.userVoteOptionId) {
+      return;
+    }
+
+    setActivePollVoteId(pollId);
+
+    const { error } = await supabase.from("poll_votes").insert({
+      poll_id: pollId,
+      option_id: optionId,
+      user_id: userId,
+    });
+
+    setActivePollVoteId(null);
+
+    if (error) {
+      console.error("Error saving poll vote:", error);
+      alert(error.message ?? "Could not save your vote.");
+      return;
+    }
+
+    setTrendingPolls((prev) => applyPollVoteUpdate(prev, pollId, optionId));
+    setMyFeedPolls((prev) => applyPollVoteUpdate(prev, pollId, optionId));
+  };
 
   useEffect(() => {
     if (replyTarget) {
@@ -1809,9 +1958,7 @@ export default function Home() {
       });
     }
 
-    return rankArticlesWithSourcePreferences(copied, {
-      mode: "trending",
-    });
+    return copied;
   }, [
     articles,
     categories,
@@ -2071,8 +2218,15 @@ export default function Home() {
         publishedAtMs: getPublishedAtTimestamp(video.publishedAt),
       };
     });
+    const rankedPolls = trendingPolls.map((poll) => ({
+      type: "poll" as const,
+      key: `poll:${poll.id}`,
+      poll,
+      score: getPollTrendingScore(poll),
+      publishedAtMs: getPublishedAtTimestamp(poll.created_at),
+    }));
 
-    const sortedItems = [...rankedArticles, ...rankedVideos].sort((left, right) => {
+    const sortedItems = [...rankedArticles, ...rankedVideos, ...rankedPolls].sort((left, right) => {
       if (right.score !== left.score) {
         return right.score - left.score;
       }
@@ -2132,67 +2286,42 @@ export default function Home() {
     }
 
     return [...diversifiedTopItems, ...prioritizedItems];
-  }, [sortMode, videos, visibleArticles]);
+  }, [sortMode, trendingPolls, videos, visibleArticles]);
 
-  const trendingRenderItems = useMemo(() => {
-    if (sortMode !== "trending") {
+  const trendingRenderItems = trendingFeedItems;
+  const myFeedRenderItems = useMemo(() => {
+    if (sortMode !== "my-feed") {
       return [];
     }
 
-    const rankedVideos = trendingFeedItems
-      .filter((item): item is Extract<(typeof trendingFeedItems)[number], { type: "video" }> =>
-        item.type === "video"
-      )
-      .map((item) => item.video)
-      .filter(
-        (video): video is VideoItem =>
-          Boolean(video?.id) && Boolean(video?.title) && Boolean(video?.creator)
-      );
-    const rankedArticles = trendingFeedItems
-      .filter((item): item is Extract<(typeof trendingFeedItems)[number], { type: "article" }> =>
-        item.type === "article"
-      )
-      .map((item) => item.article);
     const items: Array<
       | { type: "article"; key: string; article: Article }
-      | { type: "video"; key: string; video: VideoItem }
-    > = [];
-    let insertedVideos = 0;
+      | { type: "poll"; key: string; poll: PollWithResults }
+    > = visibleArticles.map((article) => ({
+      type: "article" as const,
+      key: `article:${article.id}:${article.url ?? ""}`,
+      article,
+    }));
 
-    rankedArticles.forEach((article, index) => {
-      const articleKey = `article:${article.id}:${article.url ?? ""}`;
-      items.push({
-        type: "article",
-        key: articleKey,
-        article,
+    myFeedPolls.forEach((poll, index) => {
+      items.splice(Math.min(items.length, 2 + index * 5), 0, {
+        type: "poll" as const,
+        key: `poll:${poll.id}`,
+        poll,
       });
-
-      const shouldInsertVideo = rankedVideos.length > insertedVideos && (index + 1) % 3 === 0;
-
-      if (shouldInsertVideo) {
-        const nextVideo = rankedVideos[insertedVideos];
-        if (!nextVideo) {
-          return;
-        }
-        items.push({
-          type: "video",
-          key: `video:${nextVideo.id}`,
-          video: nextVideo,
-        });
-        insertedVideos += 1;
-      }
     });
 
-    console.log("TRENDING ITEMS COUNT", items.length);
-
     return items;
-  }, [sortMode, trendingFeedItems]);
+  }, [myFeedPolls, sortMode, visibleArticles]);
 
   useEffect(() => {
     console.log(
       "TRENDING RENDER COUNT",
       sortMode === "trending" ? trendingRenderItems.length : visibleArticles.length
     );
+    if (sortMode === "trending") {
+      console.log("TRENDING ITEMS COUNT", trendingRenderItems.length);
+    }
   }, [sortMode, trendingRenderItems.length, visibleArticles.length]);
 
   useEffect(() => {
@@ -2474,12 +2603,13 @@ export default function Home() {
         </div>
       ) : null}
 
-      {sortMode === "my-feed" && categories.length === 0 ? (
+      {sortMode === "my-feed" && categories.length === 0 && myFeedPolls.length === 0 ? (
         <div className="empty-state">
           <strong>No categories selected</strong>
           <span>Choose categories in Profile to build your personalized feed.</span>
         </div>
-      ) : visibleArticles.length === 0 ? (
+      ) : visibleArticles.length === 0 &&
+        !(sortMode === "my-feed" && myFeedRenderItems.length > 0) ? (
         <div className="empty-state">
           <strong>
             {feedLoadError
@@ -2524,6 +2654,15 @@ export default function Home() {
                     ? renderArticleFeedCard(item.article, {
                         rankLabel: index < 25 ? `Top ${index + 1}` : null,
                       })
+                    : item.type === "poll"
+                    ? (
+                      <PollCard
+                        poll={item.poll}
+                        onVote={handleVoteOnPoll}
+                        isVoting={activePollVoteId === item.poll.id}
+                        rankLabel={index < 25 ? `Top ${index + 1}` : null}
+                      />
+                    )
                     : (
                       <VideoFeedCard
                         video={item.video}
@@ -2546,6 +2685,20 @@ export default function Home() {
                       cta="Learn more"
                     />
                   ) : null}
+                </div>
+              ))
+            : sortMode === "my-feed"
+            ? myFeedRenderItems.map((item) => (
+                <div key={item.key} className="stack">
+                  {item.type === "poll" ? (
+                    <PollCard
+                      poll={item.poll}
+                      onVote={handleVoteOnPoll}
+                      isVoting={activePollVoteId === item.poll.id}
+                    />
+                  ) : (
+                    renderArticleFeedCard(item.article)
+                  )}
                 </div>
               ))
             : visibleArticles.map((article) => {

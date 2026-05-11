@@ -85,6 +85,8 @@ export default function UserProfilePage() {
   const [isBlockedByThem, setIsBlockedByThem] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBlocking, setIsBlocking] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -135,6 +137,7 @@ export default function UserProfilePage() {
       if (!profileData?.id) {
         setProfile(null);
         setComments([]);
+        setIsFollowing(false);
         setIsBlocked(false);
         setIsUnavailable(false);
         setIsBlockedByThem(false);
@@ -148,6 +151,7 @@ export default function UserProfilePage() {
         { data: blockedUsersData, error: blockedUsersError },
         { data: mutuallyHiddenUserIds, error: mutuallyHiddenUsersError },
         { data: commentData, error: commentError },
+        followRecord,
       ] = await Promise.all([
           user?.id ? listBlockedUsers(supabase, user.id) : Promise.resolve({ data: [], error: null }),
           user?.id
@@ -160,6 +164,14 @@ export default function UserProfilePage() {
             )
             .eq("user_id", profileAuthUserId)
             .order("created_at", { ascending: false }),
+          user?.id
+            ? supabase
+                .from("user_follows")
+                .select("id")
+                .eq("follower_id", user.id)
+                .eq("following_id", profileAuthUserId)
+                .maybeSingle()
+            : Promise.resolve({ data: null, error: null }),
         ]);
 
       if (blockedUsersError) {
@@ -214,6 +226,7 @@ export default function UserProfilePage() {
       if (user?.id && mutuallyHiddenIds.has(profileAuthUserId)) {
         setProfile(profileData);
         setComments([]);
+        setIsFollowing(false);
         setIsBlocked(viewerBlockedProfile);
         setIsUnavailable(true);
         setIsBlockedByThem(Boolean(profileBlockedViewer));
@@ -228,6 +241,7 @@ export default function UserProfilePage() {
           hearts: heartCounts.get(comment.id) ?? 0,
         }))
       );
+      setIsFollowing(Boolean(followRecord?.data?.id));
       setIsBlocked(viewerBlockedProfile);
       setIsUnavailable(false);
       setIsBlockedByThem(false);
@@ -261,6 +275,9 @@ export default function UserProfilePage() {
       : "Block";
   const isBlockButtonDisabled = Boolean(
     isBlocking || (isUnavailable && !isBlocked) || isBlockedByThem
+  );
+  const isFollowButtonDisabled = Boolean(
+    isFollowLoading || !viewerId || !profileAuthUserId || isOwnProfile || isUnavailable
   );
 
   const handleBlockToggle = async () => {
@@ -387,6 +404,93 @@ export default function UserProfilePage() {
     });
   };
 
+  const handleFollowToggle = async () => {
+    if (!profileAuthUserId || !profile) {
+      return;
+    }
+
+    if (!viewerId) {
+      setMessage({
+        type: "error",
+        text: "Log in to follow users.",
+      });
+      return;
+    }
+
+    if (viewerId === profileAuthUserId) {
+      setMessage({
+        type: "error",
+        text: "You cannot follow yourself.",
+      });
+      return;
+    }
+
+    if (isUnavailable) {
+      setMessage({
+        type: "error",
+        text: "This profile is unavailable.",
+      });
+      return;
+    }
+
+    setIsFollowLoading(true);
+    setMessage(null);
+
+    if (isFollowing) {
+      const { error } = await supabase
+        .from("user_follows")
+        .delete()
+        .eq("follower_id", viewerId)
+        .eq("following_id", profileAuthUserId);
+
+      setIsFollowLoading(false);
+
+      if (error) {
+        console.error("Error unfollowing user:", error);
+        setMessage({
+          type: "error",
+          text: error.message ?? "Could not unfollow this user.",
+        });
+        return;
+      }
+
+      setIsFollowing(false);
+      setMessage({
+        type: "success",
+        text: "User unfollowed.",
+      });
+      return;
+    }
+
+    const { error } = await supabase.from("user_follows").upsert(
+      {
+        follower_id: viewerId,
+        following_id: profileAuthUserId,
+        following_username: profile.username ?? null,
+      },
+      {
+        onConflict: "follower_id,following_id",
+      }
+    );
+
+    setIsFollowLoading(false);
+
+    if (error) {
+      console.error("Error following user:", error);
+      setMessage({
+        type: "error",
+        text: error.message ?? "Could not follow this user.",
+      });
+      return;
+    }
+
+    setIsFollowing(true);
+    setMessage({
+      type: "success",
+      text: "User followed.",
+    });
+  };
+
   return (
     <section className="page-shell">
       {isLoading ? (
@@ -440,6 +544,13 @@ export default function UserProfilePage() {
 
             {!isOwnProfile ? (
               <div className="toolbar">
+                <button
+                  className={`button ${isFollowing ? "button-secondary" : "button-accent"}`}
+                  onClick={handleFollowToggle}
+                  disabled={isFollowButtonDisabled}
+                >
+                  {isFollowLoading ? (isFollowing ? "Unfollowing..." : "Following...") : isFollowing ? "Unfollow" : "Follow"}
+                </button>
                 <button
                   className={`button ${
                     isBlocked ? "button-secondary" : isUnavailable ? "button-secondary" : "button-accent"

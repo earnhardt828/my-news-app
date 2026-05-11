@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -13,12 +12,13 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 import { apiFetch } from "../../lib/api-base";
+import PollCard from "../components/poll-card";
 import {
   ensureProfileRow,
   saveProfilePatch,
   type AppProfileRecord,
 } from "../../lib/profile-store";
-import { slugifySourceName } from "../../lib/source-logos";
+import { hydratePolls, type PollRecord, type PollWithResults } from "../../lib/polls";
 import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { isUsernameAllowed } from "../../lib/moderation";
@@ -61,19 +61,6 @@ function normalizeArticleId(value: number | string | null | undefined) {
   return null;
 }
 
-type SavedArticle = {
-  id: number;
-  article_id: number;
-  title: string;
-  source: string;
-  category: string;
-  time: string;
-  url?: string | null;
-  image?: string | null;
-  published_at?: string | null;
-  created_at?: string | null;
-};
-
 type ProfileRow = Omit<AppProfileRecord, "id" | "email">;
 type ProfileUserRef = {
   id: string;
@@ -112,7 +99,6 @@ function resolveCommentArticleTitle(
 }
 
 export default function Profile() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -137,7 +123,7 @@ export default function Profile() {
   const [draftBio, setDraftBio] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
   const [myComments, setMyComments] = useState<MyComment[]>([]);
-  const [savedArticles, setSavedArticles] = useState<SavedArticle[]>([]);
+  const [myPolls, setMyPolls] = useState<PollWithResults[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const profileRef = useRef<ProfileRow>({
@@ -169,7 +155,7 @@ export default function Profile() {
     setIsEditingBio(false);
     setCategories([]);
     setMyComments([]);
-    setSavedArticles([]);
+    setMyPolls([]);
     profileRef.current = {
       username: null,
       contact_email: null,
@@ -266,7 +252,7 @@ export default function Profile() {
       show_less_sources: profile.show_less_sources ?? [],
     };
 
-    const [commentsRes, savedRes, reactionsRes, newsRes] = await Promise.allSettled([
+    const [commentsRes, pollsRes, reactionsRes, newsRes] = await Promise.allSettled([
       (async () => {
         let response: {
           data: RawProfileComment[] | null;
@@ -298,29 +284,34 @@ export default function Profile() {
         return response;
       })(),
       supabase
-        .from("saved_articles")
+        .from("polls")
         .select(
-          "id, article_id, title, source, url, image, category, time, published_at, created_at"
+          "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
         )
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(6),
       supabase
         .from("comment_reactions")
         .select("comment_id, reaction_type"),
       apiFetch("/api/news"),
     ]);
 
-    if (savedRes.status === "rejected") {
-      console.error("Error loading saved articles:", savedRes.reason);
-      throw savedRes.reason;
+    if (pollsRes.status === "rejected") {
+      console.error("Error loading profile polls:", pollsRes.reason);
+      setMyPolls([]);
+    } else if (pollsRes.value.error) {
+      console.error("Error loading profile polls:", pollsRes.value.error);
+      setMyPolls([]);
+    } else {
+      const hydratedPolls = await hydratePolls(
+        supabase,
+        ((pollsRes.value.data ?? []) as PollRecord[]),
+        user.id
+      );
+      setMyPolls(hydratedPolls);
     }
-
-    if (savedRes.value.error) {
-      console.error("Error loading saved articles:", savedRes.value.error);
-      throw savedRes.value.error;
-    }
-
-    setSavedArticles((savedRes.value.data ?? []) as SavedArticle[]);
 
     if (commentsRes.status === "rejected") {
       console.error("Error loading profile comments:", commentsRes.reason);
@@ -1158,11 +1149,11 @@ export default function Profile() {
             <div className="stack">
               <section className="section-card stack">
               <div className="profile-section-row">
-                <h3 className="profile-section-title">Bookmarked Articles</h3>
+                <h3 className="profile-section-title">Your Polls</h3>
                 <Link
-                  href="/profile/bookmarks"
+                  href="/profile/polls/new"
                   className="profile-section-icon-button"
-                  aria-label="Open bookmarked articles"
+                  aria-label="Create a poll"
                 >
                   <svg
                     width="20"
@@ -1181,52 +1172,19 @@ export default function Profile() {
                 </Link>
               </div>
 
-              {savedArticles.length === 0 ? (
+              <span className="muted">
+                Create news-related polls and see how people respond.
+              </span>
+
+              {myPolls.length === 0 ? (
                 <div className="empty-state">
-                  <strong>No saved articles yet</strong>
-                  <span>Save articles from the feed and they will appear here.</span>
+                  <strong>No polls yet</strong>
+                  <span>Start a poll tied to a current story, public issue, or debate.</span>
                 </div>
               ) : (
-                <div className="comment-list">
-                  {savedArticles.slice(0, 3).map((article) => (
-                    <Link
-                      key={article.id}
-                      href={`/article/${article.article_id}`}
-                      className="comment-card profile-saved-article-card"
-                    >
-                      <div className="profile-saved-article-copy">
-                        <strong className="profile-saved-article-title">
-                          {cleanDisplayText(article.title)}
-                        </strong>
-                        <div className="comment-meta">
-                          {article.category} ·{" "}
-                          <button
-                            type="button"
-                            className="source-trigger source-trigger-tight profile-saved-source-link"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              router.push(`/source/${slugifySourceName(article.source)}`);
-                            }}
-                          >
-                            {article.source}
-                          </button>{" "}
-                          · {article.time}
-                        </div>
-                      </div>
-                      {article.image ? (
-                        <div
-                          className="profile-saved-article-thumb"
-                          role="img"
-                          aria-label={cleanDisplayText(article.title)}
-                          style={{ backgroundImage: `url(${article.image})` }}
-                        />
-                      ) : (
-                        <div className="profile-saved-article-thumb profile-saved-article-thumb-placeholder">
-                          {article.source.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </Link>
+                <div className="stack">
+                  {myPolls.map((poll) => (
+                    <PollCard key={poll.id} poll={poll} showAuthor={false} />
                   ))}
                 </div>
               )}

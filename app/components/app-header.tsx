@@ -28,6 +28,10 @@ function getPageTitle(pathname: string) {
     return "Bookmarked Articles";
   }
 
+  if (pathname === "/profile/polls/new") {
+    return "Create Poll";
+  }
+
   if (pathname === "/profile/comments") {
     return "My Comments";
   }

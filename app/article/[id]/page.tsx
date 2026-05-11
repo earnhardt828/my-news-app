@@ -1954,6 +1954,18 @@ export default function ArticleDetailPage() {
             url={article.url}
             iconOnly
           />
+          <Link
+            href={`/profile/polls/new?articleId=${encodeURIComponent(
+              String(article.id)
+            )}&articleTitle=${encodeURIComponent(
+              cleanDisplayText(compareArticle.title)
+            )}&source=${encodeURIComponent(compareArticle.source)}&category=${encodeURIComponent(
+              compareArticle.category
+            )}`}
+            className="button button-secondary article-create-poll-button"
+          >
+            Create Poll
+          </Link>
           <button
             className={`bookmark-button ${isSaved ? "bookmark-button-active" : ""}`}
             onClick={handleToggleSave}

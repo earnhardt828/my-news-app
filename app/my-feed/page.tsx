@@ -2,6 +2,7 @@
 
 import AdSlot from "../components/ad-slot";
 import ArticleReaderButton from "../components/article-reader-button";
+import PollCard from "../components/poll-card";
 import SourceBadge from "../components/source-badge";
 import SourcePreferenceSheet from "../components/source-preference-sheet";
 import Link from "next/link";
@@ -17,6 +18,13 @@ import {
 import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
+import {
+  applyPollVoteUpdate,
+  getPollTrendingScore,
+  hydratePolls,
+  type PollRecord,
+  type PollWithResults,
+} from "../../lib/polls";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { slugifySourceName } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
@@ -60,6 +68,8 @@ export default function MyFeed() {
   const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
   const [activeSourceName, setActiveSourceName] = useState<string | null>(null);
   const [isSavingSourcePreference, setIsSavingSourcePreference] = useState(false);
+  const [followedPolls, setFollowedPolls] = useState<PollWithResults[]>([]);
+  const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, boolean>>({});
   const [lowQualityArticleImages, setLowQualityArticleImages] = useState<Record<string, boolean>>(
     {}
@@ -79,6 +89,7 @@ export default function MyFeed() {
         setUserId(null);
         setUserEmail(null);
         setArticles([]);
+        setFollowedPolls([]);
         setCategories([]);
         setPreferredSources([]);
         setShowLessSources([]);
@@ -106,20 +117,66 @@ export default function MyFeed() {
       const res = await apiFetch("/api/news");
       const news = (await res.json()) as Omit<FeedArticle, "saved">[];
 
-      const { data: savedArticlesData } = await supabase
-        .from("saved_articles")
-        .select("article_id")
-        .eq("user_id", userData.user.id);
-      const { data: sourceRatingsData } = await supabase
-        .from("source_ratings")
-        .select("source_name, rating")
-        .eq("user_id", userData.user.id);
+      const [
+        { data: savedArticlesData },
+        { data: sourceRatingsData },
+        { data: followRowsData },
+      ] = await Promise.all([
+        supabase
+          .from("saved_articles")
+          .select("article_id")
+          .eq("user_id", userData.user.id),
+        supabase
+          .from("source_ratings")
+          .select("source_name, rating")
+          .eq("user_id", userData.user.id),
+        supabase
+          .from("user_follows")
+          .select("following_id")
+          .eq("follower_id", userData.user.id),
+      ]);
 
       const savedArticleIds = new Set(
         ((savedArticlesData ?? []) as SavedArticleRecord[]).map(
           (savedArticle) => savedArticle.article_id
         )
       );
+      const followedUserIds = Array.from(
+        new Set([
+          userData.user.id,
+          ...(((followRowsData ?? []) as { following_id: string }[]).map(
+            (followRow) => followRow.following_id
+          )),
+        ])
+      );
+
+      const { data: pollsData, error: pollsError } = followedUserIds.length
+        ? await supabase
+            .from("polls")
+            .select(
+              "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
+            )
+            .eq("status", "active")
+            .in("user_id", followedUserIds)
+            .order("created_at", { ascending: false })
+            .limit(24)
+        : { data: [], error: null };
+
+      if (pollsError) {
+        console.error("Error loading My Feed polls:", pollsError);
+        setFollowedPolls([]);
+      } else {
+        const hydratedPolls = await hydratePolls(
+          supabase,
+          ((pollsData ?? []) as PollRecord[]),
+          userData.user.id
+        );
+        setFollowedPolls(
+          [...hydratedPolls].sort(
+            (left, right) => getPollTrendingScore(right) - getPollTrendingScore(left)
+          )
+        );
+      }
 
       const filtered =
         userCategories.length > 0
@@ -219,6 +276,37 @@ export default function MyFeed() {
     );
   };
 
+  const handleVoteOnPoll = async (pollId: string, optionId: string) => {
+    if (!userId) {
+      alert("Log in to vote in polls.");
+      return;
+    }
+
+    const targetPoll = followedPolls.find((poll) => poll.id === pollId);
+
+    if (!targetPoll || targetPoll.userVoteOptionId) {
+      return;
+    }
+
+    setActivePollVoteId(pollId);
+
+    const { error } = await supabase.from("poll_votes").insert({
+      poll_id: pollId,
+      option_id: optionId,
+      user_id: userId,
+    });
+
+    setActivePollVoteId(null);
+
+    if (error) {
+      console.error("Error saving poll vote:", error);
+      alert(error.message ?? "Could not save your vote.");
+      return;
+    }
+
+    setFollowedPolls((prev) => applyPollVoteUpdate(prev, pollId, optionId));
+  };
+
   const handleSaveSourcePreference = async (sourceName: string, mode: "prefer" | "show-less") => {
     if (!userId) {
       setSourcePreferenceStatus({
@@ -277,6 +365,23 @@ export default function MyFeed() {
     });
   };
 
+  const myFeedItems: Array<
+    | { type: "article"; key: string; article: FeedArticle }
+    | { type: "poll"; key: string; poll: PollWithResults }
+  > = articles.map((article) => ({
+    type: "article" as const,
+    key: `article:${article.id}`,
+    article,
+  }));
+
+  followedPolls.forEach((poll, index) => {
+    myFeedItems.splice(Math.min(myFeedItems.length, 2 + index * 5), 0, {
+      type: "poll" as const,
+      key: `poll:${poll.id}`,
+      poll,
+    });
+  });
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -311,16 +416,23 @@ export default function MyFeed() {
           <strong>Loading your feed...</strong>
           <span>Pulling in stories for your selected categories.</span>
         </div>
-      ) : articles.length === 0 ? (
+      ) : articles.length === 0 && followedPolls.length === 0 ? (
         <div className="empty-state">
-          <strong>No articles found</strong>
-          <span>Try adding more categories or check back when new stories land.</span>
+          <strong>No stories or polls yet</strong>
+          <span>Try adding more categories or follow people to personalize this feed.</span>
         </div>
       ) : (
         <div className="stack">
-          {articles.map((article, index) => (
-            <div key={article.id} className="stack">
-              {(() => {
+          {myFeedItems.map((item, index) => (
+            <div key={item.key} className="stack">
+              {item.type === "poll" ? (
+                <PollCard
+                  poll={item.poll}
+                  onVote={handleVoteOnPoll}
+                  isVoting={activePollVoteId === item.poll.id}
+                />
+              ) : (() => {
+                const article = item.article;
                 const selectedImage = getBestArticleImage(article);
                 const imageSrc = selectedImage.src;
                 const imageFailureKey = imageSrc
