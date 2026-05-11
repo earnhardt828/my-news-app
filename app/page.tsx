@@ -419,6 +419,14 @@ function getCategoryVarietyScore(categoryName: string, categoryCounts: Map<strin
   return 0.42;
 }
 
+function getSafeSourceLabel(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : "Unknown source";
+}
+
+function getSafeCategoryLabel(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : "general";
+}
+
 function getTrendingSourceName(
   item:
     | { type: "article"; key: string; article: Article; score: number; publishedAtMs: number }
@@ -426,14 +434,14 @@ function getTrendingSourceName(
     | { type: "poll"; key: string; poll: PollWithResults; score: number; publishedAtMs: number }
 ) {
   if (item.type === "article") {
-    return item.article.source;
+    return getSafeSourceLabel(item.article.source);
   }
 
   if (item.type === "video") {
-    return item.video.creator;
+    return getSafeSourceLabel(item.video.creator);
   }
 
-  return `poll:${item.poll.username ?? item.poll.user_id}`;
+  return `poll:${item.poll.username ?? item.poll.user_id ?? item.poll.id}`;
 }
 
 function getTrendingCategoryName(
@@ -443,14 +451,14 @@ function getTrendingCategoryName(
     | { type: "poll"; key: string; poll: PollWithResults; score: number; publishedAtMs: number }
 ) {
   if (item.type === "article") {
-    return item.article.category;
+    return getSafeCategoryLabel(item.article.category);
   }
 
   if (item.type === "video") {
     return "videos";
   }
 
-  return item.poll.category;
+  return getSafeCategoryLabel(item.poll.category);
 }
 
 export default function Home() {
@@ -2137,13 +2145,13 @@ export default function Home() {
     const sourceCounts = new Map<string, number>();
     const categoryCounts = new Map<string, number>();
     visibleArticles.forEach((article) => {
-      const sourceKey = article.source.trim().toLowerCase();
-      const categoryKey = article.category.trim().toLowerCase();
+      const sourceKey = getSafeSourceLabel(article.source).trim().toLowerCase();
+      const categoryKey = getSafeCategoryLabel(article.category).trim().toLowerCase();
       sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
       categoryCounts.set(categoryKey, (categoryCounts.get(categoryKey) ?? 0) + 1);
     });
     videos.forEach((video) => {
-      const sourceKey = video.creator.trim().toLowerCase();
+      const sourceKey = getSafeSourceLabel(video.creator).trim().toLowerCase();
       sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
       categoryCounts.set("videos", (categoryCounts.get("videos") ?? 0) + 1);
     });
@@ -2167,8 +2175,14 @@ export default function Home() {
       const recencyScore = getRecencyScore(article.publishedAt);
       const externalPopularityScore =
         articleCount === 1 ? 1 : 1 - index / Math.max(1, articleCount - 1);
-      const sourceDiversityScore = getSourceDiversityScore(article.source, sourceCounts);
-      const categoryVarietyScore = getCategoryVarietyScore(article.category, categoryCounts);
+      const sourceDiversityScore = getSourceDiversityScore(
+        getSafeSourceLabel(article.source),
+        sourceCounts
+      );
+      const categoryVarietyScore = getCategoryVarietyScore(
+        getSafeCategoryLabel(article.category),
+        categoryCounts
+      );
       const graffitiEngagementScore =
         getArticleEngagementScore(article) / maxArticleEngagement;
       const score = isLowEngagement
@@ -2196,7 +2210,10 @@ export default function Home() {
         videoCount === 1
           ? 1
           : 1 - index / Math.max(1, videoCount - 1);
-      const sourceDiversityScore = getSourceDiversityScore(video.creator, sourceCounts);
+      const sourceDiversityScore = getSourceDiversityScore(
+        getSafeSourceLabel(video.creator),
+        sourceCounts
+      );
       const categoryVarietyScore = getCategoryVarietyScore("videos", categoryCounts);
       const graffitiEngagementScore = getVideoEngagementScore(video) / maxVideoEngagement;
       const score = isLowEngagement
@@ -2288,7 +2305,58 @@ export default function Home() {
     return [...diversifiedTopItems, ...prioritizedItems];
   }, [sortMode, trendingPolls, videos, visibleArticles]);
 
-  const trendingRenderItems = trendingFeedItems;
+  const safeTrendingRenderItems = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [];
+    }
+
+    const rankedVideos = trendingFeedItems.filter(
+      (
+        item
+      ): item is Extract<(typeof trendingFeedItems)[number], { type: "video"; video: VideoItem }> =>
+        Boolean(item) &&
+        item.type === "video" &&
+        Boolean(item.video?.id) &&
+        Boolean(item.video?.title) &&
+        Boolean(item.video?.creator)
+    );
+
+    const baseItems = trendingFeedItems.filter(
+      (
+        item
+      ): item is
+        | Extract<(typeof trendingFeedItems)[number], { type: "article"; article: Article }>
+        | Extract<(typeof trendingFeedItems)[number], { type: "poll"; poll: PollWithResults }> =>
+        Boolean(item) &&
+        ((item.type === "article" && Boolean(item.article?.id) && Boolean(item.article?.title)) ||
+          (item.type === "poll" && Boolean(item.poll?.id) && Boolean(item.poll?.question)))
+    );
+
+    const mixedItems: typeof trendingFeedItems = [];
+    let insertedVideos = 0;
+    let nonVideoCount = 0;
+
+    baseItems.forEach((item) => {
+      mixedItems.push(item);
+      nonVideoCount += 1;
+
+      const shouldInsertVideo =
+        rankedVideos.length > insertedVideos && nonVideoCount % 4 === 0;
+
+      if (shouldInsertVideo) {
+        mixedItems.push(rankedVideos[insertedVideos]);
+        insertedVideos += 1;
+      }
+    });
+
+    while (insertedVideos < rankedVideos.length) {
+      mixedItems.push(rankedVideos[insertedVideos]);
+      insertedVideos += 1;
+    }
+
+    return mixedItems;
+  }, [sortMode, trendingFeedItems]);
+
   const myFeedRenderItems = useMemo(() => {
     if (sortMode !== "my-feed") {
       return [];
@@ -2317,20 +2385,20 @@ export default function Home() {
   useEffect(() => {
     console.log(
       "TRENDING RENDER COUNT",
-      sortMode === "trending" ? trendingRenderItems.length : visibleArticles.length
+      sortMode === "trending" ? safeTrendingRenderItems.length : visibleArticles.length
     );
     if (sortMode === "trending") {
-      console.log("TRENDING ITEMS COUNT", trendingRenderItems.length);
+      console.log("TRENDING ITEMS COUNT", safeTrendingRenderItems.length);
     }
-  }, [sortMode, trendingRenderItems.length, visibleArticles.length]);
+  }, [sortMode, safeTrendingRenderItems.length, visibleArticles.length]);
 
   useEffect(() => {
     if (sortMode !== "trending") {
       return;
     }
 
-    trendingRenderItems
-      .filter((item): item is Extract<(typeof trendingRenderItems)[number], { type: "article" }> =>
+    safeTrendingRenderItems
+      .filter((item): item is Extract<(typeof trendingFeedItems)[number], { type: "article" }> =>
         item.type === "article"
       )
       .slice(0, 10)
@@ -2343,7 +2411,7 @@ export default function Home() {
           selectedFrom: selectedImage.source,
         });
       });
-  }, [sortMode, trendingRenderItems]);
+  }, [sortMode, safeTrendingRenderItems]);
 
   const renderArticleFeedCard = (
     article: Article,
@@ -2353,6 +2421,8 @@ export default function Home() {
     }
   ) => {
     try {
+      const safeSourceName = getSafeSourceLabel(article.source);
+      const safeCategoryName = getSafeCategoryLabel(article.category);
       const selectedImage = getBestArticleImage(article);
       const imageSrc = selectedImage.src;
       const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
@@ -2364,7 +2434,7 @@ export default function Home() {
         >
           <div className="news-card-top-row">
             <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
-              {getCategoryLabel(article.category)}
+              {getCategoryLabel(safeCategoryName)}
             </span>
             {options?.rankLabel ? (
               <span className="chip trending-rank-badge news-card-rank-badge">
@@ -2375,15 +2445,15 @@ export default function Home() {
           <div className="trending-source-row">
             <div className="trending-source-main">
               <Link
-                href={`/source/${slugifySourceName(article.source)}`}
+                href={`/source/${slugifySourceName(safeSourceName)}`}
                 className="source-trigger source-trigger-tight trending-source-button"
                 onClick={(event) => {
                   event.stopPropagation();
                 }}
               >
                 <div className="trending-source-brand">
-                  <SourceBadge sourceName={article.source} />
-                  <span className="trending-source-name">{article.source}</span>
+                  <SourceBadge sourceName={safeSourceName} />
+                  <span className="trending-source-name">{safeSourceName}</span>
                 </div>
               </Link>
             </div>
@@ -2508,7 +2578,7 @@ export default function Home() {
         <article className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}>
           <div className="news-card-top-row">
             <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
-              {getCategoryLabel(article.category)}
+              {getCategoryLabel(getSafeCategoryLabel(article.category))}
             </span>
             {options?.rankLabel ? (
               <span className="chip trending-rank-badge news-card-rank-badge">
@@ -2518,8 +2588,8 @@ export default function Home() {
           </div>
           <div className="trending-source-row">
             <div className="trending-source-brand">
-              <SourceBadge sourceName={article.source} />
-              <span className="trending-source-name">{article.source}</span>
+              <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+              <span className="trending-source-name">{getSafeSourceLabel(article.source)}</span>
             </div>
           </div>
           <Link href={`/article/${article.id}`} className="article-link">
@@ -2536,6 +2606,76 @@ export default function Home() {
           </Link>
         </article>
       );
+    }
+  };
+
+  const renderTrendingFeedItem = (
+    item: (typeof safeTrendingRenderItems)[number] | null | undefined,
+    index: number
+  ) => {
+    try {
+      if (!item || typeof item !== "object" || !("type" in item)) {
+        console.error("TRENDING ITEM RENDER FAILED", item, new Error("Missing item type"));
+        return null;
+      }
+
+      if (item.type === "article") {
+        if (!item.article?.id || !item.article?.title) {
+          console.error(
+            "TRENDING ITEM RENDER FAILED",
+            item,
+            new Error("Malformed article item")
+          );
+          return null;
+        }
+
+        return renderArticleFeedCard(item.article, {
+          rankLabel: index < 25 ? `Top ${index + 1}` : null,
+        });
+      }
+
+      if (item.type === "poll") {
+        if (!item.poll?.id || !item.poll?.question) {
+          console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed poll item"));
+          return null;
+        }
+
+        return (
+          <PollCard
+            poll={item.poll}
+            onVote={handleVoteOnPoll}
+            isVoting={activePollVoteId === item.poll.id}
+            rankLabel={index < 25 ? `Top ${index + 1}` : null}
+          />
+        );
+      }
+
+      if (item.type === "video") {
+        if (!item.video?.id || !item.video?.title || !item.video?.creator) {
+          console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed video item"));
+          return null;
+        }
+
+        return (
+          <VideoFeedCard
+            video={item.video}
+            onToggleLike={handleToggleVideoLike}
+            onToggleSave={handleToggleVideoSave}
+            onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
+            onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
+            label="Video"
+            rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
+            className="video-card-inline"
+            variant="article"
+          />
+        );
+      }
+
+      console.error("TRENDING ITEM RENDER FAILED", item, new Error("Unknown mixed item type"));
+      return null;
+    } catch (error) {
+      console.error("TRENDING ITEM RENDER FAILED", item, error);
+      return null;
     }
   };
 
@@ -2648,36 +2788,9 @@ export default function Home() {
             </div>
           ) : null}
           {sortMode === "trending"
-            ? trendingRenderItems.map((item, index) => (
+            ? safeTrendingRenderItems.map((item, index) => (
                 <div key={item.key} className="stack">
-                  {item.type === "article"
-                    ? renderArticleFeedCard(item.article, {
-                        rankLabel: index < 25 ? `Top ${index + 1}` : null,
-                      })
-                    : item.type === "poll"
-                    ? (
-                      <PollCard
-                        poll={item.poll}
-                        onVote={handleVoteOnPoll}
-                        isVoting={activePollVoteId === item.poll.id}
-                        rankLabel={index < 25 ? `Top ${index + 1}` : null}
-                      />
-                    )
-                    : (
-                      <VideoFeedCard
-                        video={item.video}
-                        onToggleLike={handleToggleVideoLike}
-                        onToggleSave={handleToggleVideoSave}
-                        onOpenComments={(videoId) =>
-                          router.push(`/video/${videoId}#comments`)
-                        }
-                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
-                        label="Video"
-                        rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
-                        className="video-card-inline"
-                        variant="article"
-                      />
-                    )}
+                  {renderTrendingFeedItem(item, index)}
                   {(index + 1) % 3 === 0 ? (
                     <AdSlot
                       title="Sponsored placement"
