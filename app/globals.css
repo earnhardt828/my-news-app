@@ -584,9 +584,16 @@ input {
 .trending-source-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   min-width: 0;
+}
+
+.trending-source-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .trending-source-button {
@@ -598,7 +605,7 @@ input {
 .source-rating-inline {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -2856,13 +2863,13 @@ input {
 }
 
 .profile-auth-brand {
-  gap: 4px;
+  gap: 2px;
   justify-items: center;
 }
 
 .profile-auth-helper {
   margin: 0;
-  margin-top: -4px;
+  margin-top: -8px;
   max-width: 32ch;
   line-height: 1.55;
   text-align: center;

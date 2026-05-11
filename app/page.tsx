@@ -2210,7 +2210,7 @@ export default function Home() {
 
     const prioritizedItems = [...sortedItems];
     const diversifiedTopItems: typeof sortedItems = [];
-    const articleSourceUsage = new Map<string, number>();
+    const selectedSourceUsage = new Map<string, number>();
     const selectedCategoryUsage = new Map<string, number>();
 
     while (diversifiedTopItems.length < 25 && prioritizedItems.length > 0) {
@@ -2220,19 +2220,18 @@ export default function Home() {
         const item = prioritizedItems[index];
         const sourceKey = getTrendingSourceName(item).trim().toLowerCase();
         const categoryKey = getTrendingCategoryName(item).trim().toLowerCase();
-        const sourceUseCount = articleSourceUsage.get(sourceKey) ?? 0;
+        const sourceUseCount = selectedSourceUsage.get(sourceKey) ?? 0;
         const categoryUseCount = selectedCategoryUsage.get(categoryKey) ?? 0;
-        const otherArticleSourceAvailable = prioritizedItems.some((candidate, candidateIndex) => {
-          if (candidateIndex === index || candidate.type !== "article") {
+        const otherSourceAvailable = prioritizedItems.some((candidate, candidateIndex) => {
+          if (candidateIndex === index) {
             return false;
           }
 
-          const candidateSourceKey = candidate.article.source.trim().toLowerCase();
-          return (articleSourceUsage.get(candidateSourceKey) ?? 0) < 2;
+          const candidateSourceKey = getTrendingSourceName(candidate).trim().toLowerCase();
+          return candidateSourceKey !== sourceKey && (selectedSourceUsage.get(candidateSourceKey) ?? 0) < 2;
         });
 
-        const exceedsArticleSourceCap =
-          item.type === "article" && sourceUseCount >= 2 && otherArticleSourceAvailable;
+        const exceedsSourceCap = sourceUseCount >= 2 && otherSourceAvailable;
         const exceedsCategorySoftCap =
           categoryUseCount >= 4 &&
           prioritizedItems.some((candidate, candidateIndex) => {
@@ -2244,7 +2243,7 @@ export default function Home() {
             return (selectedCategoryUsage.get(candidateCategoryKey) ?? 0) < 3;
           });
 
-        if (!exceedsArticleSourceCap && !exceedsCategorySoftCap) {
+        if (!exceedsSourceCap && !exceedsCategorySoftCap) {
           selectedIndex = index;
           break;
         }
@@ -2253,10 +2252,8 @@ export default function Home() {
       const nextItem = prioritizedItems.splice(selectedIndex >= 0 ? selectedIndex : 0, 1)[0];
       diversifiedTopItems.push(nextItem);
 
-      if (nextItem.type === "article") {
-        const sourceKey = nextItem.article.source.trim().toLowerCase();
-        articleSourceUsage.set(sourceKey, (articleSourceUsage.get(sourceKey) ?? 0) + 1);
-      }
+      const sourceKey = getTrendingSourceName(nextItem).trim().toLowerCase();
+      selectedSourceUsage.set(sourceKey, (selectedSourceUsage.get(sourceKey) ?? 0) + 1);
 
       const categoryKey = getTrendingCategoryName(nextItem).trim().toLowerCase();
       selectedCategoryUsage.set(categoryKey, (selectedCategoryUsage.get(categoryKey) ?? 0) + 1);
@@ -2279,13 +2276,18 @@ export default function Home() {
         (video): video is VideoItem =>
           Boolean(video?.id) && Boolean(video?.title) && Boolean(video?.creator)
       );
+    const rankedArticles = trendingFeedItems
+      .filter((item): item is Extract<(typeof trendingFeedItems)[number], { type: "article" }> =>
+        item.type === "article"
+      )
+      .map((item) => item.article);
     const items: Array<
       | { type: "article"; key: string; article: Article }
       | { type: "video"; key: string; video: VideoItem }
     > = [];
     let insertedVideos = 0;
 
-    visibleArticles.forEach((article, index) => {
+    rankedArticles.forEach((article, index) => {
       const articleKey = `article:${article.id}:${article.url ?? ""}`;
       items.push({
         type: "article",
@@ -2312,7 +2314,7 @@ export default function Home() {
     console.log("TRENDING ITEMS COUNT", items.length);
 
     return items;
-  }, [sortMode, trendingFeedItems, visibleArticles]);
+  }, [sortMode, trendingFeedItems]);
 
   useEffect(() => {
     console.log(
@@ -2371,69 +2373,71 @@ export default function Home() {
             ) : null}
           </div>
           <div className="trending-source-row">
-            <button
-              type="button"
-              className="source-trigger source-trigger-tight trending-source-button"
-              onClick={(event) => {
-                event.stopPropagation();
-                openSourcePreferenceSheet(article.source);
-              }}
-            >
-              <div className="trending-source-brand">
-                <SourceBadge sourceName={article.source} />
-                <span className="trending-source-name">{article.source}</span>
-              </div>
-            </button>
-            {options?.showSourceRatings ? (
-              <div
-                className="source-rating-inline"
+            <div className="trending-source-main">
+              <button
+                type="button"
+                className="source-trigger source-trigger-tight trending-source-button"
                 onClick={(event) => {
-                  event.preventDefault();
                   event.stopPropagation();
+                  openSourcePreferenceSheet(article.source);
                 }}
               >
-                <button
-                  type="button"
-                  className={`source-rating-inline-button ${
-                    likedSources.includes(article.source)
-                      ? "source-rating-inline-button-active-like"
-                      : ""
-                  }`}
-                  aria-label={`Like ${article.source}`}
-                  onClick={(event) =>
-                    void handleInlineSourceRating(event, article.source, "like")
-                  }
+                <div className="trending-source-brand">
+                  <SourceBadge sourceName={article.source} />
+                  <span className="trending-source-name">{article.source}</span>
+                </div>
+              </button>
+              {options?.showSourceRatings ? (
+                <div
+                  className="source-rating-inline"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
                 >
-                  <span className="icon-action-glyph" aria-hidden="true">
-                    <svg {...actionIconProps}>
-                      <path
-                        d="M12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                        fill={likedSources.includes(article.source) ? "currentColor" : "none"}
-                      />
-                    </svg>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={`source-rating-inline-button ${
-                    dislikedSources.includes(article.source)
-                      ? "source-rating-inline-button-active-dislike"
-                      : ""
-                  }`}
-                  aria-label={`Dislike ${article.source}`}
-                  onClick={(event) =>
-                    void handleInlineSourceRating(event, article.source, "dislike")
-                  }
-                >
-                  <span className="icon-action-glyph" aria-hidden="true">
-                    <svg {...actionIconProps}>
-                      <path d="M10 14V4.8c0-.9-.7-1.6-1.6-1.6H6.9C6 3.2 5.2 3.9 5.2 4.8v8.3c0 .4.1.8.4 1.1l2.2 3c.3.4.4.8.4 1.3V20" />
-                      <path d="M14 10h4.4c1 0 1.8.9 1.6 1.9l-.9 5.7c-.1.8-.8 1.4-1.6 1.4H10" />
-                    </svg>
-                  </span>
-                </button>
-              </div>
-            ) : null}
+                  <button
+                    type="button"
+                    className={`source-rating-inline-button ${
+                      likedSources.includes(article.source)
+                        ? "source-rating-inline-button-active-like"
+                        : ""
+                    }`}
+                    aria-label={`Like ${article.source}`}
+                    onClick={(event) =>
+                      void handleInlineSourceRating(event, article.source, "like")
+                    }
+                  >
+                    <span className="icon-action-glyph" aria-hidden="true">
+                      <svg {...actionIconProps}>
+                        <path
+                          d="M12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                          fill={likedSources.includes(article.source) ? "currentColor" : "none"}
+                        />
+                      </svg>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`source-rating-inline-button ${
+                      dislikedSources.includes(article.source)
+                        ? "source-rating-inline-button-active-dislike"
+                        : ""
+                    }`}
+                    aria-label={`Dislike ${article.source}`}
+                    onClick={(event) =>
+                      void handleInlineSourceRating(event, article.source, "dislike")
+                    }
+                  >
+                    <span className="icon-action-glyph" aria-hidden="true">
+                      <svg {...actionIconProps}>
+                        <path d="M10 14V4.8c0-.9-.7-1.6-1.6-1.6H6.9C6 3.2 5.2 3.9 5.2 4.8v8.3c0 .4.1.8.4 1.1l2.2 3c.3.4.4.8.4 1.3V20" />
+                        <path d="M14 10h4.4c1 0 1.8.9 1.6 1.9l-.9 5.7c-.1.8-.8 1.4-1.6 1.4H10" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
           <Link href={`/article/${article.id}`} className="article-link">
             <div
