@@ -721,6 +721,7 @@ export default function ArticleDetailPage() {
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
   const [commentActionTarget, setCommentActionTarget] = useState<ArticleComment | null>(null);
   const [compareStatusMessage, setCompareStatusMessage] = useState("");
+  const shouldEnableCompareSources = false;
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const commentsSectionRef = useRef<HTMLElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
@@ -1907,7 +1908,9 @@ export default function ArticleDetailPage() {
     );
   }
 
-  const compareArticle = activeCompareArticle ?? article;
+  const compareArticle = shouldEnableCompareSources
+    ? activeCompareArticle ?? article
+    : article;
   const selectedArticleImage = compareArticle ? getBestArticleImage(compareArticle) : null;
   const articleImageSrc = selectedArticleImage?.src ?? null;
   console.log("IMAGE URL USED", articleImageSrc);
@@ -1915,9 +1918,8 @@ export default function ArticleDetailPage() {
     ? `${compareArticle?.id ?? article.id}:${articleImageSrc}`
     : `${compareArticle?.id ?? article.id}:none`;
   const shouldShowArticleImage =
-    Boolean(articleImageSrc) && !failedArticleImages[articleImageFailureKey];
-  const shouldUseProminentArticleImage =
-    shouldShowArticleImage &&
+    Boolean(articleImageSrc) &&
+    !failedArticleImages[articleImageFailureKey] &&
     !looksLikeLowQualityImageUrl(articleImageSrc as string) &&
     ["urlToImage", "imageUrl", "image", "mediaContent", "enclosureUrl", "ogImage", "twitterImage"].includes(
       selectedArticleImage?.source ?? ""
@@ -1936,7 +1938,7 @@ export default function ArticleDetailPage() {
 
   return (
     <section className="page-shell article-page-shell">
-      {showCompareTutorial ? (
+      {shouldEnableCompareSources && showCompareTutorial ? (
         <div
           className="compare-sources-tutorial-backdrop"
           role="button"
@@ -1963,7 +1965,7 @@ export default function ArticleDetailPage() {
         </div>
       ) : null}
 
-      {compareArticles.length > 2 ? (
+      {shouldEnableCompareSources && compareArticles.length > 2 ? (
         <div className="compare-sources-top-row" aria-hidden="true">
           <div className="compare-sources-dots">
             {compareArticles.map((compareItem, index) => (
@@ -1977,22 +1979,20 @@ export default function ArticleDetailPage() {
           </div>
         </div>
       ) : null}
-      {compareStatusMessage ? (
+      {shouldEnableCompareSources && compareStatusMessage ? (
         <div className="article-compare-status" role="status" aria-live="polite">
           {compareStatusMessage}
         </div>
       ) : null}
 
       <section
-        className="section-card article-detail-hero compare-sources-shell"
-        onTouchStart={handleCompareTouchStart}
-        onTouchEnd={handleCompareTouchEnd}
+        className={`section-card article-detail-hero ${
+          shouldEnableCompareSources ? "compare-sources-shell" : ""
+        }`}
+        onTouchStart={shouldEnableCompareSources ? handleCompareTouchStart : undefined}
+        onTouchEnd={shouldEnableCompareSources ? handleCompareTouchEnd : undefined}
       >
-        <div
-          className={`article-detail-hero-layout ${
-            shouldShowArticleImage ? "article-detail-hero-layout-with-image" : ""
-          }`}
-        >
+        <div className="article-detail-hero-layout">
           <div className="stack article-detail-hero-copy" style={{ gap: "10px" }}>
             <div className="article-detail-kicker-row">
               <button
@@ -2015,41 +2015,30 @@ export default function ArticleDetailPage() {
             <p className="article-detail-byline">
               Published: {formatPublishedTimestamp(article.publishedAt, article.time)}
             </p>
+            {shouldShowArticleImage ? (
+              <div className="article-detail-inline-image-wrap">
+                <img
+                  src={articleImageSrc as string}
+                  alt={cleanDisplayText(compareArticle.title)}
+                  className="article-thumb-image article-detail-inline-image"
+                  loading="lazy"
+                  decoding="async"
+                  onError={() => {
+                    setFailedArticleImages((prev) => {
+                      if (prev[articleImageFailureKey]) {
+                        return prev;
+                      }
+
+                      return {
+                        ...prev,
+                        [articleImageFailureKey]: true,
+                      };
+                    });
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
-
-          {shouldShowArticleImage ? (
-            <div
-              className={`article-detail-compact-media ${
-                shouldUseProminentArticleImage
-                  ? "article-detail-media-prominent"
-                  : "article-detail-media-compact"
-              }`}
-            >
-              <img
-                src={articleImageSrc as string}
-                alt={cleanDisplayText(compareArticle.title)}
-                className={`article-thumb-image article-detail-compact-image ${
-                  shouldUseProminentArticleImage
-                    ? "article-detail-compact-image-prominent"
-                    : "article-detail-compact-image-small"
-                }`}
-                loading="lazy"
-                decoding="async"
-                onError={() => {
-                  setFailedArticleImages((prev) => {
-                    if (prev[articleImageFailureKey]) {
-                      return prev;
-                    }
-
-                    return {
-                      ...prev,
-                      [articleImageFailureKey]: true,
-                    };
-                  });
-                }}
-              />
-            </div>
-          ) : null}
         </div>
 
         <div className="engagement-row article-detail-actions trending-stats-row article-detail-stats-row">
