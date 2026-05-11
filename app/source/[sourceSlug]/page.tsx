@@ -6,6 +6,7 @@ import LoadingScreen from "../../components/loading-screen";
 import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
 import { getCategoryLabel } from "../../../lib/categories";
+import { cleanDisplayText } from "../../../lib/display-text";
 import {
   getSourceNameFromSlug,
   slugifySourceName,
@@ -28,6 +29,22 @@ type SourceRatingRow = {
   source_name: string;
   rating: "like" | "dislike";
 };
+
+type SourceNewsResponse = {
+  articles: SourceArticle[];
+  nextPage?: number | null;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
+
+function normalizeSourceNewsPayload(payload: SourceArticle[] | SourceNewsResponse) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return payload.articles ?? [];
+}
 
 function formatSourceDate(publishedAt?: string | null, fallback?: string) {
   if (!publishedAt) {
@@ -78,8 +95,20 @@ export default function SourcePage({
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        const response = await apiFetch("/api/news");
-        const news = (await response.json()) as SourceArticle[];
+        const [trendingResponse, searchResponse] = await Promise.all([
+          apiFetch("/api/news?mode=trending&page=1&pageSize=75"),
+          apiFetch(
+            `/api/news?mode=search&query=${encodeURIComponent(
+              sourceName
+            )}&page=1&pageSize=60`
+          ),
+        ]);
+        const trendingNews = normalizeSourceNewsPayload(
+          (await trendingResponse.json()) as SourceArticle[] | SourceNewsResponse
+        );
+        const searchNews = normalizeSourceNewsPayload(
+          (await searchResponse.json()) as SourceArticle[] | SourceNewsResponse
+        );
         const { data: ratingsData, error: ratingsError } = await supabase
           .from("source_ratings")
           .select("id, user_id, source_name, rating")
@@ -89,7 +118,24 @@ export default function SourcePage({
           console.error("Error loading source ratings:", ratingsError);
         }
 
-        const filtered = news
+        const mergedNews = [...trendingNews];
+
+        searchNews.forEach((article) => {
+          if (
+            mergedNews.some(
+              (existingArticle) =>
+                existingArticle.id === article.id ||
+                (existingArticle.title === article.title &&
+                  existingArticle.source === article.source)
+            )
+          ) {
+            return;
+          }
+
+          mergedNews.push(article);
+        });
+
+        const filtered = mergedNews
           .filter(
             (article) =>
               slugifySourceName(article.source) === resolvedParams.sourceSlug ||
@@ -262,8 +308,8 @@ export default function SourcePage({
         <LoadingScreen label={`Loading ${sourceName}`} />
       ) : articles.length === 0 ? (
         <div className="empty-state">
-          <strong>No recent articles found</strong>
-          <span>Try another news source or head back to Search.</span>
+          <strong>No recent articles from this source yet.</strong>
+          <span>Check back soon or explore another source from Search.</span>
         </div>
       ) : (
         <div className="search-results-list">
@@ -281,7 +327,7 @@ export default function SourcePage({
                 <span className="chip chip-accent">{getCategoryLabel(article.category)}</span>
               </div>
 
-              <h3 className="search-result-title">{article.title}</h3>
+              <h3 className="search-result-title">{cleanDisplayText(article.title)}</h3>
 
               <div className="search-result-meta">
                 <span className="trending-published-date">
@@ -290,7 +336,9 @@ export default function SourcePage({
               </div>
 
               {article.description ? (
-                <p className="search-result-description">{article.description}</p>
+                <p className="search-result-description">
+                  {cleanDisplayText(article.description)}
+                </p>
               ) : null}
             </Link>
           ))}
