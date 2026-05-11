@@ -595,6 +595,43 @@ input {
   flex: 0 1 auto;
 }
 
+.source-rating-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.source-rating-inline-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
+  color: var(--text-soft);
+  box-shadow: none;
+}
+
+.source-rating-inline-button:hover {
+  transform: none;
+}
+
+.source-rating-inline-button-active-like {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-strong));
+}
+
+.source-rating-inline-button-active-dislike {
+  color: var(--foreground);
+  border-color: rgba(224, 58, 58, 0.3);
+  background: rgba(224, 58, 58, 0.12);
+}
+
 .source-trigger {
   width: 100%;
   padding: 0;

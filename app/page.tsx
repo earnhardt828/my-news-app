@@ -8,7 +8,7 @@ import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import ShareButton from "./components/share-button";
 import {
   createBlockedUser,
@@ -2092,6 +2092,22 @@ export default function Home() {
     });
   };
 
+  const handleInlineSourceRating = async (
+    event: MouseEvent<HTMLButtonElement>,
+    sourceName: string,
+    rating: "like" | "dislike"
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!userId) {
+      alert("Log in to rate sources");
+      return;
+    }
+
+    await handleSaveSourceRating(sourceName, rating);
+  };
+
   const visibleArticles = displayedArticles;
 
   const trendingFeedItems = useMemo(() => {
@@ -2331,6 +2347,7 @@ export default function Home() {
     options?: {
       rankLabel?: string | null;
       showFreshnessTime?: boolean;
+      showSourceRatings?: boolean;
     }
   ) => {
     try {
@@ -2367,6 +2384,56 @@ export default function Home() {
                 <span className="trending-source-name">{article.source}</span>
               </div>
             </button>
+            {options?.showSourceRatings ? (
+              <div
+                className="source-rating-inline"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
+                <button
+                  type="button"
+                  className={`source-rating-inline-button ${
+                    likedSources.includes(article.source)
+                      ? "source-rating-inline-button-active-like"
+                      : ""
+                  }`}
+                  aria-label={`Like ${article.source}`}
+                  onClick={(event) =>
+                    void handleInlineSourceRating(event, article.source, "like")
+                  }
+                >
+                  <span className="icon-action-glyph" aria-hidden="true">
+                    <svg {...actionIconProps}>
+                      <path
+                        d="M12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                        fill={likedSources.includes(article.source) ? "currentColor" : "none"}
+                      />
+                    </svg>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`source-rating-inline-button ${
+                    dislikedSources.includes(article.source)
+                      ? "source-rating-inline-button-active-dislike"
+                      : ""
+                  }`}
+                  aria-label={`Dislike ${article.source}`}
+                  onClick={(event) =>
+                    void handleInlineSourceRating(event, article.source, "dislike")
+                  }
+                >
+                  <span className="icon-action-glyph" aria-hidden="true">
+                    <svg {...actionIconProps}>
+                      <path d="M10 14V4.8c0-.9-.7-1.6-1.6-1.6H6.9C6 3.2 5.2 3.9 5.2 4.8v8.3c0 .4.1.8.4 1.1l2.2 3c.3.4.4.8.4 1.3V20" />
+                      <path d="M14 10h4.4c1 0 1.8.9 1.6 1.9l-.9 5.7c-.1.8-.8 1.4-1.6 1.4H10" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            ) : null}
           </div>
           <Link href={`/article/${article.id}`} className="article-link">
             <div
@@ -2632,6 +2699,7 @@ export default function Home() {
                   {item.type === "article"
                     ? renderArticleFeedCard(item.article, {
                         rankLabel: index < 25 ? `Top ${index + 1}` : null,
+                        showSourceRatings: true,
                       })
                     : (
                       <VideoFeedCard
