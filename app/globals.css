@@ -411,7 +411,7 @@ input {
   display: grid;
   gap: 18px;
   min-height: calc(100svh - env(safe-area-inset-bottom));
-  background: var(--background);
+  background: transparent;
   padding-bottom: calc(28px + env(safe-area-inset-bottom));
 }
 
@@ -1628,6 +1628,7 @@ input {
 .feed-results-stack {
   min-height: 40vh;
   padding-bottom: calc(120px + env(safe-area-inset-bottom));
+  background: transparent;
 }
 
 .search-results-filter-row {

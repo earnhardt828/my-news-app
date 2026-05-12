@@ -4,7 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { CATEGORY_OPTIONS, getCategoryLabel } from "../../../../lib/categories";
 import { cleanDisplayText } from "../../../../lib/display-text";
-import { validatePollDraft } from "../../../../lib/polls";
+import {
+  getPollSchemaSetupMessage,
+  isPollSchemaMissingError,
+  validatePollDraft,
+} from "../../../../lib/polls";
 import { supabase } from "../../../../lib/supabase";
 
 const MAX_OPTIONS = 4;
@@ -103,7 +107,9 @@ export default function CreatePollPage() {
       setIsSaving(false);
       setStatus({
         type: "error",
-        text: pollError?.message ?? "Could not create your poll.",
+        text: isPollSchemaMissingError(pollError?.message)
+          ? getPollSchemaSetupMessage()
+          : pollError?.message ?? "Could not create your poll.",
       });
       return;
     }
@@ -120,7 +126,9 @@ export default function CreatePollPage() {
     if (optionsError) {
       setStatus({
         type: "error",
-        text: optionsError.message ?? "Could not save your poll options.",
+        text: isPollSchemaMissingError(optionsError.message)
+          ? getPollSchemaSetupMessage()
+          : optionsError.message ?? "Could not save your poll options.",
       });
       return;
     }

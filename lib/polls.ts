@@ -188,6 +188,20 @@ export function validatePollDraft(input: {
   return null;
 }
 
+export function isPollSchemaMissingError(message: string | null | undefined) {
+  if (!message) {
+    return false;
+  }
+
+  return /relation .*polls.* does not exist|relation .*poll_options.* does not exist|relation .*poll_votes.* does not exist|Could not find the table .*polls|Could not find the table .*poll_options|Could not find the table .*poll_votes/i.test(
+    message
+  );
+}
+
+export function getPollSchemaSetupMessage() {
+  return "Polls are not set up in Supabase yet. Run the polls migration, then try again.";
+}
+
 export async function hydratePolls(
   supabase: SupabaseClient,
   polls: PollRecord[],
