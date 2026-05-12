@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { getCategoryLabel } from "../../lib/categories";
 import { formatPollTimestamp, type PollWithResults } from "../../lib/polls";
 
@@ -10,6 +12,9 @@ type PollCardProps = {
   rankLabel?: string | null;
   showAuthor?: boolean;
   className?: string;
+  showHeartAction?: boolean;
+  onToggleHeart?: (pollId: string) => void;
+  isHeartLoading?: boolean;
 };
 
 export default function PollCard({
@@ -19,13 +24,31 @@ export default function PollCard({
   rankLabel = null,
   showAuthor = true,
   className = "",
+  showHeartAction = false,
+  onToggleHeart,
+  isHeartLoading = false,
 }: PollCardProps) {
+  const router = useRouter();
   const hasVoted = Boolean(poll.userVoteOptionId);
   const showResults = hasVoted || !onVote;
   const rootClassName = `news-card poll-card ${rankLabel ? "news-card-has-rank" : ""} ${className}`.trim();
+  const handleOpenPoll = () => {
+    router.push(`/poll/${poll.id}`);
+  };
 
   return (
-    <article className={rootClassName}>
+    <article
+      className={rootClassName}
+      role="link"
+      tabIndex={0}
+      onClick={handleOpenPoll}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          handleOpenPoll();
+        }
+      }}
+    >
       <div className="news-card-top-row">
         <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
           {getCategoryLabel(poll.category)}
@@ -37,9 +60,21 @@ export default function PollCard({
 
       <div className="trending-source-row">
         <div className="trending-source-brand poll-card-brand">
-          <span className="poll-card-brand-mark" aria-hidden="true">
-            ●
-          </span>
+          {poll.creatorAvatarUrl ? (
+            <span className="poll-card-avatar" aria-hidden="true">
+              <Image
+                src={poll.creatorAvatarUrl}
+                alt=""
+                width={22}
+                height={22}
+                unoptimized
+              />
+            </span>
+          ) : (
+            <span className="poll-card-brand-mark" aria-hidden="true">
+              ●
+            </span>
+          )}
           <span className="trending-source-name">
             {showAuthor && poll.username ? `@${poll.username}` : "Graffiti Poll"}
           </span>
@@ -63,7 +98,10 @@ export default function PollCard({
                     : ""
                 }`}
                 disabled={hasVoted || isVoting || !onVote}
-                onClick={() => onVote?.(poll.id, option.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onVote?.(poll.id, option.id);
+                }}
               >
                 <span className="poll-option-copy">
                   <span>{option.optionText}</span>
@@ -84,6 +122,22 @@ export default function PollCard({
           <div className="trending-meta-row poll-card-meta">
             <span className="trending-published-date">{formatPollTimestamp(poll.created_at)}</span>
             <span>{poll.totalVotes} vote{poll.totalVotes === 1 ? "" : "s"}</span>
+            <span>{poll.heartCount} heart{poll.heartCount === 1 ? "" : "s"}</span>
+            <span>{poll.commentCount} comment{poll.commentCount === 1 ? "" : "s"}</span>
+            {showHeartAction ? (
+              <button
+                type="button"
+                className={`poll-heart-button ${poll.userHasHearted ? "poll-heart-button-active" : ""}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleHeart?.(poll.id);
+                }}
+                disabled={isHeartLoading}
+                aria-label={poll.userHasHearted ? "Remove heart" : "Heart poll"}
+              >
+                ♥
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

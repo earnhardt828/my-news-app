@@ -40,6 +40,10 @@ export type PollWithResults = PollRecord & {
   options: PollOptionResult[];
   totalVotes: number;
   userVoteOptionId: string | null;
+  creatorAvatarUrl: string | null;
+  heartCount: number;
+  userHasHearted: boolean;
+  commentCount: number;
 };
 
 const POLL_STOP_WORDS = new Set([
@@ -193,7 +197,7 @@ export function isPollSchemaMissingError(message: string | null | undefined) {
     return false;
   }
 
-  return /relation .*polls.* does not exist|relation .*poll_options.* does not exist|relation .*poll_votes.* does not exist|Could not find the table .*polls|Could not find the table .*poll_options|Could not find the table .*poll_votes/i.test(
+  return /relation .*polls.* does not exist|relation .*poll_options.* does not exist|relation .*poll_votes.* does not exist|relation .*poll_hearts.* does not exist|relation .*poll_comments.* does not exist|Could not find the table .*polls|Could not find the table .*poll_options|Could not find the table .*poll_votes|Could not find the table .*poll_hearts|Could not find the table .*poll_comments/i.test(
     message
   );
 }
@@ -213,7 +217,13 @@ export async function hydratePolls(
 
   const pollIds = polls.map((poll) => poll.id);
 
-  const [{ data: optionsData, error: optionsError }, { data: votesData, error: votesError }] =
+  const [
+    { data: optionsData, error: optionsError },
+    { data: votesData, error: votesError },
+    { data: heartsData, error: heartsError },
+    { data: commentsData, error: commentsError },
+    { data: profilesData, error: profilesError },
+  ] =
     await Promise.all([
       supabase
         .from("poll_options")
@@ -224,6 +234,21 @@ export async function hydratePolls(
         .from("poll_votes")
         .select("id, poll_id, option_id, user_id, created_at")
         .in("poll_id", pollIds),
+      supabase
+        .from("poll_hearts")
+        .select("id, poll_id, user_id, created_at")
+        .in("poll_id", pollIds),
+      supabase
+        .from("poll_comments")
+        .select("id, poll_id")
+        .in("poll_id", pollIds),
+      supabase
+        .from("profiles")
+        .select("id, avatar_url")
+        .in(
+          "id",
+          Array.from(new Set(polls.map((poll) => poll.user_id).filter(Boolean) as string[]))
+        ),
     ]);
 
   if (optionsError) {
@@ -232,6 +257,18 @@ export async function hydratePolls(
 
   if (votesError) {
     console.error("Error loading poll votes:", votesError);
+  }
+
+  if (heartsError && !isPollSchemaMissingError(heartsError.message)) {
+    console.error("Error loading poll hearts:", heartsError);
+  }
+
+  if (commentsError && !isPollSchemaMissingError(commentsError.message)) {
+    console.error("Error loading poll comments:", commentsError);
+  }
+
+  if (profilesError) {
+    console.error("Error loading poll creator profiles:", profilesError);
   }
 
   const options = ((optionsData ?? []) as PollOptionRecord[]).reduce(
@@ -254,9 +291,36 @@ export async function hydratePolls(
     new Map<string, PollVoteRecord[]>()
   );
 
+  const hearts = (((heartsData ?? []) as { poll_id: string; user_id: string | null }[]) ?? []).reduce(
+    (map, heart) => {
+      const pollHearts = map.get(heart.poll_id) ?? [];
+      pollHearts.push(heart);
+      map.set(heart.poll_id, pollHearts);
+      return map;
+    },
+    new Map<string, { poll_id: string; user_id: string | null }[]>()
+  );
+
+  const commentCountByPoll = (((commentsData ?? []) as { poll_id: string }[]) ?? []).reduce(
+    (map, comment) => {
+      map.set(comment.poll_id, (map.get(comment.poll_id) ?? 0) + 1);
+      return map;
+    },
+    new Map<string, number>()
+  );
+
+  const avatarByUserId = (((profilesData ?? []) as { id: string; avatar_url: string | null }[]) ?? []).reduce(
+    (map, profile) => {
+      map.set(profile.id, profile.avatar_url ?? null);
+      return map;
+    },
+    new Map<string, string | null>()
+  );
+
   return polls.map((poll) => {
     const pollOptions = options.get(poll.id) ?? [];
     const pollVotes = votes.get(poll.id) ?? [];
+    const pollHearts = hearts.get(poll.id) ?? [];
     const totalVotes = pollVotes.length;
     const voteCountByOption = new Map<string, number>();
 
@@ -268,10 +332,18 @@ export async function hydratePolls(
       currentUserId
         ? pollVotes.find((vote) => vote.user_id === currentUserId)?.option_id ?? null
         : null;
+    const heartCount = pollHearts.length;
+    const userHasHearted = currentUserId
+      ? pollHearts.some((heart) => heart.user_id === currentUserId)
+      : false;
 
     return {
       ...poll,
       question: normalizePollQuestion(poll.question),
+      creatorAvatarUrl: avatarByUserId.get(poll.user_id) ?? null,
+      heartCount,
+      userHasHearted,
+      commentCount: commentCountByPoll.get(poll.id) ?? 0,
       options: pollOptions.map((option) => {
         const voteCount = voteCountByOption.get(option.id) ?? 0;
 
@@ -325,7 +397,7 @@ export function getPollTrendingScore(poll: PollWithResults) {
   const recencyScore =
     ageHours <= 24 ? 1 : ageHours <= 72 ? 0.75 : Math.max(0.18, 0.45 * Math.exp(-(ageHours - 72) / 120));
 
-  return poll.totalVotes * 1.35 + recencyScore * 14;
+  return poll.totalVotes * 1.35 + poll.heartCount * 1.1 + recencyScore * 14;
 }
 
 export function formatPollTimestamp(timestamp?: string | null) {
