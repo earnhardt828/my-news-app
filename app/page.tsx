@@ -4,7 +4,6 @@ import AdSlot from "./components/ad-slot";
 import LoadingScreen from "./components/loading-screen";
 import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
-import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,7 +21,6 @@ import {
 import { cleanDisplayText } from "../lib/display-text";
 import {
   applyPollVoteUpdate,
-  getPollTrendingScore,
   hydratePolls,
   type PollRecord,
   type PollWithResults,
@@ -33,13 +31,6 @@ import { slugifySourceName } from "../lib/source-logos";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
 import { CATEGORY_OPTIONS, getCategoryLabel } from "../lib/categories";
-import {
-  buildVideoEmbedUrl,
-  initialVideos,
-  normalizeVideoFeedItems,
-  type VideoApiItem,
-  type VideoItem,
-} from "../lib/video-feed";
 
 const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
@@ -346,14 +337,6 @@ function arraysShallowEqual(left: string[], right: string[]) {
   return left.every((value, index) => value === right[index]);
 }
 
-function getArticleEngagementScore(article: Article) {
-  return article.likes + article.comments.length;
-}
-
-function getVideoEngagementScore(video: VideoItem) {
-  return video.likes + video.comments;
-}
-
 function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
   if (!publishedAt) {
     return 0;
@@ -363,102 +346,12 @@ function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function getRecencyScore(publishedAt: string | null | undefined) {
-  const publishedAtTimestamp = getPublishedAtTimestamp(publishedAt);
-
-  if (!publishedAtTimestamp) {
-    return 0.2;
-  }
-
-  const ageHours = Math.max(0, (Date.now() - publishedAtTimestamp) / (1000 * 60 * 60));
-
-  if (ageHours <= 24) {
-    return 1 - (ageHours / 24) * 0.12;
-  }
-
-  if (ageHours <= 72) {
-    return 0.88 - ((ageHours - 24) / 48) * 0.48;
-  }
-
-  return Math.max(0.05, 0.4 * Math.exp(-(ageHours - 72) / 96));
-}
-
-function getSourceDiversityScore(sourceName: string, sourceCounts: Map<string, number>) {
-  const occurrences = sourceCounts.get(sourceName.trim().toLowerCase()) ?? 1;
-
-  if (occurrences <= 1) {
-    return 1;
-  }
-
-  if (occurrences === 2) {
-    return 0.72;
-  }
-
-  if (occurrences === 3) {
-    return 0.46;
-  }
-
-  return 0.24;
-}
-
-function getCategoryVarietyScore(categoryName: string, categoryCounts: Map<string, number>) {
-  const occurrences = categoryCounts.get(categoryName.trim().toLowerCase()) ?? 1;
-
-  if (occurrences <= 1) {
-    return 1;
-  }
-
-  if (occurrences === 2) {
-    return 0.82;
-  }
-
-  if (occurrences === 3) {
-    return 0.64;
-  }
-
-  return 0.42;
-}
-
 function getSafeSourceLabel(value: unknown) {
   return typeof value === "string" && value.trim() ? value : "Unknown source";
 }
 
 function getSafeCategoryLabel(value: unknown) {
   return typeof value === "string" && value.trim() ? value : "general";
-}
-
-function getTrendingSourceName(
-  item:
-    | { type: "article"; key: string; article: Article; score: number; publishedAtMs: number }
-    | { type: "video"; key: string; video: VideoItem; score: number; publishedAtMs: number }
-    | { type: "poll"; key: string; poll: PollWithResults; score: number; publishedAtMs: number }
-) {
-  if (item.type === "article") {
-    return getSafeSourceLabel(item.article.source);
-  }
-
-  if (item.type === "video") {
-    return getSafeSourceLabel(item.video.creator);
-  }
-
-  return `poll:${item.poll.username ?? item.poll.user_id ?? item.poll.id}`;
-}
-
-function getTrendingCategoryName(
-  item:
-    | { type: "article"; key: string; article: Article; score: number; publishedAtMs: number }
-    | { type: "video"; key: string; video: VideoItem; score: number; publishedAtMs: number }
-    | { type: "poll"; key: string; poll: PollWithResults; score: number; publishedAtMs: number }
-) {
-  if (item.type === "article") {
-    return getSafeCategoryLabel(item.article.category);
-  }
-
-  if (item.type === "video") {
-    return "videos";
-  }
-
-  return getSafeCategoryLabel(item.poll.category);
 }
 
 export default function Home() {
@@ -501,14 +394,8 @@ export default function Home() {
     "top" | "controversial" | "newest"
   >("top");
   const [isCommentSortMenuOpen, setIsCommentSortMenuOpen] = useState(false);
-  const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
-  const [trendingPolls, setTrendingPolls] = useState<PollWithResults[]>([]);
   const [myFeedPolls, setMyFeedPolls] = useState<PollWithResults[]>([]);
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
-  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
-  const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
-    null
-  );
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
   const [categorySheetStatus, setCategorySheetStatus] = useState<{
@@ -606,7 +493,7 @@ export default function Home() {
             pageToLoad,
             timeoutMs: INITIAL_FEED_TIMEOUT_MS,
           });
-          setFeedLoadError("Couldn't load live stories right now.");
+          setFeedLoadError("Couldn’t load stories. Tap to retry.");
           setArticles([]);
           setHasMoreArticles(false);
           setFeedPage(1);
@@ -748,7 +635,7 @@ export default function Home() {
       if (replace && newsData.length === 0) {
         const emptyResponseError = new Error("Trending returned zero articles.");
         console.log("TRENDING FETCH ERROR", emptyResponseError);
-        setFeedLoadError("Couldn't load live stories right now.");
+        setFeedLoadError("Couldn’t load stories. Tap to retry.");
         setArticles([]);
         setHasMoreArticles(false);
         setFeedPage(1);
@@ -931,7 +818,7 @@ export default function Home() {
           .filter((rating) => rating.rating === "dislike")
           .map((rating) => rating.source_name)
       );
-      setFeedLoadError(replace && receivedFallbackFeed ? "Couldn't load live stories right now." : null);
+      setFeedLoadError(replace && receivedFallbackFeed ? "Couldn’t load stories. Tap to retry." : null);
       setHasMoreArticles(receivedFallbackFeed ? false : newsPayload.hasMore);
       setFeedPage(pageToLoad);
       setArticles((prev) => {
@@ -954,7 +841,7 @@ export default function Home() {
       console.log("TRENDING FETCH ERROR", error);
       console.error("INITIAL APP LOAD FAILED", error);
       if (replace && !hasLiveNewsResponse) {
-        setFeedLoadError("Couldn't load live stories right now.");
+        setFeedLoadError("Couldn’t load stories. Tap to retry.");
         setArticles([]);
         setHasMoreArticles(false);
         setFeedPage(1);
@@ -1016,62 +903,7 @@ export default function Home() {
   }, [categoryReloadKey, isMyFeedWithoutCategories, loadFeedPage, sortMode]);
 
   useEffect(() => {
-    async function fetchVideos() {
-      try {
-        const response = await apiFetch("/api/videos");
-        if (!response.ok) {
-          const responseText = await response.text();
-          throw new Error(
-            `Trending videos request failed (${response.status}): ${responseText}`
-          );
-        }
-        const data = (await response.json()) as {
-          videos?: VideoApiItem[];
-          fallback?: boolean;
-          message?: string;
-        };
-
-        if (data.fallback) {
-          console.error("Trending videos fallback used:", data.message ?? "Unknown reason");
-        }
-
-        setVideos(normalizeVideoFeedItems(data.videos));
-      } catch (error) {
-        console.error("Error loading trending videos:", error);
-        setVideos(initialVideos);
-      }
-    }
-
-    fetchVideos();
-  }, []);
-
-  useEffect(() => {
     async function loadPolls() {
-      const { data: trendingPollRows, error: trendingPollsError } = await supabase
-        .from("polls")
-        .select(
-          "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
-        )
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(40);
-
-      if (trendingPollsError) {
-        console.error("Error loading trending polls:", trendingPollsError);
-        setTrendingPolls([]);
-      } else {
-        const hydratedTrendingPolls = await hydratePolls(
-          supabase,
-          ((trendingPollRows ?? []) as PollRecord[]),
-          userId
-        );
-        setTrendingPolls(
-          [...hydratedTrendingPolls].sort(
-            (left, right) => getPollTrendingScore(right) - getPollTrendingScore(left)
-          )
-        );
-      }
-
       if (!userId) {
         setMyFeedPolls([]);
         return;
@@ -1122,7 +954,8 @@ export default function Home() {
       );
       setMyFeedPolls(
         [...hydratedMyFeedPolls].sort(
-          (left, right) => getPollTrendingScore(right) - getPollTrendingScore(left)
+          (left, right) =>
+            getPublishedAtTimestamp(right.created_at) - getPublishedAtTimestamp(left.created_at)
         )
       );
     }
@@ -1136,10 +969,7 @@ export default function Home() {
       return;
     }
 
-    const currentPoll =
-      trendingPolls.find((poll) => poll.id === pollId) ??
-      myFeedPolls.find((poll) => poll.id === pollId) ??
-      null;
+    const currentPoll = myFeedPolls.find((poll) => poll.id === pollId) ?? null;
 
     if (!currentPoll || currentPoll.userVoteOptionId) {
       return;
@@ -1161,7 +991,6 @@ export default function Home() {
       return;
     }
 
-    setTrendingPolls((prev) => applyPollVoteUpdate(prev, pollId, optionId));
     setMyFeedPolls((prev) => applyPollVoteUpdate(prev, pollId, optionId));
   };
 
@@ -2019,36 +1848,6 @@ export default function Home() {
     });
   }, [activeCommentsArticle, commentSortMode]);
 
-  const activeVideo =
-    activeVideoId === null ? null : videos.find((video) => video.id === activeVideoId) ?? null;
-
-  const activeCommentsVideo =
-    activeCommentsVideoId === null
-      ? null
-      : videos.find((video) => video.id === activeCommentsVideoId) ?? null;
-
-  const handleToggleVideoLike = (videoId: string) => {
-    setVideos((prev) =>
-      prev.map((video) =>
-        video.id === videoId
-          ? {
-              ...video,
-              liked: !video.liked,
-              likes: video.liked ? Math.max(0, video.likes - 1) : video.likes + 1,
-            }
-          : video
-      )
-    );
-  };
-
-  const handleToggleVideoSave = (videoId: string) => {
-    setVideos((prev) =>
-      prev.map((video) =>
-        video.id === videoId ? { ...video, saved: !video.saved } : video
-      )
-    );
-  };
-
   const openCategorySheet = useCallback(() => {
     setCategoryDraft(categories);
     setCategorySheetStatus(
@@ -2137,226 +1936,6 @@ export default function Home() {
 
   const visibleArticles = displayedArticles;
 
-  const trendingFeedItems = useMemo(() => {
-    if (sortMode !== "trending") {
-      return [];
-    }
-
-    const sourceCounts = new Map<string, number>();
-    const categoryCounts = new Map<string, number>();
-    visibleArticles.forEach((article) => {
-      const sourceKey = getSafeSourceLabel(article.source).trim().toLowerCase();
-      const categoryKey = getSafeCategoryLabel(article.category).trim().toLowerCase();
-      sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
-      categoryCounts.set(categoryKey, (categoryCounts.get(categoryKey) ?? 0) + 1);
-    });
-    videos.forEach((video) => {
-      const sourceKey = getSafeSourceLabel(video.creator).trim().toLowerCase();
-      sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) ?? 0) + 1);
-      categoryCounts.set("videos", (categoryCounts.get("videos") ?? 0) + 1);
-    });
-
-    const maxArticleEngagement = Math.max(
-      1,
-      ...visibleArticles.map((article) => getArticleEngagementScore(article))
-    );
-    const maxVideoEngagement = Math.max(
-      1,
-      ...videos.map((video) => getVideoEngagementScore(video))
-    );
-    const totalGraffitiEngagement =
-      visibleArticles.reduce((sum, article) => sum + getArticleEngagementScore(article), 0) +
-      videos.reduce((sum, video) => sum + getVideoEngagementScore(video), 0);
-    const isLowEngagement = totalGraffitiEngagement < 200;
-    const articleCount = Math.max(1, visibleArticles.length);
-    const videoCount = Math.max(1, videos.length);
-
-    const rankedArticles = visibleArticles.map((article, index) => {
-      const recencyScore = getRecencyScore(article.publishedAt);
-      const externalPopularityScore =
-        articleCount === 1 ? 1 : 1 - index / Math.max(1, articleCount - 1);
-      const sourceDiversityScore = getSourceDiversityScore(
-        getSafeSourceLabel(article.source),
-        sourceCounts
-      );
-      const categoryVarietyScore = getCategoryVarietyScore(
-        getSafeCategoryLabel(article.category),
-        categoryCounts
-      );
-      const graffitiEngagementScore =
-        getArticleEngagementScore(article) / maxArticleEngagement;
-      const score = isLowEngagement
-        ? recencyScore * 0.45 +
-          externalPopularityScore * 0.35 +
-          sourceDiversityScore * 0.1 +
-          categoryVarietyScore * 0.1
-        : recencyScore * 0.28 +
-          externalPopularityScore * 0.28 +
-          graffitiEngagementScore * 0.34 +
-          sourceDiversityScore * 0.05 +
-          categoryVarietyScore * 0.05;
-
-      return {
-        type: "article" as const,
-        key: `article:${article.id}:${article.url ?? ""}`,
-        article,
-        score,
-        publishedAtMs: getPublishedAtTimestamp(article.publishedAt),
-      };
-    });
-    const rankedVideos = videos.map((video, index) => {
-      const recencyScore = getRecencyScore(video.publishedAt);
-      const externalPopularityScore =
-        videoCount === 1
-          ? 1
-          : 1 - index / Math.max(1, videoCount - 1);
-      const sourceDiversityScore = getSourceDiversityScore(
-        getSafeSourceLabel(video.creator),
-        sourceCounts
-      );
-      const categoryVarietyScore = getCategoryVarietyScore("videos", categoryCounts);
-      const graffitiEngagementScore = getVideoEngagementScore(video) / maxVideoEngagement;
-      const score = isLowEngagement
-        ? recencyScore * 0.45 +
-          externalPopularityScore * 0.35 +
-          sourceDiversityScore * 0.1 +
-          categoryVarietyScore * 0.1
-        : recencyScore * 0.28 +
-          externalPopularityScore * 0.28 +
-          graffitiEngagementScore * 0.34 +
-          sourceDiversityScore * 0.05 +
-          categoryVarietyScore * 0.05;
-
-      return {
-        type: "video" as const,
-        key: `video:${video.id}`,
-        video,
-        score,
-        publishedAtMs: getPublishedAtTimestamp(video.publishedAt),
-      };
-    });
-    const rankedPolls = trendingPolls.map((poll) => ({
-      type: "poll" as const,
-      key: `poll:${poll.id}`,
-      poll,
-      score: getPollTrendingScore(poll),
-      publishedAtMs: getPublishedAtTimestamp(poll.created_at),
-    }));
-
-    const sortedItems = [...rankedArticles, ...rankedVideos, ...rankedPolls].sort((left, right) => {
-      if (right.score !== left.score) {
-        return right.score - left.score;
-      }
-
-      return right.publishedAtMs - left.publishedAtMs;
-    });
-
-    const prioritizedItems = [...sortedItems];
-    const diversifiedTopItems: typeof sortedItems = [];
-    const selectedSourceUsage = new Map<string, number>();
-    const selectedCategoryUsage = new Map<string, number>();
-
-    while (diversifiedTopItems.length < 25 && prioritizedItems.length > 0) {
-      let selectedIndex = -1;
-
-      for (let index = 0; index < prioritizedItems.length; index += 1) {
-        const item = prioritizedItems[index];
-        const sourceKey = getTrendingSourceName(item).trim().toLowerCase();
-        const categoryKey = getTrendingCategoryName(item).trim().toLowerCase();
-        const sourceUseCount = selectedSourceUsage.get(sourceKey) ?? 0;
-        const categoryUseCount = selectedCategoryUsage.get(categoryKey) ?? 0;
-        const otherSourceAvailable = prioritizedItems.some((candidate, candidateIndex) => {
-          if (candidateIndex === index) {
-            return false;
-          }
-
-          const candidateSourceKey = getTrendingSourceName(candidate).trim().toLowerCase();
-          return candidateSourceKey !== sourceKey && (selectedSourceUsage.get(candidateSourceKey) ?? 0) < 2;
-        });
-
-        const exceedsSourceCap = sourceUseCount >= 2 && otherSourceAvailable;
-        const exceedsCategorySoftCap =
-          categoryUseCount >= 4 &&
-          prioritizedItems.some((candidate, candidateIndex) => {
-            if (candidateIndex === index) {
-              return false;
-            }
-
-            const candidateCategoryKey = getTrendingCategoryName(candidate).trim().toLowerCase();
-            return (selectedCategoryUsage.get(candidateCategoryKey) ?? 0) < 3;
-          });
-
-        if (!exceedsSourceCap && !exceedsCategorySoftCap) {
-          selectedIndex = index;
-          break;
-        }
-      }
-
-      const nextItem = prioritizedItems.splice(selectedIndex >= 0 ? selectedIndex : 0, 1)[0];
-      diversifiedTopItems.push(nextItem);
-
-      const sourceKey = getTrendingSourceName(nextItem).trim().toLowerCase();
-      selectedSourceUsage.set(sourceKey, (selectedSourceUsage.get(sourceKey) ?? 0) + 1);
-
-      const categoryKey = getTrendingCategoryName(nextItem).trim().toLowerCase();
-      selectedCategoryUsage.set(categoryKey, (selectedCategoryUsage.get(categoryKey) ?? 0) + 1);
-    }
-
-    return [...diversifiedTopItems, ...prioritizedItems];
-  }, [sortMode, trendingPolls, videos, visibleArticles]);
-
-  const safeTrendingRenderItems = useMemo(() => {
-    if (sortMode !== "trending") {
-      return [];
-    }
-
-    const rankedVideos = trendingFeedItems.filter(
-      (
-        item
-      ): item is Extract<(typeof trendingFeedItems)[number], { type: "video"; video: VideoItem }> =>
-        Boolean(item) &&
-        item.type === "video" &&
-        Boolean(item.video?.id) &&
-        Boolean(item.video?.title) &&
-        Boolean(item.video?.creator)
-    );
-
-    const baseItems = trendingFeedItems.filter(
-      (
-        item
-      ): item is
-        | Extract<(typeof trendingFeedItems)[number], { type: "article"; article: Article }>
-        | Extract<(typeof trendingFeedItems)[number], { type: "poll"; poll: PollWithResults }> =>
-        Boolean(item) &&
-        ((item.type === "article" && Boolean(item.article?.id) && Boolean(item.article?.title)) ||
-          (item.type === "poll" && Boolean(item.poll?.id) && Boolean(item.poll?.question)))
-    );
-
-    const mixedItems: typeof trendingFeedItems = [];
-    let insertedVideos = 0;
-    let nonVideoCount = 0;
-
-    baseItems.forEach((item) => {
-      mixedItems.push(item);
-      nonVideoCount += 1;
-
-      const shouldInsertVideo =
-        rankedVideos.length > insertedVideos && nonVideoCount % 4 === 0;
-
-      if (shouldInsertVideo) {
-        mixedItems.push(rankedVideos[insertedVideos]);
-        insertedVideos += 1;
-      }
-    });
-
-    while (insertedVideos < rankedVideos.length) {
-      mixedItems.push(rankedVideos[insertedVideos]);
-      insertedVideos += 1;
-    }
-
-    return mixedItems;
-  }, [sortMode, trendingFeedItems]);
-
   const myFeedRenderItems = useMemo(() => {
     if (sortMode !== "my-feed") {
       return [];
@@ -2385,33 +1964,30 @@ export default function Home() {
   useEffect(() => {
     console.log(
       "TRENDING RENDER COUNT",
-      sortMode === "trending" ? safeTrendingRenderItems.length : visibleArticles.length
+      visibleArticles.length
     );
     if (sortMode === "trending") {
-      console.log("TRENDING ITEMS COUNT", safeTrendingRenderItems.length);
+      console.log("TRENDING ITEMS COUNT", visibleArticles.length);
     }
-  }, [sortMode, safeTrendingRenderItems.length, visibleArticles.length]);
+  }, [sortMode, visibleArticles.length]);
 
   useEffect(() => {
     if (sortMode !== "trending") {
       return;
     }
 
-    safeTrendingRenderItems
-      .filter((item): item is Extract<(typeof trendingFeedItems)[number], { type: "article" }> =>
-        item.type === "article"
-      )
+    visibleArticles
       .slice(0, 10)
-      .forEach((item) => {
-        const selectedImage = getBestArticleImage(item.article);
+      .forEach((article) => {
+        const selectedImage = getBestArticleImage(article);
         console.log("TRENDING IMAGE SELECTED", {
-          title: item.article.title,
-          source: item.article.source,
+          title: article.title,
+          source: article.source,
           imageUrl: selectedImage.src,
           selectedFrom: selectedImage.source,
         });
       });
-  }, [sortMode, safeTrendingRenderItems]);
+  }, [sortMode, visibleArticles]);
 
   const renderArticleFeedCard = (
     article: Article,
@@ -2609,76 +2185,6 @@ export default function Home() {
     }
   };
 
-  const renderTrendingFeedItem = (
-    item: (typeof safeTrendingRenderItems)[number] | null | undefined,
-    index: number
-  ) => {
-    try {
-      if (!item || typeof item !== "object" || !("type" in item)) {
-        console.error("TRENDING ITEM RENDER FAILED", item, new Error("Missing item type"));
-        return null;
-      }
-
-      if (item.type === "article") {
-        if (!item.article?.id || !item.article?.title) {
-          console.error(
-            "TRENDING ITEM RENDER FAILED",
-            item,
-            new Error("Malformed article item")
-          );
-          return null;
-        }
-
-        return renderArticleFeedCard(item.article, {
-          rankLabel: index < 25 ? `Top ${index + 1}` : null,
-        });
-      }
-
-      if (item.type === "poll") {
-        if (!item.poll?.id || !item.poll?.question) {
-          console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed poll item"));
-          return null;
-        }
-
-        return (
-          <PollCard
-            poll={item.poll}
-            onVote={handleVoteOnPoll}
-            isVoting={activePollVoteId === item.poll.id}
-            rankLabel={index < 25 ? `Top ${index + 1}` : null}
-          />
-        );
-      }
-
-      if (item.type === "video") {
-        if (!item.video?.id || !item.video?.title || !item.video?.creator) {
-          console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed video item"));
-          return null;
-        }
-
-        return (
-          <VideoFeedCard
-            video={item.video}
-            onToggleLike={handleToggleVideoLike}
-            onToggleSave={handleToggleVideoSave}
-            onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
-            onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
-            label="Video"
-            rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
-            className="video-card-inline"
-            variant="article"
-          />
-        );
-      }
-
-      console.error("TRENDING ITEM RENDER FAILED", item, new Error("Unknown mixed item type"));
-      return null;
-    } catch (error) {
-      console.error("TRENDING ITEM RENDER FAILED", item, error);
-      return null;
-    }
-  };
-
   if (
     sortMode === "trending" &&
     isInitialFeedLoading &&
@@ -2753,14 +2259,14 @@ export default function Home() {
         <div className="empty-state">
           <strong>
             {feedLoadError
-              ? "Live stories unavailable"
+              ? "Couldn’t load stories."
               : sortMode === "my-feed"
               ? "No articles found"
               : "No stories yet"}
           </strong>
           <span>
             {feedLoadError
-              ? feedLoadError
+              ? "Tap to retry."
               : sortMode === "my-feed"
               ? "Try adding more categories or check back when new stories land."
               : "Check back in a moment for fresh stories."}
@@ -2776,7 +2282,7 @@ export default function Home() {
           {feedLoadError ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
               <div className="stack" style={{ gap: "10px" }}>
-                <span>{feedLoadError}</span>
+                <span>{sortMode === "trending" ? "Couldn’t load stories. Tap to retry." : feedLoadError}</span>
                 {sortMode === "trending" ? (
                   <div>
                     <button className="button button-secondary" onClick={handleRetryFeedLoad}>
@@ -2788,18 +2294,30 @@ export default function Home() {
             </div>
           ) : null}
           {sortMode === "trending"
-            ? safeTrendingRenderItems.map((item, index) => (
-                <div key={item.key} className="stack">
-                  {renderTrendingFeedItem(item, index)}
-                  {(index + 1) % 3 === 0 ? (
-                    <AdSlot
-                      title="Sponsored placement"
-                      copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
-                      cta="Learn more"
-                    />
-                  ) : null}
-                </div>
-              ))
+            ? visibleArticles.map((article, index) => {
+                const articleKey =
+                  article.id || article.url || getArticleDeduplicationKey(article);
+
+                try {
+                  return (
+                    <div key={articleKey} className="stack">
+                      {renderArticleFeedCard(article, {
+                        rankLabel: index < 25 ? `Top ${index + 1}` : null,
+                      })}
+                      {(index + 1) % 3 === 0 ? (
+                        <AdSlot
+                          title="Sponsored placement"
+                          copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
+                          cta="Learn more"
+                        />
+                      ) : null}
+                    </div>
+                  );
+                } catch (error) {
+                  console.error("TRENDING ITEM RENDER FAILED", article, error);
+                  return null;
+                }
+              })
             : sortMode === "my-feed"
             ? myFeedRenderItems.map((item) => (
                 <div key={item.key} className="stack">
@@ -3221,84 +2739,6 @@ export default function Home() {
                 </div>
               ) : null}
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {activeCommentsVideo ? (
-        <div
-          className="bottom-sheet-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="video-comments-title"
-        >
-          <div className="bottom-sheet">
-            <div className="bottom-sheet-handle" aria-hidden="true" />
-            <div className="bottom-sheet-header">
-              <div className="stack" style={{ gap: "6px" }}>
-                <h3 id="video-comments-title" className="modal-title">
-                  Video comments
-                </h3>
-                <p className="muted bottom-sheet-title">{activeCommentsVideo.title}</p>
-              </div>
-              <button
-                className="button button-secondary"
-                onClick={() => setActiveCommentsVideoId(null)}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="empty-state">
-              <strong>Placeholder discussion</strong>
-              <span>
-                This feed uses real YouTube news videos. For now, comments remain
-                a lightweight placeholder instead of syncing YouTube comment threads.
-              </span>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {activeVideo ? (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="trending-video-player-title"
-        >
-          <div className="modal-card video-modal-card">
-            <div className="bottom-sheet-header">
-              <div className="stack" style={{ gap: "6px" }}>
-                <h3 id="trending-video-player-title" className="modal-title">
-                  {activeVideo.title}
-                </h3>
-                <p className="muted bottom-sheet-title">{activeVideo.creator}</p>
-              </div>
-              <button
-                className="button button-secondary"
-                onClick={() => setActiveVideoId(null)}
-              >
-                Close
-              </button>
-            </div>
-
-            {activeVideo.embedUrl ? (
-              <div className="video-player-shell">
-                <iframe
-                  src={buildVideoEmbedUrl(activeVideo.youtubeId, true)}
-                  title={activeVideo.title}
-                  className="video-player-frame"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
-              </div>
-            ) : (
-              <div className="empty-state">
-                <strong>Placeholder video</strong>
-                <span>Real YouTube videos will appear here when the API is available.</span>
-              </div>
-            )}
           </div>
         </div>
       ) : null}
