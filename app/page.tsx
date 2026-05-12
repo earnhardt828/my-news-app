@@ -4,6 +4,7 @@ import AdSlot from "./components/ad-slot";
 import LoadingScreen from "./components/loading-screen";
 import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
+import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -31,6 +32,7 @@ import { slugifySourceName } from "../lib/source-logos";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
 import { CATEGORY_OPTIONS, getCategoryLabel } from "../lib/categories";
+import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../lib/video-feed";
 
 const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
@@ -157,6 +159,10 @@ type PaginatedNewsResponse = {
   pageSize: number;
   hasMore: boolean;
 };
+
+type TrendingFeedItem =
+  | { type: "article"; key: string; article: Article }
+  | { type: "video"; key: string; video: VideoItem };
 
 function isMissingCommentMetadataColumnError(message: string | null | undefined) {
   if (!message) {
@@ -396,6 +402,7 @@ export default function Home() {
   const [isCommentSortMenuOpen, setIsCommentSortMenuOpen] = useState(false);
   const [myFeedPolls, setMyFeedPolls] = useState<PollWithResults[]>([]);
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
+  const [videos, setVideos] = useState<VideoItem[]>([]);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
   const [categorySheetStatus, setCategorySheetStatus] = useState<{
@@ -963,6 +970,40 @@ export default function Home() {
     void loadPolls();
   }, [userId]);
 
+  useEffect(() => {
+    async function loadTrendingVideos() {
+      try {
+        const response = await apiFetch("/api/videos");
+        if (!response.ok) {
+          const responseText = await response.text();
+          throw new Error(`Trending videos request failed (${response.status}): ${responseText}`);
+        }
+
+        const data = (await response.json()) as {
+          videos?: VideoApiItem[];
+          fallback?: boolean;
+          message?: string;
+        };
+
+        if (data.fallback) {
+          console.error("Trending videos fallback used", {
+            message: data.message ?? "Unknown reason",
+          });
+        }
+
+        const normalizedVideos = normalizeVideoFeedItems(data.videos).filter(
+          (video) => !video.fallback
+        );
+        setVideos(normalizedVideos);
+      } catch (error) {
+        console.error("Error loading trending videos:", error);
+        setVideos([]);
+      }
+    }
+
+    void loadTrendingVideos();
+  }, []);
+
   const handleVoteOnPoll = async (pollId: string, optionId: string) => {
     if (!userId) {
       alert("Log in to vote in polls.");
@@ -992,6 +1033,28 @@ export default function Home() {
     }
 
     setMyFeedPolls((prev) => applyPollVoteUpdate(prev, pollId, optionId));
+  };
+
+  const handleToggleVideoLike = (videoId: string) => {
+    setVideos((prev) =>
+      prev.map((video) =>
+        video.id === videoId
+          ? {
+              ...video,
+              liked: !video.liked,
+              likes: video.liked ? Math.max(0, video.likes - 1) : video.likes + 1,
+            }
+          : video
+      )
+    );
+  };
+
+  const handleToggleVideoSave = (videoId: string) => {
+    setVideos((prev) =>
+      prev.map((video) =>
+        video.id === videoId ? { ...video, saved: !video.saved } : video
+      )
+    );
   };
 
   useEffect(() => {
@@ -1936,6 +1999,97 @@ export default function Home() {
 
   const visibleArticles = displayedArticles;
 
+  const balancedTrendingArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return visibleArticles;
+    }
+
+    const prioritizedArticles = [...visibleArticles];
+    const diversifiedTopArticles: Article[] = [];
+    const selectedSourceUsage = new Map<string, number>();
+
+    while (diversifiedTopArticles.length < 25 && prioritizedArticles.length > 0) {
+      let selectedIndex = -1;
+
+      for (let index = 0; index < prioritizedArticles.length; index += 1) {
+        const article = prioritizedArticles[index];
+        const sourceKey = getSafeSourceLabel(article.source).trim().toLowerCase();
+        const sourceUseCount = selectedSourceUsage.get(sourceKey) ?? 0;
+
+        const otherSourceAvailable = prioritizedArticles.some((candidate, candidateIndex) => {
+          if (candidateIndex === index) {
+            return false;
+          }
+
+          const candidateSourceKey = getSafeSourceLabel(candidate.source).trim().toLowerCase();
+          return candidateSourceKey !== sourceKey && (selectedSourceUsage.get(candidateSourceKey) ?? 0) < 2;
+        });
+
+        if (!(sourceUseCount >= 2 && otherSourceAvailable)) {
+          selectedIndex = index;
+          break;
+        }
+      }
+
+      const nextArticle = prioritizedArticles.splice(selectedIndex >= 0 ? selectedIndex : 0, 1)[0];
+      diversifiedTopArticles.push(nextArticle);
+
+      const sourceKey = getSafeSourceLabel(nextArticle.source).trim().toLowerCase();
+      selectedSourceUsage.set(sourceKey, (selectedSourceUsage.get(sourceKey) ?? 0) + 1);
+    }
+
+    return [...diversifiedTopArticles, ...prioritizedArticles];
+  }, [sortMode, visibleArticles]);
+
+  const trendingRenderItems = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as TrendingFeedItem[];
+    }
+
+    const items: TrendingFeedItem[] = [];
+    let insertedVideos = 0;
+    let articleCount = 0;
+
+    balancedTrendingArticles.forEach((article) => {
+      items.push({
+        type: "article",
+        key: `article:${article.id}:${article.url ?? ""}`,
+        article,
+      });
+      articleCount += 1;
+
+      if (videos.length > insertedVideos && articleCount % 4 === 0) {
+        const video = videos[insertedVideos];
+
+        if (video?.id && video?.title && video?.creator) {
+          items.push({
+            type: "video",
+            key: `video:${video.id}`,
+            video,
+          });
+        }
+
+        insertedVideos += 1;
+      }
+    });
+
+    while (insertedVideos < videos.length) {
+      const video = videos[insertedVideos];
+
+      if (video?.id && video?.title && video?.creator) {
+        items.push({
+          type: "video",
+          key: `video:${video.id}`,
+          video,
+        });
+      }
+
+      insertedVideos += 1;
+    }
+
+    return items;
+  }, [balancedTrendingArticles, sortMode, videos]);
+
   const myFeedRenderItems = useMemo(() => {
     if (sortMode !== "my-feed") {
       return [];
@@ -1964,19 +2118,19 @@ export default function Home() {
   useEffect(() => {
     console.log(
       "TRENDING RENDER COUNT",
-      visibleArticles.length
+      sortMode === "trending" ? trendingRenderItems.length : visibleArticles.length
     );
     if (sortMode === "trending") {
-      console.log("TRENDING ITEMS COUNT", visibleArticles.length);
+      console.log("TRENDING ITEMS COUNT", trendingRenderItems.length);
     }
-  }, [sortMode, visibleArticles.length]);
+  }, [sortMode, trendingRenderItems.length, visibleArticles.length]);
 
   useEffect(() => {
     if (sortMode !== "trending") {
       return;
     }
 
-    visibleArticles
+    balancedTrendingArticles
       .slice(0, 10)
       .forEach((article) => {
         const selectedImage = getBestArticleImage(article);
@@ -1987,7 +2141,7 @@ export default function Home() {
           selectedFrom: selectedImage.source,
         });
       });
-  }, [sortMode, visibleArticles]);
+  }, [balancedTrendingArticles, sortMode]);
 
   const renderArticleFeedCard = (
     article: Article,
@@ -2185,6 +2339,43 @@ export default function Home() {
     }
   };
 
+  const renderTrendingFeedItem = (item: TrendingFeedItem, index: number) => {
+    try {
+      if (item.type === "article") {
+        if (!item.article?.id || !item.article?.title) {
+          console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed article item"));
+          return null;
+        }
+
+        return renderArticleFeedCard(item.article, {
+          rankLabel: index < 25 ? `Top ${index + 1}` : null,
+        });
+      }
+
+      if (!item.video?.id || !item.video?.title || !item.video?.creator) {
+        console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed video item"));
+        return null;
+      }
+
+      return (
+        <VideoFeedCard
+          video={item.video}
+          onToggleLike={handleToggleVideoLike}
+          onToggleSave={handleToggleVideoSave}
+          onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
+          onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
+          label="Video"
+          rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
+          className="video-card-inline"
+          variant="article"
+        />
+      );
+    } catch (error) {
+      console.error("TRENDING ITEM RENDER FAILED", item, error);
+      return null;
+    }
+  };
+
   if (
     sortMode === "trending" &&
     isInitialFeedLoading &&
@@ -2294,16 +2485,16 @@ export default function Home() {
             </div>
           ) : null}
           {sortMode === "trending"
-            ? visibleArticles.map((article, index) => {
-                const articleKey =
-                  article.id || article.url || getArticleDeduplicationKey(article);
+            ? trendingRenderItems.map((item, index) => {
+                const itemKey =
+                  item.type === "article"
+                    ? item.article.id || item.article.url || getArticleDeduplicationKey(item.article)
+                    : item.key;
 
                 try {
                   return (
-                    <div key={articleKey} className="stack">
-                      {renderArticleFeedCard(article, {
-                        rankLabel: index < 25 ? `Top ${index + 1}` : null,
-                      })}
+                    <div key={itemKey} className="stack">
+                      {renderTrendingFeedItem(item, index)}
                       {(index + 1) % 3 === 0 ? (
                         <AdSlot
                           title="Sponsored placement"
@@ -2314,7 +2505,7 @@ export default function Home() {
                     </div>
                   );
                 } catch (error) {
-                  console.error("TRENDING ITEM RENDER FAILED", article, error);
+                  console.error("TRENDING ITEM RENDER FAILED", item, error);
                   return null;
                 }
               })
