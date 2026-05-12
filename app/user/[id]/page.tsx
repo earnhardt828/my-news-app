@@ -527,7 +527,26 @@ export default function UserProfilePage() {
               </div>
 
               <div className="profile-meta">
-                <h2 className="profile-name">{displayName}</h2>
+                <div className="profile-meta-row">
+                  <h2 className="profile-name">{displayName}</h2>
+                  {!isOwnProfile ? (
+                    <button
+                      className={`button profile-follow-button ${
+                        isFollowing ? "button-secondary" : "button-accent"
+                      }`}
+                      onClick={handleFollowToggle}
+                      disabled={isFollowButtonDisabled}
+                    >
+                      {isFollowLoading
+                        ? isFollowing
+                          ? "Unfollowing..."
+                          : "Following..."
+                        : isFollowing
+                          ? "Unfollow"
+                          : "Follow"}
+                    </button>
+                  ) : null}
+                </div>
                 {profile.bio ? <p className="profile-bio-text">{profile.bio}</p> : null}
                 <div className="profile-stats-row">
                   <div className="profile-stat-block">
@@ -544,13 +563,6 @@ export default function UserProfilePage() {
 
             {!isOwnProfile ? (
               <div className="toolbar">
-                <button
-                  className={`button ${isFollowing ? "button-secondary" : "button-accent"}`}
-                  onClick={handleFollowToggle}
-                  disabled={isFollowButtonDisabled}
-                >
-                  {isFollowLoading ? (isFollowing ? "Unfollowing..." : "Following...") : isFollowing ? "Unfollow" : "Follow"}
-                </button>
                 <button
                   className={`button ${
                     isBlocked ? "button-secondary" : isUnavailable ? "button-secondary" : "button-accent"
