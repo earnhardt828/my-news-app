@@ -174,47 +174,41 @@ export default function VideoFeedCard({
         <div
           ref={frameRef}
           data-video-id={video.id}
-          className={`video-frame video-frame-article ${articleFrameClass} video-frame-live ${
+          className={`video-frame video-frame-article ${articleFrameClass} ${
             video.theme ?? "video-card-theme-rose"
           }`}
         >
-          {!video.fallback ? (
-            <>
-              <iframe
-                src={buildVideoEmbedUrl(video.youtubeId, true)}
-                title={video.title}
-                className="video-player-frame"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
+          <button
+            className="video-frame-button"
+            onClick={() => onOpenPlayer(video.id)}
+            aria-label={`Play ${video.title}`}
+          >
+            {video.thumbnailUrl ? (
+              <Image
+                src={video.thumbnailUrl}
+                alt={video.title}
+                fill
+                sizes="(max-width: 768px) 100vw, 420px"
+                className="video-thumbnail"
+                unoptimized
               />
-              <button
-                type="button"
-                className="video-frame-detail-trigger"
-                onClick={() => onOpenPlayer(video.id)}
-                aria-label={`Open details for ${video.title}`}
-              />
-            </>
-          ) : (
-            <button
-              className="video-frame-button"
-              onClick={() => onOpenPlayer(video.id)}
-              aria-label={`Play ${video.title}`}
-            >
-              {video.thumbnailUrl ? (
-                <Image
-                  src={video.thumbnailUrl}
-                  alt={video.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 420px"
-                  className="video-thumbnail"
-                  unoptimized
-                />
-              ) : null}
+            ) : null}
+            <div className="video-frame-overlay">
+              <span className="video-play-badge" aria-hidden="true">
+                ▶
+              </span>
+              <span className="video-live-pill">
+                {video.fallback ? "Placeholder video" : "Tap to play"}
+              </span>
+            </div>
+            {!video.thumbnailUrl ? (
               <div className="video-frame-fallback-copy">
-                <span className="video-live-pill">Placeholder video</span>
+                <span className="video-live-pill">
+                  {video.fallback ? "Placeholder video" : "Watch video"}
+                </span>
               </div>
-            </button>
-          )}
+            ) : null}
+          </button>
         </div>
 
         <div className="engagement-row trending-stats-row">
