@@ -785,14 +785,11 @@ export default function Search() {
 
   return (
     <section className="page-shell search-shell">
-      <section className="section-card stack search-card">
+      <section className="search-bar-shell">
         <label className="search-input-shell" htmlFor="search-input">
-          <span className="search-input-icon" aria-hidden="true">
-            ⌕
-          </span>
           <input
             id="search-input"
-            className="search-input search-input-with-icon"
+            className="search-input"
             type="text"
             placeholder="Search news, sources, or topics"
             value={query}
@@ -908,9 +905,6 @@ export default function Search() {
                       <span className="search-source-kind">News source</span>
                     </div>
                   </div>
-                  <span className="search-trending-icon" aria-hidden="true">
-                    ↗
-                  </span>
                 </div>
               </Link>
             </div>

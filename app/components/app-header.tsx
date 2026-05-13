@@ -110,6 +110,26 @@ export default function AppHeader() {
     ? getSourceNameFromSlug(sourcePathSegments[sourcePathSegments.length - 1] ?? "")
     : "Source";
 
+  const closeTo = (fallbackPath: string) => {
+    if (typeof window !== "undefined") {
+      const referrer = document.referrer;
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const referrerPath = referrer.startsWith(window.location.origin)
+        ? referrer.replace(window.location.origin, "")
+        : "";
+      const canGoBack =
+        window.history.length > 1 &&
+        (!referrer || (referrer.startsWith(window.location.origin) && referrerPath !== currentPath));
+
+      if (canGoBack) {
+        router.back();
+        return;
+      }
+    }
+
+    router.push(fallbackPath);
+  };
+
   useEffect(() => {
     if (typeof document === "undefined") {
       return;
@@ -276,14 +296,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close article"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/");
-          }}
+          onClick={() => closeTo("/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -353,14 +366,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close source page"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/search");
-          }}
+          onClick={() => closeTo("/search")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -379,14 +385,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close user profile"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/search");
-          }}
+          onClick={() => closeTo("/search")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -405,14 +404,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close video"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/");
-          }}
+          onClick={() => closeTo("/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -431,14 +423,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close poll"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/");
-          }}
+          onClick={() => closeTo("/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -457,14 +442,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close categories"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/profile");
-          }}
+          onClick={() => closeTo("/profile")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -483,14 +461,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close bookmarks"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/profile");
-          }}
+          onClick={() => closeTo("/profile")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -509,14 +480,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close comments"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/profile");
-          }}
+          onClick={() => closeTo("/profile")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -535,14 +499,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close source rankings"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/");
-          }}
+          onClick={() => closeTo("/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -561,14 +518,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close contact info"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/settings");
-          }}
+          onClick={() => closeTo("/settings")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -587,14 +537,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close change username"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/settings");
-          }}
+          onClick={() => closeTo("/settings")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -613,14 +556,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close about page"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/settings");
-          }}
+          onClick={() => closeTo("/settings")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -639,14 +575,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close contact page"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/settings");
-          }}
+          onClick={() => closeTo("/settings")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -665,14 +594,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close blocked users"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/settings");
-          }}
+          onClick={() => closeTo("/settings")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -691,14 +613,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close report abuse"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/settings");
-          }}
+          onClick={() => closeTo("/settings")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -717,14 +632,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close privacy page"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/settings");
-          }}
+          onClick={() => closeTo("/settings")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -743,14 +651,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close terms page"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-              return;
-            }
-
-            router.push("/settings");
-          }}
+          onClick={() => closeTo("/settings")}
         >
           <span aria-hidden="true">×</span>
         </button>

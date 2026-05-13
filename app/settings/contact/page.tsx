@@ -109,7 +109,7 @@ export default function SettingsContactPage() {
         <LoadingScreen />
       ) : (
         <div className="stack settings-detail-shell">
-          <section className="section-card stack settings-compact-form">
+          <section className="stack settings-compact-form settings-compact-form-plain">
             {!currentUser?.id ? (
               <div className="status-message status-error">
                 Log in to update your contact info.

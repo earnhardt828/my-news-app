@@ -7,6 +7,7 @@ import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
 import { getCategoryLabel } from "../../../lib/categories";
 import { cleanDisplayText } from "../../../lib/display-text";
+import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
 import {
   getSourceNameFromSlug,
   slugifySourceName,
@@ -38,6 +39,11 @@ type SourceNewsResponse = {
   hasMore: boolean;
 };
 
+type UserState = {
+  id: string;
+  email: string | null;
+};
+
 function normalizeSourceNewsPayload(payload: SourceArticle[] | SourceNewsResponse) {
   if (Array.isArray(payload)) {
     return payload;
@@ -65,6 +71,13 @@ function formatSourceDate(publishedAt?: string | null, fallback?: string) {
   }).format(new Date(timestamp));
 }
 
+function normalizeSourceLabel(value?: string | null) {
+  return cleanDisplayText(value ?? "")
+    .replace(/\s+\d+(?:\.\d+)?$/, "")
+    .trim()
+    .toLowerCase();
+}
+
 export default function SourcePage({
   params,
 }: {
@@ -73,9 +86,13 @@ export default function SourcePage({
   const [articles, setArticles] = useState<SourceArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sourceSlug, setSourceSlug] = useState("");
+  const [currentUser, setCurrentUser] = useState<UserState | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [ratings, setRatings] = useState<SourceRatingRow[]>([]);
   const [isSavingRating, setIsSavingRating] = useState(false);
+  const [preferredSources, setPreferredSources] = useState<string[]>([]);
+  const [showLessSources, setShowLessSources] = useState<string[]>([]);
+  const [isSavingPreference, setIsSavingPreference] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -95,16 +112,20 @@ export default function SourcePage({
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        const [trendingResponse, searchResponse] = await Promise.all([
-          apiFetch("/api/news?mode=trending&page=1&pageSize=75"),
+        const [trendingResponse, latestResponse, searchResponse] = await Promise.all([
+          apiFetch("/api/news?mode=trending&page=1&pageSize=100"),
+          apiFetch("/api/news?mode=latest&page=1&pageSize=100"),
           apiFetch(
             `/api/news?mode=search&query=${encodeURIComponent(
               sourceName
-            )}&page=1&pageSize=60`
+            )}&page=1&pageSize=75`
           ),
         ]);
         const trendingNews = normalizeSourceNewsPayload(
           (await trendingResponse.json()) as SourceArticle[] | SourceNewsResponse
+        );
+        const latestNews = normalizeSourceNewsPayload(
+          (await latestResponse.json()) as SourceArticle[] | SourceNewsResponse
         );
         const searchNews = normalizeSourceNewsPayload(
           (await searchResponse.json()) as SourceArticle[] | SourceNewsResponse
@@ -113,14 +134,19 @@ export default function SourcePage({
           .from("source_ratings")
           .select("id, user_id, source_name, rating")
           .eq("source_name", sourceName);
+        const ensuredProfile = user?.id
+          ? await ensureProfileRow({
+              id: user.id,
+              email: user.email ?? null,
+            })
+          : null;
 
         if (ratingsError) {
           console.error("Error loading source ratings:", ratingsError);
         }
 
-        const mergedNews = [...trendingNews];
-
-        searchNews.forEach((article) => {
+        const mergedNews: SourceArticle[] = [];
+        [...searchNews, ...latestNews, ...trendingNews].forEach((article) => {
           if (
             mergedNews.some(
               (existingArticle) =>
@@ -135,12 +161,16 @@ export default function SourcePage({
           mergedNews.push(article);
         });
 
+        const sourceLabel = normalizeSourceLabel(sourceName);
+
         const filtered = mergedNews
-          .filter(
-            (article) =>
+          .filter((article) => {
+            const articleSourceLabel = normalizeSourceLabel(article.source);
+            return (
               slugifySourceName(article.source) === resolvedParams.sourceSlug ||
-              article.source.toLowerCase() === sourceName.toLowerCase()
-          )
+              articleSourceLabel === sourceLabel
+            );
+          })
           .sort((a, b) => {
             const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
             const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
@@ -151,9 +181,19 @@ export default function SourcePage({
           return;
         }
 
+        setCurrentUser(
+          user?.id
+            ? {
+                id: user.id,
+                email: user.email ?? null,
+              }
+            : null
+        );
         setUserId(user?.id ?? null);
         setArticles(filtered);
         setRatings((ratingsData ?? []) as SourceRatingRow[]);
+        setPreferredSources(ensuredProfile?.data?.preferred_sources ?? []);
+        setShowLessSources(ensuredProfile?.data?.show_less_sources ?? []);
         window.dispatchEvent(
           new CustomEvent("reflekt:source-title", { detail: sourceName })
         );
@@ -191,14 +231,10 @@ export default function SourcePage({
     () => ratings.filter((rating) => rating.rating === "like").length,
     [ratings]
   );
-  const dislikeCount = useMemo(
-    () => ratings.filter((rating) => rating.rating === "dislike").length,
-    [ratings]
-  );
-  const netScore = likeCount - dislikeCount;
+  const isShowLessSource = showLessSources.includes(sourceName);
 
   const handleToggleHeart = async () => {
-    if (!userId) {
+    if (!currentUser?.id) {
       alert("Log in to heart sources.");
       return;
     }
@@ -207,7 +243,7 @@ export default function SourcePage({
 
     const existingRating = ratings.find(
       (currentRating) =>
-        currentRating.user_id === userId && currentRating.source_name === sourceName
+        currentRating.user_id === currentUser.id && currentRating.source_name === sourceName
     );
 
     if (existingRating?.rating === "like") {
@@ -215,13 +251,27 @@ export default function SourcePage({
         .from("source_ratings")
         .delete()
         .eq("id", existingRating.id)
-        .eq("user_id", userId);
+        .eq("user_id", currentUser.id);
 
       setIsSavingRating(false);
 
       if (error) {
         console.error("Error clearing source rating:", error);
         return;
+      }
+
+      if (currentUser.id) {
+        const nextPreferredSources = preferredSources.filter((current) => current !== sourceName);
+        const saveResult = await saveProfilePatch(currentUser, {
+          id: currentUser.id,
+          email: currentUser.email,
+          preferred_sources: nextPreferredSources,
+          show_less_sources: showLessSources,
+        });
+
+        if (!saveResult.error) {
+          setPreferredSources(nextPreferredSources);
+        }
       }
 
       setRatings((prev) => prev.filter((currentRating) => currentRating.id !== existingRating.id));
@@ -232,7 +282,7 @@ export default function SourcePage({
       .from("source_ratings")
       .upsert(
         {
-          user_id: userId,
+          user_id: currentUser.id,
           source_name: sourceName,
           rating: "like",
           updated_at: new Date().toISOString(),
@@ -251,13 +301,61 @@ export default function SourcePage({
       return;
     }
 
+    if (currentUser.id) {
+      const nextPreferredSources = preferredSources.includes(sourceName)
+        ? preferredSources
+        : [...preferredSources, sourceName];
+      const nextShowLessSources = showLessSources.filter((current) => current !== sourceName);
+      const saveResult = await saveProfilePatch(currentUser, {
+        id: currentUser.id,
+        email: currentUser.email,
+        preferred_sources: nextPreferredSources,
+        show_less_sources: nextShowLessSources,
+      });
+
+      if (!saveResult.error) {
+        setPreferredSources(nextPreferredSources);
+        setShowLessSources(nextShowLessSources);
+      }
+    }
+
     setRatings((prev) => {
       const next = prev.filter(
-        (currentRating) =>
-          !(currentRating.user_id === userId && currentRating.source_name === sourceName)
+        (currentRating) => !(currentRating.user_id === currentUser.id && currentRating.source_name === sourceName)
       );
       return [...next, data as SourceRatingRow];
     });
+  };
+
+  const handleToggleShowLess = async () => {
+    if (!currentUser?.id) {
+      alert("Log in to customize My Feed sources.");
+      return;
+    }
+
+    setIsSavingPreference(true);
+
+    const nextShowLessSources = isShowLessSource
+      ? showLessSources.filter((current) => current !== sourceName)
+      : [...showLessSources, sourceName];
+    const nextPreferredSources = preferredSources.filter((current) => current !== sourceName);
+
+    const { error } = await saveProfilePatch(currentUser, {
+      id: currentUser.id,
+      email: currentUser.email,
+      preferred_sources: nextPreferredSources,
+      show_less_sources: nextShowLessSources,
+    });
+
+    setIsSavingPreference(false);
+
+    if (error) {
+      console.error("Error saving source preference:", error);
+      return;
+    }
+
+    setPreferredSources(nextPreferredSources);
+    setShowLessSources(nextShowLessSources);
   };
 
   return (
@@ -271,24 +369,38 @@ export default function SourcePage({
               <span className="search-source-kind">News source</span>
             </div>
           </div>
-          <div className="source-rating-summary">
-            <span>❤️ {likeCount}</span>
-            <strong>{netScore >= 0 ? `+${netScore}` : netScore}</strong>
+          <div className="source-page-controls">
+            <button
+              type="button"
+              className={`icon-action-pill ${userRating === "like" ? "icon-action-pill-active" : ""}`}
+              onClick={() => void handleToggleHeart()}
+              disabled={isSavingRating}
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill={userRating === "like" ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
+                </svg>
+              </span>
+              <span>{likeCount}</span>
+            </button>
+            <button
+              type="button"
+              className={`icon-action-pill ${isShowLessSource ? "icon-action-pill-active" : ""}`}
+              onClick={() => void handleToggleShowLess()}
+              disabled={isSavingPreference}
+            >
+              <span>{isShowLessSource ? "Showing less" : "Show Less"}</span>
+            </button>
           </div>
-        </div>
-
-        <div className="source-rating-actions">
-          <button
-            type="button"
-            className={`icon-action-pill ${
-              userRating === "like" ? "icon-action-pill-active" : ""
-            }`}
-            onClick={() => void handleToggleHeart()}
-            disabled={isSavingRating}
-          >
-            <span>♥</span>
-            <span>{userRating === "like" ? "Hearted" : "Heart"}</span>
-          </button>
         </div>
       </section>
 

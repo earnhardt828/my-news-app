@@ -1666,6 +1666,10 @@ input {
   gap: 14px;
 }
 
+.search-bar-shell {
+  display: block;
+}
+
 .search-card {
   gap: 14px;
 }
@@ -1695,6 +1699,12 @@ input {
 
 .search-input-with-icon {
   padding-left: 56px;
+}
+
+.search-bar-shell .search-input {
+  min-height: 50px;
+  border-radius: 18px;
+  box-shadow: none;
 }
 
 .search-results-section {
@@ -2018,6 +2028,7 @@ input {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .source-page-header {
@@ -2043,6 +2054,13 @@ input {
 
 .source-rating-actions {
   display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.source-page-controls {
+  display: inline-flex;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -3942,6 +3960,13 @@ input {
 .settings-compact-form {
   gap: 14px;
   padding: 16px;
+}
+
+.settings-compact-form-plain {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 0;
+  background: transparent;
 }
 
 .settings-compact-input-row {
