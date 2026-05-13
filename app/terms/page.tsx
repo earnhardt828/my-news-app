@@ -38,9 +38,10 @@ export default function TermsPage() {
         <section className="legal-section">
           <h2 className="legal-section-title">User-generated content</h2>
           <p className="legal-section-body">
-            You are responsible for the comments, replies, profile information, and
-            other content you post. By submitting content, you confirm that you have the
-            right to share it and that it does not violate applicable law or these terms.
+            You are responsible for the comments, replies, polls, profile information,
+            and other content you post. By submitting content, you confirm that you
+            have the right to share it and that it does not violate applicable law
+            or these terms.
           </p>
         </section>
 
@@ -58,7 +59,9 @@ export default function TermsPage() {
           <p className="legal-section-body">
             Graffiti may hide, limit, remove, or review content and accounts when needed
             for safety, policy enforcement, abuse prevention, legal compliance, or
-            product integrity. Users may also have access to blocking and reporting tools.
+            product integrity. Users may also have access to blocking and reporting tools,
+            and repeated misuse of comments, polls, follows, or reporting features may
+            lead to restrictions.
           </p>
         </section>
 
@@ -77,6 +80,7 @@ export default function TermsPage() {
             Graffiti surfaces articles, feeds, and media from third-party publishers.
             Those publishers remain responsible for their reporting, rights, and content,
             and outbound links may be subject to third-party terms and policies.
+            Graffiti does not claim ownership of outside news articles or publisher media.
           </p>
         </section>
 

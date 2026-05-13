@@ -30,8 +30,9 @@ export default function PrivacyPage() {
           <h2 className="legal-section-title">Information collected</h2>
           <p className="legal-section-body">
             Graffiti may collect account information such as your email address,
-            username, profile image, category preferences, saved articles, and the
-            content you submit through comments, reports, or support messages.
+            username, profile image, category preferences, saved articles, hearts,
+            follows, poll votes, and the content you submit through comments, polls,
+            reports, or support messages.
           </p>
         </section>
 
@@ -40,16 +41,17 @@ export default function PrivacyPage() {
           <p className="legal-section-body">
             Profile details like usernames, avatars, bios, and selected categories are
             used to personalize the app and help other users recognize who is
-            participating in public conversations.
+            participating in public conversations. Public profile pages may also show
+            your polls, follows, and other visible account activity inside Graffiti.
           </p>
         </section>
 
         <section className="legal-section">
           <h2 className="legal-section-title">Comments and public content</h2>
           <p className="legal-section-body">
-            Comments, replies, hearts, and related moderation activity may be visible
-            inside Graffiti. If you choose to participate publicly, the information you
-            post can be seen by other users in the app.
+            Comments, replies, polls, poll votes, hearts, and related moderation
+            activity may be visible inside Graffiti. If you choose to participate
+            publicly, the information you post can be seen by other users in the app.
           </p>
         </section>
 
@@ -58,7 +60,8 @@ export default function PrivacyPage() {
           <p className="legal-section-body">
             Graffiti may store limited technical and usage information to keep the app
             reliable, understand feature performance, and improve the feed, search, and
-            product experience over time.
+            product experience over time. That can include app analytics, error logs,
+            performance signals, and feature usage data where available.
           </p>
         </section>
 
@@ -66,8 +69,10 @@ export default function PrivacyPage() {
           <h2 className="legal-section-title">Third-party services</h2>
           <p className="legal-section-body">
             Graffiti relies on third-party infrastructure and content sources, including
-            services for authentication, databases, hosting, analytics, and news
-            ingestion. Those providers may process limited data as needed to support the app.
+            services for authentication, databases, hosting, analytics, and news or
+            video ingestion. Graffiti currently uses providers such as Supabase and
+            third-party news/video services, which may process limited data as needed
+            to support the app.
           </p>
         </section>
 
@@ -75,8 +80,17 @@ export default function PrivacyPage() {
           <h2 className="legal-section-title">Blocking and reporting tools</h2>
           <p className="legal-section-body">
             Blocking, abuse reporting, and moderation workflows may store relevant user,
-            comment, and safety information so the app can enforce policies and respond
-            to issues responsibly.
+            comment, poll, follow, and safety information so the app can enforce
+            policies and respond to issues responsibly.
+          </p>
+        </section>
+
+        <section className="legal-section">
+          <h2 className="legal-section-title">Bookmarks and follows</h2>
+          <p className="legal-section-body">
+            Graffiti stores saved articles, source hearts, follows, and show-less
+            preferences so the app can personalize My Feed and help you return to
+            content and publishers that matter to you.
           </p>
         </section>
 
@@ -92,7 +106,7 @@ export default function PrivacyPage() {
         <section className="legal-section">
           <h2 className="legal-section-title">Contact</h2>
           <p className="legal-section-body">
-            Questions about this policy can be sent to{" "}
+            You can contact Graffiti about privacy, account deletion, or data questions at{" "}
             <a className="trust-inline-link" href="mailto:support@graffiti.news">
               support@graffiti.news
             </a>

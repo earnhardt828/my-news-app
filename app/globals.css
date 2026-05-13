@@ -1776,7 +1776,7 @@ input {
 }
 
 .search-results-shell {
-  gap: 12px;
+  gap: 10px;
 }
 
 .search-inline-loading {
@@ -1857,6 +1857,12 @@ input {
 .search-source-card {
   text-decoration: none;
   color: inherit;
+}
+
+.search-source-meta-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .search-user-card {
@@ -2103,12 +2109,13 @@ input {
 }
 
 .source-rankings-metrics {
-  display: grid;
-  justify-items: end;
-  gap: 4px;
-  color: var(--text-soft);
-  font-size: 0.84rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+  color: var(--foreground);
+  font-size: 0.92rem;
+  font-weight: 800;
 }
 
 .source-rankings-metrics strong {
@@ -2981,6 +2988,7 @@ input {
   width: clamp(82px, 23vw, 112px);
   height: auto;
   object-fit: contain;
+  background: transparent;
   animation: loading-logo-fade 420ms ease-out both;
 }
 
@@ -3083,6 +3091,7 @@ input {
   width: clamp(132px, 36vw, 178px);
   height: auto;
   object-fit: contain;
+  background: transparent;
   animation: loading-logo-fade 520ms ease-out both;
 }
 

@@ -106,7 +106,14 @@ export function isLikelyHighQualityArticleImage(
     return false;
   }
 
-  return source === "urlToImage" || source === "imageUrl" || source === "image";
+  return (
+    source === "urlToImage" ||
+    source === "imageUrl" ||
+    source === "image" ||
+    source === "ogImage" ||
+    source === "twitterImage" ||
+    source === "mediaContent"
+  );
 }
 
 export function shouldUseLargeArticleImage(width: number, height: number) {

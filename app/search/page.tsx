@@ -55,6 +55,13 @@ type SearchNewsResponse = {
   hasMore: boolean;
 };
 
+type SourceRatingRow = {
+  id: string;
+  user_id: string;
+  source_name: string;
+  rating: "like" | "dislike";
+};
+
 const fallbackTrendingTerms = [
   "CNN",
   "Markets",
@@ -118,6 +125,25 @@ const COMMON_SINGLE_TERM_BLOCKLIST = new Set([
   "update",
   "was",
 ]);
+
+const SOURCE_ALIASES: Record<string, string[]> = {
+  CNN: ["cnn"],
+  "BBC News": ["bbc", "bbc news"],
+  "CBS News": ["cbs", "cbs news"],
+  "ABC News": ["abc", "abc news"],
+  "NBC News": ["nbc", "nbc news"],
+  CNBC: ["cnbc"],
+  Reuters: ["reuters"],
+  NPR: ["npr"],
+  Bloomberg: ["bloomberg"],
+  Politico: ["politico"],
+  Axios: ["axios"],
+  "AP News": ["ap", "ap news", "associated press"],
+  "Associated Press": ["ap", "ap news", "associated press"],
+  "Fox News": ["fox", "fox news"],
+  "The Guardian": ["guardian", "the guardian"],
+  "The Hill": ["the hill", "hill"],
+};
 
 function formatSearchDate(publishedAt?: string | null, fallback?: string) {
   if (!publishedAt) {
@@ -376,6 +402,8 @@ export default function Search() {
   const [searchArticles, setSearchArticles] = useState<NewsArticle[]>([]);
   const [userResults, setUserResults] = useState<UserProfileSearchResult[]>([]);
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [sourceRatings, setSourceRatings] = useState<SourceRatingRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [isLoadingMoreSearchResults, setIsLoadingMoreSearchResults] = useState(false);
@@ -391,6 +419,9 @@ export default function Search() {
       setIsLoading(true);
 
       try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         const response = await apiFetch(
           `/api/news?mode=trending&page=1&pageSize=${SEARCH_PAGE_SIZE}`
         );
@@ -404,6 +435,23 @@ export default function Search() {
 
         if (derivedTerms.length > 0) {
           setTrendingTerms(derivedTerms);
+        }
+
+        setCurrentUserId(user?.id ?? null);
+
+        if (user?.id) {
+          const { data: ratingsData, error: ratingsError } = await supabase
+            .from("source_ratings")
+            .select("id, user_id, source_name, rating");
+
+          if (ratingsError) {
+            console.error("Error loading source hearts:", ratingsError);
+            setSourceRatings([]);
+          } else {
+            setSourceRatings((ratingsData ?? []) as SourceRatingRow[]);
+          }
+        } else {
+          setSourceRatings([]);
         }
       } catch (error) {
         console.error("Error loading search data:", error);
@@ -668,8 +716,16 @@ export default function Search() {
     }
 
     const exactMappedSource =
-      Object.keys(sourceLogoMap).find(
-        (sourceName) => sourceName.trim().toLowerCase() === normalizedQuery
+      Object.keys(sourceLogoMap).find((sourceName) => {
+        const normalizedSource = sourceName.trim().toLowerCase();
+        const aliases = SOURCE_ALIASES[sourceName] ?? [];
+
+        return (
+          normalizedSource === normalizedQuery ||
+          aliases.includes(normalizedQuery) ||
+          normalizedQuery === normalizedSource.replace(/\s+news$/, "")
+        );
+      }
       ) ?? null;
 
     if (exactMappedSource) {
@@ -696,6 +752,87 @@ export default function Search() {
       ) ?? null
     );
   }, [articles, normalizedQuery, searchArticles]);
+
+  const matchedSourceHeartCount = useMemo(
+    () =>
+      matchedSourceName
+        ? sourceRatings.filter(
+            (rating) =>
+              rating.source_name === matchedSourceName && rating.rating === "like"
+          ).length
+        : 0,
+    [matchedSourceName, sourceRatings]
+  );
+
+  const matchedSourceHearted = useMemo(
+    () =>
+      Boolean(
+        matchedSourceName &&
+          currentUserId &&
+          sourceRatings.find(
+            (rating) =>
+              rating.user_id === currentUserId &&
+              rating.source_name === matchedSourceName &&
+              rating.rating === "like"
+          )
+      ),
+    [currentUserId, matchedSourceName, sourceRatings]
+  );
+
+  const handleToggleSourceHeart = async (sourceName: string) => {
+    if (!currentUserId) {
+      alert("Log in to heart sources.");
+      return;
+    }
+
+    const existingRating = sourceRatings.find(
+      (rating) => rating.user_id === currentUserId && rating.source_name === sourceName
+    );
+
+    if (existingRating?.rating === "like") {
+      const { error } = await supabase
+        .from("source_ratings")
+        .delete()
+        .eq("id", existingRating.id)
+        .eq("user_id", currentUserId);
+
+      if (error) {
+        console.error("Error clearing source heart:", error);
+        return;
+      }
+
+      setSourceRatings((prev) => prev.filter((rating) => rating.id !== existingRating.id));
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("source_ratings")
+      .upsert(
+        {
+          user_id: currentUserId,
+          source_name: sourceName,
+          rating: "like",
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id,source_name",
+        }
+      )
+      .select("id, user_id, source_name, rating")
+      .single();
+
+    if (error) {
+      console.error("Error saving source heart:", error);
+      return;
+    }
+
+    setSourceRatings((prev) => {
+      const next = prev.filter(
+        (rating) => !(rating.user_id === currentUserId && rating.source_name === sourceName)
+      );
+      return [...next, data as SourceRatingRow];
+    });
+  };
 
   const filteredResults = useMemo(() => {
     if (!normalizedQuery) {
@@ -905,6 +1042,36 @@ export default function Search() {
                       <span className="search-source-kind">News source</span>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    className={`icon-action-pill icon-action-pill-icon-only ${
+                      matchedSourceHearted ? "icon-action-pill-active" : ""
+                    }`}
+                    aria-label={matchedSourceHearted ? "Unheart source" : "Heart source"}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void handleToggleSourceHeart(matchedSourceName);
+                    }}
+                  >
+                    <span className="icon-action-glyph" aria-hidden="true">
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill={matchedSourceHearted ? "currentColor" : "none"}
+                        stroke="currentColor"
+                        strokeWidth="1.9"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+                <div className="search-source-meta-row">
+                  <span className="search-source-kind">{matchedSourceHeartCount} hearts</span>
                 </div>
               </Link>
             </div>

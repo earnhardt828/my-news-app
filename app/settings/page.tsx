@@ -364,7 +364,7 @@ export default function SettingsPage() {
               <Link href="/settings/report-abuse" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Report abuse or safety issue</strong>
-                  <span>Reach out at support@graffiti.app for urgent safety concerns.</span>
+                  <span>Reach out at support@graffiti.news for urgent safety concerns.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›

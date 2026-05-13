@@ -17,7 +17,7 @@ export default function LoadingScreen({
       <div className="loading-screen-pulse" aria-hidden="true" />
       <div className="loading-screen-logo-wrap">
         <Image
-          src="/branding/graffiti-loading-center.png"
+          src="/branding/graffiti-loading-center-light-transparent.png"
           alt="Graffiti"
           width={86}
           height={86}
@@ -25,7 +25,7 @@ export default function LoadingScreen({
           className="loading-screen-logo branding-image-light"
         />
         <Image
-          src="/branding/graffiti-loading-center-dark.png"
+          src="/branding/graffiti-loading-center-dark-transparent.png"
           alt="Graffiti"
           width={86}
           height={86}
@@ -36,7 +36,7 @@ export default function LoadingScreen({
       <p className="loading-screen-status-text">{message ?? label}</p>
       <div className="loading-screen-bottom-wrap">
         <Image
-          src="/branding/graffiti-loading-bottom.png"
+          src="/branding/graffiti-loading-bottom-light-transparent.png"
           alt="Graffiti"
           width={172}
           height={34}
@@ -44,7 +44,7 @@ export default function LoadingScreen({
           className="loading-screen-bottom-logo branding-image-light"
         />
         <Image
-          src="/branding/graffiti-loading-bottom-dark.png"
+          src="/branding/graffiti-loading-bottom-dark-transparent.png"
           alt="Graffiti"
           width={172}
           height={34}
