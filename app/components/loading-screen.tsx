@@ -17,7 +17,7 @@ export default function LoadingScreen({
       <div className="loading-screen-pulse" aria-hidden="true" />
       <div className="loading-screen-logo-wrap">
         <Image
-          src="/branding/graffiti-loading-center-light-transparent.png"
+          src="/branding/Logo%20Graffiti.png"
           alt="Graffiti"
           width={86}
           height={86}
@@ -36,7 +36,7 @@ export default function LoadingScreen({
       <p className="loading-screen-status-text">{message ?? label}</p>
       <div className="loading-screen-bottom-wrap">
         <Image
-          src="/branding/graffiti-loading-bottom-light-transparent.png"
+          src="/branding/Graffiti%20name%20logo%20rainbow.png"
           alt="Graffiti"
           width={172}
           height={34}

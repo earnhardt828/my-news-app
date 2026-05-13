@@ -843,8 +843,23 @@ input {
 
 .trending-tabs-wrap {
   display: flex;
-  justify-content: center;
   width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-inline: 2px;
+}
+
+.trending-tabs-wrap::-webkit-scrollbar {
+  display: none;
+}
+
+.trending-tabs-wrap .toolbar {
+  width: max-content;
+  min-width: 100%;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-bottom: 2px;
 }
 
 .category-launch-button {
@@ -1841,7 +1856,11 @@ input {
   padding: 14px;
   border-radius: 22px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 90%, white), color-mix(in srgb, var(--surface-muted) 86%, white));
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(255, 214, 87, 0.12) 35%, var(--surface) 65%),
+      color-mix(in srgb, rgba(52, 208, 235, 0.08) 24%, var(--surface-muted) 76%)
+    );
   border: 1px solid color-mix(in srgb, var(--border) 90%, white);
 }
 
@@ -3094,10 +3113,7 @@ input {
     max(env(safe-area-inset-right), 16px)
     max(env(safe-area-inset-bottom), 16px)
     max(env(safe-area-inset-left), 16px);
-  background:
-    radial-gradient(circle at 24% 22%, rgba(255, 110, 73, 0.1), transparent 30%),
-    radial-gradient(circle at 76% 34%, rgba(77, 190, 255, 0.1), transparent 26%),
-    linear-gradient(180deg, #ffffff 0%, #f7f7fb 100%);
+  background: #ffffff;
   overflow: hidden;
 }
 
@@ -3145,10 +3161,10 @@ input {
   width: min(54vw, 280px);
   height: min(54vw, 280px);
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 94, 58, 0.18), transparent 58%),
-    radial-gradient(circle at 18% 34%, rgba(255, 94, 58, 0.14), transparent 22%),
-    radial-gradient(circle at 76% 24%, rgba(255, 146, 82, 0.12), transparent 18%),
-    radial-gradient(circle at 66% 80%, rgba(255, 94, 58, 0.08), transparent 16%);
+    radial-gradient(circle at 50% 50%, rgba(255, 94, 58, 0.1), transparent 58%),
+    radial-gradient(circle at 18% 34%, rgba(255, 94, 58, 0.08), transparent 22%),
+    radial-gradient(circle at 76% 24%, rgba(255, 146, 82, 0.06), transparent 18%),
+    radial-gradient(circle at 66% 80%, rgba(255, 94, 58, 0.04), transparent 16%);
   animation: loading-spray-pulse 2.6s ease-in-out infinite;
 }
 
@@ -3156,9 +3172,9 @@ input {
   width: min(70vw, 360px);
   height: min(50vw, 260px);
   background:
-    radial-gradient(circle at 38% 58%, rgba(0, 180, 255, 0.12), transparent 52%),
-    radial-gradient(circle at 78% 42%, rgba(145, 93, 255, 0.08), transparent 24%),
-    radial-gradient(circle at 22% 76%, rgba(255, 204, 90, 0.08), transparent 18%);
+    radial-gradient(circle at 38% 58%, rgba(0, 180, 255, 0.08), transparent 52%),
+    radial-gradient(circle at 78% 42%, rgba(145, 93, 255, 0.05), transparent 24%),
+    radial-gradient(circle at 22% 76%, rgba(255, 204, 90, 0.05), transparent 18%);
   animation: loading-spray-pulse 3.2s ease-in-out 180ms infinite;
 }
 
@@ -3216,6 +3232,7 @@ input {
   height: auto;
   object-fit: contain;
   background: transparent;
+  box-shadow: none;
   animation: loading-logo-fade 520ms ease-out both;
 }
 
@@ -4091,7 +4108,7 @@ input {
 }
 
 .settings-compact-form {
-  gap: 10px;
+  gap: 6px;
   padding: 0;
 }
 
@@ -4116,6 +4133,7 @@ input {
 
 .settings-compact-actions {
   justify-content: flex-start;
+  margin-top: 0;
 }
 
 .settings-compact-button {

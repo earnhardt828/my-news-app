@@ -175,12 +175,164 @@ const TRENDING_CATEGORY_RAILS = [
   "World",
 ] as const;
 
+const CHARLOTTE_LOCAL_SOURCE_ALLOWLIST = [
+  "Charlotte Observer",
+  "WSOC-TV",
+  "WSOC Charlotte",
+  "WBTV",
+  "WCNC",
+  "Queen City News",
+  "WFAE",
+  "Axios Charlotte",
+  "WCCB Charlotte",
+] as const;
+
+const CHARLOTTE_AREA_PLACE_NAMES = [
+  "charlotte",
+  "matthews",
+  "huntersville",
+  "cornelius",
+  "davidson",
+  "pineville",
+  "mint hill",
+  "concord",
+  "kannapolis",
+  "gastonia",
+  "rock hill",
+  "fort mill",
+  "mooresville",
+] as const;
+
+const CHARLOTTE_LOCAL_QUERY = [
+  "Charlotte NC local news",
+  "Charlotte Observer",
+  "WSOC Charlotte",
+  "WBTV Charlotte",
+  "WCNC Charlotte",
+  "Queen City News",
+  "WFAE Charlotte",
+  "Axios Charlotte",
+  "WCCB Charlotte",
+].join(" ");
+
+const NATIONAL_SOURCE_KEYWORDS = [
+  "fox news",
+  "cnn",
+  "msnbc",
+  "reuters",
+  "associated press",
+  "ap news",
+  "nbc news",
+  "cbs news",
+  "abc news",
+  "newsmax",
+];
+
 function isMissingCommentMetadataColumnError(message: string | null | undefined) {
   if (!message) {
     return false;
   }
 
   return /article_title|article_source|article_image|article_url/i.test(message);
+}
+
+function normalizeLookupValue(value: string | null | undefined) {
+  return cleanDisplayText(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function isCharlotteAreaLocation(city?: string | null, state?: string | null, label?: string | null) {
+  const combined = normalizeLookupValue([city, state, label].filter(Boolean).join(" "));
+  return CHARLOTTE_AREA_PLACE_NAMES.some((placeName) => combined.includes(placeName));
+}
+
+function buildLocalNewsQuery(options?: {
+  city?: string | null;
+  state?: string | null;
+  label?: string | null;
+}) {
+  const label = cleanDisplayText(options?.label ?? "").trim();
+  const city = cleanDisplayText(options?.city ?? "").trim();
+  const state = cleanDisplayText(options?.state ?? "").trim();
+
+  if (isCharlotteAreaLocation(city, state, label)) {
+    return CHARLOTTE_LOCAL_QUERY;
+  }
+
+  const fallbackLabel = label || [city, state].filter(Boolean).join(", ");
+  return fallbackLabel ? `${fallbackLabel} local news` : "United States local news";
+}
+
+function getLocalSearchTerms(localQuery: string, localLocationLabel: string) {
+  const combined = normalizeLookupValue(`${localLocationLabel} ${localQuery}`);
+  const terms = combined
+    .split(/[^a-z0-9]+/i)
+    .filter(
+      (term) =>
+        term.length >= 3 &&
+        !["local", "news", "north", "south", "carolina", "united", "states", "regional"].includes(
+          term
+        )
+    );
+
+  return Array.from(new Set(terms));
+}
+
+function scoreLocalArticle(article: Article, localQuery: string, localLocationLabel: string) {
+  const sourceName = normalizeLookupValue(article.source);
+  const title = normalizeLookupValue(article.title);
+  const description = normalizeLookupValue(article.description);
+  const articleText = `${title} ${description} ${normalizeLookupValue(article.url)}`;
+  const localTerms = getLocalSearchTerms(localQuery, localLocationLabel);
+  const isCharlotteArea = isCharlotteAreaLocation(undefined, undefined, `${localLocationLabel} ${localQuery}`);
+  const articleAgeHours = article.publishedAt
+    ? Math.max(0, (Date.now() - new Date(article.publishedAt).getTime()) / (1000 * 60 * 60))
+    : 48;
+  let score = Math.max(0, 120 - articleAgeHours);
+
+  const localTermMatches = localTerms.filter((term) => articleText.includes(term)).length;
+  score += localTermMatches * 18;
+
+  if (isCharlotteArea) {
+    const hasCharlotteSource = CHARLOTTE_LOCAL_SOURCE_ALLOWLIST.some((source) =>
+      sourceName.includes(normalizeLookupValue(source))
+    );
+    const hasCharlotteStorySignal =
+      /(charlotte|mecklenburg|queen city|gastonia|concord|rock hill|fort mill|huntersville|matthews)/.test(
+        articleText
+      );
+
+    if (hasCharlotteSource) {
+      score += 220;
+    }
+
+    if (hasCharlotteStorySignal) {
+      score += 95;
+    }
+
+    if (
+      !hasCharlotteSource &&
+      !hasCharlotteStorySignal &&
+      NATIONAL_SOURCE_KEYWORDS.some((keyword) => sourceName.includes(keyword))
+    ) {
+      score -= 85;
+    }
+  } else {
+    const hasLocationInSource = localTerms.some((term) => sourceName.includes(term));
+    if (hasLocationInSource) {
+      score += 48;
+    }
+
+    if (
+      !localTermMatches &&
+      NATIONAL_SOURCE_KEYWORDS.some((keyword) => sourceName.includes(keyword))
+    ) {
+      score -= 30;
+    }
+  }
+
+  return score;
 }
 
 const actionIconProps = {
@@ -1248,7 +1400,11 @@ export default function Home() {
             "";
           const state = payload?.address?.state ?? "";
           const nextLabel = [city, state].filter(Boolean).join(", ");
-          const nextQuery = nextLabel ? `${nextLabel} local news` : "United States local news";
+          const nextQuery = buildLocalNewsQuery({
+            city,
+            state,
+            label: nextLabel,
+          });
           setLocalLocationLabel(nextLabel || "Regional news");
           setLocalQuery(nextQuery);
           setLocalQueryDraft(nextLabel || "United States local news");
@@ -1271,6 +1427,61 @@ export default function Home() {
       }
     );
   }, [localQuery, sortMode]);
+
+  const handleUpdateLocalQuery = useCallback(async () => {
+    const trimmedDraft = localQueryDraft.trim();
+
+    if (!trimmedDraft) {
+      setLocalLocationLabel("Regional news");
+      setLocalQuery("United States local news");
+      setLocalQueryDraft("United States local news");
+      return;
+    }
+
+    if (/^\d{5}$/.test(trimmedDraft)) {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=us&postalcode=${encodeURIComponent(
+            trimmedDraft
+          )}&limit=1&addressdetails=1`,
+          {
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+        const payload = (await response.json().catch(() => [])) as Array<{
+          address?: {
+            city?: string;
+            town?: string;
+            village?: string;
+            state?: string;
+          };
+        }>;
+        const firstMatch = payload[0];
+        const city =
+          firstMatch?.address?.city ??
+          firstMatch?.address?.town ??
+          firstMatch?.address?.village ??
+          "";
+        const state = firstMatch?.address?.state ?? "";
+        const nextLabel = [city, state].filter(Boolean).join(", ");
+
+        if (nextLabel) {
+          setLocalLocationLabel(nextLabel);
+          setLocalQuery(buildLocalNewsQuery({ city, state, label: nextLabel }));
+          setLocalQueryDraft(nextLabel);
+          return;
+        }
+      } catch (error) {
+        console.error("Error resolving local zip code:", error);
+      }
+    }
+
+    setLocalLocationLabel(trimmedDraft);
+    setLocalQuery(buildLocalNewsQuery({ label: trimmedDraft }));
+    setLocalQueryDraft(trimmedDraft);
+  }, [localQueryDraft]);
 
   const createNotification = useCallback(
     async ({
@@ -2171,7 +2382,32 @@ export default function Home() {
     }, 900);
   };
 
-  const visibleArticles = displayedArticles;
+  const balancedLocalArticles = useMemo(() => {
+    if (sortMode !== "local") {
+      return displayedArticles;
+    }
+
+    return [...displayedArticles].sort((leftArticle, rightArticle) => {
+      const scoreDifference =
+        scoreLocalArticle(rightArticle, localQuery, localLocationLabel) -
+        scoreLocalArticle(leftArticle, localQuery, localLocationLabel);
+
+      if (scoreDifference !== 0) {
+        return scoreDifference;
+      }
+
+      const rightPublishedAt = rightArticle.publishedAt
+        ? new Date(rightArticle.publishedAt).getTime()
+        : 0;
+      const leftPublishedAt = leftArticle.publishedAt
+        ? new Date(leftArticle.publishedAt).getTime()
+        : 0;
+
+      return rightPublishedAt - leftPublishedAt;
+    });
+  }, [displayedArticles, localLocationLabel, localQuery, sortMode]);
+
+  const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
 
   const balancedTrendingArticles = useMemo(() => {
     if (sortMode !== "trending") {
@@ -2300,16 +2536,17 @@ export default function Home() {
       };
     }).filter((section) => section.articles.length >= 3);
 
-    const insertionIndexes = [7, 17, 27];
+    let nextInsertAt = 10;
 
-    availableSections.slice(0, insertionIndexes.length).forEach((section, sectionIndex) => {
-      const insertAt = Math.min(insertionIndexes[sectionIndex], items.length);
+    availableSections.slice(0, 3).forEach((section) => {
+      const insertAt = Math.min(nextInsertAt, items.length);
       items.splice(insertAt, 0, {
         type: "category-section",
         key: `category-section:${section.title.toLowerCase()}`,
         title: section.title,
         articles: section.articles,
       });
+      nextInsertAt += 11;
     });
 
     return items;
@@ -2797,9 +3034,7 @@ export default function Home() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  const nextValue = localQueryDraft.trim() || "United States local news";
-                  setLocalLocationLabel(localQueryDraft.trim() || "Regional news");
-                  setLocalQuery(nextValue.includes("local news") ? nextValue : `${nextValue} local news`);
+                  void handleUpdateLocalQuery();
                 }
               }}
             />
@@ -2807,9 +3042,7 @@ export default function Home() {
               type="button"
               className="button button-secondary local-feed-button"
               onClick={() => {
-                const nextValue = localQueryDraft.trim() || "United States local news";
-                setLocalLocationLabel(localQueryDraft.trim() || "Regional news");
-                setLocalQuery(nextValue.includes("local news") ? nextValue : `${nextValue} local news`);
+                void handleUpdateLocalQuery();
               }}
             >
               Update
