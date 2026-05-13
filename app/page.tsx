@@ -391,7 +391,7 @@ export default function Home() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-  const [sortMode, setSortMode] = useState<"trending" | "my-feed" | "latest">(
+  const [sortMode, setSortMode] = useState<"trending" | "my-feed" | "latest" | "local">(
     "trending"
   );
   const [userId, setUserId] = useState<string | null>(null);
@@ -443,6 +443,9 @@ export default function Home() {
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
   const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
+  const [localQuery, setLocalQuery] = useState("");
+  const [localQueryDraft, setLocalQueryDraft] = useState("");
+  const [localLocationLabel, setLocalLocationLabel] = useState("Regional news");
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -473,13 +476,17 @@ export default function Home() {
     console.log("LOADING STATE", isLoading);
   }, [articles.length, isLoading]);
 
-  const feedMode: "trending" | "latest" | "myfeed" = useMemo(() => {
+  const feedMode: "trending" | "latest" | "myfeed" | "local" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
 
     if (sortMode === "my-feed") {
       return "myfeed";
+    }
+
+    if (sortMode === "local") {
+      return "local";
     }
 
     return "trending";
@@ -610,17 +617,30 @@ export default function Home() {
         setDislikedSources([]);
       }
 
-      const params = new URLSearchParams({
-        mode: feedMode,
-        page: String(pageToLoad),
-        pageSize: String(FEED_PAGE_SIZE),
-      });
+      let newsPath = "";
 
-      if (feedMode === "myfeed" && requestCategories.length > 0) {
-        params.set("category", requestCategories.join(","));
+      if (feedMode === "local") {
+        const localSearchQuery = localQuery.trim() || "United States local news";
+        const params = new URLSearchParams({
+          mode: "search",
+          query: localSearchQuery,
+          page: String(pageToLoad),
+          pageSize: String(FEED_PAGE_SIZE),
+        });
+        newsPath = `/api/news?${params.toString()}`;
+      } else {
+        const params = new URLSearchParams({
+          mode: feedMode,
+          page: String(pageToLoad),
+          pageSize: String(FEED_PAGE_SIZE),
+        });
+
+        if (feedMode === "myfeed" && requestCategories.length > 0) {
+          params.set("category", requestCategories.join(","));
+        }
+
+        newsPath = `/api/news?${params.toString()}`;
       }
-
-      const newsPath = `/api/news?${params.toString()}`;
       const newsUrl = buildApiUrl(newsPath);
       console.log("TRENDING FETCH URL", newsUrl);
 
@@ -907,7 +927,7 @@ export default function Home() {
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
-  }, [feedMode]);
+  }, [feedMode, localQuery]);
 
   const handleRetryFeedLoad = useCallback(() => {
     void loadFeedPage(1, { replace: true });
@@ -1182,6 +1202,75 @@ export default function Home() {
       observer.disconnect();
     };
   }, [sortMode, videos]);
+
+  useEffect(() => {
+    if (sortMode !== "local" || localQuery) {
+      return;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      const fallbackTimeoutId = window.setTimeout(() => {
+        setLocalLocationLabel("Regional news");
+        setLocalQuery("United States local news");
+        setLocalQueryDraft("United States local news");
+      }, 0);
+
+      return () => {
+        window.clearTimeout(fallbackTimeoutId);
+      };
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
+            {
+              headers: {
+                Accept: "application/json",
+              },
+            }
+          );
+          const payload = (await response.json().catch(() => null)) as
+            | {
+                address?: {
+                  city?: string;
+                  town?: string;
+                  village?: string;
+                  state?: string;
+                };
+              }
+            | null;
+          const city =
+            payload?.address?.city ??
+            payload?.address?.town ??
+            payload?.address?.village ??
+            "";
+          const state = payload?.address?.state ?? "";
+          const nextLabel = [city, state].filter(Boolean).join(", ");
+          const nextQuery = nextLabel ? `${nextLabel} local news` : "United States local news";
+          setLocalLocationLabel(nextLabel || "Regional news");
+          setLocalQuery(nextQuery);
+          setLocalQueryDraft(nextLabel || "United States local news");
+        } catch (error) {
+          console.error("Error resolving local location:", error);
+          setLocalLocationLabel("Regional news");
+          setLocalQuery("United States local news");
+          setLocalQueryDraft("United States local news");
+        }
+      },
+      () => {
+        setLocalLocationLabel("Regional news");
+        setLocalQuery("United States local news");
+        setLocalQueryDraft("United States local news");
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 5000,
+        maximumAge: 600000,
+      }
+    );
+  }, [localQuery, sortMode]);
 
   const createNotification = useCallback(
     async ({
@@ -2211,7 +2300,7 @@ export default function Home() {
       };
     }).filter((section) => section.articles.length >= 3);
 
-    const insertionIndexes = [5, 14, 24];
+    const insertionIndexes = [7, 17, 27];
 
     availableSections.slice(0, insertionIndexes.length).forEach((section, sectionIndex) => {
       const insertAt = Math.min(insertionIndexes[sectionIndex], items.length);
@@ -2677,10 +2766,57 @@ export default function Home() {
               >
                 Latest
               </button>
+              <button
+                className={`toolbar-pill ${
+                  sortMode === "local" ? "toolbar-pill-active" : ""
+                }`}
+                onClick={() => setSortMode("local")}
+              >
+                Local
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {sortMode === "local" ? (
+        <div className="section-card stack local-feed-shell">
+          <div className="local-feed-top-row">
+            <strong>Local</strong>
+            <span className="muted">
+              {!localQuery ? "Finding nearby news..." : localLocationLabel}
+            </span>
+          </div>
+          <div className="local-feed-controls">
+            <input
+              className="search-input local-feed-input"
+              type="text"
+              placeholder="Enter a city or region"
+              value={localQueryDraft}
+              onChange={(event) => setLocalQueryDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  const nextValue = localQueryDraft.trim() || "United States local news";
+                  setLocalLocationLabel(localQueryDraft.trim() || "Regional news");
+                  setLocalQuery(nextValue.includes("local news") ? nextValue : `${nextValue} local news`);
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="button button-secondary local-feed-button"
+              onClick={() => {
+                const nextValue = localQueryDraft.trim() || "United States local news";
+                setLocalLocationLabel(localQueryDraft.trim() || "Regional news");
+                setLocalQuery(nextValue.includes("local news") ? nextValue : `${nextValue} local news`);
+              }}
+            >
+              Update
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {sortMode === "my-feed" ? (
         <div className="section-card stack">

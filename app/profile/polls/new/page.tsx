@@ -139,12 +139,9 @@ export default function CreatePollPage() {
   return (
     <section className="page-shell">
       <section className="section-card stack">
-        <div className="stack" style={{ gap: "6px" }}>
-          <strong className="profile-section-title">Create Poll</strong>
-          <span className="muted">
-            Polls should be related to news, current events, or public issues.
-          </span>
-        </div>
+        <span className="muted">
+          Polls should be related to news, current events, or public issues.
+        </span>
 
         {relatedArticleLabel ? (
           <div className="poll-related-article">

@@ -1910,6 +1910,36 @@ input {
   letter-spacing: -0.02em;
 }
 
+.local-feed-shell {
+  gap: 12px;
+}
+
+.local-feed-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.local-feed-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.local-feed-input {
+  flex: 1 1 260px;
+  min-height: 44px;
+}
+
+.local-feed-button {
+  min-height: 42px;
+  border-radius: 999px;
+  box-shadow: none;
+}
+
 .search-results-filter-row {
   position: relative;
   z-index: 2;
@@ -2159,7 +2189,9 @@ input {
 
 .source-rankings-list {
   display: grid;
-  gap: 10px;
+  gap: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
 }
 
 .source-rankings-row {
@@ -2168,12 +2200,17 @@ input {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: transparent;
   color: var(--foreground);
   text-decoration: none;
-  box-shadow: var(--shadow-soft);
+  box-shadow: none;
+}
+
+.source-rankings-row:last-child {
+  border-bottom: 0;
 }
 
 .source-rankings-rank {
@@ -4054,8 +4091,8 @@ input {
 }
 
 .settings-compact-form {
-  gap: 14px;
-  padding: 16px;
+  gap: 10px;
+  padding: 0;
 }
 
 .settings-compact-form-plain {
@@ -4071,8 +4108,10 @@ input {
 }
 
 .settings-compact-input {
-  min-height: 50px;
-  border-radius: 16px;
+  min-height: 44px;
+  height: 44px;
+  padding-block: 0;
+  border-radius: 14px;
 }
 
 .settings-compact-actions {
@@ -4080,7 +4119,8 @@ input {
 }
 
 .settings-compact-button {
-  min-height: 40px;
+  min-height: 42px;
+  height: 42px;
   min-width: 180px;
   padding-inline: 18px;
   border-radius: 999px;

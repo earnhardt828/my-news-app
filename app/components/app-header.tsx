@@ -492,6 +492,25 @@ export default function AppHeader() {
     );
   }
 
+  if (pathname === "/profile/polls/new") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close create poll"
+          onClick={() => closeTo("/profile")}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          Create Poll
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
   if (pathname === "/source-rankings") {
     return (
       <div className="app-header-article-bar">
