@@ -985,57 +985,6 @@ export default function Search() {
         </section>
       ) : (
         <section className="stack search-results-shell">
-          {userResults.length > 0 ? (
-            <div className="search-results-section">
-              <p className="search-results-section-heading">Users</p>
-              <div className="search-results-list">
-                {userResults.map((user) => (
-                  <Link
-                    key={user.id}
-                    href={`/user/${encodeURIComponent(user.username ?? user.id)}`}
-                    className="section-card search-user-card"
-                    onClick={() => {
-                      console.log("CLICKED USER", user);
-                      console.log("NAVIGATING TO USERNAME", user.username);
-                    }}
-                  >
-                    <div className="search-user-card-row">
-                      <div className="search-user-brand">
-                        <span className="avatar-shell search-user-avatar">
-                          {user.avatar_url ? (
-                            <Image
-                              src={user.avatar_url}
-                              alt={user.username ?? "User avatar"}
-                              width={48}
-                              height={48}
-                              unoptimized
-                              className="source-avatar-image"
-                            />
-                          ) : (
-                            <span className="avatar-fallback">
-                              {(user.username ?? "G").charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                        </span>
-                        <div className="stack" style={{ gap: "4px" }}>
-                          <strong className="search-source-name">@{user.username}</strong>
-                          {user.bio ? (
-                            <span className="search-user-bio">{user.bio}</span>
-                          ) : (
-                            <span className="search-source-kind">Graffiti user</span>
-                          )}
-                        </div>
-                      </div>
-                      <span className="search-trending-icon" aria-hidden="true">
-                        ↗
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           {matchedSourceName ? (
             <div className="search-results-section">
               <p className="search-results-section-heading">Sources</p>
@@ -1234,6 +1183,57 @@ export default function Search() {
               </div>
             </div>
           )}
+
+          {userResults.length > 0 ? (
+            <div className="search-results-section">
+              <p className="search-results-section-heading">Users</p>
+              <div className="search-results-list">
+                {userResults.map((user) => (
+                  <Link
+                    key={user.id}
+                    href={`/user/${encodeURIComponent(user.username ?? user.id)}`}
+                    className="section-card search-user-card"
+                    onClick={() => {
+                      console.log("CLICKED USER", user);
+                      console.log("NAVIGATING TO USERNAME", user.username);
+                    }}
+                  >
+                    <div className="search-user-card-row">
+                      <div className="search-user-brand">
+                        <span className="avatar-shell search-user-avatar">
+                          {user.avatar_url ? (
+                            <Image
+                              src={user.avatar_url}
+                              alt={user.username ?? "User avatar"}
+                              width={48}
+                              height={48}
+                              unoptimized
+                              className="source-avatar-image"
+                            />
+                          ) : (
+                            <span className="avatar-fallback">
+                              {(user.username ?? "G").charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </span>
+                        <div className="stack" style={{ gap: "4px" }}>
+                          <strong className="search-source-name">@{user.username}</strong>
+                          {user.bio ? (
+                            <span className="search-user-bio">{user.bio}</span>
+                          ) : (
+                            <span className="search-source-kind">Graffiti user</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="search-trending-icon" aria-hidden="true">
+                        ↗
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
       )}
     </section>

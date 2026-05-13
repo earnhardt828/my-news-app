@@ -163,7 +163,17 @@ type PaginatedNewsResponse = {
 
 type TrendingFeedItem =
   | { type: "article"; key: string; article: Article }
-  | { type: "video"; key: string; video: VideoItem };
+  | { type: "video"; key: string; video: VideoItem }
+  | { type: "category-section"; key: string; title: string; articles: Article[] };
+
+const TRENDING_CATEGORY_RAILS = [
+  "Politics",
+  "Sports",
+  "Business",
+  "Tech",
+  "Entertainment",
+  "World",
+] as const;
 
 function isMissingCommentMetadataColumnError(message: string | null | undefined) {
   if (!message) {
@@ -2189,6 +2199,30 @@ export default function Home() {
       insertedVideos += 1;
     }
 
+    const availableSections = TRENDING_CATEGORY_RAILS.map((category) => {
+      const sectionArticles = balancedTrendingArticles.filter((article) => {
+        const normalizedCategory = getSafeCategoryLabel(article.category, article).toLowerCase();
+        return normalizedCategory === category.toLowerCase();
+      });
+
+      return {
+        title: category,
+        articles: sectionArticles.slice(0, 5),
+      };
+    }).filter((section) => section.articles.length >= 3);
+
+    const insertionIndexes = [5, 14, 24];
+
+    availableSections.slice(0, insertionIndexes.length).forEach((section, sectionIndex) => {
+      const insertAt = Math.min(insertionIndexes[sectionIndex], items.length);
+      items.splice(insertAt, 0, {
+        type: "category-section",
+        key: `category-section:${section.title.toLowerCase()}`,
+        title: section.title,
+        articles: section.articles,
+      });
+    });
+
     return items;
   }, [balancedTrendingArticles, sortMode, videos]);
 
@@ -2504,8 +2538,67 @@ export default function Home() {
     }
   };
 
-  const renderTrendingFeedItem = (item: TrendingFeedItem, index: number) => {
+  const renderTrendingFeedItem = (item: TrendingFeedItem, rankedIndex: number) => {
     try {
+      if (item.type === "category-section") {
+        return (
+          <section className="category-rail-shell" aria-label={`${item.title} stories`}>
+            <div className="category-rail-header">
+              <strong className="category-rail-title">{item.title}</strong>
+            </div>
+            <div className="category-rail-track">
+              {item.articles.map((article) => {
+                const safeSourceName = getSafeSourceLabel(article.source);
+                const selectedImage = getBestArticleImage(article);
+                const imageSrc = selectedImage.src;
+                const imageFailureKey = imageSrc ? `rail:${article.id}:${imageSrc}` : `rail:${article.id}:none`;
+                const shouldShowImage =
+                  Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
+
+                return (
+                  <Link
+                    key={`rail-article:${article.id}`}
+                    href={`/article/${article.id}`}
+                    className="category-rail-card"
+                  >
+                    {shouldShowImage ? (
+                      <div className="category-rail-image-shell">
+                        <img
+                          src={imageSrc as string}
+                          alt={cleanDisplayText(article.title)}
+                          className="category-rail-image"
+                          loading="lazy"
+                          decoding="async"
+                          onError={() => {
+                            setFailedArticleImages((prev) => {
+                              if (prev[imageFailureKey]) {
+                                return prev;
+                              }
+
+                              return {
+                                ...prev,
+                                [imageFailureKey]: true,
+                              };
+                            });
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                    <div className="category-rail-copy">
+                      <div className="trending-source-brand">
+                        <SourceBadge sourceName={safeSourceName} />
+                        <span className="trending-source-name">{safeSourceName}</span>
+                      </div>
+                      <h3 className="category-rail-card-title">{cleanDisplayText(article.title)}</h3>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        );
+      }
+
       if (item.type === "article") {
         if (!item.article?.id || !item.article?.title) {
           console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed article item"));
@@ -2513,7 +2606,7 @@ export default function Home() {
         }
 
         return renderArticleFeedCard(item.article, {
-          rankLabel: index < 25 ? `Top ${index + 1}` : null,
+          rankLabel: rankedIndex < 25 ? `Top ${rankedIndex + 1}` : null,
         });
       }
 
@@ -2534,7 +2627,7 @@ export default function Home() {
               trendingVideoFrameRefs.current[item.video.id] = node;
             }}
             label="Video"
-            rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
+            rankBadgeLabel={rankedIndex < 25 ? `Top ${rankedIndex + 1}` : null}
             className="video-card-inline"
           variant="article"
         />
@@ -2654,7 +2747,14 @@ export default function Home() {
             </div>
           ) : null}
           {sortMode === "trending"
-            ? trendingRenderItems.map((item, index) => {
+            ? (() => {
+                let rankedItemIndex = -1;
+
+                return trendingRenderItems.map((item, index) => {
+                  if (item.type !== "category-section") {
+                    rankedItemIndex += 1;
+                  }
+
                 const itemKey =
                   item.type === "article"
                     ? item.article.id || item.article.url || getArticleDeduplicationKey(item.article)
@@ -2663,7 +2763,7 @@ export default function Home() {
                 try {
                   return (
                     <div key={itemKey} className="stack">
-                      {renderTrendingFeedItem(item, index)}
+                      {renderTrendingFeedItem(item, rankedItemIndex)}
                       {(index + 1) % 3 === 0 ? (
                         <AdSlot
                           title="Sponsored placement"
@@ -2677,7 +2777,8 @@ export default function Home() {
                   console.error("TRENDING ITEM RENDER FAILED", item, error);
                   return null;
                 }
-              })
+              });
+            })()
             : sortMode === "my-feed"
             ? myFeedRenderItems.map((item) => (
                 <div key={item.key} className="stack">

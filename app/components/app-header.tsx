@@ -796,9 +796,9 @@ export default function AppHeader() {
         <button
           type="button"
           className="category-launch-button"
-          aria-label="Customize categories"
+          aria-label="Create poll"
           onClick={() => {
-            window.dispatchEvent(new CustomEvent("reflekt:open-categories"));
+            router.push("/profile/polls/new");
           }}
         >
           +
