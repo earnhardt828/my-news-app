@@ -32,7 +32,7 @@ import { isCommentAllowed } from "../lib/moderation";
 import { slugifySourceName } from "../lib/source-logos";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
-import { CATEGORY_OPTIONS, getCategoryLabel } from "../lib/categories";
+import { CATEGORY_OPTIONS, getCategoryLabel, getDisplayCategory } from "../lib/categories";
 import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../lib/video-feed";
 
 const FEED_PAGE_SIZE = 25;
@@ -354,11 +354,27 @@ function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
 }
 
 function getSafeSourceLabel(value: unknown) {
-  return typeof value === "string" && value.trim() ? value : "Unknown source";
+  if (typeof value !== "string") {
+    return "Unknown source";
+  }
+
+  const cleaned = cleanDisplayText(value).replace(/\s+\d+(?:\.\d+)?$/, "").trim();
+
+  if (
+    !cleaned ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleaned)
+  ) {
+    return "News source";
+  }
+
+  return cleaned;
 }
 
-function getSafeCategoryLabel(value: unknown) {
-  return typeof value === "string" && value.trim() ? value : "general";
+function getSafeCategoryLabel(value: unknown, article?: Pick<Article, "source" | "title">) {
+  return getDisplayCategory(typeof value === "string" ? value : null, {
+    source: article?.source ?? null,
+    title: article?.title ?? null,
+  });
 }
 
 export default function Home() {
@@ -2075,7 +2091,7 @@ export default function Home() {
       for (let index = 0; index < prioritizedArticles.length; index += 1) {
         const article = prioritizedArticles[index];
         const sourceKey = getSafeSourceLabel(article.source).trim().toLowerCase();
-        const categoryKey = getSafeCategoryLabel(article.category).trim().toLowerCase();
+        const categoryKey = getSafeCategoryLabel(article.category, article).trim().toLowerCase();
         const sourceUseCount = selectedSourceUsage.get(sourceKey) ?? 0;
 
         const otherSourceAvailable = prioritizedArticles.some((candidate, candidateIndex) => {
@@ -2093,7 +2109,7 @@ export default function Home() {
               return false;
             }
 
-            return getSafeCategoryLabel(candidate.category).trim().toLowerCase() !== categoryKey;
+            return getSafeCategoryLabel(candidate.category, candidate).trim().toLowerCase() !== categoryKey;
           }
         );
 
@@ -2118,7 +2134,7 @@ export default function Home() {
       diversifiedTopArticles.push(nextArticle);
 
       const sourceKey = getSafeSourceLabel(nextArticle.source).trim().toLowerCase();
-      const categoryKey = getSafeCategoryLabel(nextArticle.category).trim().toLowerCase();
+      const categoryKey = getSafeCategoryLabel(nextArticle.category, nextArticle).trim().toLowerCase();
       lastSourceKey = sourceKey;
       lastCategoryKey = categoryKey;
       selectedSourceUsage.set(sourceKey, (selectedSourceUsage.get(sourceKey) ?? 0) + 1);
@@ -2144,7 +2160,7 @@ export default function Home() {
       });
       articleCount += 1;
 
-      if (videos.length > insertedVideos && articleCount % 5 === 0) {
+      if (videos.length > insertedVideos && articleCount % 4 === 0) {
         const video = videos[insertedVideos];
 
         if (video?.id && video?.title && video?.creator) {
@@ -2238,7 +2254,7 @@ export default function Home() {
   ) => {
     try {
       const safeSourceName = getSafeSourceLabel(article.source);
-      const safeCategoryName = getSafeCategoryLabel(article.category);
+      const safeCategoryName = getSafeCategoryLabel(article.category, article);
       const selectedImage = getBestArticleImage(article);
       const imageSrc = selectedImage.src;
       const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
@@ -2249,7 +2265,9 @@ export default function Home() {
         (selectedImage.source === "urlToImage" ||
           selectedImage.source === "imageUrl" ||
           selectedImage.source === "image" ||
-          selectedImage.source === "ogImage");
+          selectedImage.source === "ogImage" ||
+          selectedImage.source === "twitterImage" ||
+          selectedImage.source === "mediaContent");
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
@@ -2293,6 +2311,15 @@ export default function Home() {
                       {cleanDisplayText(article.title)}
                     </h3>
                   </div>
+                  {article.description ? (
+                    <p className="article-card-summary">
+                      {cleanDisplayText(article.description)
+                        .split(/(?<=[.!?])\s+/)
+                        .slice(0, 2)
+                        .join(" ")
+                        .trim()}
+                    </p>
+                  ) : null}
                   <span className="chip chip-accent trending-category-pill trending-category-pill-body">
                     {getCategoryLabel(safeCategoryName)}
                   </span>
@@ -2327,6 +2354,15 @@ export default function Home() {
                       {cleanDisplayText(article.title)}
                     </h3>
                   </div>
+                  {article.description ? (
+                    <p className="article-card-summary">
+                      {cleanDisplayText(article.description)
+                        .split(/(?<=[.!?])\s+/)
+                        .slice(0, 2)
+                        .join(" ")
+                        .trim()}
+                    </p>
+                  ) : null}
                   <span className="chip chip-accent trending-category-pill trending-category-pill-body">
                     {getCategoryLabel(safeCategoryName)}
                   </span>
@@ -2445,7 +2481,7 @@ export default function Home() {
                 </span>
               ) : null}
               <span className="chip chip-accent trending-category-pill trending-category-pill-top">
-                {getCategoryLabel(getSafeCategoryLabel(article.category))}
+                {getCategoryLabel(getSafeCategoryLabel(article.category, article))}
               </span>
             </div>
           </div>

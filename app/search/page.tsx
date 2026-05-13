@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../lib/api-base";
 import { getBestArticleImage } from "../../lib/article-images";
 import SourceBadge from "../components/source-badge";
-import { getCategoryLabel } from "../../lib/categories";
+import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
@@ -362,7 +362,16 @@ function getSearchResultImage(article: NewsArticle) {
 }
 
 function sanitizeSourceName(value: string | null | undefined) {
-  return cleanDisplayText(value ?? "").replace(/\s+\d+(?:\.\d+)?$/, "").trim();
+  const cleaned = cleanDisplayText(value ?? "").replace(/\s+\d+(?:\.\d+)?$/, "").trim();
+
+  if (
+    !cleaned ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleaned)
+  ) {
+    return "News source";
+  }
+
+  return cleaned;
 }
 
 function dedupeSearchArticles(articles: NewsArticle[]) {
@@ -1125,6 +1134,10 @@ export default function Search() {
                     const shouldShowImage =
                       Boolean(imageSrc) && !failedSearchImages[imageFailureKey];
                     const safeSourceName = sanitizeSourceName(article.source);
+                    const safeCategoryName = getDisplayCategory(article.category, {
+                      source: article.source,
+                      title: article.title,
+                    });
 
                     return (
                       <Link
@@ -1150,7 +1163,7 @@ export default function Search() {
                                 </div>
                               </button>
                               <span className="chip chip-accent">
-                                {getCategoryLabel(article.category)}
+                                {getCategoryLabel(safeCategoryName)}
                               </span>
                             </div>
 

@@ -1015,6 +1015,17 @@ input {
   max-width: none;
 }
 
+.article-card-summary {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  line-height: 1.52;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .article-title {
   margin: 0;
   font-size: clamp(1.2rem, 4.8vw, 1.6rem);
@@ -1030,7 +1041,7 @@ input {
   aspect-ratio: 16 / 9;
   height: auto;
   min-height: 0;
-  max-height: 320px;
+  max-height: 360px;
   margin: 0 auto;
   border-radius: 18px;
   object-fit: cover;
@@ -1162,7 +1173,7 @@ input {
 
 .article-image-lg {
   min-height: 0;
-  max-height: 340px;
+  max-height: 380px;
   max-width: 100%;
   margin: 0;
 }
@@ -1663,7 +1674,7 @@ input {
 }
 
 .search-shell {
-  gap: 14px;
+  gap: 8px;
 }
 
 .search-bar-shell {
@@ -1709,7 +1720,7 @@ input {
 
 .search-results-section {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .search-results-section-heading {
@@ -1776,7 +1787,7 @@ input {
 }
 
 .search-results-shell {
-  gap: 10px;
+  gap: 8px;
 }
 
 .search-inline-loading {
@@ -2080,9 +2091,9 @@ input {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: 20px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--foreground);
@@ -2099,13 +2110,14 @@ input {
 .source-rankings-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
 .source-rankings-name {
   font-weight: 800;
   line-height: 1.35;
+  font-size: 0.98rem;
 }
 
 .source-rankings-metrics {
@@ -3945,7 +3957,7 @@ input {
 }
 
 .settings-detail-shell {
-  max-width: 520px;
+  max-width: 620px;
   margin: 0 auto;
 }
 
@@ -3972,18 +3984,19 @@ input {
 }
 
 .settings-compact-form-plain {
-  max-width: 360px;
+  width: min(100%, 520px);
   margin: 0 auto;
   padding: 0;
   background: transparent;
 }
 
 .settings-compact-input-row {
-  max-width: 360px;
+  width: 100%;
+  max-width: 520px;
 }
 
 .settings-compact-input {
-  min-height: 48px;
+  min-height: 50px;
   border-radius: 16px;
 }
 
@@ -3993,7 +4006,8 @@ input {
 
 .settings-compact-button {
   min-height: 40px;
-  padding-inline: 16px;
+  min-width: 180px;
+  padding-inline: 18px;
   border-radius: 999px;
   box-shadow: none;
 }
