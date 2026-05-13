@@ -1671,10 +1671,10 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   color: var(--text-soft);
-  font-size: 1.45rem;
+  font-size: 1.56rem;
   font-weight: 800;
   pointer-events: none;
   line-height: 1;
@@ -1713,7 +1713,7 @@ input {
 
 .search-trending-list {
   display: grid;
-  gap: 8px;
+  gap: 0;
 }
 
 .search-trending-row {
@@ -1722,12 +1722,16 @@ input {
   justify-content: space-between;
   gap: 14px;
   min-height: 52px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
+  padding: 14px 2px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: transparent;
   color: var(--foreground);
   text-align: left;
+}
+
+.search-trending-row:last-child {
+  border-bottom: 0;
 }
 
 .search-trending-label {
@@ -1737,7 +1741,13 @@ input {
 }
 
 .search-trending-icon {
-  color: var(--accent-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: var(--text-soft);
   font-size: 1rem;
   font-weight: 800;
 }
@@ -3866,7 +3876,7 @@ input {
 }
 
 .settings-detail-shell {
-  max-width: 560px;
+  max-width: 520px;
   margin: 0 auto;
 }
 
@@ -3885,6 +3895,30 @@ input {
 .settings-detail-note {
   font-size: 0.92rem;
   line-height: 1.45;
+}
+
+.settings-compact-form {
+  gap: 14px;
+}
+
+.settings-compact-input-row {
+  max-width: 360px;
+}
+
+.settings-compact-input {
+  min-height: 48px;
+  border-radius: 16px;
+}
+
+.settings-compact-actions {
+  justify-content: flex-start;
+}
+
+.settings-compact-button {
+  min-height: 40px;
+  padding-inline: 16px;
+  border-radius: 999px;
+  box-shadow: none;
 }
 
 .settings-empty-state {

@@ -184,16 +184,16 @@ export default function SettingsUsernamePage() {
         <LoadingScreen />
       ) : (
         <div className="stack settings-detail-shell">
-          <section className="section-card stack">
+          <section className="section-card stack settings-compact-form">
             {!currentUser?.id ? (
               <div className="status-message status-error">
                 Log in to update your username.
               </div>
             ) : (
               <>
-                <div className="input-row">
+                <div className="input-row settings-compact-input-row">
                   <input
-                    className="input"
+                    className="input settings-compact-input"
                     type="text"
                     placeholder="Username"
                     value={username}
@@ -207,9 +207,9 @@ export default function SettingsUsernamePage() {
                     disabled={isSaving}
                   />
                 </div>
-                <div className="toolbar">
+                <div className="toolbar settings-compact-actions">
                   <button
-                    className="button button-accent"
+                    className="button button-accent settings-compact-button"
                     onClick={handleSave}
                     disabled={isSaving}
                   >

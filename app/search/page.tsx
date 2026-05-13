@@ -335,6 +335,10 @@ function getSearchResultImage(article: NewsArticle) {
   return getBestArticleImage(article).src;
 }
 
+function sanitizeSourceName(value: string | null | undefined) {
+  return cleanDisplayText(value ?? "").replace(/\s+\d+(?:\.\d+)?$/, "").trim();
+}
+
 function dedupeSearchArticles(articles: NewsArticle[]) {
   const seen = new Set<string>();
 
@@ -663,8 +667,19 @@ export default function Search() {
       return null;
     }
 
+    const exactMappedSource =
+      Object.keys(sourceLogoMap).find(
+        (sourceName) => sourceName.trim().toLowerCase() === normalizedQuery
+      ) ?? null;
+
+    if (exactMappedSource) {
+      return exactMappedSource;
+    }
+
     const searchPool = searchArticles.length > 0 ? searchArticles : articles;
-    const uniqueSources = Array.from(new Set(searchPool.map((article) => article.source))).sort();
+    const uniqueSources = Array.from(
+      new Set(searchPool.map((article) => sanitizeSourceName(article.source)).filter(Boolean))
+    ).sort();
 
     const exactMatch =
       uniqueSources.find((source) => source.toLowerCase() === normalizedQuery) ?? null;
@@ -687,11 +702,42 @@ export default function Search() {
       return [];
     }
 
+    const normalizedMatchedSource = matchedSourceName?.trim().toLowerCase() ?? null;
+    const isExactSourceQuery = normalizedMatchedSource === normalizedQuery;
     const candidateArticles = searchArticles.length > 0 ? searchArticles : articles;
     const rankedArticles = [...candidateArticles]
       .map((article) => ({
         article,
-        score: getMatchScore(article, normalizedQuery),
+        score: (() => {
+          const sourceName = sanitizeSourceName(article.source);
+          const baseScore = getMatchScore(
+            {
+              ...article,
+              source: sourceName,
+            },
+            normalizedQuery
+          );
+
+          if (!isExactSourceQuery || !matchedSourceName) {
+            return baseScore;
+          }
+
+          const articleText = `${article.title} ${article.description ?? ""} ${
+            article.content ?? ""
+          }`.toLowerCase();
+          const exactSourceMatch = sourceName.toLowerCase() === normalizedMatchedSource;
+          const directlyAboutSource = articleText.includes(normalizedQuery);
+
+          if (exactSourceMatch) {
+            return baseScore + 25;
+          }
+
+          if (directlyAboutSource) {
+            return baseScore + 4;
+          }
+
+          return baseScore - 18;
+        })(),
       }))
       .filter((item) => item.score > 0)
       .sort((a, b) => {
@@ -735,7 +781,7 @@ export default function Search() {
     return (recentArticles.length >= 5 ? recentArticles : [...recentArticles, ...olderArticles]).map(
       ({ article }) => article
     );
-  }, [articles, normalizedQuery, searchArticles, searchDateFilter]);
+  }, [articles, matchedSourceName, normalizedQuery, searchArticles, searchDateFilter]);
 
   return (
     <section className="page-shell search-shell">
@@ -775,7 +821,19 @@ export default function Search() {
                 >
                   <span className="search-trending-label">{item}</span>
                   <span className="search-trending-icon" aria-hidden="true">
-                    ↗
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M7 17 17 7" />
+                      <path d="M9 7h8v8" />
+                    </svg>
                   </span>
                 </button>
               ))}
@@ -905,6 +963,7 @@ export default function Search() {
                       : `${article.id}:none`;
                     const shouldShowImage =
                       Boolean(imageSrc) && !failedSearchImages[imageFailureKey];
+                    const safeSourceName = sanitizeSourceName(article.source);
 
                     return (
                       <Link
@@ -921,12 +980,12 @@ export default function Search() {
                                 onClick={(event) => {
                                   event.preventDefault();
                                   event.stopPropagation();
-                                  router.push(`/source/${slugifySourceName(article.source)}`);
+                                  router.push(`/source/${slugifySourceName(safeSourceName)}`);
                                 }}
                               >
                                 <div className="trending-source-brand">
-                                  <SourceBadge sourceName={article.source} />
-                                  <span className="trending-source-name">{article.source}</span>
+                                  <SourceBadge sourceName={safeSourceName} />
+                                  <span className="trending-source-name">{safeSourceName}</span>
                                 </div>
                               </button>
                               <span className="chip chip-accent">

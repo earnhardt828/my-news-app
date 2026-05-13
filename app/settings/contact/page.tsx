@@ -109,23 +109,16 @@ export default function SettingsContactPage() {
         <LoadingScreen />
       ) : (
         <div className="stack settings-detail-shell">
-          <section className="section-card stack">
-            <div className="stack" style={{ gap: "8px" }}>
-              <h2 className="settings-detail-title">Update contact info</h2>
-              <p className="muted settings-detail-copy">
-                Save a contact email for account follow-up without changing your login email.
-              </p>
-            </div>
-
+          <section className="section-card stack settings-compact-form">
             {!currentUser?.id ? (
               <div className="status-message status-error">
                 Log in to update your contact info.
               </div>
             ) : (
               <>
-                <div className="input-row">
+                <div className="input-row settings-compact-input-row">
                   <input
-                    className="input"
+                    className="input settings-compact-input"
                     type="email"
                     placeholder="Contact email"
                     value={contactEmail}
@@ -139,12 +132,9 @@ export default function SettingsContactPage() {
                     disabled={isSaving}
                   />
                 </div>
-                <div className="muted settings-detail-note">
-                  Sign-in email changes still need a separate Supabase auth flow.
-                </div>
-                <div className="toolbar">
+                <div className="toolbar settings-compact-actions">
                   <button
-                    className="button button-accent"
+                    className="button button-accent settings-compact-button"
                     onClick={handleSave}
                     disabled={isSaving}
                   >
