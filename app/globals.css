@@ -404,7 +404,7 @@ input {
 .app-main {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: 20px 20px 0;
+  padding: 20px 24px 0;
 }
 
 .page-shell {
@@ -538,7 +538,7 @@ input {
   position: relative;
   display: grid;
   gap: 16px;
-  padding: 14px;
+  padding: 16px;
   background: var(--surface-strong);
   border: 1px solid var(--border);
   border-radius: 22px;
@@ -1853,7 +1853,7 @@ input {
 .category-rail-shell {
   display: grid;
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
   border-radius: 22px;
   background:
     linear-gradient(
@@ -1862,6 +1862,7 @@ input {
       color-mix(in srgb, rgba(52, 208, 235, 0.08) 24%, var(--surface-muted) 76%)
     );
   border: 1px solid color-mix(in srgb, var(--border) 90%, white);
+  box-shadow: 0 16px 36px rgba(20, 33, 61, 0.06);
 }
 
 .category-rail-header {

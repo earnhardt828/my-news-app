@@ -51,11 +51,12 @@ type NormalizedArticle = {
   comments: null[];
 };
 
-type NewsMode = "trending" | "latest" | "myfeed" | "search" | "compare";
+type NewsMode = "trending" | "latest" | "myfeed" | "search" | "compare" | "local";
 
 type ProviderFetchParams = {
   mode: NewsMode;
   query: string;
+  location: string;
   categories: string[];
   page: number;
   pageSize: number;
@@ -298,7 +299,67 @@ const RSS_FEEDS: RssFeedConfig[] = [
     category: "Politics",
     tags: ["politics", "us", "breaking"],
   },
+  {
+    url: "https://www.charlotteobserver.com/latest-news/?outputType=xml",
+    source: "Charlotte Observer",
+    category: "Local News",
+    tags: ["charlotte", "north carolina", "local"],
+  },
+  {
+    url: "https://www.wsoctv.com/arc/outboundfeeds/rss/",
+    source: "WSOC-TV",
+    category: "Local News",
+    tags: ["charlotte", "north carolina", "local"],
+  },
+  {
+    url: "https://www.wbtv.com/rss/",
+    source: "WBTV",
+    category: "Local News",
+    tags: ["charlotte", "north carolina", "local"],
+  },
+  {
+    url: "https://www.wcnc.com/feeds/syndication/rss/news/local",
+    source: "WCNC",
+    category: "Local News",
+    tags: ["charlotte", "north carolina", "local"],
+  },
+  {
+    url: "https://www.qcnews.com/feed/",
+    source: "Queen City News",
+    category: "Local News",
+    tags: ["charlotte", "queen city", "north carolina", "local"],
+  },
+  {
+    url: "https://www.wfae.org/rss.xml",
+    source: "WFAE",
+    category: "Local News",
+    tags: ["charlotte", "north carolina", "local"],
+  },
+  {
+    url: "https://charlotte.axios.com/feed/",
+    source: "Axios Charlotte",
+    category: "Local News",
+    tags: ["charlotte", "north carolina", "local"],
+  },
+  {
+    url: "https://www.wccbcharlotte.com/feed/",
+    source: "WCCB Charlotte",
+    category: "Local News",
+    tags: ["charlotte", "north carolina", "local"],
+  },
 ];
+
+const CHARLOTTE_LOCAL_SOURCES = [
+  "charlotte observer",
+  "wsoc-tv",
+  "wsoc charlotte",
+  "wbtv",
+  "wcnc",
+  "queen city news",
+  "wfae",
+  "axios charlotte",
+  "wccb charlotte",
+] as const;
 
 const FALLBACK_ARTICLE_SEEDS = [
   {
@@ -524,6 +585,14 @@ function getCategoryQuery(category: string) {
   return CATEGORY_QUERY_MAP[category] ?? category;
 }
 
+function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | "location">) {
+  if (params.mode === "local") {
+    return params.location.trim() || params.query.trim();
+  }
+
+  return params.query.trim();
+}
+
 function getMatchScore(article: NormalizedArticle, query: string) {
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -555,6 +624,66 @@ function getMatchScore(article: NormalizedArticle, query: string) {
       if (haystacks[1].includes(token)) score += 2;
       if (haystacks[2].includes(token)) score += 1;
     });
+
+  return score;
+}
+
+function isCharlotteQuery(query: string) {
+  const normalized = query.trim().toLowerCase();
+  return /(charlotte|mecklenburg|queen city|matthews|huntersville|gastonia|concord|rock hill|fort mill)/.test(
+    normalized
+  );
+}
+
+function getLocalMatchScore(article: NormalizedArticle, location: string) {
+  const normalizedLocation = location.trim().toLowerCase();
+  const articleText = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
+    article.source
+  } ${article.category}`.toLowerCase();
+  const sourceName = article.source.trim().toLowerCase();
+  const terms = normalizedLocation
+    .split(/[^a-z0-9]+/)
+    .filter(
+      (term) =>
+        term.length > 2 &&
+        !["local", "news", "north", "south", "carolina", "regional", "united", "states"].includes(
+          term
+        )
+    );
+
+  let score = 0;
+
+  if (isCharlotteQuery(normalizedLocation)) {
+    if (CHARLOTTE_LOCAL_SOURCES.some((source) => sourceName.includes(source))) {
+      score += 120;
+    }
+
+    if (/(charlotte|mecklenburg|queen city|matthews|huntersville|gastonia|concord|rock hill|fort mill)/.test(articleText)) {
+      score += 70;
+    }
+
+    if (
+      /(fox news|cnn|reuters|associated press|ap news|nbc news|cbs news|abc news|newsmax)/.test(
+        sourceName
+      ) &&
+      !/charlotte|north carolina|mecklenburg/.test(articleText)
+    ) {
+      score -= 45;
+    }
+  }
+
+  terms.forEach((term) => {
+    if (articleText.includes(term)) {
+      score += 18;
+    }
+    if (sourceName.includes(term)) {
+      score += 22;
+    }
+  });
+
+  if (article.category.toLowerCase() === "local news") {
+    score += 12;
+  }
 
   return score;
 }
@@ -941,11 +1070,27 @@ async function enrichTrendingArticleImages(articles: NormalizedArticle[]) {
 
 function sortArticlesForMode(
   articles: NormalizedArticle[],
-  params: Pick<ProviderFetchParams, "mode" | "query">
+  params: Pick<ProviderFetchParams, "mode" | "query" | "location">
 ) {
   if (params.mode === "search" || params.mode === "compare") {
     return [...articles].sort((left, right) => {
       const scoreDiff = getMatchScore(right, params.query) - getMatchScore(left, params.query);
+
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+
+      const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+      const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+  }
+
+  if (params.mode === "local") {
+    return [...articles].sort((left, right) => {
+      const scoreDiff =
+        getLocalMatchScore(right, params.location || params.query) -
+        getLocalMatchScore(left, params.location || params.query);
 
       if (scoreDiff !== 0) {
         return scoreDiff;
@@ -1008,20 +1153,22 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
   const categories = getModeCategories(params.mode, params.categories);
   const requests: Array<{ url: string; category: string }> = [];
 
-  if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
-    const encodedQuery = encodeURIComponent(params.query.trim());
-    const exactQuery = encodeURIComponent(`"${params.query.trim()}"`);
+  const effectiveQuery = getEffectiveQuery(params);
+
+  if ((params.mode === "search" || params.mode === "compare" || params.mode === "local") && effectiveQuery) {
+    const encodedQuery = encodeURIComponent(effectiveQuery);
+    const exactQuery = encodeURIComponent(`"${effectiveQuery}"`);
     requests.push(
       {
         url: `https://newsapi.org/v2/everything?q=${exactQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
-          params.mode === "compare" ? 20 : 8,
+          params.mode === "compare" ? 20 : params.mode === "local" ? 14 : 8,
           Math.ceil(params.pageSize / 2)
         )}`,
         category: "Search",
       },
       {
         url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
-          params.mode === "compare" ? 30 : 10,
+          params.mode === "compare" ? 30 : params.mode === "local" ? 20 : 10,
           params.pageSize
         )}`,
         category: "Search",
@@ -1133,10 +1280,12 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
   const categories = getModeCategories(params.mode, params.categories);
   const requests: Array<{ url: string; category: string }> = [];
 
-  if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
+  const effectiveQuery = getEffectiveQuery(params);
+
+  if ((params.mode === "search" || params.mode === "compare" || params.mode === "local") && effectiveQuery) {
     requests.push({
       url: `https://gnews.io/api/v4/search?q=${encodeURIComponent(
-        params.query.trim()
+        effectiveQuery
       )}&lang=en&country=us&max=${Math.min(
         params.mode === "compare" ? Math.max(params.pageSize, 50) : params.pageSize,
         100
@@ -1244,8 +1393,10 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
   baseUrl.searchParams.set("language", "en");
   baseUrl.searchParams.set("country", "us");
 
-  if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
-    baseUrl.searchParams.set("q", params.query.trim());
+  const effectiveQuery = getEffectiveQuery(params);
+
+  if ((params.mode === "search" || params.mode === "compare" || params.mode === "local") && effectiveQuery) {
+    baseUrl.searchParams.set("q", effectiveQuery);
   } else if (categories.length > 0) {
     baseUrl.searchParams.set("q", getCategoryQuery(categories[0]));
     baseUrl.searchParams.set("category", categories[0].toLowerCase().replace(/\s+/g, ","));
@@ -1254,6 +1405,7 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
   const tokenCacheKey = JSON.stringify({
     mode: params.mode,
     query: params.query,
+    location: params.location,
     categories,
   });
   const pageToken = await resolveNewsDataToken(tokenCacheKey, params.page, baseUrl);
@@ -1377,14 +1529,26 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
 
 async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
   const candidateFeeds =
-    (params.mode === "search" || params.mode === "compare") && params.query.trim()
+    (params.mode === "search" || params.mode === "compare" || params.mode === "local") &&
+    getEffectiveQuery(params)
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
           const modeCategories = getModeCategories(params.mode, params.categories);
           return modeCategories.includes(feed.category);
         });
 
-  const feedsToFetch = candidateFeeds.length > 0 ? candidateFeeds : RSS_FEEDS;
+  const feedsToFetch =
+    params.mode === "local" && isCharlotteQuery(params.location || params.query)
+      ? RSS_FEEDS.filter(
+          (feed) =>
+            feed.category === "Local News" ||
+            CHARLOTTE_LOCAL_SOURCES.some((source) =>
+              feed.source.toLowerCase().includes(source)
+            )
+        )
+      : candidateFeeds.length > 0
+      ? candidateFeeds
+      : RSS_FEEDS;
 
   const responses = await Promise.allSettled(
     feedsToFetch
@@ -1394,6 +1558,8 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
           ? 10
           : params.mode === "trending"
           ? 12
+          : params.mode === "local"
+          ? 10
           : params.mode === "latest"
           ? 10
           : 8
@@ -1429,6 +1595,11 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
     articles = articles.filter((article) => getMatchScore(article, params.query) > 0);
   }
 
+  if (params.mode === "local") {
+    const locationQuery = params.location || params.query;
+    articles = articles.filter((article) => getLocalMatchScore(article, locationQuery) > 0);
+  }
+
   articles.sort((left, right) => {
     const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
     const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
@@ -1448,6 +1619,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const cacheKey = JSON.stringify({
     mode: params.mode,
     query: params.query,
+    location: params.location,
     categories: params.categories,
     page: params.page,
     pageSize: params.pageSize,
@@ -1505,6 +1677,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     page: params.page,
     pageSize: params.pageSize,
     query: params.query,
+    location: params.location,
     configuredProviders: {
       newsApi: Boolean(NEWS_API_KEY),
       gnews: Boolean(GNEWS_API_KEY),
@@ -1584,6 +1757,7 @@ function parseMode(value: string | null): NewsMode {
   if (
     value === "latest" ||
     value === "myfeed" ||
+    value === "local" ||
     value === "search" ||
     value === "compare"
   ) {
@@ -1601,7 +1775,7 @@ function parseCategories(value: string | null) {
 }
 
 function shouldUseLegacyArrayResponse(searchParams: URLSearchParams) {
-  return !["page", "pageSize", "mode", "query", "q", "category"].some((key) =>
+  return !["page", "pageSize", "mode", "query", "q", "category", "location"].some((key) =>
     searchParams.has(key)
   );
 }
@@ -1624,6 +1798,7 @@ export async function GET(request: Request) {
   const isLegacyRequest = shouldUseLegacyArrayResponse(searchParams);
   const mode = parseMode(searchParams.get("mode"));
   const query = searchParams.get("query")?.trim() ?? searchParams.get("q")?.trim() ?? "";
+  const location = searchParams.get("location")?.trim() ?? "";
   const categories = parseCategories(searchParams.get("category"));
   const page = Math.max(1, Number(searchParams.get("page") ?? DEFAULT_PAGE) || DEFAULT_PAGE);
   const maxAllowedPageSize = mode === "compare" ? MAX_COMPARE_PAGE_SIZE : MAX_PAGE_SIZE;
@@ -1636,6 +1811,7 @@ export async function GET(request: Request) {
     const legacyPayload = await collectArticles({
       mode: "trending",
       query: "",
+      location: "",
       categories: [],
       page: 1,
       pageSize: 60,
@@ -1647,6 +1823,7 @@ export async function GET(request: Request) {
   const payload = await collectArticles({
     mode,
     query,
+    location,
     categories,
     page,
     pageSize,

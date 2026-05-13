@@ -774,8 +774,8 @@ export default function Home() {
       if (feedMode === "local") {
         const localSearchQuery = localQuery.trim() || "United States local news";
         const params = new URLSearchParams({
-          mode: "search",
-          query: localSearchQuery,
+          mode: "local",
+          location: localSearchQuery,
           page: String(pageToLoad),
           pageSize: String(FEED_PAGE_SIZE),
         });

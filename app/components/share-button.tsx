@@ -48,6 +48,8 @@ export default function ShareButton({
 
   const encodedUrl = encodeURIComponent(targetUrl);
   const encodedTitle = encodeURIComponent(title);
+  const canUseNativeShare =
+    typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   const openSheet = () => {
     setFeedback(null);
@@ -107,6 +109,30 @@ export default function ShareButton({
     await handleCopyLink("Link copied");
   };
 
+  const handleNativeShare = async () => {
+    if (!canUseNativeShare) {
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title,
+        url: targetUrl,
+      });
+      setIsOpen(false);
+      setFeedback(null);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+      console.error("Error opening native share:", error);
+      setFeedback({
+        type: "error",
+        text: "Could not open share menu.",
+      });
+    }
+  };
+
   return (
     <>
       <button
@@ -151,6 +177,24 @@ export default function ShareButton({
             </div>
 
             <div className="share-sheet-grid">
+              {canUseNativeShare ? (
+                <button
+                  type="button"
+                  className="share-sheet-option"
+                  onClick={() => {
+                    void handleNativeShare();
+                  }}
+                >
+                  <span className="share-sheet-icon" aria-hidden="true">
+                    <svg {...iconProps}>
+                      <path d="M7 17 17 7" />
+                      <path d="M9 7h8v8" />
+                    </svg>
+                  </span>
+                  <span className="share-sheet-label">More</span>
+                </button>
+              ) : null}
+
               <button
                 type="button"
                 className="share-sheet-option"
@@ -161,7 +205,11 @@ export default function ShareButton({
                 }
               >
                 <span className="share-sheet-icon" aria-hidden="true">
-                  X
+                  <svg {...iconProps}>
+                    <path d="m6 6 12 12" />
+                    <path d="m18 6-5 5" />
+                    <path d="m11 13-5 5" />
+                  </svg>
                 </span>
                 <span className="share-sheet-label">X</span>
               </button>
@@ -174,7 +222,11 @@ export default function ShareButton({
                 }}
               >
                 <span className="share-sheet-icon" aria-hidden="true">
-                  IG
+                  <svg {...iconProps}>
+                    <rect x="4.5" y="4.5" width="15" height="15" rx="4" />
+                    <circle cx="12" cy="12" r="3.4" />
+                    <circle cx="16.8" cy="7.4" r="0.9" fill="currentColor" stroke="none" />
+                  </svg>
                 </span>
                 <span className="share-sheet-label">Instagram</span>
               </button>
@@ -185,7 +237,9 @@ export default function ShareButton({
                 onClick={handleTextShare}
               >
                 <span className="share-sheet-icon" aria-hidden="true">
-                  SMS
+                  <svg {...iconProps}>
+                    <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                  </svg>
                 </span>
                 <span className="share-sheet-label">Text</span>
               </button>
@@ -200,7 +254,15 @@ export default function ShareButton({
                 }
               >
                 <span className="share-sheet-icon" aria-hidden="true">
-                  R
+                  <svg {...iconProps}>
+                    <circle cx="12" cy="12.6" r="3.2" />
+                    <path d="M7.2 10.4a8.4 8.4 0 0 1 9.6 0" />
+                    <path d="M8.6 16.1c1 .8 2.2 1.2 3.4 1.2 1.3 0 2.5-.4 3.5-1.2" />
+                    <circle cx="8" cy="12.1" r="1" fill="currentColor" stroke="none" />
+                    <circle cx="16" cy="12.1" r="1" fill="currentColor" stroke="none" />
+                    <path d="M16.9 7.7 19 6.8" />
+                    <circle cx="19.5" cy="6.6" r="1" fill="currentColor" stroke="none" />
+                  </svg>
                 </span>
                 <span className="share-sheet-label">Reddit</span>
               </button>
@@ -213,7 +275,10 @@ export default function ShareButton({
                 }}
               >
                 <span className="share-sheet-icon" aria-hidden="true">
-                  ⧉
+                  <svg {...iconProps}>
+                    <rect x="9" y="9" width="10" height="10" rx="2" />
+                    <path d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
+                  </svg>
                 </span>
                 <span className="share-sheet-label">Copy Link</span>
               </button>
