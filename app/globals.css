@@ -944,6 +944,11 @@ input {
   line-height: 1.4;
 }
 
+.trending-published-date-inline {
+  display: inline-flex;
+  width: fit-content;
+}
+
 .trending-category-pill {
   background: color-mix(in srgb, var(--accent) 10%, var(--surface-muted));
   width: fit-content;
@@ -951,6 +956,10 @@ input {
 
 .trending-category-pill-top {
   justify-self: end;
+}
+
+.trending-category-pill-body {
+  margin-top: 2px;
 }
 
 .trending-category-pill-inline {
@@ -1037,6 +1046,10 @@ input {
   overflow: hidden;
   background: rgba(20, 33, 61, 0.08);
   flex-shrink: 0;
+}
+
+.article-thumb-shell-inline {
+  margin-top: 2px;
 }
 
 .article-thumb-image {
@@ -2964,7 +2977,8 @@ input {
 }
 
 .loading-screen-spray,
-.loading-screen-pulse {
+.loading-screen-pulse,
+.loading-screen-speckles {
   position: absolute;
   inset: 50% auto auto 50%;
   transform: translate(-50%, -50%);
@@ -3006,6 +3020,20 @@ input {
   background: radial-gradient(circle, rgba(255, 255, 255, 0.7), transparent 68%);
   mix-blend-mode: screen;
   animation: loading-pulse-ring 2.4s ease-in-out infinite;
+}
+
+.loading-screen-speckles {
+  z-index: 1;
+  width: min(72vw, 420px);
+  height: min(52vw, 300px);
+  background:
+    radial-gradient(circle at 20% 34%, rgba(255, 89, 94, 0.22) 0 1px, transparent 2px),
+    radial-gradient(circle at 34% 64%, rgba(255, 202, 58, 0.2) 0 1px, transparent 2px),
+    radial-gradient(circle at 52% 28%, rgba(138, 201, 38, 0.18) 0 1px, transparent 2px),
+    radial-gradient(circle at 68% 68%, rgba(25, 130, 196, 0.18) 0 1px, transparent 2px),
+    radial-gradient(circle at 80% 38%, rgba(106, 76, 147, 0.16) 0 1px, transparent 2px);
+  opacity: 0.8;
+  animation: loading-speckle-drift 4.2s ease-in-out infinite;
 }
 
 .loading-screen-status-text {
@@ -3089,13 +3117,27 @@ input {
   }
 }
 
+@keyframes loading-speckle-drift {
+  0%,
+  100% {
+    opacity: 0.52;
+    transform: translate(-50%, -50%) scale(0.98);
+  }
+
+  50% {
+    opacity: 0.82;
+    transform: translate(-50%, -50%) scale(1.02);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .loading-screen-logo,
   .loading-screen-logo-wrap,
   .loading-screen-bottom-logo,
   .loading-screen-spray-primary,
   .loading-screen-spray-secondary,
-  .loading-screen-pulse {
+  .loading-screen-pulse,
+  .loading-screen-speckles {
     animation: none;
   }
 }
@@ -3899,6 +3941,7 @@ input {
 
 .settings-compact-form {
   gap: 14px;
+  padding: 16px;
 }
 
 .settings-compact-input-row {

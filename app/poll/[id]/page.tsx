@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import LoadingScreen from "../../components/loading-screen";
 import PollCard from "../../components/poll-card";
 import { hydratePolls, type PollRecord, type PollWithResults } from "../../../lib/polls";
 import { cleanDisplayText } from "../../../lib/display-text";
@@ -325,10 +326,7 @@ export default function PollDetailPage() {
   if (isLoading) {
     return (
       <section className="page-shell article-page-shell">
-        <div className="loading-state">
-          <strong>Loading poll</strong>
-          <span>Fetching votes, hearts, and comments.</span>
-        </div>
+        <LoadingScreen label="Loading poll" message="Fetching votes, hearts, and comments." />
       </section>
     );
   }

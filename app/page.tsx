@@ -404,6 +404,7 @@ export default function Home() {
   const [myFeedPolls, setMyFeedPolls] = useState<PollWithResults[]>([]);
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [autoplayTrendingVideoId, setAutoplayTrendingVideoId] = useState<string | null>(null);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
   const [categorySheetStatus, setCategorySheetStatus] = useState<{
@@ -418,6 +419,7 @@ export default function Home() {
   const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isFetchingNextPageRef = useRef(false);
   const activeFeedRequestIdRef = useRef(0);
   const categoriesRef = useRef<string[]>([]);
@@ -1098,6 +1100,62 @@ export default function Home() {
       observer.disconnect();
     };
   }, [feedPage, hasMoreArticles, isLoading, isLoadingMoreArticles, loadFeedPage]);
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      return;
+    }
+
+    const playableVideos = videos.filter((video) => !video.fallback && Boolean(video.youtubeId));
+
+    if (playableVideos.length === 0) {
+      return;
+    }
+
+    const visibilityMap = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const videoId = (entry.target as HTMLDivElement).dataset.videoId;
+
+          if (!videoId) {
+            return;
+          }
+
+          visibilityMap.set(videoId, entry.isIntersecting ? entry.intersectionRatio : 0);
+        });
+
+        let nextAutoplayId: string | null = null;
+        let highestRatio = 0;
+
+        visibilityMap.forEach((ratio, videoId) => {
+          if (ratio > highestRatio) {
+            highestRatio = ratio;
+            nextAutoplayId = videoId;
+          }
+        });
+
+        setAutoplayTrendingVideoId(highestRatio >= 0.65 ? nextAutoplayId : null);
+      },
+      {
+        threshold: [0.35, 0.5, 0.65, 0.8],
+        rootMargin: "0px 0px -10% 0px",
+      }
+    );
+
+    playableVideos.forEach((video) => {
+      const node = trendingVideoFrameRefs.current[video.id];
+
+      if (node) {
+        visibilityMap.set(video.id, 0);
+        observer.observe(node);
+      }
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [sortMode, videos]);
 
   const createNotification = useCallback(
     async ({
@@ -2214,6 +2272,9 @@ export default function Home() {
                   <span className="trending-source-name">{safeSourceName}</span>
                 </div>
               </Link>
+              <span className="trending-published-date trending-published-date-inline">
+                {publishedLabel}
+              </span>
             </div>
             <div className="trending-card-top-meta">
               {options?.rankLabel ? (
@@ -2221,9 +2282,6 @@ export default function Home() {
                   {options.rankLabel}
                 </span>
               ) : null}
-              <span className="chip chip-accent trending-category-pill trending-category-pill-top">
-                {getCategoryLabel(safeCategoryName)}
-              </span>
             </div>
           </div>
           <Link href={`/article/${article.id}`} className="article-link">
@@ -2235,6 +2293,9 @@ export default function Home() {
                       {cleanDisplayText(article.title)}
                     </h3>
                   </div>
+                  <span className="chip chip-accent trending-category-pill trending-category-pill-body">
+                    {getCategoryLabel(safeCategoryName)}
+                  </span>
                 </div>
                 <div className="article-hero-shell">
                   <img
@@ -2259,21 +2320,20 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div
-                className={`news-card-body ${
-                  shouldShowImage ? "news-card-body-with-thumb" : "news-card-body-text-only"
-                }`}
-              >
+              <div className="news-card-body news-card-body-text-only">
                 <div className="news-card-copy">
                   <div className="trending-title-row">
                     <h3 className="trending-article-title">
                       {cleanDisplayText(article.title)}
                     </h3>
                   </div>
+                  <span className="chip chip-accent trending-category-pill trending-category-pill-body">
+                    {getCategoryLabel(safeCategoryName)}
+                  </span>
                 </div>
 
                 {shouldShowImage ? (
-                  <div className="article-thumb-shell">
+                  <div className="article-thumb-shell article-thumb-shell-inline">
                     <img
                       src={imageSrc as string}
                       alt={cleanDisplayText(article.title)}
@@ -2299,7 +2359,6 @@ export default function Home() {
             )}
           </Link>
           <div className="news-card-footer">
-            <span className="trending-published-date">{publishedLabel}</span>
             <div className="engagement-row trending-stats-row news-card-actions">
               <button
                 className={`icon-action-pill icon-action-pill-ghost ${
@@ -2427,16 +2486,20 @@ export default function Home() {
         return null;
       }
 
-      return (
-        <VideoFeedCard
-          video={item.video}
-          onToggleLike={handleToggleVideoLike}
-          onToggleSave={handleToggleVideoSave}
-          onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
-          onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
-          label="Video"
-          rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
-          className="video-card-inline"
+        return (
+          <VideoFeedCard
+            video={item.video}
+            isAutoplaying={autoplayTrendingVideoId === item.video.id && !item.video.fallback}
+            onToggleLike={handleToggleVideoLike}
+            onToggleSave={handleToggleVideoSave}
+            onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
+            onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
+            frameRef={(node) => {
+              trendingVideoFrameRefs.current[item.video.id] = node;
+            }}
+            label="Video"
+            rankBadgeLabel={index < 25 ? `Top ${index + 1}` : null}
+            className="video-card-inline"
           variant="article"
         />
       );

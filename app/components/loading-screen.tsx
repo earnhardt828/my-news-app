@@ -13,6 +13,7 @@ export default function LoadingScreen({
     <div className="loading-screen" role="status" aria-live="polite" aria-label={label}>
       <div className="loading-screen-spray loading-screen-spray-primary" aria-hidden="true" />
       <div className="loading-screen-spray loading-screen-spray-secondary" aria-hidden="true" />
+      <div className="loading-screen-speckles" aria-hidden="true" />
       <div className="loading-screen-pulse" aria-hidden="true" />
       <div className="loading-screen-logo-wrap">
         <Image

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import LoadingScreen from "../components/loading-screen";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -867,10 +868,7 @@ export default function Profile() {
   return (
     <section className="page-shell">
       {isLoading ? (
-        <div className="loading-state">
-          <strong>Loading profile...</strong>
-          <span>Checking your account and saved activity.</span>
-        </div>
+        <LoadingScreen label="Loading profile" message="Checking your account and saved activity." />
       ) : !isSignedIn ? (
         <div className="profile-auth-shell">
           <section className="section-card stack profile-auth-card">
@@ -1184,7 +1182,7 @@ export default function Profile() {
               ) : (
                 <div className="stack">
                   {myPolls.map((poll) => (
-                    <PollCard key={poll.id} poll={poll} showAuthor={false} />
+                    <PollCard key={poll.id} poll={poll} />
                   ))}
                 </div>
               )}

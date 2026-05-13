@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
+import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
 import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
@@ -1791,10 +1792,7 @@ export default function ArticleDetailPage() {
   if (isLoading) {
     return (
       <section className="page-shell">
-        <div className="loading-state">
-          <strong>Loading article</strong>
-          <span>Fetching story details, likes, and comments.</span>
-        </div>
+        <LoadingScreen label="Loading article" message="Fetching story details, likes, and comments." />
       </section>
     );
   }

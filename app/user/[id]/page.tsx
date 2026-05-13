@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import PollCard from "../../components/poll-card";
+import LoadingScreen from "../../components/loading-screen";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -379,10 +380,7 @@ export default function UserProfilePage() {
   return (
     <section className="page-shell">
       {isLoading ? (
-        <div className="loading-state">
-          <strong>Loading profile</strong>
-          <span>Fetching profile details and recent polls.</span>
-        </div>
+        <LoadingScreen label="Loading profile" message="Fetching profile details and recent polls." />
       ) : !profile ? (
         <div className="empty-state">
           <strong>User not found</strong>
@@ -493,7 +491,7 @@ export default function UserProfilePage() {
               ) : (
                 <div className="stack">
                   {polls.map((poll) => (
-                    <PollCard key={poll.id} poll={poll} showAuthor={false} />
+                    <PollCard key={poll.id} poll={poll} />
                   ))}
                 </div>
               )}
