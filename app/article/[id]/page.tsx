@@ -236,6 +236,22 @@ function normalizeSummaryText(value: string) {
     .trim();
 }
 
+function protectSentenceAbbreviations(value: string) {
+  return value
+    .replace(/\bU\.S\./gi, (match) => match.replace(/\./g, "__DOT__"))
+    .replace(/\bU\.K\./gi, (match) => match.replace(/\./g, "__DOT__"))
+    .replace(/\bE\.U\./gi, (match) => match.replace(/\./g, "__DOT__"))
+    .replace(/\bU\.N\./gi, (match) => match.replace(/\./g, "__DOT__"))
+    .replace(/\bMr\./g, "Mr__DOT__")
+    .replace(/\bMrs\./g, "Mrs__DOT__")
+    .replace(/\bMs\./g, "Ms__DOT__")
+    .replace(/\bDr\./g, "Dr__DOT__");
+}
+
+function restoreSentenceAbbreviations(value: string) {
+  return value.replace(/__DOT__/g, ".");
+}
+
 function extractDateline(text: string) {
   const match = text.match(
     /^([A-Z][A-Z\s.'-]{2,40}(?:\s*\([A-Z]+\))?)\s+[—-]\s+/
@@ -255,7 +271,7 @@ function extractDateline(text: string) {
 }
 
 function cleanSummarySentence(sentence: string) {
-  const cleaned = normalizeSummaryText(sentence)
+  const cleaned = normalizeSummaryText(restoreSentenceAbbreviations(sentence))
     .replace(/^[A-Z][A-Z\s.'-]{2,40}(?:\s*\([A-Z]+\))?\s+[—-]\s+/, "")
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -279,13 +295,14 @@ function trimToLastFullSentence(value: string) {
     return "";
   }
 
-  const matches = normalized.match(/[^.!?]+[.!?]/g);
+  const protectedText = protectSentenceAbbreviations(normalized);
+  const matches = protectedText.match(/[^.!?]+[.!?]/g);
 
   if (!matches || matches.length === 0) {
     return "";
   }
 
-  return matches.join(" ").trim();
+  return restoreSentenceAbbreviations(matches.join(" ").trim());
 }
 
 function getCompleteSentences(value: string) {
@@ -295,10 +312,23 @@ function getCompleteSentences(value: string) {
     return [];
   }
 
-  return normalized
+  return protectSentenceAbbreviations(normalized)
     .match(/[^.!?]+[.!?]/g)
+    ?.map((sentence) => restoreSentenceAbbreviations(sentence))
     ?.map((sentence) => cleanSummarySentence(sentence))
-    .filter(Boolean) ?? [];
+    .filter((sentence) => {
+      if (!sentence) {
+        return false;
+      }
+
+      const terminalWord = sentence
+        .replace(/[.!?]+$/, "")
+        .trim()
+        .split(/\s+/)
+        .at(-1);
+
+      return !(terminalWord && terminalWord.length === 1 && sentence.split(/\s+/).length >= 4);
+    }) ?? [];
 }
 
 function normalizeArticleId(value: number | string | null | undefined) {
@@ -665,15 +695,10 @@ function buildSummaryItems(
       uniquePoints[0].charAt(0).toUpperCase() + uniquePoints[0].slice(1);
   }
 
-  const labels = [
-    "🧠 Key point",
-    "⚠️ Why it matters",
-    "📍 Context",
-    "🔎 What to watch",
-  ];
+  const labels = ["Key point", "Why it matters", "Context"];
 
   return uniquePoints
-    .slice(0, Math.min(labels.length, Math.max(3, uniquePoints.length)))
+    .slice(0, labels.length)
     .map((text, index) => ({
       label: labels[index] ?? "Key point",
       text,

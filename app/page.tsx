@@ -18,6 +18,7 @@ import {
 import { apiFetch, buildApiUrl } from "../lib/api-base";
 import {
   getBestArticleImage,
+  isLikelyHighQualityArticleImage,
 } from "../lib/article-images";
 import { cleanDisplayText } from "../lib/display-text";
 import {
@@ -2007,6 +2008,8 @@ export default function Home() {
     const prioritizedArticles = [...visibleArticles];
     const diversifiedTopArticles: Article[] = [];
     const selectedSourceUsage = new Map<string, number>();
+    let lastSourceKey = "";
+    let lastCategoryKey = "";
 
     while (diversifiedTopArticles.length < 25 && prioritizedArticles.length > 0) {
       let selectedIndex = -1;
@@ -2014,6 +2017,7 @@ export default function Home() {
       for (let index = 0; index < prioritizedArticles.length; index += 1) {
         const article = prioritizedArticles[index];
         const sourceKey = getSafeSourceLabel(article.source).trim().toLowerCase();
+        const categoryKey = getSafeCategoryLabel(article.category).trim().toLowerCase();
         const sourceUseCount = selectedSourceUsage.get(sourceKey) ?? 0;
 
         const otherSourceAvailable = prioritizedArticles.some((candidate, candidateIndex) => {
@@ -2025,9 +2029,30 @@ export default function Home() {
           return candidateSourceKey !== sourceKey && (selectedSourceUsage.get(candidateSourceKey) ?? 0) < 2;
         });
 
-        if (!(sourceUseCount >= 2 && otherSourceAvailable)) {
+        const alternativeCategoryAvailable = prioritizedArticles.some(
+          (candidate, candidateIndex) => {
+            if (candidateIndex === index) {
+              return false;
+            }
+
+            return getSafeCategoryLabel(candidate.category).trim().toLowerCase() !== categoryKey;
+          }
+        );
+
+        if (sourceUseCount >= 2 && otherSourceAvailable) {
+          continue;
+        }
+
+        if (sourceKey === lastSourceKey && otherSourceAvailable) {
+          continue;
+        }
+
+        if (categoryKey === lastCategoryKey && alternativeCategoryAvailable) {
+          continue;
+        }
+
+        if (selectedIndex === -1) {
           selectedIndex = index;
-          break;
         }
       }
 
@@ -2035,6 +2060,9 @@ export default function Home() {
       diversifiedTopArticles.push(nextArticle);
 
       const sourceKey = getSafeSourceLabel(nextArticle.source).trim().toLowerCase();
+      const categoryKey = getSafeCategoryLabel(nextArticle.category).trim().toLowerCase();
+      lastSourceKey = sourceKey;
+      lastCategoryKey = categoryKey;
       selectedSourceUsage.set(sourceKey, (selectedSourceUsage.get(sourceKey) ?? 0) + 1);
     }
 
@@ -2058,7 +2086,7 @@ export default function Home() {
       });
       articleCount += 1;
 
-      if (videos.length > insertedVideos && articleCount % 4 === 0) {
+      if (videos.length > insertedVideos && articleCount % 5 === 0) {
         const video = videos[insertedVideos];
 
         if (video?.id && video?.title && video?.creator) {
@@ -2157,23 +2185,23 @@ export default function Home() {
       const imageSrc = selectedImage.src;
       const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
       const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
+      const shouldUseLargeImage =
+        shouldShowImage &&
+        isLikelyHighQualityArticleImage(selectedImage.source, imageSrc) &&
+        (selectedImage.source === "urlToImage" ||
+          selectedImage.source === "imageUrl" ||
+          selectedImage.source === "image" ||
+          selectedImage.source === "ogImage");
+      const publishedLabel = options?.showFreshnessTime
+        ? formatFreshnessTime(article.publishedAt, article.time)
+        : formatPublishedDate(article.publishedAt, article.time);
 
       return (
         <article
           className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}
         >
-          <div className="news-card-top-row">
-            <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
-              {getCategoryLabel(safeCategoryName)}
-            </span>
-            {options?.rankLabel ? (
-              <span className="chip trending-rank-badge news-card-rank-badge">
-                {options.rankLabel}
-              </span>
-            ) : null}
-          </div>
-          <div className="trending-source-row">
-            <div className="trending-source-main">
+          <div className="news-card-top-row news-card-top-row-brand">
+            <div className="trending-source-stack">
               <Link
                 href={`/source/${slugifySourceName(safeSourceName)}`}
                 className="source-trigger source-trigger-tight trending-source-button"
@@ -2186,38 +2214,31 @@ export default function Home() {
                   <span className="trending-source-name">{safeSourceName}</span>
                 </div>
               </Link>
+              <span className="chip chip-accent trending-category-pill">
+                {getCategoryLabel(safeCategoryName)}
+              </span>
             </div>
+            {options?.rankLabel ? (
+              <span className="chip trending-rank-badge news-card-rank-badge">
+                {options.rankLabel}
+              </span>
+            ) : null}
           </div>
           <Link href={`/article/${article.id}`} className="article-link">
-            <div
-              className={`news-card-body ${
-                shouldShowImage ? "news-card-body-with-thumb" : "news-card-body-text-only"
-              }`}
-            >
-              <div className="news-card-copy">
-                <div className="trending-title-row">
-                  <h3 className="trending-article-title">
-                    {cleanDisplayText(article.title)}
-                  </h3>
-                </div>
-
-                <div className="news-card-header">
-                  <div className="trending-meta-row">
-                    <span className="trending-published-date">
-                      {options?.showFreshnessTime
-                        ? formatFreshnessTime(article.publishedAt, article.time)
-                        : formatPublishedDate(article.publishedAt, article.time)}
-                    </span>
+            {shouldUseLargeImage ? (
+              <div className="news-card-body news-card-body-with-hero">
+                <div className="news-card-copy">
+                  <div className="trending-title-row">
+                    <h3 className="trending-article-title">
+                      {cleanDisplayText(article.title)}
+                    </h3>
                   </div>
                 </div>
-              </div>
-
-              {shouldShowImage ? (
-                <div className="article-thumb-shell">
+                <div className="article-hero-shell">
                   <img
                     src={imageSrc as string}
                     alt={cleanDisplayText(article.title)}
-                    className="article-thumb-image"
+                    className="article-image article-image-lg"
                     loading="lazy"
                     decoding="async"
                     onError={() => {
@@ -2234,70 +2255,110 @@ export default function Home() {
                     }}
                   />
                 </div>
-              ) : null}
-            </div>
-          </Link>
+              </div>
+            ) : (
+              <div
+                className={`news-card-body ${
+                  shouldShowImage ? "news-card-body-with-thumb" : "news-card-body-text-only"
+                }`}
+              >
+                <div className="news-card-copy">
+                  <div className="trending-title-row">
+                    <h3 className="trending-article-title">
+                      {cleanDisplayText(article.title)}
+                    </h3>
+                  </div>
+                </div>
 
-          <div className="engagement-row trending-stats-row">
-            <button
-              className={`icon-action-pill ${
-                article.likedByCurrentUser ? "icon-action-pill-active" : ""
-              }`}
-              onClick={() => handleLike(article.id)}
-              aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
-            >
-              <span className="icon-action-glyph" aria-hidden="true">
-                <svg {...actionIconProps}>
-                  <path
-                    d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                    fill={article.likedByCurrentUser ? "currentColor" : "none"}
-                  />
-                </svg>
-              </span>
-              <span>{article.likes}</span>
-            </button>
-            <button
-              className="icon-action-pill"
-              onClick={() => {
-                router.push(`/article/${article.id}#comments`);
-              }}
-              aria-label="Open article comments"
-            >
-              <span className="icon-action-glyph" aria-hidden="true">
-                <svg {...actionIconProps}>
-                  <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-                </svg>
-              </span>
-              <span>{article.comments.length}</span>
-            </button>
-            <ShareButton
-              path={`/article/${article.id}`}
-              title={cleanDisplayText(article.title)}
-              url={article.url}
-              iconOnly
-            />
-            <button
-              className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
-              onClick={() => handleToggleSaveArticle(article)}
-              disabled={activeSaveArticleId === article.id}
-              aria-label={article.saved ? "Remove bookmark" : "Save article"}
-            >
-              <span className="icon-action-glyph" aria-hidden="true">
-                {activeSaveArticleId === article.id ? (
-                  <svg {...actionIconProps}>
-                    <path d="M12 5v7" />
-                    <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
-                  </svg>
-                ) : (
+                {shouldShowImage ? (
+                  <div className="article-thumb-shell">
+                    <img
+                      src={imageSrc as string}
+                      alt={cleanDisplayText(article.title)}
+                      className="article-thumb-image"
+                      loading="lazy"
+                      decoding="async"
+                      onError={() => {
+                        setFailedArticleImages((prev) => {
+                          if (prev[imageFailureKey]) {
+                            return prev;
+                          }
+
+                          return {
+                            ...prev,
+                            [imageFailureKey]: true,
+                          };
+                        });
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </Link>
+          <div className="news-card-footer">
+            <span className="trending-published-date">{publishedLabel}</span>
+            <div className="engagement-row trending-stats-row news-card-actions">
+              <button
+                className={`icon-action-pill ${
+                  article.likedByCurrentUser ? "icon-action-pill-active" : ""
+                }`}
+                onClick={() => handleLike(article.id)}
+                aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
+              >
+                <span className="icon-action-glyph" aria-hidden="true">
                   <svg {...actionIconProps}>
                     <path
-                      d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
-                      fill={article.saved ? "currentColor" : "none"}
+                      d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                      fill={article.likedByCurrentUser ? "currentColor" : "none"}
                     />
                   </svg>
-                )}
-              </span>
-            </button>
+                </span>
+                <span>{article.likes}</span>
+              </button>
+              <button
+                className="icon-action-pill"
+                onClick={() => {
+                  router.push(`/article/${article.id}#comments`);
+                }}
+                aria-label="Open article comments"
+              >
+                <span className="icon-action-glyph" aria-hidden="true">
+                  <svg {...actionIconProps}>
+                    <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                  </svg>
+                </span>
+                <span>{article.comments.length}</span>
+              </button>
+              <ShareButton
+                path={`/article/${article.id}`}
+                title={cleanDisplayText(article.title)}
+                url={article.url}
+                iconOnly
+              />
+              <button
+                className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
+                onClick={() => handleToggleSaveArticle(article)}
+                disabled={activeSaveArticleId === article.id}
+                aria-label={article.saved ? "Remove bookmark" : "Save article"}
+              >
+                <span className="icon-action-glyph" aria-hidden="true">
+                  {activeSaveArticleId === article.id ? (
+                    <svg {...actionIconProps}>
+                      <path d="M12 5v7" />
+                      <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
+                    </svg>
+                  ) : (
+                    <svg {...actionIconProps}>
+                      <path
+                        d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                        fill={article.saved ? "currentColor" : "none"}
+                      />
+                    </svg>
+                  )}
+                </span>
+              </button>
+            </div>
           </div>
         </article>
       );
@@ -2306,34 +2367,36 @@ export default function Home() {
 
       return (
         <article className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}>
-          <div className="news-card-top-row">
-            <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
-              {getCategoryLabel(getSafeCategoryLabel(article.category))}
-            </span>
+          <div className="news-card-top-row news-card-top-row-brand">
+            <div className="trending-source-stack">
+              <div className="trending-source-brand">
+                <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+                <span className="trending-source-name">{getSafeSourceLabel(article.source)}</span>
+              </div>
+              <span className="chip chip-accent trending-category-pill">
+                {getCategoryLabel(getSafeCategoryLabel(article.category))}
+              </span>
+            </div>
             {options?.rankLabel ? (
               <span className="chip trending-rank-badge news-card-rank-badge">
                 {options.rankLabel}
               </span>
             ) : null}
           </div>
-          <div className="trending-source-row">
-            <div className="trending-source-brand">
-              <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-              <span className="trending-source-name">{getSafeSourceLabel(article.source)}</span>
-            </div>
-          </div>
           <Link href={`/article/${article.id}`} className="article-link">
             <div className="news-card-body news-card-body-text-only">
               <div className="news-card-copy">
                 <h3 className="trending-article-title">{cleanDisplayText(article.title)}</h3>
-                <span className="trending-published-date">
-                  {options?.showFreshnessTime
-                    ? formatFreshnessTime(article.publishedAt, article.time)
-                    : formatPublishedDate(article.publishedAt, article.time)}
-                </span>
               </div>
             </div>
           </Link>
+          <div className="news-card-footer">
+            <span className="trending-published-date">
+              {options?.showFreshnessTime
+                ? formatFreshnessTime(article.publishedAt, article.time)
+                : formatPublishedDate(article.publishedAt, article.time)}
+            </span>
+          </div>
         </article>
       );
     }

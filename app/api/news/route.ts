@@ -185,6 +185,18 @@ const RSS_FEEDS: RssFeedConfig[] = [
     tags: ["breaking", "politics", "world"],
   },
   {
+    url: "https://feeds.reuters.com/reuters/topNews",
+    source: "Reuters",
+    category: "Breaking News",
+    tags: ["breaking", "markets", "world"],
+  },
+  {
+    url: "https://feeds.apnews.com/apnews/topnews",
+    source: "AP News",
+    category: "Breaking News",
+    tags: ["breaking", "politics", "world"],
+  },
+  {
     url: "https://feeds.bbci.co.uk/news/world/rss.xml",
     source: "BBC News",
     category: "World",
@@ -209,16 +221,82 @@ const RSS_FEEDS: RssFeedConfig[] = [
     tags: ["breaking", "politics", "world"],
   },
   {
+    url: "https://moxie.foxnews.com/google-publisher/latest.xml",
+    source: "Fox News",
+    category: "Breaking News",
+    tags: ["breaking", "politics", "us"],
+  },
+  {
+    url: "https://feeds.nbcnews.com/nbcnews/public/news",
+    source: "NBC News",
+    category: "Breaking News",
+    tags: ["breaking", "politics", "world"],
+  },
+  {
+    url: "https://www.cbsnews.com/latest/rss/main",
+    source: "CBS News",
+    category: "Breaking News",
+    tags: ["breaking", "politics", "world"],
+  },
+  {
+    url: "https://abcnews.go.com/abcnews/topstories",
+    source: "ABC News",
+    category: "Breaking News",
+    tags: ["breaking", "politics", "world"],
+  },
+  {
     url: "https://www.cnbc.com/id/100003114/device/rss/rss.html",
     source: "CNBC",
     category: "Finance",
     tags: ["finance", "markets", "business"],
   },
   {
+    url: "https://feeds.bloomberg.com/markets/news.rss",
+    source: "Bloomberg",
+    category: "Finance",
+    tags: ["finance", "markets", "business"],
+  },
+  {
+    url: "https://www.politico.com/rss/politicopicks.xml",
+    source: "Politico",
+    category: "Politics",
+    tags: ["politics", "elections", "policy"],
+  },
+  {
+    url: "https://thehill.com/feed/",
+    source: "The Hill",
+    category: "Politics",
+    tags: ["politics", "congress", "policy"],
+  },
+  {
+    url: "https://www.theguardian.com/us-news/rss",
+    source: "The Guardian",
+    category: "World",
+    tags: ["world", "politics", "us"],
+  },
+  {
+    url: "https://api.axios.com/feed/",
+    source: "Axios",
+    category: "Politics",
+    tags: ["politics", "business", "tech"],
+  },
+  {
     url: "https://www.espn.com/espn/rss/news",
     source: "ESPN",
     category: "Sports",
     tags: ["sports", "nfl", "nba", "mlb"],
+  },
+  {
+    url: "https://www.tmz.com/rss.xml",
+    source: "TMZ",
+    category: "Entertainment",
+    tags: ["entertainment", "celebrity", "culture"],
+  },
+  {
+    url: "https://www.newsmax.com/rss/Newsfront/16/",
+    source: "Newsmax",
+    category: "Politics",
+    tags: ["politics", "us", "breaking"],
   },
 ];
 
@@ -514,6 +592,176 @@ function diversifyArticles<T extends { source: string; category: string }>(artic
   return diversified;
 }
 
+function getPublishedTime(article: { publishedAt: string | null }) {
+  if (!article.publishedAt) {
+    return 0;
+  }
+
+  const timestamp = new Date(article.publishedAt).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function getLaunchRecencyScore(article: { publishedAt: string | null }) {
+  const publishedTime = getPublishedTime(article);
+
+  if (!publishedTime) {
+    return 0.1;
+  }
+
+  const ageHours = Math.max(0, (Date.now() - publishedTime) / 3_600_000);
+
+  if (ageHours <= 6) {
+    return 1;
+  }
+
+  if (ageHours <= 24) {
+    return 0.94;
+  }
+
+  if (ageHours <= 72) {
+    return 0.8;
+  }
+
+  if (ageHours <= 168) {
+    return 0.56;
+  }
+
+  if (ageHours <= 336) {
+    return 0.32;
+  }
+
+  return 0.14;
+}
+
+function getProviderOrderScore(index: number, total: number) {
+  if (total <= 1) {
+    return 1;
+  }
+
+  return 1 - index / Math.max(1, total - 1);
+}
+
+function balanceTrendingArticles<T extends { source: string; category: string }>(
+  articles: T[],
+  windowSize = 25
+) {
+  const remaining = [...articles];
+  const balanced: T[] = [];
+  const sourceCounts = new Map<string, number>();
+  let lastSource = "";
+  let lastCategory = "";
+
+  while (balanced.length < windowSize && remaining.length > 0) {
+    let selectedIndex = remaining.findIndex((article, index) => {
+      const sourceKey = article.source.trim().toLowerCase();
+      const categoryKey = article.category.trim().toLowerCase();
+      const sourceCount = sourceCounts.get(sourceKey) ?? 0;
+      const otherSourceAvailable = remaining.some((candidate, candidateIndex) => {
+        if (candidateIndex === index) {
+          return false;
+        }
+
+        const candidateSourceKey = candidate.source.trim().toLowerCase();
+        return candidateSourceKey !== sourceKey && (sourceCounts.get(candidateSourceKey) ?? 0) < 2;
+      });
+
+      if (sourceCount >= 2 && otherSourceAvailable) {
+        return false;
+      }
+
+      if (sourceKey === lastSource) {
+        const alternativeSourceAvailable = remaining.some((candidate, candidateIndex) => {
+          if (candidateIndex === index) {
+            return false;
+          }
+
+          const candidateSourceKey = candidate.source.trim().toLowerCase();
+          return candidateSourceKey !== sourceKey && (sourceCounts.get(candidateSourceKey) ?? 0) < 2;
+        });
+
+        if (alternativeSourceAvailable) {
+          return false;
+        }
+      }
+
+      if (categoryKey === lastCategory) {
+        const alternativeCategoryAvailable = remaining.some((candidate, candidateIndex) => {
+          if (candidateIndex === index) {
+            return false;
+          }
+
+          return candidate.category.trim().toLowerCase() !== categoryKey;
+        });
+
+        if (alternativeCategoryAvailable) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    if (selectedIndex === -1) {
+      selectedIndex = 0;
+    }
+
+    const [nextArticle] = remaining.splice(selectedIndex, 1);
+    balanced.push(nextArticle);
+    lastSource = nextArticle.source.trim().toLowerCase();
+    lastCategory = nextArticle.category.trim().toLowerCase();
+    sourceCounts.set(lastSource, (sourceCounts.get(lastSource) ?? 0) + 1);
+  }
+
+  return [...balanced, ...remaining];
+}
+
+function sortTrendingForLaunch(articles: NormalizedArticle[]) {
+  const sourceFrequency = new Map<string, number>();
+  const categoryFrequency = new Map<string, number>();
+
+  articles.forEach((article) => {
+    const sourceKey = article.source.trim().toLowerCase();
+    const categoryKey = article.category.trim().toLowerCase();
+    sourceFrequency.set(sourceKey, (sourceFrequency.get(sourceKey) ?? 0) + 1);
+    categoryFrequency.set(categoryKey, (categoryFrequency.get(categoryKey) ?? 0) + 1);
+  });
+
+  const scored = [...articles]
+    .map((article, index) => {
+      const sourceKey = article.source.trim().toLowerCase();
+      const categoryKey = article.category.trim().toLowerCase();
+      const sourceCount = sourceFrequency.get(sourceKey) ?? 1;
+      const categoryCount = categoryFrequency.get(categoryKey) ?? 1;
+      const engagementScore = Math.min(
+        1,
+        (article.likes + article.comments.length * 2) / 18
+      );
+      const launchScore =
+        getLaunchRecencyScore(article) * 0.46 +
+        getProviderOrderScore(index, articles.length) * 0.31 +
+        (1 / sourceCount) * 0.15 +
+        (1 / categoryCount) * 0.06 +
+        engagementScore * 0.02 -
+        Math.max(0, sourceCount - 2) * 0.015;
+
+      return {
+        article,
+        launchScore,
+        publishedTime: getPublishedTime(article),
+      };
+    })
+    .sort((left, right) => {
+      if (right.launchScore !== left.launchScore) {
+        return right.launchScore - left.launchScore;
+      }
+
+      return right.publishedTime - left.publishedTime;
+    })
+    .map(({ article }) => article);
+
+  return balanceTrendingArticles(scored);
+}
+
 function dedupeArticles(articles: NormalizedArticle[]) {
   const seenUrls = new Set<string>();
   const seenTitles = new Set<string>();
@@ -717,15 +965,13 @@ function sortArticlesForMode(
     });
   }
 
-  return diversifyArticles(
-    [...articles].sort((left, right) => {
-      const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
-      const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
-      const leftScore = left.likes + left.comments.length * 2 + leftTime / 10000000;
-      const rightScore = right.likes + right.comments.length * 2 + rightTime / 10000000;
-      return rightScore - leftScore;
-    })
-  );
+  if (params.mode === "myfeed") {
+    return diversifyArticles(
+      [...articles].sort((left, right) => getPublishedTime(right) - getPublishedTime(left))
+    );
+  }
+
+  return sortTrendingForLaunch(articles);
 }
 
 function buildFallbackArticles(params: ProviderFetchParams): ProviderResponse {

@@ -76,10 +76,10 @@ export function getBestArticleImage(article: ArticleImageFields) {
     ["urlToImage", normalizeImageValue(article.urlToImage)],
     ["imageUrl", normalizeImageValue(article.imageUrl)],
     ["image", normalizeImageValue(article.image)],
-    ["mediaContent", normalizeImageValue(article.mediaContent)],
-    ["enclosureUrl", normalizeImageValue(article.enclosureUrl)],
     ["ogImage", normalizeImageValue(article.ogImage)],
     ["twitterImage", normalizeImageValue(article.twitterImage)],
+    ["mediaContent", normalizeImageValue(article.mediaContent)],
+    ["enclosureUrl", normalizeImageValue(article.enclosureUrl)],
     ["thumbnail", normalizeImageValue(article.thumbnail)],
   ];
 

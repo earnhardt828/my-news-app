@@ -11,20 +11,23 @@ export default function LoadingScreen({
 }: LoadingScreenProps) {
   return (
     <div className="loading-screen" role="status" aria-live="polite" aria-label={label}>
+      <div className="loading-screen-spray loading-screen-spray-primary" aria-hidden="true" />
+      <div className="loading-screen-spray loading-screen-spray-secondary" aria-hidden="true" />
+      <div className="loading-screen-pulse" aria-hidden="true" />
       <div className="loading-screen-logo-wrap">
         <Image
           src="/branding/graffiti-loading-center.png"
           alt="Graffiti"
-          width={92}
-          height={92}
+          width={86}
+          height={86}
           priority
           className="loading-screen-logo branding-image-light"
         />
         <Image
           src="/branding/graffiti-loading-center-dark.png"
           alt="Graffiti"
-          width={92}
-          height={92}
+          width={86}
+          height={86}
           priority
           className="loading-screen-logo branding-image-dark"
         />
@@ -34,16 +37,16 @@ export default function LoadingScreen({
         <Image
           src="/branding/graffiti-loading-bottom.png"
           alt="Graffiti"
-          width={158}
-          height={32}
+          width={172}
+          height={34}
           priority
           className="loading-screen-bottom-logo branding-image-light"
         />
         <Image
           src="/branding/graffiti-loading-bottom-dark.png"
           alt="Graffiti"
-          width={158}
-          height={32}
+          width={172}
+          height={34}
           priority
           className="loading-screen-bottom-logo branding-image-dark"
         />
