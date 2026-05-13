@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
@@ -186,13 +185,6 @@ export default function SettingsUsernamePage() {
       ) : (
         <div className="stack settings-detail-shell">
           <section className="section-card stack">
-            <div className="stack" style={{ gap: "8px" }}>
-              <h2 className="settings-detail-title">Change username</h2>
-              <p className="muted settings-detail-copy">
-                Pick the name other readers see on your profile and comments.
-              </p>
-            </div>
-
             {!currentUser?.id ? (
               <div className="status-message status-error">
                 Log in to update your username.
@@ -223,9 +215,6 @@ export default function SettingsUsernamePage() {
                   >
                     {isSaving ? "Saving..." : "Save"}
                   </button>
-                  <Link href="/settings" className="button button-secondary">
-                    Back to Settings
-                  </Link>
                 </div>
               </>
             )}

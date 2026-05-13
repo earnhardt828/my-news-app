@@ -785,91 +785,100 @@ export default function Search() {
       ) : (
         <section className="stack search-results-shell">
           {userResults.length > 0 ? (
-            <div className="search-results-list">
-              {userResults.map((user) => (
-                <Link
-                  key={user.id}
-                  href={`/user/${encodeURIComponent(user.username ?? user.id)}`}
-                  className="section-card search-user-card"
-                  onClick={() => {
-                    console.log("CLICKED USER", user);
-                    console.log("NAVIGATING TO USERNAME", user.username);
-                  }}
-                >
-                  <div className="search-user-card-row">
-                    <div className="search-user-brand">
-                      <span className="avatar-shell search-user-avatar">
-                        {user.avatar_url ? (
-                          <Image
-                            src={user.avatar_url}
-                            alt={user.username ?? "User avatar"}
-                            width={48}
-                            height={48}
-                            unoptimized
-                            className="source-avatar-image"
-                          />
-                        ) : (
-                          <span className="avatar-fallback">
-                            {(user.username ?? "G").charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                      </span>
-                      <div className="stack" style={{ gap: "4px" }}>
-                        <strong className="search-source-name">@{user.username}</strong>
-                        {user.bio ? (
-                          <span className="search-user-bio">{user.bio}</span>
-                        ) : (
-                          <span className="search-source-kind">Graffiti user</span>
-                        )}
+            <div className="search-results-section">
+              <p className="search-results-section-heading">Users</p>
+              <div className="search-results-list">
+                {userResults.map((user) => (
+                  <Link
+                    key={user.id}
+                    href={`/user/${encodeURIComponent(user.username ?? user.id)}`}
+                    className="section-card search-user-card"
+                    onClick={() => {
+                      console.log("CLICKED USER", user);
+                      console.log("NAVIGATING TO USERNAME", user.username);
+                    }}
+                  >
+                    <div className="search-user-card-row">
+                      <div className="search-user-brand">
+                        <span className="avatar-shell search-user-avatar">
+                          {user.avatar_url ? (
+                            <Image
+                              src={user.avatar_url}
+                              alt={user.username ?? "User avatar"}
+                              width={48}
+                              height={48}
+                              unoptimized
+                              className="source-avatar-image"
+                            />
+                          ) : (
+                            <span className="avatar-fallback">
+                              {(user.username ?? "G").charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </span>
+                        <div className="stack" style={{ gap: "4px" }}>
+                          <strong className="search-source-name">@{user.username}</strong>
+                          {user.bio ? (
+                            <span className="search-user-bio">{user.bio}</span>
+                          ) : (
+                            <span className="search-source-kind">Graffiti user</span>
+                          )}
+                        </div>
                       </div>
+                      <span className="search-trending-icon" aria-hidden="true">
+                        ↗
+                      </span>
                     </div>
-                    <span className="search-trending-icon" aria-hidden="true">
-                      ↗
-                    </span>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
             </div>
           ) : null}
 
           {matchedSourceName ? (
-            <Link
-              href={`/source/${slugifySourceName(matchedSourceName)}`}
-              className="section-card search-source-card"
-            >
-              <div className="search-source-card-row">
-                <div className="search-source-brand">
-                  <SourceBadge sourceName={matchedSourceName} />
-                  <div className="stack" style={{ gap: "4px" }}>
-                    <strong className="search-source-name">{matchedSourceName}</strong>
-                    <span className="search-source-kind">News source</span>
+            <div className="search-results-section">
+              <p className="search-results-section-heading">Sources</p>
+              <Link
+                href={`/source/${slugifySourceName(matchedSourceName)}`}
+                className="section-card search-source-card"
+              >
+                <div className="search-source-card-row">
+                  <div className="search-source-brand">
+                    <SourceBadge sourceName={matchedSourceName} />
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="search-source-name">{matchedSourceName}</strong>
+                      <span className="search-source-kind">News source</span>
+                    </div>
                   </div>
+                  <span className="search-trending-icon" aria-hidden="true">
+                    ↗
+                  </span>
                 </div>
-                <span className="search-trending-icon" aria-hidden="true">
-                  ↗
-                </span>
-              </div>
-            </Link>
+              </Link>
+            </div>
           ) : null}
 
-          <div className="search-results-filter-row" role="tablist" aria-label="Search date filter">
-            {[
-              { value: "recent", label: "Recent" },
-              { value: "week", label: "Past week" },
-              { value: "month", label: "Past month" },
-              { value: "all", label: "All time" },
-            ].map((filterOption) => (
-              <button
-                key={filterOption.value}
-                type="button"
-                className={`chip search-filter-chip ${
-                  searchDateFilter === filterOption.value ? "search-filter-chip-active" : ""
-                }`}
-                onClick={() => setSearchDateFilter(filterOption.value as SearchDateFilter)}
-              >
-                {filterOption.label}
-              </button>
-            ))}
+          <div className="search-results-section">
+            <p className="search-results-section-heading">Date filters</p>
+            <div className="search-results-filter-row" role="tablist" aria-label="Search date filter">
+              {[
+                { value: "recent", label: "Recent" },
+                { value: "week", label: "Past Week" },
+                { value: "month", label: "Past Month" },
+                { value: "all", label: "All Time" },
+              ].map((filterOption) => (
+                <button
+                  key={filterOption.value}
+                  type="button"
+                  className={`chip search-filter-chip ${
+                    searchDateFilter === filterOption.value ? "search-filter-chip-active" : ""
+                  }`}
+                  onClick={() => setSearchDateFilter(filterOption.value as SearchDateFilter)}
+                >
+                  {filterOption.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {isSearchLoading ? (
@@ -885,108 +894,111 @@ export default function Search() {
               </span>
             </div>
           ) : (
-            <div className="search-results-list">
-              {filteredResults.map((article) => (
-                (() => {
-                  const imageSrc = getSearchResultImage(article);
-                  const imageFailureKey = imageSrc
-                    ? `${article.id}:${imageSrc}`
-                    : `${article.id}:none`;
-                  const shouldShowImage =
-                    Boolean(imageSrc) && !failedSearchImages[imageFailureKey];
+            <div className="search-results-section">
+              <p className="search-results-section-heading">Articles</p>
+              <div className="search-results-list">
+                {filteredResults.map((article) => (
+                  (() => {
+                    const imageSrc = getSearchResultImage(article);
+                    const imageFailureKey = imageSrc
+                      ? `${article.id}:${imageSrc}`
+                      : `${article.id}:none`;
+                    const shouldShowImage =
+                      Boolean(imageSrc) && !failedSearchImages[imageFailureKey];
 
-                  return (
-                    <Link
-                      key={article.id}
-                      href={`/article/${article.id}`}
-                      className="section-card search-result-card"
-                    >
-                      <div className="search-result-layout">
-                        <div className="search-result-copy">
-                          <div className="search-result-source-row">
-                            <button
-                              type="button"
-                              className="source-trigger source-trigger-tight trending-source-button"
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                router.push(`/source/${slugifySourceName(article.source)}`);
-                              }}
-                            >
-                              <div className="trending-source-brand">
-                                <SourceBadge sourceName={article.source} />
-                                <span className="trending-source-name">{article.source}</span>
-                              </div>
-                            </button>
-                            <span className="chip chip-accent">
-                              {getCategoryLabel(article.category)}
-                            </span>
-                          </div>
-
-                          <h3 className="search-result-title">
-                            {cleanDisplayText(article.title)}
-                          </h3>
-
-                          <div className="search-result-meta">
-                            <span className="trending-published-date">
-                              {formatSearchDate(article.publishedAt, article.time)}
-                            </span>
-                            {formatSearchDateDetail(article.publishedAt) ? (
-                              <span className="search-result-date-detail">
-                                {formatSearchDateDetail(article.publishedAt)}
+                    return (
+                      <Link
+                        key={article.id}
+                        href={`/article/${article.id}`}
+                        className="section-card search-result-card"
+                      >
+                        <div className="search-result-layout">
+                          <div className="search-result-copy">
+                            <div className="search-result-source-row">
+                              <button
+                                type="button"
+                                className="source-trigger source-trigger-tight trending-source-button"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  router.push(`/source/${slugifySourceName(article.source)}`);
+                                }}
+                              >
+                                <div className="trending-source-brand">
+                                  <SourceBadge sourceName={article.source} />
+                                  <span className="trending-source-name">{article.source}</span>
+                                </div>
+                              </button>
+                              <span className="chip chip-accent">
+                                {getCategoryLabel(article.category)}
                               </span>
-                            ) : null}
-                            {!isArticleWithinDays(article, 30) ? (
-                              <span className="chip search-result-age-chip">Older</span>
+                            </div>
+
+                            <h3 className="search-result-title">
+                              {cleanDisplayText(article.title)}
+                            </h3>
+
+                            <div className="search-result-meta">
+                              <span className="trending-published-date">
+                                {formatSearchDate(article.publishedAt, article.time)}
+                              </span>
+                              {formatSearchDateDetail(article.publishedAt) ? (
+                                <span className="search-result-date-detail">
+                                  {formatSearchDateDetail(article.publishedAt)}
+                                </span>
+                              ) : null}
+                              {!isArticleWithinDays(article, 30) ? (
+                                <span className="chip search-result-age-chip">Older</span>
+                              ) : null}
+                            </div>
+
+                            {article.description ? (
+                              <p className="search-result-description">
+                                {cleanDisplayText(article.description)}
+                              </p>
                             ) : null}
                           </div>
+                          {shouldShowImage ? (
+                            <div className="search-result-image-shell">
+                              <img
+                                src={imageSrc as string}
+                                alt={cleanDisplayText(article.title)}
+                                className="search-result-image"
+                                loading="lazy"
+                                decoding="async"
+                                onError={() => {
+                                  setFailedSearchImages((prev) => {
+                                    if (prev[imageFailureKey]) {
+                                      return prev;
+                                    }
 
-                          {article.description ? (
-                            <p className="search-result-description">
-                              {cleanDisplayText(article.description)}
-                            </p>
+                                    return {
+                                      ...prev,
+                                      [imageFailureKey]: true,
+                                    };
+                                  });
+                                }}
+                              />
+                            </div>
                           ) : null}
                         </div>
-                        {shouldShowImage ? (
-                          <div className="search-result-image-shell">
-                            <img
-                              src={imageSrc as string}
-                              alt={cleanDisplayText(article.title)}
-                              className="search-result-image"
-                              loading="lazy"
-                              decoding="async"
-                              onError={() => {
-                                setFailedSearchImages((prev) => {
-                                  if (prev[imageFailureKey]) {
-                                    return prev;
-                                  }
-
-                                  return {
-                                    ...prev,
-                                    [imageFailureKey]: true,
-                                  };
-                                });
-                              }}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    </Link>
-                  );
-                })()
-              ))}
-              {isLoadingMoreSearchResults ? (
-                <div className="search-inline-loading" role="status" aria-live="polite">
-                  Loading more articles...
-                </div>
-              ) : null}
-              {!isSearchLoading && hasMoreSearchResults ? (
-                <div
-                  ref={loadMoreSearchSentinelRef}
-                  className="feed-load-sentinel"
-                  aria-hidden="true"
-                />
-              ) : null}
+                      </Link>
+                    );
+                  })()
+                ))}
+                {isLoadingMoreSearchResults ? (
+                  <div className="search-inline-loading" role="status" aria-live="polite">
+                    Loading more articles...
+                  </div>
+                ) : null}
+                {!isSearchLoading && hasMoreSearchResults ? (
+                  <div
+                    ref={loadMoreSearchSentinelRef}
+                    className="feed-load-sentinel"
+                    aria-hidden="true"
+                  />
+                ) : null}
+              </div>
             </div>
           )}
         </section>

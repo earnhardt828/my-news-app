@@ -1387,7 +1387,18 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
   const feedsToFetch = candidateFeeds.length > 0 ? candidateFeeds : RSS_FEEDS;
 
   const responses = await Promise.allSettled(
-    feedsToFetch.slice(0, params.mode === "compare" ? 7 : 5).map(async (feed) => {
+    feedsToFetch
+      .slice(
+        0,
+        params.mode === "compare"
+          ? 10
+          : params.mode === "trending"
+          ? 12
+          : params.mode === "latest"
+          ? 10
+          : 8
+      )
+      .map(async (feed) => {
       const response = await fetch(feed.url, {
         headers: {
           Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
@@ -1515,11 +1526,13 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     params.mode === "trending" && params.page === 1
       ? await enrichTrendingArticleImages(realArticles)
       : realArticles;
-  const realSliced = enrichedRealArticles.slice(0, params.pageSize);
+  const finalRealArticles =
+    params.mode === "trending" ? balanceTrendingArticles(enrichedRealArticles) : enrichedRealArticles;
+  const realSliced = finalRealArticles.slice(0, params.pageSize);
   const hasMore = providerResponses.some(
     (result) => result.status === "fulfilled" && result.value.hasMore
-  ) || enrichedRealArticles.length > params.pageSize;
-  const fallbackUsed = enrichedRealArticles.length === 0;
+  ) || finalRealArticles.length > params.pageSize;
+  const fallbackUsed = finalRealArticles.length === 0;
 
   if (fallbackUsed) {
     console.error("[api/news] All live providers returned zero usable articles", {
@@ -1531,11 +1544,11 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     });
   }
 
-  console.log("REAL ARTICLES COUNT", enrichedRealArticles.length);
+  console.log("REAL ARTICLES COUNT", finalRealArticles.length);
   console.log("FALLBACK USED", fallbackUsed);
   console.log(
     "FIRST 5 IMAGE URLS",
-    enrichedRealArticles.slice(0, 5).map((article) => ({
+    finalRealArticles.slice(0, 5).map((article) => ({
       title: article.title,
       image: article.image,
       imageUrl: article.imageUrl,

@@ -2201,7 +2201,7 @@ export default function Home() {
           className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}
         >
           <div className="news-card-top-row news-card-top-row-brand">
-            <div className="trending-source-stack">
+            <div className="trending-source-stack trending-source-stack-primary">
               <Link
                 href={`/source/${slugifySourceName(safeSourceName)}`}
                 className="source-trigger source-trigger-tight trending-source-button"
@@ -2214,15 +2214,17 @@ export default function Home() {
                   <span className="trending-source-name">{safeSourceName}</span>
                 </div>
               </Link>
-              <span className="chip chip-accent trending-category-pill">
+            </div>
+            <div className="trending-card-top-meta">
+              {options?.rankLabel ? (
+                <span className="chip trending-rank-badge news-card-rank-badge">
+                  {options.rankLabel}
+                </span>
+              ) : null}
+              <span className="chip chip-accent trending-category-pill trending-category-pill-top">
                 {getCategoryLabel(safeCategoryName)}
               </span>
             </div>
-            {options?.rankLabel ? (
-              <span className="chip trending-rank-badge news-card-rank-badge">
-                {options.rankLabel}
-              </span>
-            ) : null}
           </div>
           <Link href={`/article/${article.id}`} className="article-link">
             {shouldUseLargeImage ? (
@@ -2300,7 +2302,7 @@ export default function Home() {
             <span className="trending-published-date">{publishedLabel}</span>
             <div className="engagement-row trending-stats-row news-card-actions">
               <button
-                className={`icon-action-pill ${
+                className={`icon-action-pill icon-action-pill-ghost ${
                   article.likedByCurrentUser ? "icon-action-pill-active" : ""
                 }`}
                 onClick={() => handleLike(article.id)}
@@ -2317,7 +2319,7 @@ export default function Home() {
                 <span>{article.likes}</span>
               </button>
               <button
-                className="icon-action-pill"
+                className="icon-action-pill icon-action-pill-ghost"
                 onClick={() => {
                   router.push(`/article/${article.id}#comments`);
                 }}
@@ -2335,9 +2337,12 @@ export default function Home() {
                 title={cleanDisplayText(article.title)}
                 url={article.url}
                 iconOnly
+                className="icon-action-pill-ghost"
               />
               <button
-                className={`bookmark-button ${article.saved ? "bookmark-button-active" : ""}`}
+                className={`bookmark-button icon-action-pill-ghost ${
+                  article.saved ? "bookmark-button-active" : ""
+                }`}
                 onClick={() => handleToggleSaveArticle(article)}
                 disabled={activeSaveArticleId === article.id}
                 aria-label={article.saved ? "Remove bookmark" : "Save article"}
@@ -2368,20 +2373,22 @@ export default function Home() {
       return (
         <article className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}>
           <div className="news-card-top-row news-card-top-row-brand">
-            <div className="trending-source-stack">
+            <div className="trending-source-stack trending-source-stack-primary">
               <div className="trending-source-brand">
                 <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
                 <span className="trending-source-name">{getSafeSourceLabel(article.source)}</span>
               </div>
-              <span className="chip chip-accent trending-category-pill">
+            </div>
+            <div className="trending-card-top-meta">
+              {options?.rankLabel ? (
+                <span className="chip trending-rank-badge news-card-rank-badge">
+                  {options.rankLabel}
+                </span>
+              ) : null}
+              <span className="chip chip-accent trending-category-pill trending-category-pill-top">
                 {getCategoryLabel(getSafeCategoryLabel(article.category))}
               </span>
             </div>
-            {options?.rankLabel ? (
-              <span className="chip trending-rank-badge news-card-rank-badge">
-                {options.rankLabel}
-              </span>
-            ) : null}
           </div>
           <Link href={`/article/${article.id}`} className="article-link">
             <div className="news-card-body news-card-body-text-only">
