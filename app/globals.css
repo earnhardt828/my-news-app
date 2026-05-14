@@ -1976,6 +1976,61 @@ input {
   color: var(--accent-strong);
 }
 
+.compact-feed-module {
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 88%, rgba(86, 142, 255, 0.04));
+  box-shadow: 0 10px 22px rgba(20, 33, 61, 0.04);
+}
+
+.compact-feed-module-header {
+  display: grid;
+  gap: 2px;
+}
+
+.compact-feed-module-header strong {
+  font-size: 0.96rem;
+  line-height: 1.2;
+}
+
+.compact-feed-module-header span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.compact-feed-module-list {
+  display: grid;
+  gap: 8px;
+}
+
+.compact-feed-module-link {
+  display: grid;
+  gap: 4px;
+  color: var(--foreground);
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+}
+
+.compact-feed-module-link strong {
+  font-size: 0.95rem;
+  line-height: 1.32;
+}
+
+.compact-feed-module-link span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.compact-feed-module-link-rich {
+  padding-block: 12px;
+}
+
 .local-city-dropdown {
   position: absolute;
   top: calc(100% + 8px);
@@ -2259,7 +2314,9 @@ input {
 }
 
 .source-rankings-shell {
-  gap: 8px;
+  gap: 4px;
+  align-content: start;
+  min-height: auto;
 }
 
 .source-rankings-list {
@@ -2273,8 +2330,8 @@ input {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: 10px;
+  padding: 7px 4px;
   border-radius: 0;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
@@ -2297,7 +2354,7 @@ input {
 .source-rankings-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -2311,9 +2368,9 @@ input {
   display: inline-flex;
   align-items: center;
   justify-self: end;
-  gap: 10px;
+  gap: 8px;
   color: var(--foreground);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 800;
 }
 
@@ -3663,8 +3720,8 @@ input {
 }
 
 .profile-inline-button {
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 12px;
   border-radius: 999px;
 }
 
@@ -3677,8 +3734,8 @@ input {
 }
 
 .profile-follow-button {
-  min-height: 40px;
-  padding-inline: 16px;
+  min-height: 38px;
+  padding-inline: 14px;
   flex-shrink: 0;
 }
 

@@ -1,6 +1,5 @@
 "use client";
 
-import AdSlot from "./components/ad-slot";
 import LoadingScreen from "./components/loading-screen";
 import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
@@ -163,7 +162,15 @@ type PaginatedNewsResponse = {
 
 type TrendingFeedItem =
   | { type: "article"; key: string; article: Article }
-  | { type: "video"; key: string; video: VideoItem };
+  | { type: "video"; key: string; video: VideoItem }
+  | {
+      type: "module";
+      key: string;
+      module:
+        | { kind: "top-polls"; polls: PollWithResults[] }
+        | { kind: "quick-watch"; video: VideoItem }
+        | { kind: "celebrity-buzz"; article: Article };
+    };
 
 const LOCAL_CITY_SUGGESTIONS = [
   "Chicago, IL",
@@ -272,6 +279,86 @@ const LOCAL_CITY_CONFIGS = {
   },
 } as const;
 
+type SupportedLocalCity = keyof typeof LOCAL_CITY_CONFIGS;
+
+type CachedFeedPayload = {
+  articles: Article[];
+  page: number;
+  hasMore: boolean;
+  savedAt: string;
+};
+
+const LOCAL_METRO_STATE_FALLBACKS: Array<{
+  city: SupportedLocalCity;
+  states: string[];
+  tokens?: string[];
+}> = [
+  { city: "Charlotte, NC", states: ["north carolina", "south carolina"], tokens: ["charlotte", "mecklenburg", "queen city", "gastonia", "concord", "rock hill"] },
+  { city: "Chicago, IL", states: ["illinois"], tokens: ["chicago", "cook county", "evanston", "oak park", "naperville"] },
+  { city: "Los Angeles, CA", states: ["california"], tokens: ["los angeles", "hollywood", "pasadena", "santa monica", "burbank", "long beach"] },
+  { city: "San Francisco, CA", states: ["california"], tokens: ["san francisco", "oakland", "berkeley", "marin", "bay area"] },
+  { city: "New York, NY", states: ["new york", "new jersey", "connecticut"], tokens: ["new york", "nyc", "brooklyn", "queens", "bronx", "manhattan", "jersey city"] },
+  { city: "Atlanta, GA", states: ["georgia"], tokens: ["atlanta", "fulton county", "buckhead", "decatur"] },
+  { city: "Houston, TX", states: ["texas"], tokens: ["houston", "harris county", "sugar land"] },
+  { city: "Miami, FL", states: ["florida"], tokens: ["miami", "broward", "south florida", "fort lauderdale"] },
+  { city: "Cincinnati, OH", states: ["ohio", "kentucky"], tokens: ["cincinnati", "hamilton county", "northern kentucky"] },
+  { city: "Detroit, MI", states: ["michigan"], tokens: ["detroit", "wayne county", "dearborn"] },
+  { city: "Minneapolis, MN", states: ["minnesota"], tokens: ["minneapolis", "saint paul", "st paul", "twin cities"] },
+  { city: "Phoenix, AZ", states: ["arizona"], tokens: ["phoenix", "mesa", "tempe", "scottsdale"] },
+  { city: "Philadelphia, PA", states: ["pennsylvania", "delaware", "new jersey"], tokens: ["philadelphia", "philly", "camden", "delco"] },
+];
+
+function getFeedCacheKey(
+  mode: "trending" | "latest" | "myfeed" | "local",
+  localLabel: string
+) {
+  return mode === "local"
+    ? `graffiti:last-feed:${mode}:${normalizeLookupValue(localLabel) || "regional"}`
+    : `graffiti:last-feed:${mode}`;
+}
+
+function readCachedFeedPayload(cacheKey: string): CachedFeedPayload | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(cacheKey);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as CachedFeedPayload | null;
+
+    if (
+      !parsed ||
+      !Array.isArray(parsed.articles) ||
+      typeof parsed.page !== "number" ||
+      typeof parsed.hasMore !== "boolean"
+    ) {
+      return null;
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error("Error reading cached feed payload:", error);
+    return null;
+  }
+}
+
+function writeCachedFeedPayload(cacheKey: string, payload: CachedFeedPayload) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(cacheKey, JSON.stringify(payload));
+  } catch (error) {
+    console.error("Error writing cached feed payload:", error);
+  }
+}
+
 const NATIONAL_SOURCE_KEYWORDS = [
   "fox news",
   "cnn",
@@ -334,6 +421,37 @@ function buildLocalNewsQuery(options?: {
 
   const fallbackLabel = label || [city, state].filter(Boolean).join(", ");
   return fallbackLabel ? `${fallbackLabel} local news` : "United States local news";
+}
+
+function resolveSupportedMetroCity(options?: {
+  city?: string | null;
+  state?: string | null;
+  label?: string | null;
+}): SupportedLocalCity | null {
+  const label = cleanDisplayText(options?.label ?? "").trim();
+  const city = cleanDisplayText(options?.city ?? "").trim();
+  const state = cleanDisplayText(options?.state ?? "").trim();
+
+  const directMatch = getSupportedLocalCityConfig(city, state, label);
+
+  if (directMatch) {
+    return directMatch[0] as SupportedLocalCity;
+  }
+
+  const haystack = normalizeLookupValue(`${city} ${state} ${label}`);
+
+  for (const fallback of LOCAL_METRO_STATE_FALLBACKS) {
+    const stateMatched = fallback.states.some((candidateState) =>
+      normalizeLookupValue(`${state} ${label}`).includes(candidateState)
+    );
+    const tokenMatched = fallback.tokens?.some((token) => haystack.includes(token)) ?? false;
+
+    if (tokenMatched || stateMatched) {
+      return fallback.city;
+    }
+  }
+
+  return null;
 }
 
 function getLocalSearchTerms(localQuery: string, localLocationLabel: string) {
@@ -727,6 +845,8 @@ export default function Home() {
     const replace = options?.replace ?? false;
     const requestCategories = categoriesRef.current;
     const requestId = activeFeedRequestIdRef.current + 1;
+    const feedCacheKey = getFeedCacheKey(feedMode, localLocationLabel);
+    const cachedFeed = replace ? readCachedFeedPayload(feedCacheKey) : null;
     activeFeedRequestIdRef.current = requestId;
 
     const isCurrentRequest = () => activeFeedRequestIdRef.current === requestId;
@@ -762,10 +882,21 @@ export default function Home() {
             pageToLoad,
             timeoutMs: INITIAL_FEED_TIMEOUT_MS,
           });
-          setFeedLoadError("Couldn’t load stories. Tap to retry.");
-          setArticles([]);
-          setHasMoreArticles(false);
-          setFeedPage(1);
+          if (cachedFeed) {
+            setFeedLoadError("Showing the last loaded stories while we retry.");
+            setArticles(cachedFeed.articles);
+            setHasMoreArticles(cachedFeed.hasMore);
+            setFeedPage(cachedFeed.page);
+          } else {
+            setFeedLoadError(
+              sortMode === "local"
+                ? "No local stories found for this city yet."
+                : "Couldn’t load stories. Tap to retry."
+            );
+            setArticles([]);
+            setHasMoreArticles(false);
+            setFeedPage(1);
+          }
           setIsInitialFeedLoading(false);
           isFetchingNextPageRef.current = false;
           setIsLoading(false);
@@ -917,10 +1048,25 @@ export default function Home() {
       if (replace && newsData.length === 0) {
         const emptyResponseError = new Error("Trending returned zero articles.");
         console.log("TRENDING FETCH ERROR", emptyResponseError);
-        setFeedLoadError("Couldn’t load stories. Tap to retry.");
-        setArticles([]);
-        setHasMoreArticles(false);
-        setFeedPage(1);
+        if (cachedFeed) {
+          setFeedLoadError(
+            sortMode === "local"
+              ? "No local stories found for this city yet."
+              : "Showing the last loaded stories while we retry."
+          );
+          setArticles(cachedFeed.articles);
+          setHasMoreArticles(cachedFeed.hasMore);
+          setFeedPage(cachedFeed.page);
+        } else {
+          setFeedLoadError(
+            sortMode === "local"
+              ? "No local stories found for this city yet."
+              : "Couldn’t load stories. Tap to retry."
+          );
+          setArticles([]);
+          setHasMoreArticles(false);
+          setFeedPage(1);
+        }
         setIsInitialFeedLoading(false);
         return;
       }
@@ -1100,16 +1246,32 @@ export default function Home() {
           .filter((rating) => rating.rating === "dislike")
           .map((rating) => rating.source_name)
       );
-      setFeedLoadError(replace && receivedFallbackFeed ? "Couldn’t load stories. Tap to retry." : null);
+      setFeedLoadError(
+        replace && receivedFallbackFeed
+          ? sortMode === "local"
+            ? "No local stories found for this city yet."
+            : "Showing the last loaded stories while we retry."
+          : null
+      );
       setHasMoreArticles(receivedFallbackFeed ? false : newsPayload.hasMore);
       setFeedPage(pageToLoad);
       setArticles((prev) => {
-        const nextArticles = receivedFallbackFeed && replace
-          ? []
-          :
-          replace ? mergedArticles : mergeArticlesByIdentity(prev, mergedArticles);
+        const nextArticles =
+          receivedFallbackFeed && replace
+            ? cachedFeed?.articles ?? prev
+            : replace
+              ? mergedArticles
+              : mergeArticlesByIdentity(prev, mergedArticles);
         console.log("ARTICLES USED", nextArticles);
         console.log("TRENDING FINAL COUNT", nextArticles.length);
+        if (nextArticles.length > 0) {
+          writeCachedFeedPayload(feedCacheKey, {
+            articles: nextArticles,
+            page: pageToLoad,
+            hasMore: receivedFallbackFeed ? false : newsPayload.hasMore,
+            savedAt: new Date().toISOString(),
+          });
+        }
         return nextArticles;
       });
       if (replace) {
@@ -1123,10 +1285,25 @@ export default function Home() {
       console.log("TRENDING FETCH ERROR", error);
       console.error("INITIAL APP LOAD FAILED", error);
       if (replace && !hasLiveNewsResponse) {
-        setFeedLoadError("Couldn’t load stories. Tap to retry.");
-        setArticles([]);
-        setHasMoreArticles(false);
-        setFeedPage(1);
+        if (cachedFeed) {
+          setFeedLoadError(
+            sortMode === "local"
+              ? "No local stories found for this city yet."
+              : "Showing the last loaded stories while we retry."
+          );
+          setArticles(cachedFeed.articles);
+          setHasMoreArticles(cachedFeed.hasMore);
+          setFeedPage(cachedFeed.page);
+        } else {
+          setFeedLoadError(
+            sortMode === "local"
+              ? "No local stories found for this city yet."
+              : "Couldn’t load stories. Tap to retry."
+          );
+          setArticles([]);
+          setHasMoreArticles(false);
+          setFeedPage(1);
+        }
         setIsInitialFeedLoading(false);
       } else {
         console.error("Home feed enrichment failed after live stories loaded", error);
@@ -1153,7 +1330,7 @@ export default function Home() {
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
-  }, [feedMode, localQuery]);
+  }, [feedMode, localLocationLabel, localQuery, sortMode]);
 
   const handleRetryFeedLoad = useCallback(() => {
     void loadFeedPage(1, { replace: true });
@@ -1407,11 +1584,11 @@ export default function Home() {
           }
         });
 
-        setAutoplayTrendingVideoId(highestRatio >= 0.65 ? nextAutoplayId : null);
+        setAutoplayTrendingVideoId(highestRatio >= 0.5 ? nextAutoplayId : null);
       },
       {
-        threshold: [0.35, 0.5, 0.65, 0.8],
-        rootMargin: "0px 0px -10% 0px",
+        threshold: [0.25, 0.4, 0.5, 0.7],
+        rootMargin: "0px 0px -5% 0px",
       }
     );
 
@@ -1436,9 +1613,10 @@ export default function Home() {
 
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       const fallbackTimeoutId = window.setTimeout(() => {
-        setLocalLocationLabel("Regional news");
-        setLocalQuery("United States local news");
-        setLocalQueryDraft("United States local news");
+        setLocalLocationLabel("Charlotte, NC");
+        setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
+        setLocalQueryDraft("Charlotte, NC");
+        setLocalSearchStatus("Choose a nearby city.");
       }, 0);
 
       return () => {
@@ -1473,26 +1651,38 @@ export default function Home() {
             payload?.address?.village ??
             "";
           const state = payload?.address?.state ?? "";
-          const nextLabel = [city, state].filter(Boolean).join(", ");
-          const nextQuery = buildLocalNewsQuery({
+          const detectedLabel = [city, state].filter(Boolean).join(", ");
+          const supportedMetro = resolveSupportedMetroCity({
             city,
             state,
-            label: nextLabel,
+            label: detectedLabel,
           });
-          setLocalLocationLabel(nextLabel || "Regional news");
-          setLocalQuery(nextQuery);
-          setLocalQueryDraft(nextLabel || "United States local news");
+
+          if (supportedMetro) {
+            setLocalLocationLabel(supportedMetro);
+            setLocalQuery(buildLocalNewsQuery({ city, state, label: supportedMetro }));
+            setLocalQueryDraft(supportedMetro);
+            setLocalSearchStatus("Choose a nearby city.");
+            return;
+          }
+
+          setLocalLocationLabel("Charlotte, NC");
+          setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
+          setLocalQueryDraft("Charlotte, NC");
+          setLocalSearchStatus("Choose a nearby city.");
         } catch (error) {
           console.error("Error resolving local location:", error);
-          setLocalLocationLabel("Regional news");
-          setLocalQuery("United States local news");
-          setLocalQueryDraft("United States local news");
+          setLocalLocationLabel("Charlotte, NC");
+          setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
+          setLocalQueryDraft("Charlotte, NC");
+          setLocalSearchStatus("Choose a nearby city.");
         }
       },
       () => {
-        setLocalLocationLabel("Regional news");
-        setLocalQuery("United States local news");
-        setLocalQueryDraft("United States local news");
+        setLocalLocationLabel("Charlotte, NC");
+        setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
+        setLocalQueryDraft("Charlotte, NC");
+        setLocalSearchStatus("Choose a nearby city.");
       },
       {
         enableHighAccuracy: false,
@@ -1515,10 +1705,10 @@ export default function Home() {
     };
 
     if (!trimmedDraft) {
-      setLocalLocationLabel("Regional news");
-      setLocalQuery("United States local news");
-      setLocalQueryDraft("United States local news");
-      setLocalSearchStatus(null);
+      setLocalLocationLabel("Charlotte, NC");
+      setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
+      setLocalQueryDraft("Charlotte, NC");
+      setLocalSearchStatus("Choose a nearby city.");
       return;
     }
 
@@ -1552,7 +1742,9 @@ export default function Home() {
         const nextLabel = [city, state].filter(Boolean).join(", ");
 
         if (nextLabel) {
-          const supportedCity = resolveSupportedCity(nextLabel);
+          const supportedCity =
+            resolveSupportedCity(nextLabel) ??
+            resolveSupportedMetroCity({ city, state, label: nextLabel });
 
           if (supportedCity) {
             setLocalLocationLabel(supportedCity);
@@ -1562,9 +1754,7 @@ export default function Home() {
             return;
           }
 
-          setLocalSearchStatus(
-            "Choose a supported nearby metro area from the dropdown for stronger local coverage."
-          );
+          setLocalSearchStatus("Choose a nearby city.");
           return;
         }
       } catch (error) {
@@ -1575,9 +1765,7 @@ export default function Home() {
     const supportedCity = resolveSupportedCity(trimmedDraft);
 
     if (!supportedCity) {
-      setLocalSearchStatus(
-        "Choose a supported nearby metro area from the dropdown for stronger local coverage."
-      );
+      setLocalSearchStatus("Choose a nearby city.");
       return;
     }
 
@@ -2656,6 +2844,51 @@ export default function Home() {
     return items;
   }, [balancedTrendingArticles, sortMode, videos]);
 
+  const trendingBreakModules = useMemo(() => {
+    const modules: TrendingFeedItem[] = [];
+    const celebrityArticle =
+      balancedTrendingArticles.find(
+        (article) => getCategoryLabel(getSafeCategoryLabel(article.category, article)) === "Celebrity"
+      ) ?? null;
+    const topPolls = myFeedPolls.slice(0, 2);
+    const quickWatchVideo = videos.find((video) => !video.fallback) ?? null;
+
+    if (topPolls.length > 0) {
+      modules.push({
+        type: "module",
+        key: "module:top-polls",
+        module: {
+          kind: "top-polls",
+          polls: topPolls,
+        },
+      });
+    }
+
+    if (quickWatchVideo) {
+      modules.push({
+        type: "module",
+        key: `module:quick-watch:${quickWatchVideo.id}`,
+        module: {
+          kind: "quick-watch",
+          video: quickWatchVideo,
+        },
+      });
+    }
+
+    if (celebrityArticle) {
+      modules.push({
+        type: "module",
+        key: `module:celebrity-buzz:${celebrityArticle.id}`,
+        module: {
+          kind: "celebrity-buzz",
+          article: celebrityArticle,
+        },
+      });
+    }
+
+    return modules;
+  }, [balancedTrendingArticles, myFeedPolls, videos]);
+
   const myFeedRenderItems = useMemo(() => {
     if (sortMode !== "my-feed") {
       return [];
@@ -2981,6 +3214,63 @@ export default function Home() {
         });
       }
 
+      if (item.type === "module") {
+        if (item.module.kind === "top-polls") {
+          return (
+            <section className="section-card compact-feed-module">
+              <div className="compact-feed-module-header">
+                <strong>Top Polls</strong>
+                <span>What people are weighing in on</span>
+              </div>
+              <div className="compact-feed-module-list">
+                {item.module.polls.map((poll) => (
+                  <Link key={poll.id} href={`/poll/${poll.id}/`} className="compact-feed-module-link">
+                    <strong>{poll.question}</strong>
+                    <span>
+                      {getCategoryLabel(poll.category)} · {poll.totalVotes} votes
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          );
+        }
+
+        if (item.module.kind === "quick-watch") {
+          return (
+            <section className="section-card compact-feed-module">
+              <div className="compact-feed-module-header">
+                <strong>Quick Watch</strong>
+                <span>Fast video catch-up</span>
+              </div>
+              <Link
+                href={`/video/${item.module.video.id}/`}
+                className="compact-feed-module-link compact-feed-module-link-rich"
+              >
+                <strong>{item.module.video.title}</strong>
+                <span>{item.module.video.creator}</span>
+              </Link>
+            </section>
+          );
+        }
+
+        return (
+          <section className="section-card compact-feed-module">
+            <div className="compact-feed-module-header">
+              <strong>Celebrity Buzz</strong>
+              <span>Trending entertainment headlines</span>
+            </div>
+            <Link
+              href={`/article/${item.module.article.id}/`}
+              className="compact-feed-module-link compact-feed-module-link-rich"
+            >
+              <strong>{cleanDisplayText(item.module.article.title)}</strong>
+              <span>{getSafeSourceLabel(item.module.article.source)}</span>
+            </Link>
+          </section>
+        );
+      }
+
       if (!item.video?.id || !item.video?.title || !item.video?.creator) {
         console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed video item"));
         return null;
@@ -3065,7 +3355,7 @@ export default function Home() {
         <div className="section-card stack local-feed-shell">
           <div className="local-feed-top-row">
             <span className="local-feed-selected-label">
-              {!localQuery ? "Finding nearby news..." : `Showing: ${localLocationLabel}`}
+              {!localQuery ? "Finding nearby news..." : `Selected city: ${localLocationLabel}`}
             </span>
           </div>
           <div className="local-feed-controls">
@@ -3190,7 +3480,7 @@ export default function Home() {
               : sortMode === "my-feed"
               ? "No articles found"
               : sortMode === "local"
-              ? "No strong local stories found yet"
+              ? "No local stories found for this city yet."
               : "No stories yet"}
           </strong>
           <span>
@@ -3199,7 +3489,7 @@ export default function Home() {
               : sortMode === "my-feed"
               ? "Try adding more categories or check back when new stories land."
               : sortMode === "local"
-              ? "Try another nearby major city to get stronger local coverage."
+              ? "Choose a nearby city."
               : "Check back in a moment for fresh stories."}
           </span>
           {feedLoadError && sortMode === "trending" ? (
@@ -3233,26 +3523,34 @@ export default function Home() {
           {sortMode === "trending"
             ? (() => {
                 let rankedItemIndex = -1;
+                let insertedModuleCount = 0;
 
-                return trendingRenderItems.map((item, index) => {
-                  rankedItemIndex += 1;
+                return trendingRenderItems.map((item) => {
+                  if (item.type !== "module") {
+                    rankedItemIndex += 1;
+                  }
 
                 const itemKey =
                   item.type === "article"
                     ? item.article.id || item.article.url || getArticleDeduplicationKey(item.article)
                     : item.key;
 
+                const inlineModule =
+                  rankedItemIndex >= 0 &&
+                  (rankedItemIndex + 1) % 9 === 0 &&
+                  insertedModuleCount < trendingBreakModules.length
+                    ? trendingBreakModules[insertedModuleCount]
+                    : null;
+
+                if (inlineModule) {
+                  insertedModuleCount += 1;
+                }
+
                 try {
                   return (
                     <div key={itemKey} className="stack">
                       {renderTrendingFeedItem(item, rankedItemIndex)}
-                      {(index + 1) % 3 === 0 ? (
-                        <AdSlot
-                          title="Sponsored placement"
-                          copy="This is a clean mobile ad placeholder. Swap in your ad network creative or partner placement later."
-                          cta="Learn more"
-                        />
-                      ) : null}
+                      {inlineModule ? renderTrendingFeedItem(inlineModule, rankedItemIndex) : null}
                     </div>
                   );
                 } catch (error) {

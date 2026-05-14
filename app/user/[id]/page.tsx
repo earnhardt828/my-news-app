@@ -354,20 +354,23 @@ export default function UserProfilePage() {
       return;
     }
 
-    const { error } = await supabase.from("user_follows").upsert(
+    const { error } = await supabase.from("user_follows").insert(
       {
         follower_id: viewerId,
         following_id: profileAuthUserId,
         following_username: profile.username ?? null,
-      },
-      {
-        onConflict: "follower_id,following_id",
       }
     );
 
     setIsFollowLoading(false);
 
     if (error) {
+      if (error.code === "23505") {
+        setIsFollowing(true);
+        setMessage({ type: "success", text: "User followed." });
+        return;
+      }
+
       console.error("Error following user:", error);
       setMessage({ type: "error", text: error.message ?? "Could not follow this user." });
       return;

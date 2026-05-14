@@ -38,6 +38,9 @@ const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCUMZ7gohGI9HcU9VNsr2FJQ", name: "Bloomberg" },
   { channelId: "UChqUTb7kYRX8-EiaN3XFrSQ", name: "Reuters" },
   { channelId: "UC52X5wxOL_s5yw0dQk7NtgA", name: "Associated Press" },
+  { channelId: "UCBi2mrWuNuyYy4gbM6fU18Q", name: "ABC News" },
+  { channelId: "UCoMdktPbSTixAyNGwb-UYkQ", name: "Sky News" },
+  { channelId: "UCNye-wNBqNL5ZzHSJj3l8Bg", name: "Al Jazeera English" },
 ];
 
 const FALLBACK_VIDEOS: VideoFeedItem[] = [

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
 import ThemeToggle from "../components/theme-toggle";
-import { listBlockedUsers, removeBlockedUser } from "../../lib/blocked-users";
+import { listBlockedUsers } from "../../lib/blocked-users";
 import { fetchProfilesByIdentity, getProfileIdentity } from "../../lib/profile-identities";
 import { ensureProfileRow } from "../../lib/profile-store";
 import { supabase } from "../../lib/supabase";
@@ -43,7 +43,6 @@ export default function SettingsPage() {
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserRecord[]>([]);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [activeBlockedUserId, setActiveBlockedUserId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -144,30 +143,6 @@ export default function SettingsPage() {
     setMessage("Logged out.");
     router.push("/profile#signed-out");
     router.refresh();
-  };
-
-  const handleUnblockUser = async (blockedUserId: string) => {
-    if (!currentUser?.id) {
-      setMessage("Log in to manage blocked users.");
-      return;
-    }
-
-    setActiveBlockedUserId(blockedUserId);
-
-    const { error } = await removeBlockedUser(supabase, currentUser.id, blockedUserId);
-
-    setActiveBlockedUserId(null);
-
-    if (error) {
-      console.error("Error unblocking user:", error);
-      setMessage("Could not unblock that user.");
-      return;
-    }
-
-    setBlockedUsers((prev) =>
-      prev.filter((blockedUser) => blockedUser.blocked_id !== blockedUserId)
-    );
-    setMessage("Blocked user removed.");
   };
 
   const handleDeleteAccount = async () => {
@@ -327,39 +302,6 @@ export default function SettingsPage() {
                   ›
                 </span>
               </Link>
-
-              {blockedUsers.length > 0 ? (
-                <div className="settings-sublist">
-                  {blockedUsers.map((blockedUser) => (
-                    <div key={blockedUser.id} className="settings-subrow">
-                      <div className="settings-list-copy">
-                        <strong>
-                          {blockedUser.username
-                            ? `@${blockedUser.username}`
-                            : blockedUser.blocked_id}
-                        </strong>
-                        <span>
-                          Blocked on{" "}
-                          {new Date(blockedUser.created_at).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </span>
-                      </div>
-                      <button
-                        className="comment-action"
-                        onClick={() => handleUnblockUser(blockedUser.blocked_id)}
-                        disabled={activeBlockedUserId === blockedUser.blocked_id}
-                      >
-                        {activeBlockedUserId === blockedUser.blocked_id
-                          ? "Unblocking..."
-                          : "Unblock"}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
 
               <Link href="/settings/report-abuse" className="settings-list-row">
                 <div className="settings-list-copy">
