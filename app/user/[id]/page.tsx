@@ -193,7 +193,8 @@ export default function UserProfilePage() {
   const displayName = profile?.username ? `@${profile.username}` : "Graffiti user";
   const initials = (profile?.username ?? "G").charAt(0).toUpperCase();
   const profileAuthUserId = getProfileIdentity(profile);
-  const isOwnProfile = Boolean(viewerId && profileAuthUserId && viewerId === profileAuthUserId);
+  const followTargetId = profile?.id ?? null;
+  const isOwnProfile = Boolean(viewerId && followTargetId && viewerId === followTargetId);
   const blockButtonLabel = !viewerId
     ? "Log in to block users."
     : isBlocked
@@ -203,11 +204,12 @@ export default function UserProfilePage() {
     isBlocking || (isUnavailable && !isBlocked) || isBlockedByThem
   );
   const isFollowButtonDisabled = Boolean(
-    isFollowLoading || !viewerId || !profileAuthUserId || isOwnProfile || isUnavailable
+    isFollowLoading || !viewerId || !followTargetId || isOwnProfile || isUnavailable
   );
 
   const handleBlockToggle = async () => {
     if (!profileAuthUserId || !profile) {
+      setMessage({ type: "error", text: "Could not update block status." });
       return;
     }
 
@@ -321,7 +323,7 @@ export default function UserProfilePage() {
       return;
     }
 
-    if (viewerId === profileAuthUserId) {
+    if (viewerId === followTargetId) {
       setMessage({ type: "error", text: "You cannot follow yourself." });
       return;
     }
@@ -339,7 +341,7 @@ export default function UserProfilePage() {
         .from("user_follows")
         .delete()
         .eq("follower_id", viewerId)
-        .eq("following_id", profileAuthUserId);
+        .eq("following_id", followTargetId);
 
       setIsFollowLoading(false);
 
@@ -357,7 +359,7 @@ export default function UserProfilePage() {
     const { error } = await supabase.from("user_follows").insert(
       {
         follower_id: viewerId,
-        following_id: profileAuthUserId,
+        following_id: followTargetId,
         following_username: profile.username ?? null,
       }
     );

@@ -114,8 +114,19 @@ export default function MyFeed() {
       setPreferredSources(profile?.preferred_sources ?? []);
       setShowLessSources(profile?.show_less_sources ?? []);
 
-      const res = await apiFetch("/api/news");
-      const news = (await res.json()) as Omit<FeedArticle, "saved">[];
+      const categoryQuery = userCategories.join(",");
+      const personalizedPath = categoryQuery
+        ? `/api/news?mode=myfeed&category=${encodeURIComponent(categoryQuery)}&pageSize=40`
+        : "/api/news?mode=myfeed&pageSize=40";
+      const fallbackPath = "/api/news?mode=trending&pageSize=30";
+
+      const personalizedRes = await apiFetch(personalizedPath);
+      const personalizedPayload = (await personalizedRes.json()) as
+        | { articles?: Omit<FeedArticle, "saved">[] }
+        | Omit<FeedArticle, "saved">[];
+      const personalizedNews = Array.isArray(personalizedPayload)
+        ? personalizedPayload
+        : (personalizedPayload.articles ?? []);
 
       const [
         { data: savedArticlesData },
@@ -178,10 +189,29 @@ export default function MyFeed() {
         );
       }
 
-      const filtered =
+      let filtered =
         userCategories.length > 0
-          ? news.filter((item) => userCategories.includes(item.category))
-          : news;
+          ? personalizedNews.filter((item) => userCategories.includes(item.category))
+          : personalizedNews;
+
+      if (filtered.length === 0) {
+        const fallbackRes = await apiFetch(fallbackPath);
+        const fallbackPayload = (await fallbackRes.json()) as
+          | { articles?: Omit<FeedArticle, "saved">[] }
+          | Omit<FeedArticle, "saved">[];
+        const fallbackNews = Array.isArray(fallbackPayload)
+          ? fallbackPayload
+          : (fallbackPayload.articles ?? []);
+
+        filtered =
+          userCategories.length > 0
+            ? fallbackNews.filter((item) => userCategories.includes(item.category))
+            : fallbackNews;
+
+        if (filtered.length === 0) {
+          filtered = fallbackNews;
+        }
+      }
 
       const ranked = rankArticlesWithSourcePreferences(
         filtered.map((article) => ({
@@ -384,33 +414,6 @@ export default function MyFeed() {
 
   return (
     <section className="page-shell">
-      <div className="page-hero">
-        <p className="page-eyebrow">Personalized</p>
-        <h2 className="page-title">Your categories, your pace.</h2>
-        <p className="page-subtitle">
-          My Feed pulls in live stories based on the categories you selected in
-          Profile.
-        </p>
-      </div>
-
-      <div className="section-card stack">
-        <strong>Following</strong>
-        {categories.length === 0 ? (
-          <div className="empty-state">
-            <strong>No categories selected</strong>
-            <span>Go to Profile and pick categories to personalize this feed.</span>
-          </div>
-        ) : (
-          <div className="category-grid">
-            {categories.map((category) => (
-              <span key={category} className="chip chip-accent">
-                {getCategoryLabel(category)}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
       {isLoading ? (
         <div className="loading-state">
           <strong>Loading your feed...</strong>
