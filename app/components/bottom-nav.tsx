@@ -86,13 +86,22 @@ const navItems: NavItem[] = [
   },
 ];
 
+function normalizePathname(pathname: string) {
+  if (!pathname || pathname === "/") {
+    return "/";
+  }
+
+  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
+
 export default function BottomNav() {
-  const pathname = usePathname();
+  const pathname = normalizePathname(usePathname());
 
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
       {navItems.map((item) => {
-        const isActive = pathname === item.href;
+        const normalizedHref = normalizePathname(item.href);
+        const isActive = pathname === normalizedHref;
 
         return (
           <Link

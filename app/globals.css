@@ -443,9 +443,9 @@ input {
 }
 
 .app-main {
-  width: min(100%, 760px);
+  width: calc(100% - 32px);
+  max-width: 430px;
   margin: 0 auto;
-  max-width: calc(100vw - 32px);
   padding: 18px 16px 0;
   overflow-x: clip;
 }
@@ -1917,9 +1917,14 @@ input {
 .local-feed-top-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
-  flex-wrap: wrap;
+}
+
+.local-feed-selected-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-soft);
 }
 
 .local-feed-controls {
@@ -1944,6 +1949,31 @@ input {
   min-height: 42px;
   border-radius: 999px;
   box-shadow: none;
+}
+
+.local-feed-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.local-feed-chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.local-feed-city-chip {
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+}
+
+.local-feed-city-chip-active {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-strong));
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+  color: var(--accent-strong);
 }
 
 .local-city-dropdown {
@@ -4932,7 +4962,8 @@ input {
   }
 
   .app-main {
-    max-width: 760px;
+    width: calc(100% - 32px);
+    max-width: 430px;
     padding-top: 32px;
   }
 

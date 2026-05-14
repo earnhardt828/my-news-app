@@ -15,6 +15,7 @@ export const CATEGORY_OPTIONS = [
   "Health",
   "Science",
   "Entertainment",
+  "Celebrity",
   "Art",
   "Music",
   "Finance",
@@ -50,6 +51,7 @@ export const CATEGORY_LABELS: Record<NewsCategory, string> = {
   Health: "Health 🏥",
   Science: "Science 🔬",
   Entertainment: "Entertainment 🎬",
+  Celebrity: "Celebrity ✨",
   Art: "Art 🖼️",
   Music: "Music 🎵",
   Finance: "Finance 💸",
@@ -98,7 +100,11 @@ function inferCategoryFromContext(source?: string | null, title?: string | null)
     return "Health";
   }
 
-  if (/\b(movie|music|tv|celebrity|hollywood|tmz|entertainment)\b/.test(haystack)) {
+  if (/\b(celebrity|celeb|tmz|people magazine|people|hollywood reporter|e news|variety)\b/.test(haystack)) {
+    return "Celebrity";
+  }
+
+  if (/\b(movie|music|tv|hollywood|entertainment|streaming)\b/.test(haystack)) {
     return "Entertainment";
   }
 

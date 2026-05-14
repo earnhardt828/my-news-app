@@ -7,6 +7,14 @@ import { useEffect, useState } from "react";
 import { getSourceNameFromSlug } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
+function normalizePathname(pathname: string) {
+  if (!pathname || pathname === "/") {
+    return "/";
+  }
+
+  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
+
 function getPageTitle(pathname: string) {
   if (pathname === "/videos") {
     return "Videos";
@@ -96,7 +104,7 @@ function getPageTitle(pathname: string) {
 }
 
 export default function AppHeader() {
-  const pathname = usePathname();
+  const pathname = normalizePathname(usePathname());
   const router = useRouter();
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);

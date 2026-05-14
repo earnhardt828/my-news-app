@@ -171,6 +171,7 @@ const CATEGORY_QUERY_MAP: Record<string, string> = {
   Health: "health OR medicine OR hospital OR disease",
   Science: "science OR research OR climate OR nasa",
   Entertainment: "entertainment OR celebrity OR streaming OR movies",
+  Celebrity: "celebrity OR hollywood OR tmz OR people magazine OR variety OR e! news",
   Finance: "finance OR markets OR stocks OR federal reserve",
   Crime: "crime OR police OR court",
   Weather: "weather OR storm OR forecast",

@@ -166,113 +166,111 @@ type TrendingFeedItem =
   | { type: "video"; key: string; video: VideoItem };
 
 const LOCAL_CITY_SUGGESTIONS = [
-  "Atlanta, GA",
-  "Austin, TX",
-  "Boston, MA",
-  "Charlotte, NC",
   "Chicago, IL",
-  "Chattanooga, TN",
-  "Charleston, SC",
-  "Cincinnati, OH",
-  "Cleveland, OH",
-  "Columbus, OH",
-  "Columbia, SC",
-  "Colorado Springs, CO",
-  "Corpus Christi, TX",
-  "Dallas, TX",
-  "Denver, CO",
-  "Detroit, MI",
-  "Houston, TX",
-  "Jacksonville, FL",
-  "Kansas City, MO",
   "Los Angeles, CA",
-  "Miami, FL",
-  "Nashville, TN",
   "New York, NY",
-  "Philadelphia, PA",
+  "Atlanta, GA",
+  "Houston, TX",
+  "Miami, FL",
+  "Charlotte, NC",
+  "Cincinnati, OH",
+  "Detroit, MI",
+  "Minneapolis, MN",
   "Phoenix, AZ",
-  "Raleigh, NC",
-  "Richmond, VA",
-  "San Diego, CA",
   "San Francisco, CA",
-  "Seattle, WA",
-  "Washington, DC",
+  "Philadelphia, PA",
 ] as const;
 
-const CHARLOTTE_LOCAL_SOURCE_ALLOWLIST = [
-  "Charlotte Observer",
-  "WSOC-TV",
-  "WSOC Charlotte",
-  "WBTV",
-  "WCNC",
-  "Queen City News",
-  "WFAE",
-  "Axios Charlotte",
-  "WCCB Charlotte",
-] as const;
-
-const CHARLOTTE_AREA_PLACE_NAMES = [
-  "charlotte",
-  "matthews",
-  "huntersville",
-  "cornelius",
-  "davidson",
-  "pineville",
-  "mint hill",
-  "concord",
-  "kannapolis",
-  "gastonia",
-  "rock hill",
-  "fort mill",
-  "mooresville",
-] as const;
-
-const CHARLOTTE_LOCAL_QUERY = [
-  "Charlotte NC local news",
-  "Charlotte Observer",
-  "WSOC Charlotte",
-  "WBTV Charlotte",
-  "WCNC Charlotte",
-  "Queen City News",
-  "WFAE Charlotte",
-  "Axios Charlotte",
-  "WCCB Charlotte",
-].join(" ");
-
-const CHICAGO_LOCAL_SOURCE_ALLOWLIST = [
-  "Chicago Tribune",
-  "WGN Chicago",
-  "WGN-TV",
-  "ABC7 Chicago",
-  "NBC Chicago",
-  "CBS Chicago",
-  "Fox 32 Chicago",
-  "Block Club Chicago",
-  "WBEZ Chicago",
-] as const;
-
-const CHICAGO_AREA_PLACE_NAMES = [
-  "chicago",
-  "evanston",
-  "oak park",
-  "naperville",
-  "aurora",
-  "joliet",
-  "schaumburg",
-  "waukegan",
-] as const;
-
-const CHICAGO_LOCAL_QUERY = [
-  "Chicago local news",
-  "Chicago Tribune",
-  "WGN Chicago",
-  "ABC7 Chicago",
-  "NBC Chicago",
-  "CBS Chicago",
-  "Fox 32 Chicago",
-  "Block Club Chicago",
-  "WBEZ Chicago",
-].join(" ");
+const LOCAL_CITY_CONFIGS = {
+  "Chicago, IL": {
+    query:
+      "Chicago local news Chicago Tribune WGN Chicago ABC7 Chicago NBC Chicago CBS Chicago Fox 32 Chicago Block Club Chicago WBEZ Chicago",
+    sources: [
+      "Chicago Tribune",
+      "WGN Chicago",
+      "WGN-TV",
+      "ABC7 Chicago",
+      "NBC Chicago",
+      "CBS Chicago",
+      "Fox 32 Chicago",
+      "Block Club Chicago",
+      "WBEZ Chicago",
+    ],
+    signals: ["chicago", "illinois", "cook county", "evanston", "oak park"],
+  },
+  "Los Angeles, CA": {
+    query:
+      "Los Angeles local news LA Times KTLA ABC7 Los Angeles NBC Los Angeles CBS Los Angeles LAist",
+    sources: ["LA Times", "KTLA", "ABC7 Los Angeles", "NBC Los Angeles", "CBS Los Angeles", "LAist"],
+    signals: ["los angeles", "la county", "hollywood", "pasadena", "santa monica"],
+  },
+  "New York, NY": {
+    query:
+      "New York local news NY1 Gothamist New York Daily News CBS New York NBC New York ABC7NY",
+    sources: ["NY1", "Gothamist", "New York Daily News", "CBS New York", "NBC New York", "ABC7NY"],
+    signals: ["new york", "nyc", "manhattan", "brooklyn", "queens", "bronx", "staten island"],
+  },
+  "Atlanta, GA": {
+    query: "Atlanta local news AJC WSB-TV FOX 5 Atlanta 11Alive Atlanta News First",
+    sources: ["AJC", "WSB-TV", "FOX 5 Atlanta", "11Alive", "Atlanta News First"],
+    signals: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
+  },
+  "Houston, TX": {
+    query: "Houston local news Houston Chronicle KHOU ABC13 Houston FOX 26 Houston KPRC",
+    sources: ["Houston Chronicle", "KHOU", "ABC13 Houston", "FOX 26 Houston", "KPRC"],
+    signals: ["houston", "texas", "harris county", "katy", "sugar land"],
+  },
+  "Miami, FL": {
+    query: "Miami local news Miami Herald WSVN NBC 6 South Florida CBS Miami Local 10",
+    sources: ["Miami Herald", "WSVN", "NBC 6 South Florida", "CBS Miami", "Local 10"],
+    signals: ["miami", "south florida", "dade", "miami-dade", "fort lauderdale"],
+  },
+  "Charlotte, NC": {
+    query:
+      "Charlotte NC local news Charlotte Observer WSOC Charlotte WBTV Charlotte WCNC Charlotte Queen City News WFAE Charlotte Axios Charlotte",
+    sources: [
+      "Charlotte Observer",
+      "WSOC-TV",
+      "WSOC Charlotte",
+      "WBTV",
+      "WCNC",
+      "Queen City News",
+      "WFAE",
+      "Axios Charlotte",
+    ],
+    signals: ["charlotte", "mecklenburg", "queen city", "gastonia", "rock hill", "fort mill"],
+  },
+  "Cincinnati, OH": {
+    query: "Cincinnati local news Cincinnati Enquirer WCPO WLWT FOX19",
+    sources: ["Cincinnati Enquirer", "WCPO", "WLWT", "FOX19"],
+    signals: ["cincinnati", "ohio", "hamilton county", "covington", "newport"],
+  },
+  "Detroit, MI": {
+    query: "Detroit local news Detroit Free Press Detroit News WXYZ ClickOnDetroit FOX 2 Detroit",
+    sources: ["Detroit Free Press", "Detroit News", "WXYZ", "ClickOnDetroit", "FOX 2 Detroit"],
+    signals: ["detroit", "michigan", "wayne county", "dearborn", "troy"],
+  },
+  "Minneapolis, MN": {
+    query: "Minneapolis local news Star Tribune KARE 11 WCCO FOX 9 MPR News",
+    sources: ["Star Tribune", "KARE 11", "WCCO", "FOX 9", "MPR News"],
+    signals: ["minneapolis", "saint paul", "st paul", "minnesota", "hennepin"],
+  },
+  "Phoenix, AZ": {
+    query: "Phoenix local news Arizona Republic AZFamily ABC15 Arizona FOX 10 Phoenix 12News",
+    sources: ["Arizona Republic", "AZFamily", "ABC15 Arizona", "FOX 10 Phoenix", "12News"],
+    signals: ["phoenix", "arizona", "maricopa county", "mesa", "scottsdale"],
+  },
+  "San Francisco, CA": {
+    query: "San Francisco local news SF Chronicle KQED ABC7 Bay Area NBC Bay Area CBS News Bay Area",
+    sources: ["SF Chronicle", "KQED", "ABC7 Bay Area", "NBC Bay Area", "CBS News Bay Area"],
+    signals: ["san francisco", "bay area", "oakland", "san jose", "berkeley"],
+  },
+  "Philadelphia, PA": {
+    query: "Philadelphia local news Philadelphia Inquirer 6ABC NBC10 Philadelphia CBS Philadelphia WHYY",
+    sources: ["Philadelphia Inquirer", "6ABC", "NBC10 Philadelphia", "CBS Philadelphia", "WHYY"],
+    signals: ["philadelphia", "pennsylvania", "philly", "camden", "delaware county"],
+  },
+} as const;
 
 const NATIONAL_SOURCE_KEYWORDS = [
   "fox news",
@@ -301,14 +299,22 @@ function normalizeLookupValue(value: string | null | undefined) {
     .toLowerCase();
 }
 
-function isCharlotteAreaLocation(city?: string | null, state?: string | null, label?: string | null) {
+function getSupportedLocalCityConfig(
+  city?: string | null,
+  state?: string | null,
+  label?: string | null
+) {
   const combined = normalizeLookupValue([city, state, label].filter(Boolean).join(" "));
-  return CHARLOTTE_AREA_PLACE_NAMES.some((placeName) => combined.includes(placeName));
-}
 
-function isChicagoAreaLocation(city?: string | null, state?: string | null, label?: string | null) {
-  const combined = normalizeLookupValue([city, state, label].filter(Boolean).join(" "));
-  return CHICAGO_AREA_PLACE_NAMES.some((placeName) => combined.includes(placeName));
+  return (
+    Object.entries(LOCAL_CITY_CONFIGS).find(([cityLabel, config]) => {
+      const normalizedCityLabel = normalizeLookupValue(cityLabel);
+      return (
+        combined.includes(normalizedCityLabel) ||
+        config.signals.some((signal) => combined.includes(normalizeLookupValue(signal)))
+      );
+    }) ?? null
+  );
 }
 
 function buildLocalNewsQuery(options?: {
@@ -320,12 +326,10 @@ function buildLocalNewsQuery(options?: {
   const city = cleanDisplayText(options?.city ?? "").trim();
   const state = cleanDisplayText(options?.state ?? "").trim();
 
-  if (isCharlotteAreaLocation(city, state, label)) {
-    return CHARLOTTE_LOCAL_QUERY;
-  }
+  const localCityMatch = getSupportedLocalCityConfig(city, state, label);
 
-  if (isChicagoAreaLocation(city, state, label)) {
-    return CHICAGO_LOCAL_QUERY;
+  if (localCityMatch) {
+    return localCityMatch[1].query;
   }
 
   const fallbackLabel = label || [city, state].filter(Boolean).join(", ");
@@ -353,8 +357,7 @@ function scoreLocalArticle(article: Article, localQuery: string, localLocationLa
   const description = normalizeLookupValue(article.description);
   const articleText = `${title} ${description} ${normalizeLookupValue(article.url)}`;
   const localTerms = getLocalSearchTerms(localQuery, localLocationLabel);
-  const isCharlotteArea = isCharlotteAreaLocation(undefined, undefined, `${localLocationLabel} ${localQuery}`);
-  const isChicagoArea = isChicagoAreaLocation(undefined, undefined, `${localLocationLabel} ${localQuery}`);
+  const matchedLocalCity = getSupportedLocalCityConfig(undefined, undefined, `${localLocationLabel} ${localQuery}`);
   const articleAgeHours = article.publishedAt
     ? Math.max(0, (Date.now() - new Date(article.publishedAt).getTime()) / (1000 * 60 * 60))
     : 48;
@@ -363,68 +366,42 @@ function scoreLocalArticle(article: Article, localQuery: string, localLocationLa
   const localTermMatches = localTerms.filter((term) => articleText.includes(term)).length;
   score += localTermMatches * 18;
 
-  if (isCharlotteArea) {
-    const hasCharlotteSource = CHARLOTTE_LOCAL_SOURCE_ALLOWLIST.some((source) =>
+  if (matchedLocalCity) {
+    const localConfig = matchedLocalCity[1];
+    const hasLocalSource = localConfig.sources.some((source) =>
       sourceName.includes(normalizeLookupValue(source))
     );
-    const hasCharlotteStorySignal =
-      /(charlotte|mecklenburg|queen city|gastonia|concord|rock hill|fort mill|huntersville|matthews)/.test(
-        articleText
-      );
+    const hasLocalStorySignal = localConfig.signals.some((signal) =>
+      articleText.includes(normalizeLookupValue(signal))
+    );
 
-    if (hasCharlotteSource) {
+    if (hasLocalSource) {
       score += 220;
     }
 
-    if (hasCharlotteStorySignal) {
+    if (hasLocalStorySignal) {
       score += 95;
     }
 
     if (
-      !hasCharlotteSource &&
-      !hasCharlotteStorySignal &&
+      !hasLocalSource &&
+      !hasLocalStorySignal &&
       NATIONAL_SOURCE_KEYWORDS.some((keyword) => sourceName.includes(keyword))
     ) {
-      score -= 85;
+      score -= 95;
     }
   } else {
-    if (isChicagoArea) {
-      const hasChicagoSource = CHICAGO_LOCAL_SOURCE_ALLOWLIST.some((source) =>
-        sourceName.includes(normalizeLookupValue(source))
-      );
-      const hasChicagoStorySignal =
-        /(chicago|illinois|cook county|evanston|oak park|naperville|aurora|joliet|schaumburg)/.test(
-          articleText
-        );
-
-      if (hasChicagoSource) {
-        score += 220;
-      }
-
-      if (hasChicagoStorySignal) {
-        score += 95;
-      }
-
-      if (
-        !hasChicagoSource &&
-        !hasChicagoStorySignal &&
-        NATIONAL_SOURCE_KEYWORDS.some((keyword) => sourceName.includes(keyword))
-      ) {
-        score -= 85;
-      }
-    }
-
     const hasLocationInSource = localTerms.some((term) => sourceName.includes(term));
     if (hasLocationInSource) {
       score += 48;
     }
+  }
 
-    if (
-      !localTermMatches &&
-      NATIONAL_SOURCE_KEYWORDS.some((keyword) => sourceName.includes(keyword))
-    ) {
-      score -= 30;
-    }
+  if (
+    !localTermMatches &&
+    NATIONAL_SOURCE_KEYWORDS.some((keyword) => sourceName.includes(keyword))
+  ) {
+    score -= 30;
   }
 
   return score;
@@ -3087,9 +3064,8 @@ export default function Home() {
       {sortMode === "local" ? (
         <div className="section-card stack local-feed-shell">
           <div className="local-feed-top-row">
-            <strong>Local</strong>
-            <span className="muted">
-              {!localQuery ? "Finding nearby news..." : localLocationLabel}
+            <span className="local-feed-selected-label">
+              {!localQuery ? "Finding nearby news..." : `Showing: ${localLocationLabel}`}
             </span>
           </div>
           <div className="local-feed-controls">
@@ -3155,6 +3131,25 @@ export default function Home() {
               Update
             </button>
           </div>
+          <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
+            {LOCAL_CITY_SUGGESTIONS.map((city) => (
+              <button
+                key={city}
+                type="button"
+                className={`chip local-feed-city-chip ${
+                  localLocationLabel === city ? "local-feed-city-chip-active" : ""
+                }`}
+                onClick={() => {
+                  setLocalQueryDraft(city);
+                  setLocalLocationLabel(city);
+                  setLocalQuery(buildLocalNewsQuery({ label: city }));
+                  setLocalSearchStatus(null);
+                }}
+              >
+                {city}
+              </button>
+            ))}
+          </div>
           {localSearchStatus ? (
             <p className="settings-detail-note">{localSearchStatus}</p>
           ) : null}
@@ -3218,8 +3213,14 @@ export default function Home() {
           {feedLoadError ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
               <div className="stack" style={{ gap: "10px" }}>
-                <span>{sortMode === "trending" ? "Couldn’t load stories. Tap to retry." : feedLoadError}</span>
-                {sortMode === "trending" ? (
+                <span>
+                  {sortMode === "trending"
+                    ? "Couldn’t load stories. Tap to retry."
+                    : sortMode === "local"
+                    ? "No local stories found for this city yet."
+                    : feedLoadError}
+                </span>
+                {sortMode === "trending" || sortMode === "local" ? (
                   <div>
                     <button className="button button-secondary" onClick={handleRetryFeedLoad}>
                       Retry
