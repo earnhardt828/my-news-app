@@ -133,7 +133,7 @@ export default function SourceRankingsPage() {
   };
 
   return (
-    <section className="page-shell">
+    <section className="page-shell source-rankings-shell">
       {isLoading ? (
         <LoadingScreen label="Loading source rankings" />
       ) : rankedSources.length === 0 ? (

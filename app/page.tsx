@@ -236,6 +236,41 @@ const CHARLOTTE_LOCAL_QUERY = [
   "WCCB Charlotte",
 ].join(" ");
 
+const CHICAGO_LOCAL_SOURCE_ALLOWLIST = [
+  "Chicago Tribune",
+  "WGN Chicago",
+  "WGN-TV",
+  "ABC7 Chicago",
+  "NBC Chicago",
+  "CBS Chicago",
+  "Fox 32 Chicago",
+  "Block Club Chicago",
+  "WBEZ Chicago",
+] as const;
+
+const CHICAGO_AREA_PLACE_NAMES = [
+  "chicago",
+  "evanston",
+  "oak park",
+  "naperville",
+  "aurora",
+  "joliet",
+  "schaumburg",
+  "waukegan",
+] as const;
+
+const CHICAGO_LOCAL_QUERY = [
+  "Chicago local news",
+  "Chicago Tribune",
+  "WGN Chicago",
+  "ABC7 Chicago",
+  "NBC Chicago",
+  "CBS Chicago",
+  "Fox 32 Chicago",
+  "Block Club Chicago",
+  "WBEZ Chicago",
+].join(" ");
+
 const NATIONAL_SOURCE_KEYWORDS = [
   "fox news",
   "cnn",
@@ -268,6 +303,11 @@ function isCharlotteAreaLocation(city?: string | null, state?: string | null, la
   return CHARLOTTE_AREA_PLACE_NAMES.some((placeName) => combined.includes(placeName));
 }
 
+function isChicagoAreaLocation(city?: string | null, state?: string | null, label?: string | null) {
+  const combined = normalizeLookupValue([city, state, label].filter(Boolean).join(" "));
+  return CHICAGO_AREA_PLACE_NAMES.some((placeName) => combined.includes(placeName));
+}
+
 function buildLocalNewsQuery(options?: {
   city?: string | null;
   state?: string | null;
@@ -279,6 +319,10 @@ function buildLocalNewsQuery(options?: {
 
   if (isCharlotteAreaLocation(city, state, label)) {
     return CHARLOTTE_LOCAL_QUERY;
+  }
+
+  if (isChicagoAreaLocation(city, state, label)) {
+    return CHICAGO_LOCAL_QUERY;
   }
 
   const fallbackLabel = label || [city, state].filter(Boolean).join(", ");
@@ -307,6 +351,7 @@ function scoreLocalArticle(article: Article, localQuery: string, localLocationLa
   const articleText = `${title} ${description} ${normalizeLookupValue(article.url)}`;
   const localTerms = getLocalSearchTerms(localQuery, localLocationLabel);
   const isCharlotteArea = isCharlotteAreaLocation(undefined, undefined, `${localLocationLabel} ${localQuery}`);
+  const isChicagoArea = isChicagoAreaLocation(undefined, undefined, `${localLocationLabel} ${localQuery}`);
   const articleAgeHours = article.publishedAt
     ? Math.max(0, (Date.now() - new Date(article.publishedAt).getTime()) / (1000 * 60 * 60))
     : 48;
@@ -340,6 +385,32 @@ function scoreLocalArticle(article: Article, localQuery: string, localLocationLa
       score -= 85;
     }
   } else {
+    if (isChicagoArea) {
+      const hasChicagoSource = CHICAGO_LOCAL_SOURCE_ALLOWLIST.some((source) =>
+        sourceName.includes(normalizeLookupValue(source))
+      );
+      const hasChicagoStorySignal =
+        /(chicago|illinois|cook county|evanston|oak park|naperville|aurora|joliet|schaumburg)/.test(
+          articleText
+        );
+
+      if (hasChicagoSource) {
+        score += 220;
+      }
+
+      if (hasChicagoStorySignal) {
+        score += 95;
+      }
+
+      if (
+        !hasChicagoSource &&
+        !hasChicagoStorySignal &&
+        NATIONAL_SOURCE_KEYWORDS.some((keyword) => sourceName.includes(keyword))
+      ) {
+        score -= 85;
+      }
+    }
+
     const hasLocationInSource = localTerms.some((term) => sourceName.includes(term));
     if (hasLocationInSource) {
       score += 48;
@@ -619,6 +690,7 @@ export default function Home() {
   const [localQuery, setLocalQuery] = useState("");
   const [localQueryDraft, setLocalQueryDraft] = useState("");
   const [localLocationLabel, setLocalLocationLabel] = useState("Regional news");
+  const [isLocalAutocompleteOpen, setIsLocalAutocompleteOpen] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -2437,18 +2509,14 @@ export default function Home() {
     const normalizedDraft = cleanDisplayText(localQueryDraft).trim().toLowerCase();
 
     if (normalizedDraft.length === 0) {
-      return LOCAL_CITY_SUGGESTIONS.slice(0, 8);
+      return [];
     }
 
     const startsWithMatches = LOCAL_CITY_SUGGESTIONS.filter((city) =>
       city.toLowerCase().startsWith(normalizedDraft)
     );
-    const partialMatches = LOCAL_CITY_SUGGESTIONS.filter(
-      (city) =>
-        city.toLowerCase().includes(normalizedDraft) && !startsWithMatches.includes(city)
-    );
 
-    return [...startsWithMatches, ...partialMatches].slice(0, 8);
+    return startsWithMatches.slice(0, 8);
   }, [localQueryDraft, sortMode]);
 
   const balancedTrendingArticles = useMemo(() => {
@@ -2983,47 +3051,66 @@ export default function Home() {
             </span>
           </div>
           <div className="local-feed-controls">
-            <input
-              className="search-input local-feed-input"
-              type="text"
-              placeholder="Enter a city or region"
-              value={localQueryDraft}
-              onChange={(event) => setLocalQueryDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void handleUpdateLocalQuery();
-                }
-              }}
-            />
+            <div className="local-feed-input-shell">
+              <input
+                className="search-input local-feed-input"
+                type="text"
+                placeholder="Enter a major city"
+                value={localQueryDraft}
+                onFocus={() => setIsLocalAutocompleteOpen(true)}
+                onBlur={() => {
+                  window.setTimeout(() => {
+                    setIsLocalAutocompleteOpen(false);
+                  }, 120);
+                }}
+                onChange={(event) => {
+                  setLocalQueryDraft(event.target.value);
+                  setIsLocalAutocompleteOpen(true);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    setIsLocalAutocompleteOpen(false);
+                    void handleUpdateLocalQuery();
+                  }
+                }}
+              />
+              {isLocalAutocompleteOpen && localCitySuggestions.length > 0 ? (
+                <div
+                  className="local-city-dropdown"
+                  role="listbox"
+                  aria-label="Suggested cities"
+                >
+                  {localCitySuggestions.map((city) => (
+                    <button
+                      key={city}
+                      type="button"
+                      className="local-city-dropdown-item"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        setLocalQueryDraft(city);
+                        setLocalLocationLabel(city);
+                        setLocalQuery(buildLocalNewsQuery({ label: city }));
+                        setIsLocalAutocompleteOpen(false);
+                      }}
+                    >
+                      {city}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <button
               type="button"
               className="button button-secondary local-feed-button"
               onClick={() => {
+                setIsLocalAutocompleteOpen(false);
                 void handleUpdateLocalQuery();
               }}
             >
               Update
             </button>
           </div>
-          {localCitySuggestions.length > 0 ? (
-            <div className="local-city-suggestions" role="listbox" aria-label="Suggested cities">
-              {localCitySuggestions.map((city) => (
-                <button
-                  key={city}
-                  type="button"
-                  className="local-city-suggestion"
-                  onClick={() => {
-                    setLocalQueryDraft(city);
-                    setLocalLocationLabel(city);
-                    setLocalQuery(buildLocalNewsQuery({ label: city }));
-                  }}
-                >
-                  {city}
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
       ) : null}
 

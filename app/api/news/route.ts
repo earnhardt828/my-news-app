@@ -347,6 +347,54 @@ const RSS_FEEDS: RssFeedConfig[] = [
     category: "Local News",
     tags: ["charlotte", "north carolina", "local"],
   },
+  {
+    url: "https://www.chicagotribune.com/feed/",
+    source: "Chicago Tribune",
+    category: "Local News",
+    tags: ["chicago", "illinois", "local"],
+  },
+  {
+    url: "https://wgntv.com/feed/",
+    source: "WGN Chicago",
+    category: "Local News",
+    tags: ["chicago", "illinois", "local"],
+  },
+  {
+    url: "https://abc7chicago.com/feed/",
+    source: "ABC7 Chicago",
+    category: "Local News",
+    tags: ["chicago", "illinois", "local"],
+  },
+  {
+    url: "https://www.nbcchicago.com/feed/",
+    source: "NBC Chicago",
+    category: "Local News",
+    tags: ["chicago", "illinois", "local"],
+  },
+  {
+    url: "https://www.cbsnews.com/chicago/latest/rss/main",
+    source: "CBS Chicago",
+    category: "Local News",
+    tags: ["chicago", "illinois", "local"],
+  },
+  {
+    url: "https://www.fox32chicago.com/rss",
+    source: "Fox 32 Chicago",
+    category: "Local News",
+    tags: ["chicago", "illinois", "local"],
+  },
+  {
+    url: "https://blockclubchicago.org/feed/",
+    source: "Block Club Chicago",
+    category: "Local News",
+    tags: ["chicago", "illinois", "local"],
+  },
+  {
+    url: "https://www.wbez.org/rss.xml",
+    source: "WBEZ Chicago",
+    category: "Local News",
+    tags: ["chicago", "illinois", "local"],
+  },
 ];
 
 const CHARLOTTE_LOCAL_SOURCES = [
@@ -359,6 +407,18 @@ const CHARLOTTE_LOCAL_SOURCES = [
   "wfae",
   "axios charlotte",
   "wccb charlotte",
+] as const;
+
+const CHICAGO_LOCAL_SOURCES = [
+  "chicago tribune",
+  "wgn chicago",
+  "wgn-tv",
+  "abc7 chicago",
+  "nbc chicago",
+  "cbs chicago",
+  "fox 32 chicago",
+  "block club chicago",
+  "wbez chicago",
 ] as const;
 
 const FALLBACK_ARTICLE_SEEDS = [
@@ -635,6 +695,13 @@ function isCharlotteQuery(query: string) {
   );
 }
 
+function isChicagoQuery(query: string) {
+  const normalized = query.trim().toLowerCase();
+  return /(chicago|cook county|evanston|oak park|naperville|aurora|joliet|schaumburg)/.test(
+    normalized
+  );
+}
+
 function getLocalMatchScore(article: NormalizedArticle, location: string) {
   const normalizedLocation = location.trim().toLowerCase();
   const articleText = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
@@ -667,6 +734,25 @@ function getLocalMatchScore(article: NormalizedArticle, location: string) {
         sourceName
       ) &&
       !/charlotte|north carolina|mecklenburg/.test(articleText)
+    ) {
+      score -= 45;
+    }
+  }
+
+  if (isChicagoQuery(normalizedLocation)) {
+    if (CHICAGO_LOCAL_SOURCES.some((source) => sourceName.includes(source))) {
+      score += 120;
+    }
+
+    if (/(chicago|illinois|cook county|evanston|oak park|naperville|aurora|joliet|schaumburg)/.test(articleText)) {
+      score += 70;
+    }
+
+    if (
+      /(fox news|cnn|reuters|associated press|ap news|nbc news|cbs news|abc news|newsmax)/.test(
+        sourceName
+      ) &&
+      !/chicago|illinois|cook county/.test(articleText)
     ) {
       score -= 45;
     }
@@ -1538,11 +1624,16 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
         });
 
   const feedsToFetch =
-    params.mode === "local" && isCharlotteQuery(params.location || params.query)
+    params.mode === "local" &&
+    (isCharlotteQuery(params.location || params.query) ||
+      isChicagoQuery(params.location || params.query))
       ? RSS_FEEDS.filter(
           (feed) =>
             feed.category === "Local News" ||
             CHARLOTTE_LOCAL_SOURCES.some((source) =>
+              feed.source.toLowerCase().includes(source)
+            ) ||
+            CHICAGO_LOCAL_SOURCES.some((source) =>
               feed.source.toLowerCase().includes(source)
             )
         )
