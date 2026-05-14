@@ -166,6 +166,9 @@ type TrendingFeedItem =
   | { type: "video"; key: string; video: VideoItem };
 
 const LOCAL_CITY_SUGGESTIONS = [
+  "Atlanta, GA",
+  "Austin, TX",
+  "Boston, MA",
   "Charlotte, NC",
   "Chicago, IL",
   "Chattanooga, TN",
@@ -691,6 +694,7 @@ export default function Home() {
   const [localQueryDraft, setLocalQueryDraft] = useState("");
   const [localLocationLabel, setLocalLocationLabel] = useState("Regional news");
   const [isLocalAutocompleteOpen, setIsLocalAutocompleteOpen] = useState(false);
+  const [localSearchStatus, setLocalSearchStatus] = useState<string | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1523,11 +1527,21 @@ export default function Home() {
 
   const handleUpdateLocalQuery = useCallback(async () => {
     const trimmedDraft = localQueryDraft.trim();
+    const resolveSupportedCity = (value: string) => {
+      const normalizedValue = cleanDisplayText(value).trim().toLowerCase();
+
+      return (
+        LOCAL_CITY_SUGGESTIONS.find(
+          (city) => city.trim().toLowerCase() === normalizedValue
+        ) ?? null
+      );
+    };
 
     if (!trimmedDraft) {
       setLocalLocationLabel("Regional news");
       setLocalQuery("United States local news");
       setLocalQueryDraft("United States local news");
+      setLocalSearchStatus(null);
       return;
     }
 
@@ -1561,9 +1575,19 @@ export default function Home() {
         const nextLabel = [city, state].filter(Boolean).join(", ");
 
         if (nextLabel) {
-          setLocalLocationLabel(nextLabel);
-          setLocalQuery(buildLocalNewsQuery({ city, state, label: nextLabel }));
-          setLocalQueryDraft(nextLabel);
+          const supportedCity = resolveSupportedCity(nextLabel);
+
+          if (supportedCity) {
+            setLocalLocationLabel(supportedCity);
+            setLocalQuery(buildLocalNewsQuery({ city, state, label: supportedCity }));
+            setLocalQueryDraft(supportedCity);
+            setLocalSearchStatus(null);
+            return;
+          }
+
+          setLocalSearchStatus(
+            "Choose a supported nearby metro area from the dropdown for stronger local coverage."
+          );
           return;
         }
       } catch (error) {
@@ -1571,9 +1595,19 @@ export default function Home() {
       }
     }
 
-    setLocalLocationLabel(trimmedDraft);
-    setLocalQuery(buildLocalNewsQuery({ label: trimmedDraft }));
-    setLocalQueryDraft(trimmedDraft);
+    const supportedCity = resolveSupportedCity(trimmedDraft);
+
+    if (!supportedCity) {
+      setLocalSearchStatus(
+        "Choose a supported nearby metro area from the dropdown for stronger local coverage."
+      );
+      return;
+    }
+
+    setLocalLocationLabel(supportedCity);
+    setLocalQuery(buildLocalNewsQuery({ label: supportedCity }));
+    setLocalQueryDraft(supportedCity);
+    setLocalSearchStatus(null);
   }, [localQueryDraft]);
 
   const createNotification = useCallback(
@@ -3065,6 +3099,7 @@ export default function Home() {
                 }}
                 onChange={(event) => {
                   setLocalQueryDraft(event.target.value);
+                  setLocalSearchStatus(null);
                   setIsLocalAutocompleteOpen(true);
                 }}
                 onKeyDown={(event) => {
@@ -3091,6 +3126,7 @@ export default function Home() {
                         setLocalQueryDraft(city);
                         setLocalLocationLabel(city);
                         setLocalQuery(buildLocalNewsQuery({ label: city }));
+                        setLocalSearchStatus(null);
                         setIsLocalAutocompleteOpen(false);
                       }}
                     >
@@ -3111,6 +3147,9 @@ export default function Home() {
               Update
             </button>
           </div>
+          {localSearchStatus ? (
+            <p className="settings-detail-note">{localSearchStatus}</p>
+          ) : null}
         </div>
       ) : null}
 
@@ -3147,6 +3186,8 @@ export default function Home() {
               ? "Couldn’t load stories."
               : sortMode === "my-feed"
               ? "No articles found"
+              : sortMode === "local"
+              ? "No strong local stories found yet"
               : "No stories yet"}
           </strong>
           <span>
@@ -3154,6 +3195,8 @@ export default function Home() {
               ? "Tap to retry."
               : sortMode === "my-feed"
               ? "Try adding more categories or check back when new stories land."
+              : sortMode === "local"
+              ? "Try another nearby major city to get stronger local coverage."
               : "Check back in a moment for fresh stories."}
           </span>
           {feedLoadError && sortMode === "trending" ? (

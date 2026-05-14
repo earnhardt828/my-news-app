@@ -524,7 +524,17 @@ export default function Profile() {
     setSignUpNotice("");
     setResendStatus(null);
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const trimmedIdentifier = email.trim();
+
+    if (!trimmedIdentifier || !trimmedIdentifier.includes("@")) {
+      setMessage("Enter a valid email to sign up.");
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedIdentifier,
+      password,
+    });
 
     if (error) {
       setMessage(error.message);
@@ -538,7 +548,7 @@ export default function Profile() {
     clearProfileState();
     setCurrentUser(null);
     setPassword("");
-    setPendingConfirmationEmail(email.trim());
+    setPendingConfirmationEmail(trimmedIdentifier);
     setResendCooldown(45);
     setSignUpNotice("Check your email to confirm your account.");
   };
@@ -548,7 +558,49 @@ export default function Profile() {
     setSignUpNotice("");
     setResendStatus(null);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const trimmedIdentifier = email.trim();
+
+    if (!trimmedIdentifier) {
+      setMessage("Enter your email or username.");
+      return;
+    }
+
+    let resolvedEmail = trimmedIdentifier;
+
+    if (!trimmedIdentifier.includes("@")) {
+      const { data: matchingProfiles, error: lookupError } = await supabase
+        .from("profiles")
+        .select("id, email, username")
+        .ilike("username", trimmedIdentifier);
+
+      if (lookupError) {
+        setMessage(lookupError.message ?? "Could not look up that username.");
+        return;
+      }
+
+      const matchedProfile = (matchingProfiles ?? []).find(
+        (profile) =>
+          (profile.username ?? "").trim().toLowerCase() ===
+          trimmedIdentifier.toLowerCase()
+      );
+
+      if (!matchedProfile) {
+        setMessage("Username not found.");
+        return;
+      }
+
+      if (!matchedProfile.email) {
+        setMessage("This username does not have a valid email on file.");
+        return;
+      }
+
+      resolvedEmail = matchedProfile.email;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: resolvedEmail,
+      password,
+    });
 
     if (error) {
       setMessage(error.message);
@@ -897,8 +949,8 @@ export default function Profile() {
             <div className="input-row">
               <input
                 className="input"
-                type="email"
-                placeholder="Email"
+                type="text"
+                placeholder="Email or username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -922,7 +974,15 @@ export default function Profile() {
             </div>
 
             {message || authFlashMessage ? (
-              <div className="chip chip-accent">{message || authFlashMessage}</div>
+              <div
+                className={
+                  (message || authFlashMessage) === "Username updated."
+                    ? "profile-inline-note"
+                    : "chip chip-accent"
+                }
+              >
+                {message || authFlashMessage}
+              </div>
             ) : null}
             {signUpNotice ? (
               <div className="status-message status-success">

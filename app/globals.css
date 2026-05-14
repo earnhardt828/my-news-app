@@ -3,24 +3,24 @@
 :root {
   --background: #f4f7fb;
   --foreground: #14213d;
-  --surface: rgba(255, 255, 255, 0.88);
+  --surface: rgba(255, 255, 255, 0.92);
   --surface-strong: #ffffff;
   --surface-muted: #eef3f9;
   --border: rgba(20, 33, 61, 0.1);
   --text-soft: #6a768f;
-  --accent: #ff4fd8;
-  --accent-strong: #d92db3;
-  --accent-secondary: #34d0eb;
-  --accent-faint: rgba(255, 79, 216, 0.14);
-  --shadow-soft: 0 22px 60px rgba(20, 33, 61, 0.1);
-  --body-top: #fff7fd;
-  --body-mid: #f8f5fb;
-  --body-bottom: #f5fbff;
+  --accent: #e34abb;
+  --accent-strong: #b93492;
+  --accent-secondary: #3cb3d2;
+  --accent-faint: rgba(227, 74, 187, 0.09);
+  --shadow-soft: 0 18px 42px rgba(20, 33, 61, 0.08);
+  --body-top: #fbfcff;
+  --body-mid: #f5f7fb;
+  --body-bottom: #eef3f9;
   --topbar-bg: rgba(244, 247, 251, 0.84);
   --topbar-border: rgba(255, 255, 255, 0.7);
   --nav-bg: rgba(255, 255, 255, 0.94);
   --nav-border: rgba(20, 33, 61, 0.08);
-  --nav-shadow: 0 18px 42px rgba(20, 33, 61, 0.12);
+  --nav-shadow: 0 10px 26px rgba(20, 33, 61, 0.1);
   --nav-link-color: #7f8aa1;
   --nav-link-hover-bg: rgba(20, 33, 61, 0.05);
   --nav-link-active-bg: rgba(255, 79, 216, 0.12);
@@ -43,8 +43,8 @@
   --theme-toggle-icon-bg: rgba(20, 33, 61, 0.08);
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(255, 79, 216, 0.07),
-    rgba(255, 159, 67, 0.05)
+    rgba(227, 74, 187, 0.035),
+    rgba(60, 179, 210, 0.025)
   );
 }
 
@@ -56,19 +56,19 @@
   --surface-muted: #182235;
   --border: rgba(186, 201, 231, 0.14);
   --text-soft: #99a6c0;
-  --accent: #ff4fd8;
-  --accent-strong: #ff95ea;
-  --accent-secondary: #34d0eb;
-  --accent-faint: rgba(255, 79, 216, 0.2);
-  --shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.34);
-  --body-top: #1c0c22;
+  --accent: #e86acc;
+  --accent-strong: #ffb1ef;
+  --accent-secondary: #45bfdc;
+  --accent-faint: rgba(232, 106, 204, 0.14);
+  --shadow-soft: 0 18px 46px rgba(0, 0, 0, 0.3);
+  --body-top: #14182a;
   --body-mid: #0d1526;
   --body-bottom: #09141f;
   --topbar-bg: rgba(12, 19, 35, 0.84);
   --topbar-border: rgba(186, 201, 231, 0.08);
   --nav-bg: rgba(18, 26, 43, 0.96);
   --nav-border: rgba(186, 201, 231, 0.08);
-  --nav-shadow: 0 22px 50px rgba(0, 0, 0, 0.34);
+  --nav-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
   --nav-link-color: #99a6c0;
   --nav-link-hover-bg: rgba(186, 201, 231, 0.08);
   --nav-link-active-bg: rgba(255, 79, 216, 0.22);
@@ -91,66 +91,66 @@
   --theme-toggle-icon-bg: rgba(186, 201, 231, 0.1);
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(255, 79, 216, 0.08),
-    rgba(52, 208, 235, 0.05)
+    rgba(232, 106, 204, 0.04),
+    rgba(69, 191, 220, 0.025)
   );
 }
 
 :root[data-weekday="monday"] {
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(255, 79, 216, 0.07),
-    rgba(255, 159, 67, 0.05)
+    rgba(227, 74, 187, 0.035),
+    rgba(255, 159, 67, 0.02)
   );
 }
 
 :root[data-weekday="tuesday"] {
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(52, 208, 235, 0.07),
-    rgba(150, 102, 255, 0.05)
+    rgba(60, 179, 210, 0.035),
+    rgba(150, 102, 255, 0.02)
   );
 }
 
 :root[data-weekday="wednesday"] {
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(72, 201, 176, 0.07),
-    rgba(52, 208, 235, 0.05)
+    rgba(72, 201, 176, 0.035),
+    rgba(60, 179, 210, 0.02)
   );
 }
 
 :root[data-weekday="thursday"] {
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(255, 214, 87, 0.07),
-    rgba(255, 79, 216, 0.05)
+    rgba(255, 214, 87, 0.03),
+    rgba(227, 74, 187, 0.02)
   );
 }
 
 :root[data-weekday="friday"] {
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(255, 79, 216, 0.08),
-    rgba(52, 208, 235, 0.05),
-    rgba(255, 214, 87, 0.04)
+    rgba(227, 74, 187, 0.04),
+    rgba(60, 179, 210, 0.02),
+    rgba(255, 214, 87, 0.015)
   );
 }
 
 :root[data-weekday="saturday"] {
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(150, 102, 255, 0.07),
-    rgba(52, 208, 235, 0.05)
+    rgba(150, 102, 255, 0.04),
+    rgba(60, 179, 210, 0.02)
   );
 }
 
 :root[data-weekday="sunday"] {
   --daily-gradient: linear-gradient(
     180deg,
-    rgba(255, 79, 216, 0.06),
-    rgba(52, 208, 235, 0.04),
-    rgba(255, 214, 87, 0.03)
+    rgba(227, 74, 187, 0.03),
+    rgba(60, 179, 210, 0.018),
+    rgba(255, 214, 87, 0.012)
   );
 }
 
@@ -191,7 +191,7 @@ input {
 
 .app-shell {
   min-height: 100vh;
-  padding: 0 0 calc(88px + env(safe-area-inset-bottom));
+  padding: 0 0 calc(80px + env(safe-area-inset-bottom));
 }
 
 .topbar {
@@ -4112,6 +4112,8 @@ input {
 .settings-detail-note {
   font-size: 0.92rem;
   line-height: 1.45;
+  margin: 0 0 2px;
+  color: var(--text-soft);
 }
 
 .settings-compact-form {
@@ -4829,16 +4831,17 @@ input {
 
 .bottom-nav {
   position: fixed;
-  left: 50%;
-  bottom: calc(14px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 30;
-  width: min(calc(100% - 24px), 760px);
-  padding: 10px;
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
-  border-radius: 24px;
+  border-radius: 22px 22px 0 0;
   background: var(--nav-bg);
   border: 1px solid var(--nav-border);
   box-shadow: var(--nav-shadow);
@@ -4880,6 +4883,18 @@ input {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
+.profile-inline-note {
+  align-self: flex-start;
+  margin: 4px 0 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-strong));
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -4894,7 +4909,7 @@ input {
 
 @media (min-width: 768px) {
   .app-shell {
-    padding-bottom: 120px;
+    padding-bottom: 112px;
   }
 
   .app-main {

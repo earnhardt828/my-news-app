@@ -116,6 +116,9 @@ export default function SettingsContactPage() {
               </div>
             ) : (
               <>
+                <p className="settings-detail-note">
+                  Current account email: {currentUser.email ?? "No email on file"}
+                </p>
                 <div className="input-row settings-compact-input-row">
                   <input
                     className="input settings-compact-input"
