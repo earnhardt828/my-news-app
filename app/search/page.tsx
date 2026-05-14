@@ -992,7 +992,7 @@ export default function Search() {
                 {userResults.map((user) => (
                   <Link
                     key={user.id}
-                    href={`/user/${encodeURIComponent(user.username ?? user.id)}`}
+                    href={`/user/${encodeURIComponent(user.username ?? user.id)}/`}
                     className="section-card search-user-card"
                     onClick={() => {
                       console.log("CLICKED USER", user);
@@ -1040,7 +1040,7 @@ export default function Search() {
             <div className="search-results-section">
               <p className="search-results-section-heading">Sources</p>
               <Link
-                href={`/source/${slugifySourceName(matchedSourceName)}`}
+                href={`/source/${slugifySourceName(matchedSourceName)}/`}
                 className="section-card search-source-card"
               >
                 <div className="search-source-card-row">
@@ -1142,7 +1142,7 @@ export default function Search() {
                     return (
                       <Link
                         key={article.id}
-                        href={`/article/${article.id}`}
+                        href={`/article/${article.id}/`}
                         className="section-card search-result-card"
                       >
                         <div className="search-result-layout">
@@ -1154,7 +1154,7 @@ export default function Search() {
                                 onClick={(event) => {
                                   event.preventDefault();
                                   event.stopPropagation();
-                                  router.push(`/source/${slugifySourceName(safeSourceName)}`);
+                                  router.push(`/source/${slugifySourceName(safeSourceName)}/`);
                                 }}
                               >
                                 <div className="trending-source-brand">

@@ -120,7 +120,7 @@ export default function ProfileBookmarksPage() {
             {savedArticles.map((article) => (
               <Link
                 key={article.id}
-                href={`/article/${article.article_id}`}
+                href={`/article/${article.article_id}/`}
                 className="comment-card profile-saved-article-card"
               >
                 <div className="profile-saved-article-copy">
@@ -134,7 +134,7 @@ export default function ProfileBookmarksPage() {
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        router.push(`/source/${slugifySourceName(article.source)}`);
+                        router.push(`/source/${slugifySourceName(article.source)}/`);
                       }}
                     >
                       {article.source}

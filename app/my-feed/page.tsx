@@ -450,7 +450,7 @@ export default function MyFeed() {
                 return (
                   <article className="news-card">
                     <Link
-                      href={`/source/${slugifySourceName(article.source)}`}
+                      href={`/source/${slugifySourceName(article.source)}/`}
                       className="source-trigger source-trigger-tight my-feed-source-trigger"
                       onClick={(event) => {
                         event.stopPropagation();
@@ -461,7 +461,7 @@ export default function MyFeed() {
                         <span className="trending-source-name">{article.source}</span>
                       </div>
                     </Link>
-                    <Link href={`/article/${article.id}`} className="article-link">
+                    <Link href={`/article/${article.id}/`} className="article-link">
                       <div
                         className={`news-card-body ${
                           shouldUseHeroImage

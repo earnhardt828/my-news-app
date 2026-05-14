@@ -146,7 +146,7 @@ export default function SourceRankingsPage() {
           {rankedSources.map((source, index) => (
             <Link
               key={source.sourceName}
-              href={`/source/${slugifySourceName(source.sourceName)}`}
+              href={`/source/${slugifySourceName(source.sourceName)}/`}
               className="source-rankings-row"
             >
               <span className="source-rankings-rank">#{index + 1}</span>

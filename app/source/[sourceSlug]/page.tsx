@@ -416,7 +416,7 @@ export default function SourcePage({
           {articles.map((article) => (
             <Link
               key={article.id}
-              href={`/article/${article.id}`}
+              href={`/article/${article.id}/`}
               className="section-card search-result-card"
             >
               <div className="search-result-source-row">

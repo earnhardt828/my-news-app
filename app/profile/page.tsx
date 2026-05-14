@@ -1093,7 +1093,7 @@ export default function Profile() {
                 </div>
                 <div className="profile-meta-row">
                   <span className="chip">{categories.length} categories selected</span>
-                  <Link href={`/user/${currentUserId}`} className="chip chip-accent">
+                  <Link href={`/user/${currentUserId}/`} className="chip chip-accent">
                     View public profile
                   </Link>
                 </div>

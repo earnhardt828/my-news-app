@@ -2514,7 +2514,15 @@ export default function Home() {
       return displayedArticles;
     }
 
-    return [...displayedArticles].sort((leftArticle, rightArticle) => {
+    const locallyRelevantArticles = [...displayedArticles].filter((article) => {
+      if (!localQuery.trim()) {
+        return true;
+      }
+
+      return scoreLocalArticle(article, localQuery, localLocationLabel) >= 110;
+    });
+
+    return locallyRelevantArticles.sort((leftArticle, rightArticle) => {
       const scoreDifference =
         scoreLocalArticle(rightArticle, localQuery, localLocationLabel) -
         scoreLocalArticle(leftArticle, localQuery, localLocationLabel);
@@ -2758,7 +2766,7 @@ export default function Home() {
           <div className="news-card-top-row news-card-top-row-brand">
             <div className="trending-source-stack trending-source-stack-primary">
               <Link
-                href={`/source/${slugifySourceName(safeSourceName)}`}
+                href={`/source/${slugifySourceName(safeSourceName)}/`}
                 className="source-trigger source-trigger-tight trending-source-button"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -2781,7 +2789,7 @@ export default function Home() {
               ) : null}
             </div>
           </div>
-          <Link href={`/article/${article.id}`} className="article-link">
+          <Link href={`/article/${article.id}/`} className="article-link">
             {shouldUseLargeImage ? (
               <div className="news-card-body news-card-body-with-hero">
                 <div className="news-card-copy">
@@ -2895,7 +2903,7 @@ export default function Home() {
               <button
                 className="icon-action-pill icon-action-pill-ghost"
                 onClick={() => {
-                  router.push(`/article/${article.id}#comments`);
+                  router.push(`/article/${article.id}/#comments`);
                 }}
                 aria-label="Open article comments"
               >
@@ -2964,7 +2972,7 @@ export default function Home() {
               </span>
             </div>
           </div>
-          <Link href={`/article/${article.id}`} className="article-link">
+          <Link href={`/article/${article.id}/`} className="article-link">
             <div className="news-card-body news-card-body-text-only">
               <div className="news-card-copy">
                 <h3 className="trending-article-title">{cleanDisplayText(article.title)}</h3>
@@ -3007,8 +3015,8 @@ export default function Home() {
             isAutoplaying={autoplayTrendingVideoId === item.video.id && !item.video.fallback}
             onToggleLike={handleToggleVideoLike}
             onToggleSave={handleToggleVideoSave}
-            onOpenComments={(videoId) => router.push(`/video/${videoId}#comments`)}
-            onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
+            onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+            onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
             frameRef={(node) => {
               trendingVideoFrameRefs.current[item.video.id] = node;
             }}
@@ -3457,7 +3465,7 @@ export default function Home() {
                       <div className="comment-header">
                         {comment.user_id ? (
                           <Link
-                            href={`/user/${comment.user_id}`}
+                            href={`/user/${comment.user_id}/`}
                             className="comment-user-link"
                           >
                             <span className="comment-user-avatar">
@@ -3495,7 +3503,7 @@ export default function Home() {
                               <div className="comment-header">
                                 {reply.user_id ? (
                                   <Link
-                                    href={`/user/${reply.user_id}`}
+                                    href={`/user/${reply.user_id}/`}
                                     className="comment-user-link"
                                   >
                                     <span className="comment-user-avatar">

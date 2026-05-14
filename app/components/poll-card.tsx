@@ -33,7 +33,7 @@ export default function PollCard({
   const showResults = hasVoted || !onVote;
   const rootClassName = `news-card poll-card ${rankLabel ? "news-card-has-rank" : ""} ${className}`.trim();
   const handleOpenPoll = () => {
-    router.push(`/poll/${poll.id}`);
+    router.push(`/poll/${poll.id}/`);
   };
 
   return (

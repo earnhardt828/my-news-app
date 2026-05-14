@@ -34,7 +34,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: "/videos",
+    href: "/videos/",
     label: "Videos",
     icon: (
       <svg {...iconProps}>
@@ -44,7 +44,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: "/search",
+    href: "/search/",
     label: "Search",
     icon: (
       <svg {...iconProps}>
@@ -54,7 +54,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: "/profile",
+    href: "/profile/",
     label: "Profile",
     icon: (
       <svg {...iconProps}>
@@ -64,7 +64,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: "/settings",
+    href: "/settings/",
     label: "Settings",
     icon: (
       <svg {...iconProps}>

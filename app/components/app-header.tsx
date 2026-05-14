@@ -366,7 +366,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close source page"
-          onClick={() => closeTo("/search")}
+          onClick={() => closeTo("/search/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -385,7 +385,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close user profile"
-          onClick={() => closeTo("/search")}
+          onClick={() => closeTo("/search/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -442,7 +442,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close categories"
-          onClick={() => closeTo("/profile")}
+          onClick={() => closeTo("/profile/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -461,7 +461,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close bookmarks"
-          onClick={() => closeTo("/profile")}
+          onClick={() => closeTo("/profile/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -480,7 +480,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close comments"
-          onClick={() => closeTo("/profile")}
+          onClick={() => closeTo("/profile/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -499,7 +499,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close create poll"
-          onClick={() => closeTo("/profile")}
+          onClick={() => closeTo("/profile/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -537,7 +537,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close contact info"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -556,7 +556,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close change username"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -575,7 +575,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close about page"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -594,7 +594,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close contact page"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -613,7 +613,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close blocked users"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -632,7 +632,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close report abuse"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -651,7 +651,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close privacy page"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -670,7 +670,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close terms page"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -689,7 +689,7 @@ export default function AppHeader() {
           type="button"
           className="article-close-button app-header-article-close"
           aria-label="Close community guidelines page"
-          onClick={() => closeTo("/settings")}
+          onClick={() => closeTo("/settings/")}
         >
           <span aria-hidden="true">×</span>
         </button>
@@ -703,13 +703,7 @@ export default function AppHeader() {
 
   if (pathname !== "/") {
     if (pathname === "/videos") {
-      return (
-        <div className="app-header-title-wrap app-header-title-wrap-center app-header-videos-wrap">
-          <span className="app-header-side-spacer" aria-hidden="true" />
-          <h1 className="brand-title app-header-videos-title">Videos</h1>
-          <span className="app-header-side-spacer" aria-hidden="true" />
-        </div>
-      );
+      return null;
     }
 
     if (pathname === "/search") {
@@ -726,7 +720,7 @@ export default function AppHeader() {
       return (
         <div className="app-header-title-wrap app-header-title-wrap-center">
           <Link
-            href="/profile/bookmarks"
+            href="/profile/bookmarks/"
             className="header-icon-button"
             aria-label="Open bookmarked articles"
           >
@@ -747,7 +741,7 @@ export default function AppHeader() {
           </Link>
           <h1 className="brand-title">Profile</h1>
           <Link
-            href="/notifications"
+            href="/notifications/"
             className="header-icon-button"
             aria-label="Open notifications"
           >
@@ -792,7 +786,7 @@ export default function AppHeader() {
   return (
     <div className="app-header-logo-wrap">
       <Link
-        href="/source-rankings"
+        href="/source-rankings/"
         className="header-icon-button"
         aria-label="Open source rankings"
       >
@@ -836,7 +830,7 @@ export default function AppHeader() {
           className="category-launch-button"
           aria-label="Create poll"
           onClick={() => {
-            router.push("/profile/polls/new");
+            router.push("/profile/polls/new/");
           }}
         >
           +
