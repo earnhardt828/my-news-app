@@ -163,16 +163,37 @@ type PaginatedNewsResponse = {
 
 type TrendingFeedItem =
   | { type: "article"; key: string; article: Article }
-  | { type: "video"; key: string; video: VideoItem }
-  | { type: "category-section"; key: string; title: string; articles: Article[] };
+  | { type: "video"; key: string; video: VideoItem };
 
-const TRENDING_CATEGORY_RAILS = [
-  "Politics",
-  "Sports",
-  "Business",
-  "Tech",
-  "Entertainment",
-  "World",
+const LOCAL_CITY_SUGGESTIONS = [
+  "Charlotte, NC",
+  "Chicago, IL",
+  "Chattanooga, TN",
+  "Charleston, SC",
+  "Cincinnati, OH",
+  "Cleveland, OH",
+  "Columbus, OH",
+  "Columbia, SC",
+  "Colorado Springs, CO",
+  "Corpus Christi, TX",
+  "Dallas, TX",
+  "Denver, CO",
+  "Detroit, MI",
+  "Houston, TX",
+  "Jacksonville, FL",
+  "Kansas City, MO",
+  "Los Angeles, CA",
+  "Miami, FL",
+  "Nashville, TN",
+  "New York, NY",
+  "Philadelphia, PA",
+  "Phoenix, AZ",
+  "Raleigh, NC",
+  "Richmond, VA",
+  "San Diego, CA",
+  "San Francisco, CA",
+  "Seattle, WA",
+  "Washington, DC",
 ] as const;
 
 const CHARLOTTE_LOCAL_SOURCE_ALLOWLIST = [
@@ -2408,6 +2429,27 @@ export default function Home() {
   }, [displayedArticles, localLocationLabel, localQuery, sortMode]);
 
   const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
+  const localCitySuggestions = useMemo(() => {
+    if (sortMode !== "local") {
+      return [] as string[];
+    }
+
+    const normalizedDraft = cleanDisplayText(localQueryDraft).trim().toLowerCase();
+
+    if (normalizedDraft.length === 0) {
+      return LOCAL_CITY_SUGGESTIONS.slice(0, 8);
+    }
+
+    const startsWithMatches = LOCAL_CITY_SUGGESTIONS.filter((city) =>
+      city.toLowerCase().startsWith(normalizedDraft)
+    );
+    const partialMatches = LOCAL_CITY_SUGGESTIONS.filter(
+      (city) =>
+        city.toLowerCase().includes(normalizedDraft) && !startsWithMatches.includes(city)
+    );
+
+    return [...startsWithMatches, ...partialMatches].slice(0, 8);
+  }, [localQueryDraft, sortMode]);
 
   const balancedTrendingArticles = useMemo(() => {
     if (sortMode !== "trending") {
@@ -2523,31 +2565,6 @@ export default function Home() {
 
       insertedVideos += 1;
     }
-
-    const availableSections = TRENDING_CATEGORY_RAILS.map((category) => {
-      const sectionArticles = balancedTrendingArticles.filter((article) => {
-        const normalizedCategory = getSafeCategoryLabel(article.category, article).toLowerCase();
-        return normalizedCategory === category.toLowerCase();
-      });
-
-      return {
-        title: category,
-        articles: sectionArticles.slice(0, 5),
-      };
-    }).filter((section) => section.articles.length >= 3);
-
-    let nextInsertAt = 10;
-
-    availableSections.slice(0, 3).forEach((section) => {
-      const insertAt = Math.min(nextInsertAt, items.length);
-      items.splice(insertAt, 0, {
-        type: "category-section",
-        key: `category-section:${section.title.toLowerCase()}`,
-        title: section.title,
-        articles: section.articles,
-      });
-      nextInsertAt += 11;
-    });
 
     return items;
   }, [balancedTrendingArticles, sortMode, videos]);
@@ -2866,65 +2883,6 @@ export default function Home() {
 
   const renderTrendingFeedItem = (item: TrendingFeedItem, rankedIndex: number) => {
     try {
-      if (item.type === "category-section") {
-        return (
-          <section className="category-rail-shell" aria-label={`${item.title} stories`}>
-            <div className="category-rail-header">
-              <strong className="category-rail-title">{item.title}</strong>
-            </div>
-            <div className="category-rail-track">
-              {item.articles.map((article) => {
-                const safeSourceName = getSafeSourceLabel(article.source);
-                const selectedImage = getBestArticleImage(article);
-                const imageSrc = selectedImage.src;
-                const imageFailureKey = imageSrc ? `rail:${article.id}:${imageSrc}` : `rail:${article.id}:none`;
-                const shouldShowImage =
-                  Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
-
-                return (
-                  <Link
-                    key={`rail-article:${article.id}`}
-                    href={`/article/${article.id}`}
-                    className="category-rail-card"
-                  >
-                    {shouldShowImage ? (
-                      <div className="category-rail-image-shell">
-                        <img
-                          src={imageSrc as string}
-                          alt={cleanDisplayText(article.title)}
-                          className="category-rail-image"
-                          loading="lazy"
-                          decoding="async"
-                          onError={() => {
-                            setFailedArticleImages((prev) => {
-                              if (prev[imageFailureKey]) {
-                                return prev;
-                              }
-
-                              return {
-                                ...prev,
-                                [imageFailureKey]: true,
-                              };
-                            });
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                    <div className="category-rail-copy">
-                      <div className="trending-source-brand">
-                        <SourceBadge sourceName={safeSourceName} />
-                        <span className="trending-source-name">{safeSourceName}</span>
-                      </div>
-                      <h3 className="category-rail-card-title">{cleanDisplayText(article.title)}</h3>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        );
-      }
-
       if (item.type === "article") {
         if (!item.article?.id || !item.article?.title) {
           console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed article item"));
@@ -3048,6 +3006,24 @@ export default function Home() {
               Update
             </button>
           </div>
+          {localCitySuggestions.length > 0 ? (
+            <div className="local-city-suggestions" role="listbox" aria-label="Suggested cities">
+              {localCitySuggestions.map((city) => (
+                <button
+                  key={city}
+                  type="button"
+                  className="local-city-suggestion"
+                  onClick={() => {
+                    setLocalQueryDraft(city);
+                    setLocalLocationLabel(city);
+                    setLocalQuery(buildLocalNewsQuery({ label: city }));
+                  }}
+                >
+                  {city}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -3120,9 +3096,7 @@ export default function Home() {
                 let rankedItemIndex = -1;
 
                 return trendingRenderItems.map((item, index) => {
-                  if (item.type !== "category-section") {
-                    rankedItemIndex += 1;
-                  }
+                  rankedItemIndex += 1;
 
                 const itemKey =
                   item.type === "article"
