@@ -57,6 +57,23 @@ type DbSourceRating = {
   rating: "like" | "dislike";
 };
 
+function dedupeFeedArticles(articles: Omit<FeedArticle, "saved">[]) {
+  const seen = new Set<string>();
+
+  return articles.filter((article) => {
+    const key = `${(article.url ?? "").trim().toLowerCase()}::${cleanDisplayText(article.title)
+      .trim()
+      .toLowerCase()}`;
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
 export default function MyFeed() {
   const [articles, setArticles] = useState<FeedArticle[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -113,20 +130,30 @@ export default function MyFeed() {
       setCategories(userCategories);
       setPreferredSources(profile?.preferred_sources ?? []);
       setShowLessSources(profile?.show_less_sources ?? []);
-
-      const categoryQuery = userCategories.join(",");
-      const personalizedPath = categoryQuery
-        ? `/api/news?mode=myfeed&category=${encodeURIComponent(categoryQuery)}&pageSize=40`
-        : "/api/news?mode=myfeed&pageSize=40";
+      console.log("MY FEED CATEGORIES", userCategories);
       const fallbackPath = "/api/news?mode=trending&pageSize=30";
 
-      const personalizedRes = await apiFetch(personalizedPath);
-      const personalizedPayload = (await personalizedRes.json()) as
-        | { articles?: Omit<FeedArticle, "saved">[] }
-        | Omit<FeedArticle, "saved">[];
-      const personalizedNews = Array.isArray(personalizedPayload)
-        ? personalizedPayload
-        : (personalizedPayload.articles ?? []);
+      const categoryResponses = await Promise.allSettled(
+        userCategories.map(async (category) => {
+          const response = await apiFetch(
+            `/api/news?mode=myfeed&category=${encodeURIComponent(category)}&pageSize=18`
+          );
+
+          if (!response.ok) {
+            throw new Error(`Could not load category ${category} (${response.status})`);
+          }
+
+          const payload = (await response.json()) as
+            | { articles?: Omit<FeedArticle, "saved">[] }
+            | Omit<FeedArticle, "saved">[];
+
+          return Array.isArray(payload) ? payload : (payload.articles ?? []);
+        })
+      );
+
+      const personalizedNews = categoryResponses.flatMap((result) =>
+        result.status === "fulfilled" ? result.value : []
+      );
 
       const [
         { data: savedArticlesData },
@@ -213,6 +240,8 @@ export default function MyFeed() {
         }
       }
 
+      filtered = dedupeFeedArticles(filtered);
+
       const ranked = rankArticlesWithSourcePreferences(
         filtered.map((article) => ({
           ...article,
@@ -232,6 +261,7 @@ export default function MyFeed() {
       );
 
       setArticles(ranked);
+      console.log("MY FEED ARTICLES COUNT", ranked.length);
       setIsLoading(false);
     }
 

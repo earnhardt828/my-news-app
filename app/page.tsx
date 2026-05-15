@@ -671,6 +671,27 @@ function mergeArticlesByIdentity(existing: Article[], incoming: Article[]) {
   return merged;
 }
 
+function dedupeFeedArticlePayloads(
+  existing: FeedArticlePayload[],
+  incoming: FeedArticlePayload[]
+) {
+  const merged = [...existing];
+  const existingKeys = new Set(existing.map((article) => getArticleDeduplicationKey(article)));
+
+  incoming.forEach((article) => {
+    const dedupeKey = getArticleDeduplicationKey(article);
+
+    if (existingKeys.has(dedupeKey)) {
+      return;
+    }
+
+    existingKeys.add(dedupeKey);
+    merged.push(article);
+  });
+
+  return merged;
+}
+
 function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
   if (Array.isArray(payload)) {
     return {
@@ -790,6 +811,7 @@ export default function Home() {
   const [localLocationLabel, setLocalLocationLabel] = useState("Regional news");
   const [isLocalAutocompleteOpen, setIsLocalAutocompleteOpen] = useState(false);
   const [localSearchStatus, setLocalSearchStatus] = useState<string | null>(null);
+  const [isLocalAreaLoading, setIsLocalAreaLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -820,6 +842,7 @@ export default function Home() {
     console.log("LOADING STATE", isLoading);
   }, [articles.length, isLoading]);
 
+
   const feedMode: "trending" | "latest" | "myfeed" | "local" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
@@ -840,6 +863,15 @@ export default function Home() {
     sortMode === "my-feed" ? categories.join("|") : "__ignore-categories__";
   const isMyFeedWithoutCategories =
     sortMode === "my-feed" && categories.length === 0;
+  const selectedLocalCity = useMemo(
+    () =>
+      resolveSupportedMetroCity({
+        label: localLocationLabel,
+        city: localQueryDraft,
+        state: localQuery,
+      }),
+    [localLocationLabel, localQuery, localQueryDraft]
+  );
 
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
@@ -860,7 +892,11 @@ export default function Home() {
     }
 
     if (replace) {
-      setIsLoading(true);
+      if (feedMode === "local") {
+        setIsLocalAreaLoading(true);
+      } else {
+        setIsLoading(true);
+      }
       setFeedLoadError(null);
       setIsInitialFeedLoading(feedMode === "trending" && pageToLoad === 1);
       if (typeof window !== "undefined") {
@@ -975,9 +1011,16 @@ export default function Home() {
       }
 
       let newsPath = "";
+      let newsPayload: PaginatedNewsResponse | null = null;
 
       if (feedMode === "local") {
-        const localSearchQuery = localQuery.trim() || "United States local news";
+        if (!selectedLocalCity && !localQuery.trim()) {
+          setIsLocalAreaLoading(false);
+          return;
+        }
+
+        const localSearchQuery =
+          localQuery.trim() || buildLocalNewsQuery({ label: selectedLocalCity ?? localLocationLabel });
         const params = new URLSearchParams({
           mode: "local",
           location: localSearchQuery,
@@ -998,33 +1041,103 @@ export default function Home() {
 
         newsPath = `/api/news?${params.toString()}`;
       }
-      const newsUrl = buildApiUrl(newsPath);
-      console.log("TRENDING FETCH URL", newsUrl);
 
-      const articleFetchController =
-        replace && typeof AbortController !== "undefined" ? new AbortController() : null;
+      if (feedMode === "myfeed" && requestCategories.length > 0) {
+        const perCategoryPageSize = Math.max(
+          8,
+          Math.ceil(FEED_PAGE_SIZE / Math.min(requestCategories.length, 3))
+        );
+        const categoryResponses = await Promise.allSettled(
+          requestCategories.map(async (category) => {
+            const params = new URLSearchParams({
+              mode: "myfeed",
+              category,
+              page: String(pageToLoad),
+              pageSize: String(perCategoryPageSize),
+            });
+            const response = await apiFetch(`/api/news?${params.toString()}`);
 
-      if (replace && typeof window !== "undefined" && articleFetchController) {
-        articleFetchTimeoutId = window.setTimeout(() => {
-          articleFetchController.abort();
-        }, INITIAL_FEED_TIMEOUT_MS);
+            if (!response.ok) {
+              throw new Error(`My Feed category request failed for ${category} (${response.status})`);
+            }
+
+            return normalizeNewsPayload(
+              (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+            );
+          })
+        );
+
+        const mergedCategoryArticles = categoryResponses.flatMap((result) =>
+          result.status === "fulfilled" ? result.value.articles : []
+        );
+        const hasCategoryError = categoryResponses.some((result) => result.status === "rejected");
+
+        const dedupedCategoryArticles = dedupeFeedArticlePayloads([], mergedCategoryArticles);
+
+        let fallbackArticles: FeedArticlePayload[] = [];
+        let fallbackHasMore = false;
+
+        if (dedupedCategoryArticles.length < FEED_PAGE_SIZE) {
+          const fallbackResponse = await apiFetch(
+            `/api/news?mode=latest&page=${pageToLoad}&pageSize=${FEED_PAGE_SIZE}`
+          );
+
+          if (fallbackResponse.ok) {
+            const fallbackPayload = normalizeNewsPayload(
+              (await fallbackResponse.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+            );
+            fallbackArticles = fallbackPayload.articles;
+            fallbackHasMore = fallbackPayload.hasMore;
+          }
+        }
+
+        const mergedArticles = dedupeFeedArticlePayloads(
+          dedupedCategoryArticles,
+          fallbackArticles
+        );
+
+        newsPayload = {
+          articles: mergedArticles,
+          nextPage: pageToLoad + 1,
+          page: pageToLoad,
+          pageSize: FEED_PAGE_SIZE,
+          hasMore:
+            fallbackHasMore ||
+            dedupedCategoryArticles.length >= FEED_PAGE_SIZE ||
+            hasCategoryError,
+        };
+        console.log("MY FEED CATEGORIES", requestCategories);
+        console.log("MY FEED ARTICLES COUNT", newsPayload.articles.length);
+      } else {
+        const newsUrl = buildApiUrl(newsPath);
+        console.log("TRENDING FETCH URL", newsUrl);
+
+        const articleFetchController =
+          replace && typeof AbortController !== "undefined" ? new AbortController() : null;
+
+        if (replace && typeof window !== "undefined" && articleFetchController) {
+          articleFetchTimeoutId = window.setTimeout(() => {
+            articleFetchController.abort();
+          }, INITIAL_FEED_TIMEOUT_MS);
+        }
+
+        const newsRes = await apiFetch(newsPath, {
+          signal: articleFetchController?.signal,
+        });
+
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        if (!newsRes.ok) {
+          throw new Error(`Home feed request failed with status ${newsRes.status}`);
+        }
+
+        newsPayload = normalizeNewsPayload(
+          (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+        );
       }
 
-      const newsRes = await apiFetch(newsPath, {
-        signal: articleFetchController?.signal,
-      });
-
-      if (!isCurrentRequest()) {
-        return;
-      }
-
-      if (!newsRes.ok) {
-        throw new Error(`Home feed request failed with status ${newsRes.status}`);
-      }
-
-      const newsPayload = normalizeNewsPayload(
-        (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse
-      );
       console.log("NEWS API DATA", newsPayload);
       console.log("TRENDING FETCH RESPONSE", newsPayload);
 
@@ -1032,7 +1145,7 @@ export default function Home() {
         return;
       }
 
-      const newsData = newsPayload.articles;
+      const newsData = newsPayload?.articles ?? [];
       hasLiveNewsResponse = true;
       console.log("NEWS API ARTICLE COUNT", newsData.length);
       console.log("FIRST ARTICLE IMAGE FIELDS", {
@@ -1253,7 +1366,7 @@ export default function Home() {
             : "Showing the last loaded stories while we retry."
           : null
       );
-      setHasMoreArticles(receivedFallbackFeed ? false : newsPayload.hasMore);
+      setHasMoreArticles(receivedFallbackFeed ? false : (newsPayload?.hasMore ?? false));
       setFeedPage(pageToLoad);
       setArticles((prev) => {
         const nextArticles =
@@ -1268,12 +1381,16 @@ export default function Home() {
           writeCachedFeedPayload(feedCacheKey, {
             articles: nextArticles,
             page: pageToLoad,
-            hasMore: receivedFallbackFeed ? false : newsPayload.hasMore,
+            hasMore: receivedFallbackFeed ? false : (newsPayload?.hasMore ?? false),
             savedAt: new Date().toISOString(),
           });
         }
         return nextArticles;
       });
+      if (feedMode === "local") {
+        console.log("LOCAL SELECTED CITY", selectedLocalCity ?? localLocationLabel);
+        console.log("LOCAL ARTICLES COUNT", newsData.length);
+      }
       if (replace) {
         setIsInitialFeedLoading(false);
       }
@@ -1326,11 +1443,12 @@ export default function Home() {
       }
 
       isFetchingNextPageRef.current = false;
+      setIsLocalAreaLoading(false);
       console.log("SETTING LOADING FALSE");
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
-  }, [feedMode, localLocationLabel, localQuery, sortMode]);
+  }, [feedMode, localLocationLabel, localQuery, selectedLocalCity, sortMode]);
 
   const handleRetryFeedLoad = useCallback(() => {
     void loadFeedPage(1, { replace: true });
@@ -2708,6 +2826,20 @@ export default function Home() {
   }, [displayedArticles, localLocationLabel, localQuery, sortMode]);
 
   const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
+
+  useEffect(() => {
+    if (sortMode === "local") {
+      console.log("LOCAL SELECTED CITY", selectedLocalCity ?? localLocationLabel);
+      console.log("LOCAL ARTICLES COUNT", visibleArticles.length);
+    }
+  }, [localLocationLabel, selectedLocalCity, sortMode, visibleArticles.length]);
+
+  useEffect(() => {
+    if (sortMode === "my-feed") {
+      console.log("MY FEED CATEGORIES", categories);
+      console.log("MY FEED ARTICLES COUNT", visibleArticles.length);
+    }
+  }, [categories, sortMode, visibleArticles.length]);
   const localCitySuggestions = useMemo(() => {
     if (sortMode !== "local") {
       return [] as string[];
@@ -3443,26 +3575,9 @@ export default function Home() {
           {localSearchStatus ? (
             <p className="settings-detail-note">{localSearchStatus}</p>
           ) : null}
-        </div>
-      ) : null}
-
-      {sortMode === "my-feed" ? (
-        <div className="section-card stack">
-          <strong>Following</strong>
-          {categories.length === 0 ? (
-            <div className="empty-state">
-              <strong>No categories selected</strong>
-              <span>Go to Profile and pick categories to personalize this feed.</span>
-            </div>
-          ) : (
-            <div className="category-grid">
-              {categories.map((category) => (
-                <span key={category} className="chip chip-accent">
-                  {getCategoryLabel(category)}
-                </span>
-              ))}
-            </div>
-          )}
+          {isLocalAreaLoading ? (
+            <p className="settings-detail-note">Loading local stories...</p>
+          ) : null}
         </div>
       ) : null}
 

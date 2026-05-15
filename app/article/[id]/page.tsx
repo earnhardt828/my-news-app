@@ -644,6 +644,8 @@ function sortComments(
 
 function buildSummaryItems(
   title: string,
+  source?: string | null,
+  category?: string | null,
   description?: string | null,
   content?: string | null
 ): SummaryItem[] {
@@ -708,11 +710,34 @@ function buildSummaryItems(
       uniquePoints[0].charAt(0).toUpperCase() + uniquePoints[0].slice(1);
   }
 
-  const labels = ["Key point", "Why it matters", "Context"];
   const emojiLabels = ["🧠 Key point", "⚠️ Why it matters", "📍 Context"];
+  const groupedPoints: string[] = [];
 
-  return uniquePoints
-    .slice(0, labels.length)
+  if (uniquePoints.length > 0) {
+    groupedPoints.push(uniquePoints.slice(0, 2).join(" ").trim());
+  }
+
+  if (uniquePoints.length > 2) {
+    groupedPoints.push(uniquePoints.slice(2, 4).join(" ").trim());
+  }
+
+  const normalizedSource = cleanDisplayText(source ?? "").trim();
+  const normalizedCategory = cleanDisplayText(category ?? "").trim();
+  const contextualSentence = cleanSummarySentence(
+    [
+      normalizedSource ? `This reporting comes from ${normalizedSource}` : "",
+      normalizedCategory ? `and is categorized as ${normalizedCategory}` : "",
+    ]
+      .join(" ")
+      .trim()
+  );
+
+  if (contextualSentence) {
+    groupedPoints.push(contextualSentence);
+  }
+
+  return groupedPoints
+    .slice(0, emojiLabels.length)
     .map((text, index) => ({
       label: emojiLabels[index] ?? "🧠 Key point",
       text,
@@ -1845,6 +1870,8 @@ export default function ArticleDetailPage() {
     .trim();
   const summaryItems = buildSummaryItems(
     cleanDisplayText(compareArticle.title),
+    compareArticle.source,
+    compareArticle.category,
     rawDescription,
     cleanedContent
   );
