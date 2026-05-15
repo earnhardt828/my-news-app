@@ -28,7 +28,7 @@ class ApiFetchError extends Error {
   }
 }
 
-function isNativeCapacitorRuntime() {
+export function isNativeCapacitorRuntime() {
   if (typeof window === "undefined") {
     return false;
   }

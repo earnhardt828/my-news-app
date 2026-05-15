@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import type { MouseEvent } from "react";
+import { isNativeCapacitorRuntime } from "../../lib/api-base";
 
 type NavItem = {
   href: string;
@@ -95,7 +97,20 @@ function normalizePathname(pathname: string) {
 }
 
 export default function BottomNav() {
+  const router = useRouter();
   const pathname = normalizePathname(usePathname());
+
+  const handleNativeNavigation = (
+    event: MouseEvent<HTMLAnchorElement>,
+    href: string
+  ) => {
+    if (!isNativeCapacitorRuntime()) {
+      return;
+    }
+
+    event.preventDefault();
+    router.push(href);
+  };
 
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
@@ -109,6 +124,7 @@ export default function BottomNav() {
             href={item.href}
             className={`nav-link ${isActive ? "nav-link-active" : ""}`}
             aria-current={isActive ? "page" : undefined}
+            onClick={(event) => handleNativeNavigation(event, item.href)}
           >
             <span className="nav-icon">{item.icon}</span>
             <span>{item.label}</span>
