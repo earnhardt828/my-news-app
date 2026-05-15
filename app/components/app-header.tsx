@@ -3,14 +3,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type MouseEvent, useEffect, useState } from "react";
-import { isNativeCapacitorRuntime } from "../../lib/api-base";
-import {
-  buildNativeHashRoute,
-  normalizeAppPath,
-} from "../../lib/native-routes";
+import { useEffect, useState } from "react";
 import { getSourceNameFromSlug } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
+
+function normalizeAppPath(pathname: string) {
+  if (!pathname || pathname === "/") {
+    return "/";
+  }
+
+  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
 
 function getPageTitle(pathname: string) {
   if (pathname === "/videos") {
@@ -137,23 +140,6 @@ export default function AppHeader() {
     }
 
     router.push(fallbackPath);
-  };
-
-  const handleNativeNavigation = (
-    event: MouseEvent<HTMLAnchorElement>,
-    href: string
-  ) => {
-    if (!isNativeCapacitorRuntime()) {
-      return;
-    }
-
-    event.preventDefault();
-    const normalizedHref = normalizeAppPath(href);
-    console.log("CURRENT ROUTE", normalizedHref);
-    if (typeof window !== "undefined") {
-      window.location.replace(buildNativeHashRoute(normalizedHref));
-    }
-    router.push(href);
   };
 
   useEffect(() => {
@@ -775,7 +761,6 @@ export default function AppHeader() {
             href="/profile/bookmarks/"
             className="header-icon-button"
             aria-label="Open bookmarked articles"
-            onClick={(event) => handleNativeNavigation(event, "/profile/bookmarks/")}
           >
             <span className="header-icon-glyph" aria-hidden="true">
               <svg
@@ -797,7 +782,6 @@ export default function AppHeader() {
             href="/notifications/"
             className="header-icon-button"
             aria-label="Open notifications"
-            onClick={(event) => handleNativeNavigation(event, "/notifications/")}
           >
             <span className="header-icon-glyph" aria-hidden="true">
               <svg
@@ -843,7 +827,6 @@ export default function AppHeader() {
         href="/source-rankings/"
         className="header-icon-button"
         aria-label="Open source rankings"
-        onClick={(event) => handleNativeNavigation(event, "/source-rankings/")}
       >
         <span className="header-icon-glyph" aria-hidden="true">
           <svg
@@ -868,7 +851,6 @@ export default function AppHeader() {
         href="/"
         className="brand-mark-link brand-mark-link-center"
         aria-label="Trending home"
-        onClick={(event) => handleNativeNavigation(event, "/")}
       >
         <Image
           src={

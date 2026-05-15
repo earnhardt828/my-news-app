@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import type { MouseEvent } from "react";
-import { isNativeCapacitorRuntime } from "../../lib/api-base";
-import {
-  buildNativeHashRoute,
-  normalizeAppPath,
-} from "../../lib/native-routes";
+import { usePathname } from "next/navigation";
+
+function normalizeAppPath(pathname: string) {
+  if (!pathname || pathname === "/") {
+    return "/";
+  }
+
+  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
 
 type NavItem = {
   href: string;
@@ -93,25 +95,7 @@ const navItems: NavItem[] = [
 ];
 
 export default function BottomNav() {
-  const router = useRouter();
   const pathname = normalizeAppPath(usePathname());
-
-  const handleNativeNavigation = (
-    event: MouseEvent<HTMLAnchorElement>,
-    href: string
-  ) => {
-    if (!isNativeCapacitorRuntime()) {
-      return;
-    }
-
-    event.preventDefault();
-    const normalizedHref = normalizeAppPath(href);
-    console.log("CURRENT ROUTE", normalizedHref);
-    if (typeof window !== "undefined") {
-      window.location.replace(buildNativeHashRoute(normalizedHref));
-    }
-    router.push(href);
-  };
 
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
@@ -125,7 +109,6 @@ export default function BottomNav() {
             href={item.href}
             className={`nav-link ${isActive ? "nav-link-active" : ""}`}
             aria-current={isActive ? "page" : undefined}
-            onClick={(event) => handleNativeNavigation(event, item.href)}
           >
             <span className="nav-icon">{item.icon}</span>
             <span>{item.label}</span>

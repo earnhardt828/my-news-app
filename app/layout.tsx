@@ -1,6 +1,5 @@
 import AppHeader from "./components/app-header";
 import BottomNav from "./components/bottom-nav";
-import NativeRouteBridge from "./components/native-route-bridge";
 import Script from "next/script";
 import "./globals.css";
 
@@ -25,7 +24,6 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <NativeRouteBridge />
         <Script
           id="theme-init"
           strategy="beforeInteractive"
