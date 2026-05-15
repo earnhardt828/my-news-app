@@ -9,6 +9,7 @@ import { getBestArticleImage } from "../../lib/article-images";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
+import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -412,7 +413,10 @@ export default function Search() {
   const [userResults, setUserResults] = useState<UserProfileSearchResult[]>([]);
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [sourceRatings, setSourceRatings] = useState<SourceRatingRow[]>([]);
+  const [preferredSources, setPreferredSources] = useState<string[]>([]);
+  const [showLessSources, setShowLessSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [isLoadingMoreSearchResults, setIsLoadingMoreSearchResults] = useState(false);
@@ -447,8 +451,13 @@ export default function Search() {
         }
 
         setCurrentUserId(user?.id ?? null);
+        setCurrentUserEmail(user?.email ?? null);
 
         if (user?.id) {
+          const ensuredProfile = await ensureProfileRow({
+            id: user.id,
+            email: user.email ?? null,
+          });
           const { data: ratingsData, error: ratingsError } = await supabase
             .from("source_ratings")
             .select("id, user_id, source_name, rating");
@@ -459,8 +468,12 @@ export default function Search() {
           } else {
             setSourceRatings((ratingsData ?? []) as SourceRatingRow[]);
           }
+          setPreferredSources(ensuredProfile.data?.preferred_sources ?? []);
+          setShowLessSources(ensuredProfile.data?.show_less_sources ?? []);
         } else {
           setSourceRatings([]);
+          setPreferredSources([]);
+          setShowLessSources([]);
         }
       } catch (error) {
         console.error("Error loading search data:", error);
@@ -787,6 +800,10 @@ export default function Search() {
       ),
     [currentUserId, matchedSourceName, sourceRatings]
   );
+  const matchedSourceShowLess = useMemo(
+    () => Boolean(matchedSourceName && showLessSources.includes(matchedSourceName)),
+    [matchedSourceName, showLessSources]
+  );
 
   const handleToggleSourceHeart = async (sourceName: string) => {
     if (!currentUserId) {
@@ -841,6 +858,39 @@ export default function Search() {
       );
       return [...next, data as SourceRatingRow];
     });
+  };
+
+  const handleToggleShowLess = async (sourceName: string) => {
+    if (!currentUserId) {
+      alert("Log in to customize sources.");
+      return;
+    }
+
+    const nextShowLessSources = showLessSources.includes(sourceName)
+      ? showLessSources.filter((current) => current !== sourceName)
+      : [...showLessSources, sourceName];
+    const nextPreferredSources = preferredSources.filter((current) => current !== sourceName);
+
+    const { error } = await saveProfilePatch(
+      {
+        id: currentUserId,
+        email: currentUserEmail,
+      },
+      {
+        id: currentUserId,
+        email: currentUserEmail,
+        preferred_sources: nextPreferredSources,
+        show_less_sources: nextShowLessSources,
+      }
+    );
+
+    if (error) {
+      console.error("Error saving show less source preference:", error);
+      return;
+    }
+
+    setPreferredSources(nextPreferredSources);
+    setShowLessSources(nextShowLessSources);
   };
 
   const filteredResults = useMemo(() => {
@@ -1046,41 +1096,54 @@ export default function Search() {
                 <div className="search-source-card-row">
                   <div className="search-source-brand">
                     <SourceBadge sourceName={matchedSourceName} />
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="search-source-name">{matchedSourceName}</strong>
+                    <div className="search-source-copy stack" style={{ gap: "4px" }}>
+                      <div className="search-source-identity-row">
+                        <strong className="search-source-name">{matchedSourceName}</strong>
+                        <button
+                          type="button"
+                          className={`icon-action-pill icon-action-pill-icon-only ${
+                            matchedSourceHearted ? "icon-action-pill-active" : ""
+                          }`}
+                          aria-label={matchedSourceHearted ? "Unheart source" : "Heart source"}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void handleToggleSourceHeart(matchedSourceName);
+                          }}
+                        >
+                          <span className="icon-action-glyph" aria-hidden="true">
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill={matchedSourceHearted ? "currentColor" : "none"}
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
+                            </svg>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`icon-action-pill search-source-show-less ${
+                            matchedSourceShowLess ? "icon-action-pill-active" : ""
+                          }`}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void handleToggleShowLess(matchedSourceName);
+                          }}
+                        >
+                          <span>{matchedSourceShowLess ? "Showing less" : "Show Less"}</span>
+                        </button>
+                      </div>
                       <span className="search-source-kind">News source</span>
+                      <span className="search-source-kind">{matchedSourceHeartCount} hearts</span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`icon-action-pill icon-action-pill-icon-only ${
-                      matchedSourceHearted ? "icon-action-pill-active" : ""
-                    }`}
-                    aria-label={matchedSourceHearted ? "Unheart source" : "Heart source"}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void handleToggleSourceHeart(matchedSourceName);
-                    }}
-                  >
-                    <span className="icon-action-glyph" aria-hidden="true">
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill={matchedSourceHearted ? "currentColor" : "none"}
-                        stroke="currentColor"
-                        strokeWidth="1.9"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
-                      </svg>
-                    </span>
-                  </button>
-                </div>
-                <div className="search-source-meta-row">
-                  <span className="search-source-kind">{matchedSourceHeartCount} hearts</span>
                 </div>
               </Link>
             </div>

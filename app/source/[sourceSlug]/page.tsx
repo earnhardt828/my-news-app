@@ -166,16 +166,43 @@ export default function SourcePage({
         const filtered = mergedNews
           .filter((article) => {
             const articleSourceLabel = normalizeSourceLabel(article.source);
+            const articleTitleLabel = normalizeSourceLabel(article.title);
+            const articleDescriptionLabel = normalizeSourceLabel(article.description ?? "");
             return (
               slugifySourceName(article.source) === resolvedParams.sourceSlug ||
-              articleSourceLabel === sourceLabel
+              articleSourceLabel === sourceLabel ||
+              articleSourceLabel.includes(sourceLabel) ||
+              sourceLabel.includes(articleSourceLabel) ||
+              articleTitleLabel.includes(sourceLabel) ||
+              articleDescriptionLabel.includes(sourceLabel)
             );
           })
-          .sort((a, b) => {
-            const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-            const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+          .sort((left, right) => {
+            const leftSource = normalizeSourceLabel(left.source);
+            const rightSource = normalizeSourceLabel(right.source);
+            const leftExact = leftSource === sourceLabel ? 1 : 0;
+            const rightExact = rightSource === sourceLabel ? 1 : 0;
+
+            if (rightExact !== leftExact) {
+              return rightExact - leftExact;
+            }
+
+            const leftContains =
+              Number(normalizeSourceLabel(left.title).includes(sourceLabel)) +
+              Number(normalizeSourceLabel(left.description ?? "").includes(sourceLabel));
+            const rightContains =
+              Number(normalizeSourceLabel(right.title).includes(sourceLabel)) +
+              Number(normalizeSourceLabel(right.description ?? "").includes(sourceLabel));
+
+            if (rightContains !== leftContains) {
+              return rightContains - leftContains;
+            }
+
+            const timeA = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+            const timeB = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
             return timeB - timeA;
-          });
+          })
+          ;
 
         if (!isMounted) {
           return;
@@ -408,7 +435,7 @@ export default function SourcePage({
         <LoadingScreen label={`Loading ${sourceName}`} />
       ) : articles.length === 0 ? (
         <div className="empty-state">
-          <strong>No recent articles from this source yet.</strong>
+          <strong>No recent {sourceName} articles found yet.</strong>
           <span>Check back soon or explore another source from Search.</span>
         </div>
       ) : (

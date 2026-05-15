@@ -2101,12 +2101,6 @@ input {
   color: inherit;
 }
 
-.search-source-meta-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
 .search-user-card {
   text-decoration: none;
   color: inherit;
@@ -2129,9 +2123,10 @@ input {
 
 .search-source-brand {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   min-width: 0;
+  width: 100%;
 }
 
 .search-user-brand {
@@ -2139,6 +2134,18 @@ input {
   align-items: center;
   gap: 12px;
   min-width: 0;
+}
+
+.search-source-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.search-source-identity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .search-source-name {
@@ -2157,6 +2164,12 @@ input {
   color: var(--text-soft);
   font-size: 0.88rem;
   font-weight: 700;
+}
+
+.search-source-show-less {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.8rem;
 }
 
 .search-user-bio {

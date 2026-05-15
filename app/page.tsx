@@ -3615,7 +3615,7 @@ export default function Home() {
         </div>
       ) : (
         <div className="stack feed-results-stack">
-          {feedLoadError ? (
+          {feedLoadError && !(sortMode === "local" && visibleArticles.length > 0) ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
               <div className="stack" style={{ gap: "10px" }}>
                 <span>
