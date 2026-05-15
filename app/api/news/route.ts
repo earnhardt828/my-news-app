@@ -422,6 +422,61 @@ const CHICAGO_LOCAL_SOURCES = [
   "wbez chicago",
 ] as const;
 
+const LOCAL_CITY_CONFIGS = {
+  "Charlotte, NC": {
+    sources: CHARLOTTE_LOCAL_SOURCES,
+    signals: ["charlotte", "mecklenburg", "queen city", "north carolina", "gastonia", "concord"],
+  },
+  "Chicago, IL": {
+    sources: CHICAGO_LOCAL_SOURCES,
+    signals: ["chicago", "illinois", "cook county", "evanston", "oak park", "naperville"],
+  },
+  "Los Angeles, CA": {
+    sources: ["la times", "ktla", "abc7 los angeles", "nbc los angeles", "cbs los angeles", "laist"],
+    signals: ["los angeles", "la county", "hollywood", "pasadena", "santa monica", "burbank"],
+  },
+  "New York, NY": {
+    sources: ["ny1", "gothamist", "new york daily news", "cbs new york", "nbc new york", "abc7ny"],
+    signals: ["new york", "nyc", "manhattan", "brooklyn", "queens", "bronx", "staten island"],
+  },
+  "Atlanta, GA": {
+    sources: ["ajc", "wsb-tv", "fox 5 atlanta", "11alive", "atlanta news first"],
+    signals: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
+  },
+  "Houston, TX": {
+    sources: ["houston chronicle", "khou", "abc13 houston", "fox 26 houston", "kprc"],
+    signals: ["houston", "texas", "harris county", "sugar land"],
+  },
+  "Miami, FL": {
+    sources: ["miami herald", "wsvn", "nbc 6 south florida", "cbs miami", "local 10"],
+    signals: ["miami", "florida", "miami-dade", "south florida", "fort lauderdale"],
+  },
+  "Cincinnati, OH": {
+    sources: ["cincinnati enquirer", "wcpo", "wlwt", "fox19"],
+    signals: ["cincinnati", "ohio", "hamilton county", "northern kentucky"],
+  },
+  "Detroit, MI": {
+    sources: ["detroit free press", "detroit news", "wxyz", "clickondetroit", "fox 2 detroit"],
+    signals: ["detroit", "michigan", "wayne county", "dearborn"],
+  },
+  "Minneapolis, MN": {
+    sources: ["star tribune", "kare 11", "wcco", "fox 9", "mpr news"],
+    signals: ["minneapolis", "minnesota", "saint paul", "st paul", "twin cities"],
+  },
+  "Phoenix, AZ": {
+    sources: ["arizona republic", "azfamily", "abc15 arizona", "fox 10 phoenix", "12news"],
+    signals: ["phoenix", "arizona", "mesa", "tempe", "scottsdale"],
+  },
+  "San Francisco, CA": {
+    sources: ["sf chronicle", "kqed", "abc7 bay area", "nbc bay area", "cbs news bay area"],
+    signals: ["san francisco", "bay area", "oakland", "berkeley", "marin"],
+  },
+  "Philadelphia, PA": {
+    sources: ["philadelphia inquirer", "6abc", "nbc10 philadelphia", "cbs philadelphia", "whyy"],
+    signals: ["philadelphia", "philly", "pennsylvania", "camden", "delco"],
+  },
+} as const;
+
 const FALLBACK_ARTICLE_SEEDS = [
   {
     title: "Congress returns with a packed agenda on budget, border, and aid talks",
@@ -703,6 +758,16 @@ function isChicagoQuery(query: string) {
   );
 }
 
+function getLocalCityConfig(query: string) {
+  const normalized = query.trim().toLowerCase();
+
+  return (
+    Object.entries(LOCAL_CITY_CONFIGS).find(([, config]) =>
+      config.signals.some((signal) => normalized.includes(signal))
+    ) ?? null
+  );
+}
+
 function getLocalMatchScore(article: NormalizedArticle, location: string) {
   const normalizedLocation = location.trim().toLowerCase();
   const articleText = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
@@ -720,42 +785,38 @@ function getLocalMatchScore(article: NormalizedArticle, location: string) {
     );
 
   let score = 0;
+  const localCityConfig = getLocalCityConfig(normalizedLocation);
 
-  if (isCharlotteQuery(normalizedLocation)) {
-    if (CHARLOTTE_LOCAL_SOURCES.some((source) => sourceName.includes(source))) {
+  if (localCityConfig) {
+    const [, config] = localCityConfig;
+
+    if (config.sources.some((source) => sourceName.includes(source))) {
       score += 120;
     }
 
-    if (/(charlotte|mecklenburg|queen city|matthews|huntersville|gastonia|concord|rock hill|fort mill)/.test(articleText)) {
+    if (config.signals.some((signal) => articleText.includes(signal))) {
       score += 70;
     }
 
     if (
-      /(fox news|cnn|reuters|associated press|ap news|nbc news|cbs news|abc news|newsmax)/.test(
+      /(fox news|cnn|reuters|associated press|ap news|nbc news|cbs news|abc news|newsmax|bbc news)/.test(
         sourceName
       ) &&
-      !/charlotte|north carolina|mecklenburg/.test(articleText)
+      !config.signals.some((signal) => articleText.includes(signal))
     ) {
-      score -= 45;
+      score -= 55;
+    }
+  }
+
+  if (isCharlotteQuery(normalizedLocation)) {
+    if (/charlotte|mecklenburg|queen city|matthews|huntersville|gastonia|concord|rock hill|fort mill/.test(articleText)) {
+      score += 20;
     }
   }
 
   if (isChicagoQuery(normalizedLocation)) {
-    if (CHICAGO_LOCAL_SOURCES.some((source) => sourceName.includes(source))) {
-      score += 120;
-    }
-
-    if (/(chicago|illinois|cook county|evanston|oak park|naperville|aurora|joliet|schaumburg)/.test(articleText)) {
-      score += 70;
-    }
-
-    if (
-      /(fox news|cnn|reuters|associated press|ap news|nbc news|cbs news|abc news|newsmax)/.test(
-        sourceName
-      ) &&
-      !/chicago|illinois|cook county/.test(articleText)
-    ) {
-      score -= 45;
+    if (/chicago|illinois|cook county|evanston|oak park|naperville|aurora|joliet|schaumburg/.test(articleText)) {
+      score += 20;
     }
   }
 
@@ -1626,16 +1687,12 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
 
   const feedsToFetch =
     params.mode === "local" &&
-    (isCharlotteQuery(params.location || params.query) ||
-      isChicagoQuery(params.location || params.query))
+    getLocalCityConfig(params.location || params.query)
       ? RSS_FEEDS.filter(
           (feed) =>
             feed.category === "Local News" ||
-            CHARLOTTE_LOCAL_SOURCES.some((source) =>
-              feed.source.toLowerCase().includes(source)
-            ) ||
-            CHICAGO_LOCAL_SOURCES.some((source) =>
-              feed.source.toLowerCase().includes(source)
+            (getLocalCityConfig(params.location || params.query)?.[1].sources ?? []).some(
+              (source) => feed.source.toLowerCase().includes(source)
             )
         )
       : candidateFeeds.length > 0

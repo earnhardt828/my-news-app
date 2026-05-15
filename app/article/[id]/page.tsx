@@ -231,8 +231,20 @@ function formatRelativeTime(timestamp: string | null) {
 
 function normalizeSummaryText(value: string) {
   return value
+    .replace(/link\([^)]*\)/gi, " ")
+    .replace(/"url"\s*:\s*"[^"]*"/gi, " ")
+    .replace(/"target"\s*:\s*"[^"]*"/gi, " ")
+    .replace(/"attributes"\s*:\s*\[[^\]]*\]/gi, " ")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/[<{][^>]*[>}]?/g, " ")
     .replace(/\[\+\d+\s+chars\]/gi, "")
     .replace(/(\.\.\.|…)+/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -697,11 +709,12 @@ function buildSummaryItems(
   }
 
   const labels = ["Key point", "Why it matters", "Context"];
+  const emojiLabels = ["🧠 Key point", "⚠️ Why it matters", "📍 Context"];
 
   return uniquePoints
     .slice(0, labels.length)
     .map((text, index) => ({
-      label: labels[index] ?? "Key point",
+      label: emojiLabels[index] ?? "🧠 Key point",
       text,
     }))
     .filter((item) => item.text);
@@ -1977,18 +1990,6 @@ export default function ArticleDetailPage() {
             url={article.url}
             iconOnly
           />
-          <Link
-            href={`/profile/polls/new?articleId=${encodeURIComponent(
-              String(article.id)
-            )}&articleTitle=${encodeURIComponent(
-              cleanDisplayText(compareArticle.title)
-            )}&source=${encodeURIComponent(compareArticle.source)}&category=${encodeURIComponent(
-              compareArticle.category
-            )}`}
-            className="button button-secondary article-create-poll-button"
-          >
-            Create Poll
-          </Link>
           <button
             className={`bookmark-button ${isSaved ? "bookmark-button-active" : ""}`}
             onClick={handleToggleSave}

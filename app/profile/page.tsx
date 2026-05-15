@@ -1153,6 +1153,18 @@ export default function Profile() {
 
               <div className="profile-divider" />
 
+              <Link href="/profile/following/" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>Following</strong>
+                  <span>See who you follow and manage your list.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
+
+              <div className="profile-divider" />
+
               <div className="profile-section-row">
                 <strong className="profile-section-title-sm">Favorite categories</strong>
                 <Link

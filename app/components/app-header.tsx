@@ -36,6 +36,10 @@ function getPageTitle(pathname: string) {
     return "Bookmarked Articles";
   }
 
+  if (pathname === "/profile/following") {
+    return "Following";
+  }
+
   if (pathname === "/profile/polls/new") {
     return "Create Poll";
   }
@@ -478,6 +482,25 @@ export default function AppHeader() {
         </div>
         <span className="app-header-article-spacer" aria-hidden="true" />
       </div>
+    );
+  }
+
+  if (pathname === "/profile/following") {
+    return (
+      <header className="app-header app-header-detail">
+        <button
+          type="button"
+          className="app-header-icon-button"
+          aria-label="Close following"
+          onClick={() => closeTo("/profile/")}
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+        <div className="app-header-detail-center">
+          <span className="app-header-detail-title">Following</span>
+        </div>
+        <div className="app-header-detail-spacer" />
+      </header>
     );
   }
 
