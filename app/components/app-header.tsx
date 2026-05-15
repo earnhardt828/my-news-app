@@ -5,16 +5,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
 import { isNativeCapacitorRuntime } from "../../lib/api-base";
+import {
+  buildNativeHashRoute,
+  normalizeAppPath,
+} from "../../lib/native-routes";
 import { getSourceNameFromSlug } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
-
-function normalizePathname(pathname: string) {
-  if (!pathname || pathname === "/") {
-    return "/";
-  }
-
-  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-}
 
 function getPageTitle(pathname: string) {
   if (pathname === "/videos") {
@@ -109,7 +105,7 @@ function getPageTitle(pathname: string) {
 }
 
 export default function AppHeader() {
-  const pathname = normalizePathname(usePathname());
+  const pathname = normalizeAppPath(usePathname());
   const router = useRouter();
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
@@ -152,12 +148,18 @@ export default function AppHeader() {
     }
 
     event.preventDefault();
+    const normalizedHref = normalizeAppPath(href);
+    console.log("CURRENT ROUTE", normalizedHref);
+    if (typeof window !== "undefined") {
+      window.location.replace(buildNativeHashRoute(normalizedHref));
+    }
     router.push(href);
   };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       console.log("CURRENT PATHNAME", window.location.pathname);
+      console.log("CURRENT ROUTE", pathname);
     }
   }, [pathname]);
 

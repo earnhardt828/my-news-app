@@ -4,6 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { MouseEvent } from "react";
 import { isNativeCapacitorRuntime } from "../../lib/api-base";
+import {
+  buildNativeHashRoute,
+  normalizeAppPath,
+} from "../../lib/native-routes";
 
 type NavItem = {
   href: string;
@@ -88,17 +92,9 @@ const navItems: NavItem[] = [
   },
 ];
 
-function normalizePathname(pathname: string) {
-  if (!pathname || pathname === "/") {
-    return "/";
-  }
-
-  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-}
-
 export default function BottomNav() {
   const router = useRouter();
-  const pathname = normalizePathname(usePathname());
+  const pathname = normalizeAppPath(usePathname());
 
   const handleNativeNavigation = (
     event: MouseEvent<HTMLAnchorElement>,
@@ -109,13 +105,18 @@ export default function BottomNav() {
     }
 
     event.preventDefault();
+    const normalizedHref = normalizeAppPath(href);
+    console.log("CURRENT ROUTE", normalizedHref);
+    if (typeof window !== "undefined") {
+      window.location.replace(buildNativeHashRoute(normalizedHref));
+    }
     router.push(href);
   };
 
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
       {navItems.map((item) => {
-        const normalizedHref = normalizePathname(item.href);
+        const normalizedHref = normalizeAppPath(item.href);
         const isActive = pathname === normalizedHref;
 
         return (
