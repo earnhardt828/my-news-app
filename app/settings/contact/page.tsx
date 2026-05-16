@@ -74,6 +74,54 @@ export default function SettingsContactPage() {
 
     const trimmedContactEmail = contactEmail.trim();
 
+    if (trimmedContactEmail) {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!emailPattern.test(trimmedContactEmail)) {
+        setIsSaving(false);
+        setMessage({
+          type: "error",
+          text: "Enter a valid email address.",
+        });
+        return;
+      }
+
+      const [matchingContactEmailResult, matchingAccountEmailResult] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id")
+          .ilike("contact_email", trimmedContactEmail)
+          .limit(1),
+        supabase
+          .from("profiles")
+          .select("id")
+          .ilike("email", trimmedContactEmail)
+          .limit(1),
+      ]);
+
+      const duplicateProfileId =
+        matchingContactEmailResult.data?.[0]?.id ?? matchingAccountEmailResult.data?.[0]?.id ?? null;
+      const duplicateError = matchingContactEmailResult.error ?? matchingAccountEmailResult.error;
+
+      if (duplicateError) {
+        setIsSaving(false);
+        setMessage({
+          type: "error",
+          text: duplicateError.message ?? "Could not validate that email.",
+        });
+        return;
+      }
+
+      if (duplicateProfileId && duplicateProfileId !== currentUser.id) {
+        setIsSaving(false);
+        setMessage({
+          type: "error",
+          text: "That email is already in use.",
+        });
+        return;
+      }
+    }
+
     const { error } = await saveProfilePatch(
       {
         id: currentUser.id,

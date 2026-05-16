@@ -202,7 +202,7 @@ const LOCAL_CITY_CONFIGS = {
   },
   "Los Angeles, CA": {
     query:
-      "Los Angeles local news LA Times KTLA ABC7 Los Angeles NBC Los Angeles CBS Los Angeles LAist",
+      "Los Angeles local news LA Times KTLA ABC7 Los Angeles NBC Los Angeles CBS Los Angeles LAist FOX 11 Los Angeles Spectrum News 1 SoCal",
     sources: [
       "LA Times",
       "Los Angeles Times",
@@ -211,8 +211,10 @@ const LOCAL_CITY_CONFIGS = {
       "NBC Los Angeles",
       "CBS Los Angeles",
       "LAist",
+      "FOX 11 Los Angeles",
+      "Spectrum News 1 SoCal",
     ],
-    signals: ["los angeles", "la county", "hollywood", "pasadena", "santa monica"],
+    signals: ["los angeles", "la county", "hollywood", "pasadena", "santa monica", "socal", "southern california"],
   },
   "New York, NY": {
     query:

@@ -1093,56 +1093,54 @@ export default function Search() {
                 href={`/source/${slugifySourceName(matchedSourceName)}/`}
                 className="section-card search-source-card"
               >
-                <div className="search-source-card-row">
-                  <div className="search-source-brand">
+                <div className="source-page-header search-source-card-row">
+                  <div className="source-page-brand search-source-brand">
                     <SourceBadge sourceName={matchedSourceName} />
-                    <div className="search-source-copy stack" style={{ gap: "4px" }}>
-                      <div className="search-source-identity-row">
-                        <strong className="search-source-name">{matchedSourceName}</strong>
-                        <button
-                          type="button"
-                          className={`icon-action-pill icon-action-pill-icon-only ${
-                            matchedSourceHearted ? "icon-action-pill-active" : ""
-                          }`}
-                          aria-label={matchedSourceHearted ? "Unheart source" : "Heart source"}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void handleToggleSourceHeart(matchedSourceName);
-                          }}
-                        >
-                          <span className="icon-action-glyph" aria-hidden="true">
-                            <svg
-                              width="18"
-                              height="18"
-                              viewBox="0 0 24 24"
-                              fill={matchedSourceHearted ? "currentColor" : "none"}
-                              stroke="currentColor"
-                              strokeWidth="1.9"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
-                            </svg>
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`icon-action-pill search-source-show-less ${
-                            matchedSourceShowLess ? "icon-action-pill-active" : ""
-                          }`}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void handleToggleShowLess(matchedSourceName);
-                          }}
-                        >
-                          <span>{matchedSourceShowLess ? "Showing less" : "Show Less"}</span>
-                        </button>
-                      </div>
+                    <div className="source-page-brand-copy">
+                      <strong className="search-source-name">{matchedSourceName}</strong>
                       <span className="search-source-kind">News source</span>
-                      <span className="search-source-kind">{matchedSourceHeartCount} hearts</span>
                     </div>
+                  </div>
+                  <div className="source-page-controls">
+                    <button
+                      type="button"
+                      className={`icon-action-pill ${matchedSourceHearted ? "icon-action-pill-active" : ""}`}
+                      aria-label={matchedSourceHearted ? "Unheart source" : "Heart source"}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void handleToggleSourceHeart(matchedSourceName);
+                      }}
+                    >
+                      <span className="icon-action-glyph" aria-hidden="true">
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill={matchedSourceHearted ? "currentColor" : "none"}
+                          stroke="currentColor"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
+                        </svg>
+                      </span>
+                      <span>{matchedSourceHeartCount}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-action-pill search-source-show-less ${
+                        matchedSourceShowLess ? "icon-action-pill-active" : ""
+                      }`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void handleToggleShowLess(matchedSourceName);
+                      }}
+                    >
+                      <span>{matchedSourceShowLess ? "Showing less" : "Show Less"}</span>
+                    </button>
                   </div>
                 </div>
               </Link>

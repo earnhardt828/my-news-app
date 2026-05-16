@@ -440,8 +440,19 @@ const LOCAL_CITY_CONFIGS = {
       "nbc los angeles",
       "cbs los angeles",
       "laist",
+      "fox 11 los angeles",
+      "spectrum news 1 socal",
     ],
-    signals: ["los angeles", "la county", "hollywood", "pasadena", "santa monica", "burbank"],
+    signals: [
+      "los angeles",
+      "la county",
+      "hollywood",
+      "pasadena",
+      "santa monica",
+      "burbank",
+      "socal",
+      "southern california",
+    ],
   },
   "New York, NY": {
     sources: [

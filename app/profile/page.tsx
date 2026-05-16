@@ -20,7 +20,6 @@ import {
   type AppProfileRecord,
 } from "../../lib/profile-store";
 import { hydratePolls, type PollRecord, type PollWithResults } from "../../lib/polls";
-import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
@@ -1175,42 +1174,6 @@ export default function Profile() {
                 </span>
               </Link>
 
-              <div className="profile-divider" />
-
-              <div className="profile-section-row">
-                <strong className="profile-section-title-sm">Favorite categories</strong>
-                <Link
-                  href="/profile/categories"
-                  className="profile-section-icon-button"
-                  aria-label="Manage favorite categories"
-                >
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.9"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 5v14" />
-                    <path d="M5 12h14" />
-                  </svg>
-                </Link>
-              </div>
-              {categories.length === 0 ? (
-                <div className="profile-categories-empty">No categories selected yet.</div>
-              ) : (
-                <div className="category-grid">
-                  {categories.slice(0, 5).map((category) => (
-                    <span key={category} className="category-pill category-pill-active">
-                      {getCategoryLabel(category)}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="input-row profile-hidden-input-row">
