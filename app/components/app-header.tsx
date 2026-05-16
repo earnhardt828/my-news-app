@@ -77,7 +77,7 @@ function getPageTitle(pathname: string) {
   }
 
   if (pathname === "/my-feed") {
-    return "My Feed";
+    return "Polls";
   }
 
   if (pathname === "/privacy") {

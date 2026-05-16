@@ -22,6 +22,7 @@ import {
 import { cleanDisplayText } from "../lib/display-text";
 import {
   applyPollVoteUpdate,
+  getPollTrendingScore,
   hydratePolls,
   type PollRecord,
   type PollWithResults,
@@ -138,13 +139,6 @@ type DbCommentReply = {
   username: string | null;
   user_id: string | null;
   created_at: string | null;
-};
-
-type DbSourceRating = {
-  id: string;
-  user_id: string;
-  source_name: string;
-  rating: "like" | "dislike";
 };
 
 type FeedArticlePayload = Omit<
@@ -309,7 +303,7 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
 ];
 
 function getFeedCacheKey(
-  mode: "trending" | "latest" | "myfeed" | "local",
+  mode: "trending" | "latest" | "polls" | "local",
   localLabel: string
 ) {
   return mode === "local"
@@ -671,27 +665,6 @@ function mergeArticlesByIdentity(existing: Article[], incoming: Article[]) {
   return merged;
 }
 
-function dedupeFeedArticlePayloads(
-  existing: FeedArticlePayload[],
-  incoming: FeedArticlePayload[]
-) {
-  const merged = [...existing];
-  const existingKeys = new Set(existing.map((article) => getArticleDeduplicationKey(article)));
-
-  incoming.forEach((article) => {
-    const dedupeKey = getArticleDeduplicationKey(article);
-
-    if (existingKeys.has(dedupeKey)) {
-      return;
-    }
-
-    existingKeys.add(dedupeKey);
-    merged.push(article);
-  });
-
-  return merged;
-}
-
 function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
   if (Array.isArray(payload)) {
     return {
@@ -754,7 +727,7 @@ export default function Home() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-  const [sortMode, setSortMode] = useState<"trending" | "my-feed" | "latest" | "local">(
+  const [sortMode, setSortMode] = useState<"trending" | "polls" | "latest" | "local">(
     "trending"
   );
   const [userId, setUserId] = useState<string | null>(null);
@@ -762,8 +735,6 @@ export default function Home() {
   const [categories, setCategories] = useState<string[]>([]);
   const [preferredSources, setPreferredSources] = useState<string[]>([]);
   const [showLessSources, setShowLessSources] = useState<string[]>([]);
-  const [likedSources, setLikedSources] = useState<string[]>([]);
-  const [dislikedSources, setDislikedSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialFeedLoading, setIsInitialFeedLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
@@ -817,16 +788,11 @@ export default function Home() {
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isFetchingNextPageRef = useRef(false);
   const activeFeedRequestIdRef = useRef(0);
-  const categoriesRef = useRef<string[]>([]);
   const [replyTarget, setReplyTarget] = useState<{
     articleId: number;
     commentId: number;
     username: string | null;
   } | null>(null);
-
-  useEffect(() => {
-    categoriesRef.current = categories;
-  }, [categories]);
 
   useEffect(() => {
     console.log("APP RENDERED");
@@ -843,13 +809,13 @@ export default function Home() {
   }, [articles.length, isLoading]);
 
 
-  const feedMode: "trending" | "latest" | "myfeed" | "local" = useMemo(() => {
+  const feedMode: "trending" | "latest" | "local" | "polls" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
 
-    if (sortMode === "my-feed") {
-      return "myfeed";
+    if (sortMode === "polls") {
+      return "polls";
     }
 
     if (sortMode === "local") {
@@ -859,10 +825,8 @@ export default function Home() {
     return "trending";
   }, [sortMode]);
 
-  const categoryReloadKey =
-    sortMode === "my-feed" ? categories.join("|") : "__ignore-categories__";
-  const isMyFeedWithoutCategories =
-    sortMode === "my-feed" && categories.length === 0;
+  const categoryReloadKey = "__ignore-categories__";
+  const isMyFeedWithoutCategories = false;
   const selectedLocalCity = useMemo(
     () =>
       resolveSupportedMetroCity({
@@ -875,7 +839,6 @@ export default function Home() {
 
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
-    const requestCategories = categoriesRef.current;
     const requestId = activeFeedRequestIdRef.current + 1;
     const feedCacheKey = getFeedCacheKey(feedMode, localLocationLabel);
     const cachedFeed = replace ? readCachedFeedPayload(feedCacheKey) : null;
@@ -888,6 +851,19 @@ export default function Home() {
     let articleFetchTimeoutId: number | null = null;
 
     if (!replace && isFetchingNextPageRef.current) {
+      return;
+    }
+
+    if (feedMode === "polls") {
+      if (replace) {
+        setFeedLoadError(null);
+        setArticles([]);
+        setFeedPage(1);
+        setHasMoreArticles(false);
+        setIsInitialFeedLoading(false);
+        setIsLoading(false);
+        setIsLoadingMoreArticles(false);
+      }
       return;
     }
 
@@ -924,11 +900,7 @@ export default function Home() {
             setHasMoreArticles(cachedFeed.hasMore);
             setFeedPage(cachedFeed.page);
           } else {
-            setFeedLoadError(
-              sortMode === "local"
-                ? "No local stories found for this city yet."
-                : "Couldn’t load stories. Tap to retry."
-            );
+            setFeedLoadError(sortMode === "local" ? null : "Couldn’t load stories. Tap to retry.");
             setArticles([]);
             setHasMoreArticles(false);
             setFeedPage(1);
@@ -1006,8 +978,6 @@ export default function Home() {
         setCategories([]);
         setPreferredSources([]);
         setShowLessSources([]);
-        setLikedSources([]);
-        setDislikedSources([]);
       }
 
       let newsPath = "";
@@ -1035,80 +1005,10 @@ export default function Home() {
           pageSize: String(FEED_PAGE_SIZE),
         });
 
-        if (feedMode === "myfeed" && requestCategories.length > 0) {
-          params.set("category", requestCategories.join(","));
-        }
-
         newsPath = `/api/news?${params.toString()}`;
       }
 
-      if (feedMode === "myfeed" && requestCategories.length > 0) {
-        const perCategoryPageSize = Math.max(
-          8,
-          Math.ceil(FEED_PAGE_SIZE / Math.min(requestCategories.length, 3))
-        );
-        const categoryResponses = await Promise.allSettled(
-          requestCategories.map(async (category) => {
-            const params = new URLSearchParams({
-              mode: "myfeed",
-              category,
-              page: String(pageToLoad),
-              pageSize: String(perCategoryPageSize),
-            });
-            const response = await apiFetch(`/api/news?${params.toString()}`);
-
-            if (!response.ok) {
-              throw new Error(`My Feed category request failed for ${category} (${response.status})`);
-            }
-
-            return normalizeNewsPayload(
-              (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
-            );
-          })
-        );
-
-        const mergedCategoryArticles = categoryResponses.flatMap((result) =>
-          result.status === "fulfilled" ? result.value.articles : []
-        );
-        const hasCategoryError = categoryResponses.some((result) => result.status === "rejected");
-
-        const dedupedCategoryArticles = dedupeFeedArticlePayloads([], mergedCategoryArticles);
-
-        let fallbackArticles: FeedArticlePayload[] = [];
-        let fallbackHasMore = false;
-
-        if (dedupedCategoryArticles.length < FEED_PAGE_SIZE) {
-          const fallbackResponse = await apiFetch(
-            `/api/news?mode=latest&page=${pageToLoad}&pageSize=${FEED_PAGE_SIZE}`
-          );
-
-          if (fallbackResponse.ok) {
-            const fallbackPayload = normalizeNewsPayload(
-              (await fallbackResponse.json()) as FeedArticlePayload[] | PaginatedNewsResponse
-            );
-            fallbackArticles = fallbackPayload.articles;
-            fallbackHasMore = fallbackPayload.hasMore;
-          }
-        }
-
-        const mergedArticles = dedupeFeedArticlePayloads(
-          dedupedCategoryArticles,
-          fallbackArticles
-        );
-
-        newsPayload = {
-          articles: mergedArticles,
-          nextPage: pageToLoad + 1,
-          page: pageToLoad,
-          pageSize: FEED_PAGE_SIZE,
-          hasMore:
-            fallbackHasMore ||
-            dedupedCategoryArticles.length >= FEED_PAGE_SIZE ||
-            hasCategoryError,
-        };
-        console.log("MY FEED CATEGORIES", requestCategories);
-        console.log("MY FEED ARTICLES COUNT", newsPayload.articles.length);
-      } else {
+      {
         const newsUrl = buildApiUrl(newsPath);
         console.log("TRENDING FETCH URL", newsUrl);
 
@@ -1171,11 +1071,7 @@ export default function Home() {
           setHasMoreArticles(cachedFeed.hasMore);
           setFeedPage(cachedFeed.page);
         } else {
-          setFeedLoadError(
-            sortMode === "local"
-              ? "No local stories found for this city yet."
-              : "Couldn’t load stories. Tap to retry."
-          );
+          setFeedLoadError(sortMode === "local" ? null : "Couldn’t load stories. Tap to retry.");
           setArticles([]);
           setHasMoreArticles(false);
           setFeedPage(1);
@@ -1193,7 +1089,6 @@ export default function Home() {
         savedArticlesResult,
         blockedUsersResult,
         ownBlockedUsersResult,
-        sourceRatingsResult,
       ] = await Promise.allSettled([
         supabase.from("likes").select("id, article_id, user_id"),
         supabase
@@ -1218,12 +1113,6 @@ export default function Home() {
         userData.user?.id
           ? listBlockedUsers(supabase, userData.user.id)
           : Promise.resolve({ data: [] as DbBlockedUser[], error: null }),
-        userData.user?.id
-          ? supabase
-              .from("source_ratings")
-              .select("id, user_id, source_name, rating")
-              .eq("user_id", userData.user.id)
-          : Promise.resolve({ data: [] as DbSourceRating[], error: null }),
       ]);
 
       if (!isCurrentRequest()) {
@@ -1257,10 +1146,6 @@ export default function Home() {
         commentRepliesResult
       ) ?? []) as DbCommentReply[];
       const profiles = (readSettledData("profiles", profilesResult) ?? []) as DbProfile[];
-      const sourceRatings = (readSettledData(
-        "source ratings",
-        sourceRatingsResult
-      ) ?? []) as DbSourceRating[];
       const blockedUsersData = (readSettledData(
         "blocked users",
         blockedUsersResult
@@ -1349,23 +1234,11 @@ export default function Home() {
       setBlockedUserIds(
         ownBlockedUsersData.map((blockedUser) => blockedUser.blocked_id)
       );
-      setLikedSources(
-        sourceRatings
-          .filter((rating) => rating.rating === "like")
-          .map((rating) => rating.source_name)
-      );
-      setDislikedSources(
-        sourceRatings
-          .filter((rating) => rating.rating === "dislike")
-          .map((rating) => rating.source_name)
-      );
       setFeedLoadError(
-        replace && receivedFallbackFeed
-          ? sortMode === "local"
-            ? "No local stories found for this city yet."
-            : "Showing the last loaded stories while we retry."
-          : null
-      );
+          replace && receivedFallbackFeed && sortMode !== "local"
+            ? "Showing the last loaded stories while we retry."
+            : null
+        );
       setHasMoreArticles(receivedFallbackFeed ? false : (newsPayload?.hasMore ?? false));
       setFeedPage(pageToLoad);
       setArticles((prev) => {
@@ -1404,19 +1277,13 @@ export default function Home() {
       if (replace && !hasLiveNewsResponse) {
         if (cachedFeed) {
           setFeedLoadError(
-            sortMode === "local"
-              ? "No local stories found for this city yet."
-              : "Showing the last loaded stories while we retry."
+            sortMode === "local" ? null : "Showing the last loaded stories while we retry."
           );
           setArticles(cachedFeed.articles);
           setHasMoreArticles(cachedFeed.hasMore);
           setFeedPage(cachedFeed.page);
         } else {
-          setFeedLoadError(
-            sortMode === "local"
-              ? "No local stories found for this city yet."
-              : "Couldn’t load stories. Tap to retry."
-          );
+          setFeedLoadError(sortMode === "local" ? null : "Couldn’t load stories. Tap to retry.");
           setArticles([]);
           setHasMoreArticles(false);
           setFeedPage(1);
@@ -1481,59 +1348,76 @@ export default function Home() {
 
   useEffect(() => {
     async function loadPolls() {
-      if (!userId) {
-        setMyFeedPolls([]);
-        return;
-      }
-
-      const { data: followRowsData, error: followRowsError } = await supabase
-        .from("user_follows")
-        .select("following_id")
-        .eq("follower_id", userId);
+      const { data: followRowsData, error: followRowsError } = userId
+        ? await supabase
+            .from("user_follows")
+            .select("following_id")
+            .eq("follower_id", userId)
+        : { data: [], error: null };
 
       if (followRowsError) {
-        console.error("Error loading follows for My Feed polls:", followRowsError);
-        setMyFeedPolls([]);
-        return;
+        console.error("Error loading follows for Polls tab:", followRowsError);
       }
 
       const pollUserIds = Array.from(
         new Set([
-          userId,
+          ...(userId ? [userId] : []),
           ...(((followRowsData ?? []) as { following_id: string }[]).map(
             (followRow) => followRow.following_id
           )),
         ])
       );
 
-      const { data: myFeedPollRows, error: myFeedPollsError } = pollUserIds.length
-        ? await supabase
-            .from("polls")
-            .select(
-              "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
-            )
-            .eq("status", "active")
-            .in("user_id", pollUserIds)
-            .order("created_at", { ascending: false })
-            .limit(30)
-        : { data: [], error: null };
+      const [followedPollsResult, recentPollsResult] = await Promise.all([
+        pollUserIds.length
+          ? supabase
+              .from("polls")
+              .select(
+                "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
+              )
+              .eq("status", "active")
+              .in("user_id", pollUserIds)
+              .order("created_at", { ascending: false })
+              .limit(30)
+          : Promise.resolve({ data: [] as PollRecord[], error: null }),
+        supabase
+          .from("polls")
+          .select(
+            "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
+          )
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(40),
+      ]);
 
-      if (myFeedPollsError) {
-        console.error("Error loading My Feed polls:", myFeedPollsError);
-        setMyFeedPolls([]);
-        return;
+      if (followedPollsResult.error) {
+        console.error("Error loading followed polls:", followedPollsResult.error);
       }
 
-      const hydratedMyFeedPolls = await hydratePolls(
-        supabase,
-        ((myFeedPollRows ?? []) as PollRecord[]),
-        userId
+      if (recentPollsResult.error) {
+        console.error("Error loading recent polls:", recentPollsResult.error);
+      }
+
+      const mergedPollRows = [
+        ...(((followedPollsResult.data ?? []) as PollRecord[]) ?? []),
+        ...(((recentPollsResult.data ?? []) as PollRecord[]) ?? []),
+      ];
+      const dedupedPollRows = Array.from(
+        new Map(mergedPollRows.map((poll) => [poll.id, poll])).values()
       );
+      const hydratedPolls = await hydratePolls(supabase, dedupedPollRows, userId);
+
       setMyFeedPolls(
-        [...hydratedMyFeedPolls].sort(
-          (left, right) =>
-            getPublishedAtTimestamp(right.created_at) - getPublishedAtTimestamp(left.created_at)
-        )
+        [...hydratedPolls].sort((left, right) => {
+          const recencyDifference =
+            getPublishedAtTimestamp(right.created_at) - getPublishedAtTimestamp(left.created_at);
+
+          if (recencyDifference !== 0) {
+            return recencyDifference;
+          }
+
+          return getPollTrendingScore(right) - getPollTrendingScore(left);
+        })
       );
     }
 
@@ -2632,21 +2516,6 @@ export default function Home() {
   const displayedArticles = useMemo(() => {
     const copied = [...articles];
 
-    if (sortMode === "my-feed") {
-      const filtered =
-        categories.length > 0
-          ? copied.filter((article) => categories.includes(article.category))
-          : copied;
-
-      return rankArticlesWithSourcePreferences(filtered, {
-        preferredSources,
-        showLessSources,
-        likedSources,
-        dislikedSources,
-        mode: "my-feed",
-      });
-    }
-
     if (sortMode === "latest") {
       return rankArticlesWithSourcePreferences(copied, {
         mode: "latest",
@@ -2656,11 +2525,6 @@ export default function Home() {
     return copied;
   }, [
     articles,
-    categories,
-    preferredSources,
-    showLessSources,
-    likedSources,
-    dislikedSources,
     sortMode,
   ]);
 
@@ -2834,12 +2698,6 @@ export default function Home() {
     }
   }, [localLocationLabel, selectedLocalCity, sortMode, visibleArticles.length]);
 
-  useEffect(() => {
-    if (sortMode === "my-feed") {
-      console.log("MY FEED CATEGORIES", categories);
-      console.log("MY FEED ARTICLES COUNT", visibleArticles.length);
-    }
-  }, [categories, sortMode, visibleArticles.length]);
   const localCitySuggestions = useMemo(() => {
     if (sortMode !== "local") {
       return [] as string[];
@@ -3022,29 +2880,16 @@ export default function Home() {
   }, [balancedTrendingArticles, myFeedPolls, videos]);
 
   const myFeedRenderItems = useMemo(() => {
-    if (sortMode !== "my-feed") {
+    if (sortMode !== "polls") {
       return [];
     }
 
-    const items: Array<
-      | { type: "article"; key: string; article: Article }
-      | { type: "poll"; key: string; poll: PollWithResults }
-    > = visibleArticles.map((article) => ({
-      type: "article" as const,
-      key: `article:${article.id}:${article.url ?? ""}`,
-      article,
+    return myFeedPolls.map((poll) => ({
+      type: "poll" as const,
+      key: `poll:${poll.id}`,
+      poll,
     }));
-
-    myFeedPolls.forEach((poll, index) => {
-      items.splice(Math.min(items.length, 2 + index * 5), 0, {
-        type: "poll" as const,
-        key: `poll:${poll.id}`,
-        poll,
-      });
-    });
-
-    return items;
-  }, [myFeedPolls, sortMode, visibleArticles]);
+  }, [myFeedPolls, sortMode]);
 
   useEffect(() => {
     console.log(
@@ -3456,11 +3301,11 @@ export default function Home() {
               </button>
               <button
                 className={`toolbar-pill ${
-                  sortMode === "my-feed" ? "toolbar-pill-active" : ""
+                  sortMode === "polls" ? "toolbar-pill-active" : ""
                 }`}
-                onClick={() => setSortMode("my-feed")}
+                onClick={() => setSortMode("polls")}
               >
-                My Feed
+                Polls
               </button>
               <button
                 className={`toolbar-pill ${
@@ -3581,19 +3426,19 @@ export default function Home() {
         </div>
       ) : null}
 
-      {sortMode === "my-feed" && categories.length === 0 && myFeedPolls.length === 0 ? (
+      {sortMode === "polls" && myFeedPolls.length === 0 ? (
         <div className="empty-state">
-          <strong>No categories selected</strong>
-          <span>Choose categories in Profile to build your personalized feed.</span>
+          <strong>No polls yet</strong>
+          <span>Create the first one.</span>
         </div>
       ) : visibleArticles.length === 0 &&
-        !(sortMode === "my-feed" && myFeedRenderItems.length > 0) ? (
+        !(sortMode === "polls" && myFeedRenderItems.length > 0) ? (
         <div className="empty-state">
           <strong>
             {feedLoadError
               ? "Couldn’t load stories."
-              : sortMode === "my-feed"
-              ? "No articles found"
+              : sortMode === "polls"
+              ? "No polls yet"
               : sortMode === "local"
               ? "No local stories found for this city yet."
               : "No stories yet"}
@@ -3601,8 +3446,8 @@ export default function Home() {
           <span>
             {feedLoadError
               ? "Tap to retry."
-              : sortMode === "my-feed"
-              ? "Try adding more categories or check back when new stories land."
+              : sortMode === "polls"
+              ? "Create the first one."
               : sortMode === "local"
               ? "Choose a nearby city."
               : "Check back in a moment for fresh stories."}
@@ -3674,18 +3519,14 @@ export default function Home() {
                 }
               });
             })()
-            : sortMode === "my-feed"
+            : sortMode === "polls"
             ? myFeedRenderItems.map((item) => (
                 <div key={item.key} className="stack">
-                  {item.type === "poll" ? (
-                    <PollCard
-                      poll={item.poll}
-                      onVote={handleVoteOnPoll}
-                      isVoting={activePollVoteId === item.poll.id}
-                    />
-                  ) : (
-                    renderArticleFeedCard(item.article)
-                  )}
+                  <PollCard
+                    poll={item.poll}
+                    onVote={handleVoteOnPoll}
+                    isVoting={activePollVoteId === item.poll.id}
+                  />
                 </div>
               ))
             : visibleArticles.map((article) => {

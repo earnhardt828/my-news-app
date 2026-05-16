@@ -8,7 +8,6 @@ import SourcePreferenceSheet from "../components/source-preference-sheet";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ShareButton from "../components/share-button";
-import { apiFetch } from "../../lib/api-base";
 import {
   getBestArticleImage,
   isLikelyHighQualityArticleImage,
@@ -17,7 +16,6 @@ import {
 } from "../../lib/article-images";
 import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
-import { rankArticlesWithSourcePreferences } from "../../lib/feed-ranking";
 import {
   applyPollVoteUpdate,
   getPollTrendingScore,
@@ -47,32 +45,6 @@ type FeedArticle = {
   content?: string | null;
   saved: boolean;
 };
-
-type SavedArticleRecord = {
-  article_id: number;
-};
-
-type DbSourceRating = {
-  source_name: string;
-  rating: "like" | "dislike";
-};
-
-function dedupeFeedArticles(articles: Omit<FeedArticle, "saved">[]) {
-  const seen = new Set<string>();
-
-  return articles.filter((article) => {
-    const key = `${(article.url ?? "").trim().toLowerCase()}::${cleanDisplayText(article.title)
-      .trim()
-      .toLowerCase()}`;
-
-    if (seen.has(key)) {
-      return false;
-    }
-
-    seen.add(key);
-    return true;
-  });
-}
 
 export default function MyFeed() {
   const [articles, setArticles] = useState<FeedArticle[]>([]);
@@ -131,54 +103,25 @@ export default function MyFeed() {
       setPreferredSources(profile?.preferred_sources ?? []);
       setShowLessSources(profile?.show_less_sources ?? []);
       console.log("MY FEED CATEGORIES", userCategories);
-      const fallbackPath = "/api/news?mode=trending&pageSize=30";
-
-      const categoryResponses = await Promise.allSettled(
-        userCategories.map(async (category) => {
-          const response = await apiFetch(
-            `/api/news?mode=myfeed&category=${encodeURIComponent(category)}&pageSize=18`
-          );
-
-          if (!response.ok) {
-            throw new Error(`Could not load category ${category} (${response.status})`);
-          }
-
-          const payload = (await response.json()) as
-            | { articles?: Omit<FeedArticle, "saved">[] }
-            | Omit<FeedArticle, "saved">[];
-
-          return Array.isArray(payload) ? payload : (payload.articles ?? []);
-        })
-      );
-
-      const personalizedNews = categoryResponses.flatMap((result) =>
-        result.status === "fulfilled" ? result.value : []
-      );
 
       const [
-        { data: savedArticlesData },
-        { data: sourceRatingsData },
         { data: followRowsData },
+        recentPollsResult,
       ] = await Promise.all([
-        supabase
-          .from("saved_articles")
-          .select("article_id")
-          .eq("user_id", userData.user.id),
-        supabase
-          .from("source_ratings")
-          .select("source_name, rating")
-          .eq("user_id", userData.user.id),
         supabase
           .from("user_follows")
           .select("following_id")
           .eq("follower_id", userData.user.id),
+        supabase
+          .from("polls")
+          .select(
+            "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
+          )
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(40),
       ]);
 
-      const savedArticleIds = new Set(
-        ((savedArticlesData ?? []) as SavedArticleRecord[]).map(
-          (savedArticle) => savedArticle.article_id
-        )
-      );
       const followedUserIds = Array.from(
         new Set([
           userData.user.id,
@@ -200,68 +143,37 @@ export default function MyFeed() {
             .limit(24)
         : { data: [], error: null };
 
-      if (pollsError) {
-        console.error("Error loading My Feed polls:", pollsError);
+      if (pollsError || recentPollsResult.error) {
+        console.error("Error loading Polls page polls:", pollsError ?? recentPollsResult.error);
         setFollowedPolls([]);
       } else {
+        const mergedPollRows = [
+          ...(((pollsData ?? []) as PollRecord[]) ?? []),
+          ...(((recentPollsResult.data ?? []) as PollRecord[]) ?? []),
+        ];
+        const dedupedPollRows = Array.from(
+          new Map(mergedPollRows.map((poll) => [poll.id, poll])).values()
+        );
         const hydratedPolls = await hydratePolls(
           supabase,
-          ((pollsData ?? []) as PollRecord[]),
+          dedupedPollRows,
           userData.user.id
         );
         setFollowedPolls(
-          [...hydratedPolls].sort(
-            (left, right) => getPollTrendingScore(right) - getPollTrendingScore(left)
-          )
+          [...hydratedPolls].sort((left, right) => {
+            const recentDifference =
+              new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime();
+
+            if (recentDifference !== 0) {
+              return recentDifference;
+            }
+
+            return getPollTrendingScore(right) - getPollTrendingScore(left);
+          })
         );
       }
-
-      let filtered =
-        userCategories.length > 0
-          ? personalizedNews.filter((item) => userCategories.includes(item.category))
-          : personalizedNews;
-
-      if (filtered.length === 0) {
-        const fallbackRes = await apiFetch(fallbackPath);
-        const fallbackPayload = (await fallbackRes.json()) as
-          | { articles?: Omit<FeedArticle, "saved">[] }
-          | Omit<FeedArticle, "saved">[];
-        const fallbackNews = Array.isArray(fallbackPayload)
-          ? fallbackPayload
-          : (fallbackPayload.articles ?? []);
-
-        filtered =
-          userCategories.length > 0
-            ? fallbackNews.filter((item) => userCategories.includes(item.category))
-            : fallbackNews;
-
-        if (filtered.length === 0) {
-          filtered = fallbackNews;
-        }
-      }
-
-      filtered = dedupeFeedArticles(filtered);
-
-      const ranked = rankArticlesWithSourcePreferences(
-        filtered.map((article) => ({
-          ...article,
-          saved: savedArticleIds.has(article.id),
-        })),
-        {
-          preferredSources: profile?.preferred_sources ?? [],
-          showLessSources: profile?.show_less_sources ?? [],
-          likedSources: ((sourceRatingsData ?? []) as DbSourceRating[])
-            .filter((rating) => rating.rating === "like")
-            .map((rating) => rating.source_name),
-          dislikedSources: ((sourceRatingsData ?? []) as DbSourceRating[])
-            .filter((rating) => rating.rating === "dislike")
-            .map((rating) => rating.source_name),
-          mode: "my-feed",
-        }
-      );
-
-      setArticles(ranked);
-      console.log("MY FEED ARTICLES COUNT", ranked.length);
+      setArticles([]);
+      console.log("MY FEED ARTICLES COUNT", 0);
       setIsLoading(false);
     }
 
@@ -446,13 +358,13 @@ export default function MyFeed() {
     <section className="page-shell">
       {isLoading ? (
         <div className="loading-state">
-          <strong>Loading your feed...</strong>
-          <span>Pulling in stories for your selected categories.</span>
+          <strong>Loading polls...</strong>
+          <span>Pulling in recent community polls.</span>
         </div>
       ) : articles.length === 0 && followedPolls.length === 0 ? (
         <div className="empty-state">
-          <strong>No stories or polls yet</strong>
-          <span>Try adding more categories or follow people to personalize this feed.</span>
+          <strong>No polls yet</strong>
+          <span>Create the first one.</span>
         </div>
       ) : (
         <div className="stack">
