@@ -396,6 +396,48 @@ const RSS_FEEDS: RssFeedConfig[] = [
     category: "Local News",
     tags: ["chicago", "illinois", "local"],
   },
+  {
+    url: "https://www.latimes.com/california/rss2.0.xml",
+    source: "Los Angeles Times",
+    category: "Local News",
+    tags: ["los angeles", "california", "local", "socal"],
+  },
+  {
+    url: "https://ktla.com/feed/",
+    source: "KTLA",
+    category: "Local News",
+    tags: ["los angeles", "california", "local", "socal"],
+  },
+  {
+    url: "https://abc7.com/feed/",
+    source: "ABC7 Los Angeles",
+    category: "Local News",
+    tags: ["los angeles", "california", "local", "socal"],
+  },
+  {
+    url: "https://www.nbclosangeles.com/feed/",
+    source: "NBC Los Angeles",
+    category: "Local News",
+    tags: ["los angeles", "california", "local", "socal"],
+  },
+  {
+    url: "https://www.cbsnews.com/losangeles/latest/rss/main",
+    source: "CBS Los Angeles",
+    category: "Local News",
+    tags: ["los angeles", "california", "local", "socal"],
+  },
+  {
+    url: "https://laist.com/feeds/posts/default",
+    source: "LAist",
+    category: "Local News",
+    tags: ["los angeles", "california", "local", "socal"],
+  },
+  {
+    url: "https://www.foxla.com/rss",
+    source: "FOX 11 Los Angeles",
+    category: "Local News",
+    tags: ["los angeles", "california", "local", "socal"],
+  },
 ];
 
 const CHARLOTTE_LOCAL_SOURCES = [

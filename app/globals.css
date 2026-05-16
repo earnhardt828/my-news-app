@@ -470,6 +470,69 @@ input {
   color: var(--foreground);
 }
 
+.home-sections-shell {
+  gap: 16px;
+}
+
+.home-section-block {
+  display: grid;
+  gap: 14px;
+}
+
+.home-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.home-section-list {
+  gap: 12px;
+}
+
+.compact-empty-state {
+  padding: 18px;
+}
+
+.home-weather-card {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 190, 118, 0.16), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(246, 248, 253, 0.96));
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+}
+
+:root[data-theme="dark"] .home-weather-card {
+  background:
+    radial-gradient(circle at top left, rgba(255, 190, 118, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(20, 28, 44, 0.94), rgba(15, 22, 35, 0.98));
+}
+
+.home-weather-city {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-weather-temp {
+  font-size: clamp(2rem, 8vw, 2.8rem);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+}
+
+.home-weather-meta {
+  align-items: flex-end;
+  text-align: right;
+}
+
 .page-hero {
   display: grid;
   gap: 12px;

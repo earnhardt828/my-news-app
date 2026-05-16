@@ -166,6 +166,19 @@ type TrendingFeedItem =
         | { kind: "celebrity-buzz"; article: Article };
     };
 
+type RankedSourceSummary = {
+  sourceName: string;
+  likes: number;
+  heartedByCurrentUser: boolean;
+};
+
+type WeatherCardData = {
+  temperature: number;
+  weatherLabel: string;
+  windMph: number | null;
+  cityLabel: string;
+};
+
 const LOCAL_CITY_SUGGESTIONS = [
   "Chicago, IL",
   "Los Angeles, CA",
@@ -313,6 +326,23 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["philadelphia", "pennsylvania", "philly", "camden", "delaware county"],
   },
 } as const;
+
+const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: number }> = {
+  "Chicago, IL": { latitude: 41.8781, longitude: -87.6298 },
+  "Los Angeles, CA": { latitude: 34.0522, longitude: -118.2437 },
+  "New York, NY": { latitude: 40.7128, longitude: -74.006 },
+  "Atlanta, GA": { latitude: 33.749, longitude: -84.388 },
+  "Houston, TX": { latitude: 29.7604, longitude: -95.3698 },
+  "Miami, FL": { latitude: 25.7617, longitude: -80.1918 },
+  "Charlotte, NC": { latitude: 35.2271, longitude: -80.8431 },
+  "Cincinnati, OH": { latitude: 39.1031, longitude: -84.512 },
+  "Dallas, TX": { latitude: 32.7767, longitude: -96.797 },
+  "Detroit, MI": { latitude: 42.3314, longitude: -83.0458 },
+  "Minneapolis, MN": { latitude: 44.9778, longitude: -93.265 },
+  "Phoenix, AZ": { latitude: 33.4484, longitude: -112.074 },
+  "San Francisco, CA": { latitude: 37.7749, longitude: -122.4194 },
+  "Philadelphia, PA": { latitude: 39.9526, longitude: -75.1652 },
+};
 
 type SupportedLocalCity = keyof typeof LOCAL_CITY_CONFIGS;
 
@@ -488,6 +518,74 @@ function resolveSupportedMetroCity(options?: {
   }
 
   return null;
+}
+
+function getDistanceBetweenCoords(
+  left: { latitude: number; longitude: number },
+  right: { latitude: number; longitude: number }
+) {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMiles = 3958.8;
+  const latitudeDelta = toRadians(right.latitude - left.latitude);
+  const longitudeDelta = toRadians(right.longitude - left.longitude);
+  const startLatitude = toRadians(left.latitude);
+  const endLatitude = toRadians(right.latitude);
+
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(startLatitude) *
+      Math.cos(endLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2;
+
+  return 2 * earthRadiusMiles * Math.asin(Math.sqrt(haversine));
+}
+
+function getNearestSupportedMetroByCoords(
+  latitude: number,
+  longitude: number
+): SupportedLocalCity {
+  return (Object.entries(LOCAL_CITY_COORDINATES) as Array<
+    [SupportedLocalCity, { latitude: number; longitude: number }]
+  >).reduce<{
+    city: SupportedLocalCity;
+    distance: number;
+  }>(
+    (closest, [city, coords]) => {
+      const distance = getDistanceBetweenCoords(
+        { latitude, longitude },
+        coords
+      );
+
+      if (distance < closest.distance) {
+        return {
+          city,
+          distance,
+        };
+      }
+
+      return closest;
+    },
+    {
+      city: "Charlotte, NC",
+      distance: Number.POSITIVE_INFINITY,
+    }
+  ).city;
+}
+
+function getWeatherLabel(weatherCode: number | null | undefined) {
+  if (weatherCode === null || weatherCode === undefined) {
+    return "Local forecast";
+  }
+
+  if (weatherCode === 0) return "Clear";
+  if ([1, 2].includes(weatherCode)) return "Partly cloudy";
+  if (weatherCode === 3) return "Cloudy";
+  if ([45, 48].includes(weatherCode)) return "Fog";
+  if ([51, 53, 55, 56, 57].includes(weatherCode)) return "Drizzle";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(weatherCode)) return "Rain";
+  if ([71, 73, 75, 77, 85, 86].includes(weatherCode)) return "Snow";
+  if ([95, 96, 99].includes(weatherCode)) return "Thunderstorms";
+  return "Forecast";
 }
 
 function getLocalSearchTerms(localQuery: string, localLocationLabel: string) {
@@ -720,6 +818,17 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
   return payload;
 }
 
+function hydrateFeedArticles(feedArticles: FeedArticlePayload[]) {
+  return feedArticles.map((article) => ({
+    ...article,
+    likes: 0,
+    likeUsers: [],
+    likedByCurrentUser: false,
+    comments: [],
+    saved: false,
+  })) as Article[];
+}
+
 function isFallbackFeedArticle(article: FeedArticlePayload) {
   return article.url?.includes("graffiti.app/fallback") ?? false;
 }
@@ -827,6 +936,13 @@ export default function Home() {
   const [isLocalAutocompleteOpen, setIsLocalAutocompleteOpen] = useState(false);
   const [localSearchStatus, setLocalSearchStatus] = useState<string | null>(null);
   const [isLocalAreaLoading, setIsLocalAreaLoading] = useState(false);
+  const [localSectionArticles, setLocalSectionArticles] = useState<Article[]>([]);
+  const [categorySectionArticles, setCategorySectionArticles] = useState<Article[]>([]);
+  const [isCategorySectionLoading, setIsCategorySectionLoading] = useState(false);
+  const [homeSourceRankings, setHomeSourceRankings] = useState<RankedSourceSummary[]>([]);
+  const [isHomeSourceRankingsLoading, setIsHomeSourceRankingsLoading] = useState(false);
+  const [weatherCard, setWeatherCard] = useState<WeatherCardData | null>(null);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1523,6 +1639,276 @@ export default function Home() {
     void loadTrendingVideos();
   }, []);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadCategorySection() {
+      if (categories.length === 0) {
+        if (!isCancelled) {
+          setCategorySectionArticles([]);
+          setIsCategorySectionLoading(false);
+        }
+        return;
+      }
+
+      setIsCategorySectionLoading(true);
+
+      try {
+        const responses = await Promise.allSettled(
+          categories.slice(0, 4).map(async (category) => {
+            const response = await apiFetch(
+              `/api/news?mode=myfeed&category=${encodeURIComponent(category)}&page=1&pageSize=8`
+            );
+
+            if (!response.ok) {
+              throw new Error(`Category feed request failed (${response.status})`);
+            }
+
+            return hydrateFeedArticles(
+              normalizeNewsPayload(
+                (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            );
+          })
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        const mergedArticles = responses.reduce<Article[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("Category section fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return mergeArticlesByIdentity(accumulator, result.value);
+        }, []);
+
+        setCategorySectionArticles(mergedArticles);
+      } catch (error) {
+        console.error("Error loading category section:", error);
+        if (!isCancelled) {
+          setCategorySectionArticles([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsCategorySectionLoading(false);
+        }
+      }
+    }
+
+    void loadCategorySection();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [categories]);
+
+  useEffect(() => {
+    if (!selectedLocalCity) {
+      return;
+    }
+
+    const city = selectedLocalCity;
+    let isCancelled = false;
+
+    async function loadLocalSection() {
+      setIsLocalAreaLoading(true);
+
+      try {
+        const localQueryValue =
+          LOCAL_CITY_CONFIGS[city]?.query ?? buildLocalNewsQuery({ label: city });
+        const response = await apiFetch(
+          `/api/news?mode=local&location=${encodeURIComponent(localQueryValue)}&page=1&pageSize=6`
+        );
+
+        if (!response.ok) {
+          throw new Error(`Local section request failed (${response.status})`);
+        }
+
+        const payload = normalizeNewsPayload(
+          (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        setLocalSectionArticles(hydrateFeedArticles(payload.articles));
+      } catch (error) {
+        console.error("LOCAL SECTION FETCH ERROR", error);
+        if (!isCancelled) {
+          setLocalSectionArticles([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLocalAreaLoading(false);
+        }
+      }
+    }
+
+    void loadLocalSection();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [localEmptyStateHeadline, selectedLocalCity]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadHomeSourceRankings() {
+      setIsHomeSourceRankingsLoading(true);
+
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const { data, error } = await supabase
+          .from("source_ratings")
+          .select("id, user_id, source_name, rating");
+
+        if (error) {
+          throw error;
+        }
+
+        const ratings = (data ?? []) as Array<{
+          user_id: string;
+          source_name: string;
+          rating: "like" | "dislike";
+        }>;
+        const currentUserId = user?.id ?? null;
+        const sourceMap = new Map<string, RankedSourceSummary>();
+
+        ratings.forEach((rating) => {
+          const current = sourceMap.get(rating.source_name) ?? {
+            sourceName: rating.source_name,
+            likes: 0,
+            heartedByCurrentUser: false,
+          };
+
+          if (rating.rating === "like") {
+            current.likes += 1;
+          }
+
+          if (currentUserId && rating.user_id === currentUserId && rating.rating === "like") {
+            current.heartedByCurrentUser = true;
+          }
+
+          sourceMap.set(rating.source_name, current);
+        });
+
+        if (isCancelled) {
+          return;
+        }
+
+        setHomeSourceRankings(
+          [...sourceMap.values()]
+            .filter((source) => source.likes > 0)
+            .sort((left, right) => {
+              if (right.likes !== left.likes) {
+                return right.likes - left.likes;
+              }
+
+              return left.sourceName.localeCompare(right.sourceName);
+            })
+            .slice(0, 6)
+        );
+      } catch (error) {
+        console.error("Error loading home source rankings:", error);
+        if (!isCancelled) {
+          setHomeSourceRankings([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsHomeSourceRankingsLoading(false);
+        }
+      }
+    }
+
+    void loadHomeSourceRankings();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedLocalCity) {
+      return;
+    }
+
+    const city = selectedLocalCity;
+    let isCancelled = false;
+
+    async function loadWeatherCard() {
+      const coords = LOCAL_CITY_COORDINATES[city];
+
+      if (!coords) {
+        if (!isCancelled) {
+          setWeatherCard(null);
+          setIsWeatherLoading(false);
+        }
+        return;
+      }
+
+      setIsWeatherLoading(true);
+
+      try {
+        const response = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph`,
+          {
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Weather request failed (${response.status})`);
+        }
+
+        const payload = (await response.json()) as {
+          current?: {
+            temperature_2m?: number;
+            weather_code?: number;
+            wind_speed_10m?: number;
+          };
+        };
+
+        if (
+          isCancelled ||
+          typeof payload.current?.temperature_2m !== "number"
+        ) {
+          return;
+        }
+
+        setWeatherCard({
+          temperature: payload.current.temperature_2m,
+          weatherLabel: getWeatherLabel(payload.current.weather_code),
+          windMph: payload.current.wind_speed_10m ?? null,
+          cityLabel: city,
+        });
+      } catch (error) {
+        console.error("Error loading weather card:", error);
+        if (!isCancelled) {
+          setWeatherCard(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsWeatherLoading(false);
+        }
+      }
+    }
+
+    void loadWeatherCard();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedLocalCity]);
+
   const handleVoteOnPoll = async (pollId: string, optionId: string) => {
     if (!userId) {
       alert("Log in to vote in polls.");
@@ -1683,7 +2069,7 @@ export default function Home() {
   }, [articles.length, sortMode, videos]);
 
   useEffect(() => {
-    if (sortMode !== "local" || localQuery) {
+    if (selectedLocalCity || localQuery.trim()) {
       return;
     }
 
@@ -1699,52 +2085,13 @@ export default function Home() {
     }
 
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
-            {
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          );
-          const payload = (await response.json().catch(() => null)) as
-            | {
-                address?: {
-                  city?: string;
-                  town?: string;
-                  village?: string;
-                  state?: string;
-                };
-              }
-            | null;
-          const city =
-            payload?.address?.city ??
-            payload?.address?.town ??
-            payload?.address?.village ??
-            "";
-          const state = payload?.address?.state ?? "";
-          const detectedLabel = [city, state].filter(Boolean).join(", ");
-          const supportedMetro = resolveSupportedMetroCity({
-            city,
-            state,
-            label: detectedLabel,
-          });
-
-          if (supportedMetro) {
-            applyLocalCitySelection(supportedMetro);
-            setLocalSearchStatus("Choose a nearby city.");
-            return;
-          }
-
-          applyLocalCitySelection("Charlotte, NC");
-          setLocalSearchStatus("Choose a nearby city.");
-        } catch (error) {
-          console.error("Error resolving local location:", error);
-          applyLocalCitySelection("Charlotte, NC");
-          setLocalSearchStatus("Choose a nearby city.");
-        }
+      (position) => {
+        const nearestMetro = getNearestSupportedMetroByCoords(
+          position.coords.latitude,
+          position.coords.longitude
+        );
+        applyLocalCitySelection(nearestMetro);
+        setLocalSearchStatus("Choose a nearby city.");
       },
       () => {
         applyLocalCitySelection("Charlotte, NC");
@@ -1756,7 +2103,7 @@ export default function Home() {
         maximumAge: 600000,
       }
     );
-  }, [applyLocalCitySelection, localQuery, sortMode]);
+  }, [applyLocalCitySelection, localQuery, selectedLocalCity]);
 
   const handleUpdateLocalQuery = useCallback(async () => {
     const trimmedDraft = localQueryDraft.trim();
@@ -2933,6 +3280,27 @@ export default function Home() {
     [videos]
   );
 
+  const topTenTrendingArticles = useMemo(
+    () => balancedTrendingArticles.slice(0, 10),
+    [balancedTrendingArticles]
+  );
+
+  const topPollsSection = useMemo(
+    () =>
+      [...myFeedPolls]
+        .sort((left, right) => {
+          const scoreDifference = getPollFeedScore(right) - getPollFeedScore(left);
+
+          if (scoreDifference !== 0) {
+            return scoreDifference;
+          }
+
+          return getPublishedAtTimestamp(right.created_at) - getPublishedAtTimestamp(left.created_at);
+        })
+        .slice(0, 3),
+    [myFeedPolls]
+  );
+
   const myFeedRenderItems = useMemo(() => {
     if (sortMode !== "polls") {
       return [];
@@ -3395,6 +3763,388 @@ export default function Home() {
     return <LoadingScreen label="Loading Graffiti" message="Loading live stories..." />;
   }
 
+  if (sortMode === "trending") {
+    return (
+      <section className="page-shell home-sections-shell">
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Top 10 Trending</strong>
+              <span className="muted">
+                Ranked for launch day by freshness, provider relevance, source variety, and activity.
+              </span>
+            </div>
+          </div>
+          <div className="stack home-section-list">
+            {topTenTrendingArticles.map((article, index) => (
+              <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                {renderArticleFeedCard(article, {
+                  rankLabel: `Top ${index + 1}`,
+                })}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">My Feed</strong>
+              <span className="muted">Choose categories to shape your personalized section.</span>
+            </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => {
+                setCategoryDraft(categories);
+                setCategorySheetStatus(null);
+                setIsCategorySheetOpen(true);
+              }}
+            >
+              {categories.length > 0 ? "Edit categories" : "Add categories"}
+            </button>
+          </div>
+
+          {categories.length === 0 ? (
+            <div className="stack" style={{ gap: "12px" }}>
+              <span className="muted">Pick a few topics to build this section.</span>
+              <div className="category-grid">
+                {CATEGORY_OPTIONS.slice(0, 8).map((category) => (
+                  <button
+                    key={category}
+                    className="category-pill"
+                    onClick={() => {
+                      setCategoryDraft([category]);
+                      setCategorySheetStatus(null);
+                      setIsCategorySheetOpen(true);
+                    }}
+                  >
+                    {getCategoryLabel(category)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : isCategorySectionLoading ? (
+            <div className="muted">Loading category stories...</div>
+          ) : categorySectionArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No category stories yet</strong>
+              <span>Try updating your interests or check back shortly.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {categorySectionArticles.slice(0, 6).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Source Rankings</strong>
+              <span className="muted">News companies people are hearting right now.</span>
+            </div>
+            <Link href="/source-rankings/" className="button button-secondary">
+              See all
+            </Link>
+          </div>
+
+          {isHomeSourceRankingsLoading ? (
+            <div className="muted">Loading source rankings...</div>
+          ) : homeSourceRankings.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No source hearts yet</strong>
+              <span>Heart a source from Search or its profile to build the rankings.</span>
+            </div>
+          ) : (
+            <div className="source-rankings-list">
+              {homeSourceRankings.map((source, index) => (
+                <Link
+                  key={source.sourceName}
+                  href={`/source/${slugifySourceName(source.sourceName)}/`}
+                  className="source-rankings-row"
+                >
+                  <span className="source-rankings-rank">#{index + 1}</span>
+                  <div className="source-rankings-brand">
+                    <SourceBadge sourceName={source.sourceName} />
+                    <span className="source-rankings-name">{source.sourceName}</span>
+                  </div>
+                  <div className="source-rankings-metrics">
+                    <span
+                      className={`icon-action-pill icon-action-pill-icon-only ${
+                        source.heartedByCurrentUser ? "icon-action-pill-active" : ""
+                      }`}
+                    >
+                      <span className="icon-action-glyph" aria-hidden="true">
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill={source.heartedByCurrentUser ? "currentColor" : "none"}
+                          stroke="currentColor"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
+                        </svg>
+                      </span>
+                    </span>
+                    <strong>{source.likes}</strong>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Weather</strong>
+              <span className="muted">Forecast and local headlines for your selected city.</span>
+            </div>
+          </div>
+
+          <div className="stack local-feed-shell">
+            <div className="home-weather-card">
+              <div className="stack" style={{ gap: "4px" }}>
+                <span className="home-weather-city">{selectedLocalCity ?? localLocationLabel}</span>
+                <strong className="home-weather-temp">
+                  {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
+                </strong>
+                <span className="muted">
+                  {weatherCard ? weatherCard.weatherLabel : isWeatherLoading ? "Loading forecast..." : "Forecast unavailable"}
+                </span>
+              </div>
+              <div className="stack home-weather-meta" style={{ gap: "6px" }}>
+                <span className="muted">
+                  {weatherCard?.windMph ? `Wind ${Math.round(weatherCard.windMph)} mph` : "Local outlook"}
+                </span>
+              </div>
+            </div>
+
+            <div className="local-feed-controls">
+              <div className="local-feed-input-shell">
+                <input
+                  className="search-input local-feed-input"
+                  type="text"
+                  placeholder="Enter a major city"
+                  value={localQueryDraft}
+                  onFocus={() => setIsLocalAutocompleteOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => {
+                      setIsLocalAutocompleteOpen(false);
+                    }, 120);
+                  }}
+                  onChange={(event) => {
+                    setLocalQueryDraft(event.target.value);
+                    setLocalSearchStatus(null);
+                    setIsLocalAutocompleteOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      setIsLocalAutocompleteOpen(false);
+                      void handleUpdateLocalQuery();
+                    }
+                  }}
+                />
+                {isLocalAutocompleteOpen && localCitySuggestions.length > 0 ? (
+                  <div
+                    className="local-city-dropdown"
+                    role="listbox"
+                    aria-label="Suggested cities"
+                  >
+                    {localCitySuggestions.map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        className="local-city-dropdown-item"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          applyLocalCitySelection(city);
+                          setIsLocalAutocompleteOpen(false);
+                        }}
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="button button-secondary local-feed-button"
+                onClick={() => {
+                  setIsLocalAutocompleteOpen(false);
+                  void handleUpdateLocalQuery();
+                }}
+              >
+                Update
+              </button>
+            </div>
+
+            <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
+              {LOCAL_CITY_SUGGESTIONS.map((city) => (
+                <button
+                  key={city}
+                  type="button"
+                  className={`chip local-feed-city-chip ${
+                    localLocationLabel === city ? "local-feed-city-chip-active" : ""
+                  }`}
+                  onClick={() => {
+                    applyLocalCitySelection(city);
+                  }}
+                >
+                  {city}
+                </button>
+              ))}
+            </div>
+
+            {localSearchStatus ? <p className="settings-detail-note">{localSearchStatus}</p> : null}
+            {isLocalAreaLoading ? <p className="settings-detail-note">Loading local stories...</p> : null}
+
+            {localSectionArticles.length === 0 && !isLocalAreaLoading ? (
+              <div className="empty-state compact-empty-state">
+                <strong>{localEmptyStateHeadline}</strong>
+                <span>Choose a supported city to refresh local coverage.</span>
+              </div>
+            ) : (
+              <div className="compact-feed-module-list">
+                {localSectionArticles.slice(0, 3).map((article) => (
+                  <Link
+                    key={article.id || article.url || getArticleDeduplicationKey(article)}
+                    href={`/article/${article.id}/`}
+                    className="compact-feed-module-link compact-feed-module-link-rich"
+                  >
+                    <strong>{cleanDisplayText(article.title)}</strong>
+                    <span>{getSafeSourceLabel(article.source)}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Polls</strong>
+              <span className="muted">Top questions people are reacting to right now.</span>
+            </div>
+          </div>
+
+          {topPollsSection.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No polls yet</strong>
+              <span>Create the first one from the plus button.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {topPollsSection.map((poll) => (
+                <PollCard
+                  key={poll.id}
+                  poll={poll}
+                  onVote={handleVoteOnPoll}
+                  isVoting={activePollVoteId === poll.id}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {renderQuickWatchRow()}
+
+        {isCategorySheetOpen ? (
+          <div
+            className="bottom-sheet-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-sheet-title"
+          >
+            <div className="bottom-sheet">
+              <div className="bottom-sheet-handle" aria-hidden="true" />
+              <div className="bottom-sheet-header">
+                <div className="stack" style={{ gap: "6px" }}>
+                  <h3 id="category-sheet-title" className="modal-title">
+                    Customize feed
+                  </h3>
+                  <p className="muted bottom-sheet-title">
+                    Choose categories to shape your Graffiti feed.
+                  </p>
+                </div>
+                <button
+                  className="button button-secondary"
+                  onClick={() => {
+                    if (isSavingCategories) {
+                      return;
+                    }
+
+                    setIsCategorySheetOpen(false);
+                    setCategorySheetStatus(null);
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="category-sheet-grid">
+                {CATEGORY_OPTIONS.map((category) => (
+                  <button
+                    key={category}
+                    className={`category-pill ${
+                      categoryDraft.includes(category) ? "category-pill-active" : ""
+                    }`}
+                    onClick={() => handleToggleCategoryDraft(category)}
+                  >
+                    {getCategoryLabel(category)}
+                  </button>
+                ))}
+              </div>
+
+              {categorySheetStatus ? (
+                <div
+                  className={`status-message ${
+                    categorySheetStatus.type === "success"
+                      ? "status-success"
+                      : "status-error"
+                  }`}
+                >
+                  {categorySheetStatus.text}
+                </div>
+              ) : null}
+
+              <div className="modal-actions">
+                <button
+                  className="button button-secondary"
+                  onClick={() => {
+                    setCategoryDraft(categories);
+                    setCategorySheetStatus(null);
+                  }}
+                  disabled={isSavingCategories}
+                >
+                  Reset
+                </button>
+                <button
+                  className="button button-accent"
+                  onClick={handleSaveCategories}
+                  disabled={isSavingCategories || !userId}
+                >
+                  {isSavingCategories ? "Saving..." : "Save categories"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -3402,9 +4152,7 @@ export default function Home() {
           <div className="trending-tabs-wrap">
             <div className="toolbar toolbar-centered">
               <button
-                className={`toolbar-pill ${
-                  sortMode === "trending" ? "toolbar-pill-active" : ""
-                }`}
+                className="toolbar-pill"
                 onClick={() => setSortMode("trending")}
               >
                 Trending
@@ -3580,11 +4328,6 @@ export default function Home() {
               ? "Choose a nearby city."
               : "Check back in a moment for fresh stories."}
           </span>
-          {feedLoadError && sortMode === "trending" ? (
-            <button className="button button-secondary" onClick={handleRetryFeedLoad}>
-              Retry
-            </button>
-          ) : null}
         </div>
       ) : (
         <div className="stack feed-results-stack">
@@ -3592,13 +4335,11 @@ export default function Home() {
             <div className="feed-inline-error" role="status" aria-live="polite">
               <div className="stack" style={{ gap: "10px" }}>
                 <span>
-                  {sortMode === "trending"
-                    ? "Couldn’t load stories. Tap to retry."
-                    : sortMode === "local"
+                  {sortMode === "local"
                     ? localEmptyStateHeadline
                     : feedLoadError}
                 </span>
-                {sortMode === "trending" || sortMode === "local" ? (
+                {sortMode === "local" ? (
                   <div>
                     <button className="button button-secondary" onClick={handleRetryFeedLoad}>
                       Retry
@@ -3608,49 +4349,7 @@ export default function Home() {
               </div>
             </div>
           ) : null}
-          {sortMode === "trending"
-            ? (() => {
-                let rankedItemIndex = -1;
-                let insertedModuleCount = 0;
-
-                return trendingRenderItems.map((item) => {
-                  if (item.type !== "module") {
-                    rankedItemIndex += 1;
-                  }
-
-                const itemKey =
-                  item.type === "article"
-                    ? item.article.id || item.article.url || getArticleDeduplicationKey(item.article)
-                    : item.key;
-
-                const inlineModule =
-                  rankedItemIndex >= 0 &&
-                  (rankedItemIndex + 1) % 9 === 0 &&
-                  insertedModuleCount < trendingBreakModules.length
-                    ? trendingBreakModules[insertedModuleCount]
-                    : null;
-                const quickWatchRow =
-                  rankedItemIndex === 3 ? renderQuickWatchRow() : null;
-
-                if (inlineModule) {
-                  insertedModuleCount += 1;
-                }
-
-                try {
-                  return (
-                    <div key={itemKey} className="stack">
-                      {renderTrendingFeedItem(item, rankedItemIndex)}
-                      {quickWatchRow}
-                      {inlineModule ? renderTrendingFeedItem(inlineModule, rankedItemIndex) : null}
-                    </div>
-                  );
-                } catch (error) {
-                  console.error("TRENDING ITEM RENDER FAILED", item, error);
-                  return null;
-                }
-              });
-            })()
-            : sortMode === "polls"
+          {sortMode === "polls"
             ? myFeedRenderItems.map((item) => (
                 <div key={item.key} className="stack">
                   <PollCard
