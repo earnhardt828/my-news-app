@@ -2037,6 +2037,38 @@ input {
   padding-block: 12px;
 }
 
+.polls-filter-toolbar {
+  justify-content: flex-start;
+  margin-top: -4px;
+}
+
+.quick-watch-row {
+  gap: 14px;
+  overflow: hidden;
+}
+
+.quick-watch-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.quick-watch-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.quick-watch-item {
+  flex: 0 0 min(78vw, 320px);
+  scroll-snap-align: start;
+}
+
+.quick-watch-video-card {
+  height: 100%;
+}
+
 .local-city-dropdown {
   position: absolute;
   top: calc(100% + 8px);
@@ -3872,6 +3904,12 @@ input {
 
 .profile-comment-menu-wrap {
   position: relative;
+  flex-shrink: 0;
+}
+
+.profile-comment-delete-button {
+  min-height: 32px;
+  padding: 0 12px;
   flex-shrink: 0;
 }
 

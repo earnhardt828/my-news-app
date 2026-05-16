@@ -137,6 +137,21 @@ export function getPollKeywords(value: string) {
     .filter((token) => token.length >= 3 && !POLL_STOP_WORDS.has(token));
 }
 
+export function getPollFeedScore(poll: PollWithResults) {
+  const createdAtTimestamp = poll.created_at ? new Date(poll.created_at).getTime() : 0;
+  const ageHours = createdAtTimestamp
+    ? Math.max(0, (Date.now() - createdAtTimestamp) / (1000 * 60 * 60))
+    : 999;
+  const recencyBoost = Math.max(0, 120 - ageHours) / 120;
+
+  return (
+    poll.heartCount * 5 +
+    poll.commentCount * 4 +
+    poll.totalVotes * 3 +
+    recencyBoost * 6
+  );
+}
+
 export function isNewsRelatedPoll(
   question: string,
   category: string,

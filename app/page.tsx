@@ -22,7 +22,7 @@ import {
 import { cleanDisplayText } from "../lib/display-text";
 import {
   applyPollVoteUpdate,
-  getPollTrendingScore,
+  getPollFeedScore,
   hydratePolls,
   type PollRecord,
   type PollWithResults,
@@ -762,6 +762,8 @@ export default function Home() {
   >("top");
   const [isCommentSortMenuOpen, setIsCommentSortMenuOpen] = useState(false);
   const [myFeedPolls, setMyFeedPolls] = useState<PollWithResults[]>([]);
+  const [pollFilter, setPollFilter] = useState<"top" | "following" | "recent">("top");
+  const [pollFollowingIds, setPollFollowingIds] = useState<string[]>([]);
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [autoplayTrendingVideoId, setAutoplayTrendingVideoId] = useState<string | null>(null);
@@ -1367,6 +1369,7 @@ export default function Home() {
           )),
         ])
       );
+      setPollFollowingIds(pollUserIds);
 
       const [followedPollsResult, recentPollsResult] = await Promise.all([
         pollUserIds.length
@@ -1407,18 +1410,7 @@ export default function Home() {
       );
       const hydratedPolls = await hydratePolls(supabase, dedupedPollRows, userId);
 
-      setMyFeedPolls(
-        [...hydratedPolls].sort((left, right) => {
-          const recencyDifference =
-            getPublishedAtTimestamp(right.created_at) - getPublishedAtTimestamp(left.created_at);
-
-          if (recencyDifference !== 0) {
-            return recencyDifference;
-          }
-
-          return getPollTrendingScore(right) - getPollTrendingScore(left);
-        })
-      );
+      setMyFeedPolls(hydratedPolls);
     }
 
     void loadPolls();
@@ -2841,7 +2833,6 @@ export default function Home() {
         (article) => getCategoryLabel(getSafeCategoryLabel(article.category, article)) === "Celebrity"
       ) ?? null;
     const topPolls = myFeedPolls.slice(0, 2);
-    const quickWatchVideo = videos.find((video) => !video.fallback) ?? null;
 
     if (topPolls.length > 0) {
       modules.push({
@@ -2850,17 +2841,6 @@ export default function Home() {
         module: {
           kind: "top-polls",
           polls: topPolls,
-        },
-      });
-    }
-
-    if (quickWatchVideo) {
-      modules.push({
-        type: "module",
-        key: `module:quick-watch:${quickWatchVideo.id}`,
-        module: {
-          kind: "quick-watch",
-          video: quickWatchVideo,
         },
       });
     }
@@ -2877,19 +2857,50 @@ export default function Home() {
     }
 
     return modules;
-  }, [balancedTrendingArticles, myFeedPolls, videos]);
+  }, [balancedTrendingArticles, myFeedPolls]);
+
+  const quickWatchVideos = useMemo(
+    () => videos.filter((video) => !video.fallback).slice(0, 8),
+    [videos]
+  );
 
   const myFeedRenderItems = useMemo(() => {
     if (sortMode !== "polls") {
       return [];
     }
 
-    return myFeedPolls.map((poll) => ({
+    const sortedPolls = [...myFeedPolls]
+      .filter((poll) =>
+        pollFilter === "following" ? pollFollowingIds.includes(poll.user_id) : true
+      )
+      .sort((left, right) => {
+        if (pollFilter === "recent") {
+          return getPublishedAtTimestamp(right.created_at) - getPublishedAtTimestamp(left.created_at);
+        }
+
+        if (pollFilter === "following") {
+          const rightRecent = getPublishedAtTimestamp(right.created_at);
+          const leftRecent = getPublishedAtTimestamp(left.created_at);
+
+          if (rightRecent !== leftRecent) {
+            return rightRecent - leftRecent;
+          }
+        }
+
+        const scoreDifference = getPollFeedScore(right) - getPollFeedScore(left);
+        if (scoreDifference !== 0) {
+          return scoreDifference;
+        }
+
+        return getPublishedAtTimestamp(right.created_at) - getPublishedAtTimestamp(left.created_at);
+      });
+
+    return sortedPolls.map((poll) => ({
       type: "poll" as const,
       key: `poll:${poll.id}`,
       poll,
     }));
-  }, [myFeedPolls, sortMode]);
+  }, [myFeedPolls, pollFilter, pollFollowingIds, sortMode]);
 
   useEffect(() => {
     console.log(
@@ -3213,39 +3224,25 @@ export default function Home() {
           );
         }
 
-        if (item.module.kind === "quick-watch") {
+        if (item.module.kind === "celebrity-buzz") {
           return (
             <section className="section-card compact-feed-module">
               <div className="compact-feed-module-header">
-                <strong>Quick Watch</strong>
-                <span>Fast video catch-up</span>
+                <strong>Celebrity Buzz</strong>
+                <span>Trending entertainment headlines</span>
               </div>
               <Link
-                href={`/video/${item.module.video.id}/`}
+                href={`/article/${item.module.article.id}/`}
                 className="compact-feed-module-link compact-feed-module-link-rich"
               >
-                <strong>{item.module.video.title}</strong>
-                <span>{item.module.video.creator}</span>
+                <strong>{cleanDisplayText(item.module.article.title)}</strong>
+                <span>{getSafeSourceLabel(item.module.article.source)}</span>
               </Link>
             </section>
           );
         }
 
-        return (
-          <section className="section-card compact-feed-module">
-            <div className="compact-feed-module-header">
-              <strong>Celebrity Buzz</strong>
-              <span>Trending entertainment headlines</span>
-            </div>
-            <Link
-              href={`/article/${item.module.article.id}/`}
-              className="compact-feed-module-link compact-feed-module-link-rich"
-            >
-              <strong>{cleanDisplayText(item.module.article.title)}</strong>
-              <span>{getSafeSourceLabel(item.module.article.source)}</span>
-            </Link>
-          </section>
-        );
+        return null;
       }
 
       if (!item.video?.id || !item.video?.title || !item.video?.creator) {
@@ -3274,6 +3271,41 @@ export default function Home() {
       console.error("TRENDING ITEM RENDER FAILED", item, error);
       return null;
     }
+  };
+
+  const renderQuickWatchRow = () => {
+    if (quickWatchVideos.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="section-card quick-watch-row">
+        <div className="compact-feed-module-header">
+          <strong>Quick Watch</strong>
+          <span>Swipe through short video updates</span>
+        </div>
+        <div className="quick-watch-scroll" role="list" aria-label="Quick watch videos">
+          {quickWatchVideos.map((video) => (
+            <div key={video.id} className="quick-watch-item" role="listitem">
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={autoplayTrendingVideoId === video.id && !video.fallback}
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[video.id] = node;
+                }}
+                label="Quick Watch"
+                className="video-card-inline quick-watch-video-card"
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
   };
 
   if (
@@ -3426,10 +3458,37 @@ export default function Home() {
         </div>
       ) : null}
 
-      {sortMode === "polls" && myFeedPolls.length === 0 ? (
+      {sortMode === "polls" ? (
+        <div className="toolbar polls-filter-toolbar">
+          <button
+            className={`toolbar-pill ${pollFilter === "top" ? "toolbar-pill-active" : ""}`}
+            onClick={() => setPollFilter("top")}
+          >
+            Top Polls
+          </button>
+          <button
+            className={`toolbar-pill ${pollFilter === "following" ? "toolbar-pill-active" : ""}`}
+            onClick={() => setPollFilter("following")}
+          >
+            Following
+          </button>
+          <button
+            className={`toolbar-pill ${pollFilter === "recent" ? "toolbar-pill-active" : ""}`}
+            onClick={() => setPollFilter("recent")}
+          >
+            Recent
+          </button>
+        </div>
+      ) : null}
+
+      {sortMode === "polls" && myFeedRenderItems.length === 0 ? (
         <div className="empty-state">
-          <strong>No polls yet</strong>
-          <span>Create the first one.</span>
+          <strong>{pollFilter === "following" ? "No followed-user polls yet" : "No polls yet"}</strong>
+          <span>
+            {pollFilter === "following"
+              ? "Follow more people or create your own poll."
+              : "Create the first one."}
+          </span>
         </div>
       ) : visibleArticles.length === 0 &&
         !(sortMode === "polls" && myFeedRenderItems.length > 0) ? (
@@ -3501,6 +3560,8 @@ export default function Home() {
                   insertedModuleCount < trendingBreakModules.length
                     ? trendingBreakModules[insertedModuleCount]
                     : null;
+                const quickWatchRow =
+                  rankedItemIndex === 3 ? renderQuickWatchRow() : null;
 
                 if (inlineModule) {
                   insertedModuleCount += 1;
@@ -3510,6 +3571,7 @@ export default function Home() {
                   return (
                     <div key={itemKey} className="stack">
                       {renderTrendingFeedItem(item, rankedItemIndex)}
+                      {quickWatchRow}
                       {inlineModule ? renderTrendingFeedItem(inlineModule, rankedItemIndex) : null}
                     </div>
                   );

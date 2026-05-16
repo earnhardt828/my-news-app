@@ -1165,6 +1165,18 @@ export default function Profile() {
 
               <div className="profile-divider" />
 
+              <Link href="/profile/comments/" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>My Comments</strong>
+                  <span>Review and manage your recent comments.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
+
+              <div className="profile-divider" />
+
               <div className="profile-section-row">
                 <strong className="profile-section-title-sm">Favorite categories</strong>
                 <Link

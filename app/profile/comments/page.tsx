@@ -9,9 +9,10 @@ import { supabase } from "../../../lib/supabase";
 import { extractVideoIdFromUrl } from "../../../lib/video-feed";
 
 type MyComment = {
-  id: number;
+  id: number | string;
+  kind: "article" | "poll";
   text: string;
-  article_id: number;
+  article_id: number | string;
   article_title: string;
   article_source?: string | null;
   article_image?: string | null;
@@ -22,9 +23,26 @@ type MyComment = {
   hearts: number;
 };
 
-type RawProfileComment = Omit<MyComment, "hearts" | "article_title"> & {
+type RawProfileComment = {
+  id: number;
+  text: string;
   article_id: number | string;
   article_title?: string | null;
+  article_source?: string | null;
+  article_image?: string | null;
+  article_url?: string | null;
+  username: string | null;
+  user_id: string | null;
+  created_at: string | null;
+};
+
+type RawPollProfileComment = {
+  id: string;
+  poll_id: string;
+  user_id: string | null;
+  username: string | null;
+  text: string;
+  created_at: string | null;
 };
 
 function normalizeArticleId(value: number | string | null | undefined) {
@@ -127,10 +145,15 @@ function ReactionSummary({ hearts }: { hearts: number }) {
 }
 
 function getCommentDetailPath(comment: {
+  kind: "article" | "poll";
   article_id: number | string;
   article_url?: string | null;
-  id: number;
+  id: number | string;
 }) {
+  if (comment.kind === "poll") {
+    return `/poll/${comment.article_id}#comment-${comment.id}`;
+  }
+
   const videoId = extractVideoIdFromUrl(comment.article_url);
 
   if (videoId) {
@@ -145,6 +168,7 @@ export default function ProfileCommentsPage() {
   const [comments, setComments] = useState<MyComment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [activeDeleteId, setActiveDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -167,7 +191,7 @@ export default function ProfileCommentsPage() {
         return;
       }
 
-      const [commentsRes, reactionsRes, newsRes] = await Promise.allSettled([
+      const [commentsRes, reactionsRes, newsRes, pollCommentsRes, pollsRes] = await Promise.allSettled([
         (async () => {
           let response: {
             data: RawProfileComment[] | null;
@@ -200,6 +224,15 @@ export default function ProfileCommentsPage() {
         })(),
         supabase.from("comment_reactions").select("comment_id, reaction_type"),
         apiFetch("/api/news"),
+        supabase
+          .from("poll_comments")
+          .select("id, poll_id, user_id, username, text, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("polls")
+          .select("id, question")
+          .eq("status", "active"),
       ]);
 
       if (!isMounted) {
@@ -265,27 +298,48 @@ export default function ProfileCommentsPage() {
           .map((article) => [article.url.trim(), article.title])
       );
 
-      const enrichedComments = ((commentsRes.value.data ?? []) as RawProfileComment[]).map((comment) => {
-        console.log("PROFILE COMMENT:", comment);
+      const pollTitleLookup = new Map(
+        (
+          pollCommentsRes.status === "fulfilled" && pollsRes.status === "fulfilled"
+            ? (((pollsRes.value.data ?? []) as { id: string; question: string }[]) ?? [])
+            : []
+        ).map((poll) => [poll.id, cleanDisplayText(poll.question)])
+      );
 
-        // Older comments created before article metadata was stored can only be
-        // backfilled when the current /api/news payload still contains a
-        // matching article id or URL.
-        return {
-          ...comment,
-          article_title: resolveCommentArticleTitle(
-            comment,
-            articleTitleLookup,
-            articleUrlLookup
-          ),
-          hearts: reactions.filter(
-            (reaction) =>
-              reaction.comment_id === comment.id && reaction.reaction_type === "like"
-          ).length,
-        };
-      });
+      const enrichedArticleComments = ((commentsRes.value.data ?? []) as RawProfileComment[]).map((comment) => ({
+        ...comment,
+        kind: "article" as const,
+        article_title: resolveCommentArticleTitle(comment, articleTitleLookup, articleUrlLookup),
+        hearts: reactions.filter(
+          (reaction) => reaction.comment_id === comment.id && reaction.reaction_type === "like"
+        ).length,
+      }));
 
-      setComments(enrichedComments);
+      const enrichedPollComments =
+        pollCommentsRes.status === "fulfilled" && !pollCommentsRes.value.error
+          ? (((pollCommentsRes.value.data ?? []) as RawPollProfileComment[]) ?? []).map((comment) => ({
+              id: comment.id,
+              kind: "poll" as const,
+              text: cleanDisplayText(comment.text),
+              article_id: comment.poll_id,
+              article_title: pollTitleLookup.get(comment.poll_id) ?? "Poll",
+              article_source: null,
+              article_image: null,
+              article_url: null,
+              username: comment.username,
+              user_id: comment.user_id,
+              created_at: comment.created_at,
+              hearts: 0,
+            }))
+          : [];
+
+      setComments(
+        [...enrichedArticleComments, ...enrichedPollComments].sort((left, right) => {
+          const rightTime = right.created_at ? new Date(right.created_at).getTime() : 0;
+          const leftTime = left.created_at ? new Date(left.created_at).getTime() : 0;
+          return rightTime - leftTime;
+        })
+      );
       setMessage("");
       setIsLoading(false);
     }
@@ -296,6 +350,31 @@ export default function ProfileCommentsPage() {
       isMounted = false;
     };
   }, []);
+
+  const handleDeleteComment = async (comment: MyComment) => {
+    setActiveDeleteId(`${comment.kind}:${comment.id}`);
+
+    const query =
+      comment.kind === "poll"
+        ? supabase.from("poll_comments").delete().eq("id", String(comment.id))
+        : supabase.from("comments").delete().eq("id", Number(comment.id));
+
+    const { error } = await query;
+
+    setActiveDeleteId(null);
+
+    if (error) {
+      console.error("Error deleting profile comment:", error);
+      setMessage(error.message ?? "Could not delete comment.");
+      return;
+    }
+
+    setComments((prev) =>
+      prev.filter(
+        (current) => !(current.kind === comment.kind && String(current.id) === String(comment.id))
+      )
+    );
+  };
 
   return (
     <section className="page-shell">
@@ -334,6 +413,17 @@ export default function ProfileCommentsPage() {
                   <strong className="profile-comment-article-title">
                     {cleanDisplayText(comment.article_title)}
                   </strong>
+                  <button
+                    type="button"
+                    className="button button-secondary profile-comment-delete-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleDeleteComment(comment);
+                    }}
+                    disabled={activeDeleteId === `${comment.kind}:${comment.id}`}
+                  >
+                    {activeDeleteId === `${comment.kind}:${comment.id}` ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
                 <div className="comment-body">
                   <strong>{comment.username ?? "You"}</strong>{" "}
