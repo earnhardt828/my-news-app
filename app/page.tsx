@@ -869,15 +869,16 @@ export default function Home() {
       return;
     }
 
-    if (replace) {
-      if (feedMode === "local") {
-        setIsLocalAreaLoading(true);
-      } else {
-        setIsLoading(true);
-      }
-      setFeedLoadError(null);
-      setIsInitialFeedLoading(feedMode === "trending" && pageToLoad === 1);
-      if (typeof window !== "undefined") {
+      if (replace) {
+        if (feedMode === "local") {
+          setIsLocalAreaLoading(true);
+          setFeedLoadError(null);
+        } else {
+          setIsLoading(true);
+          setFeedLoadError(null);
+        }
+        setIsInitialFeedLoading(feedMode === "trending" && pageToLoad === 1);
+        if (typeof window !== "undefined") {
         initialLoadWarningTimeoutId = window.setTimeout(() => {
           if (!isCurrentRequest()) {
             return;
@@ -1063,6 +1064,9 @@ export default function Home() {
       if (replace && newsData.length === 0) {
         const emptyResponseError = new Error("Trending returned zero articles.");
         console.log("TRENDING FETCH ERROR", emptyResponseError);
+        if (feedMode === "local") {
+          console.error("LOCAL FETCH ERROR", emptyResponseError);
+        }
         if (cachedFeed) {
           setFeedLoadError(
             sortMode === "local"
@@ -1275,6 +1279,9 @@ export default function Home() {
       }
 
       console.log("TRENDING FETCH ERROR", error);
+      if (feedMode === "local") {
+        console.error("LOCAL FETCH ERROR", error);
+      }
       console.error("INITIAL APP LOAD FAILED", error);
       if (replace && !hasLiveNewsResponse) {
         if (cachedFeed) {
@@ -1503,6 +1510,14 @@ export default function Home() {
     );
   };
 
+  const applyLocalCitySelection = useCallback((city: string) => {
+    setLocalQueryDraft(city);
+    setLocalLocationLabel(city);
+    setLocalQuery(buildLocalNewsQuery({ label: city }));
+    setLocalSearchStatus(null);
+    setFeedLoadError(null);
+  }, []);
+
   useEffect(() => {
     if (replyTarget) {
       commentInputRef.current?.focus();
@@ -1578,11 +1593,11 @@ export default function Home() {
           }
         });
 
-        setAutoplayTrendingVideoId(highestRatio >= 0.5 ? nextAutoplayId : null);
+        setAutoplayTrendingVideoId(highestRatio >= 0.35 ? nextAutoplayId : null);
       },
       {
-        threshold: [0.25, 0.4, 0.5, 0.7],
-        rootMargin: "0px 0px -5% 0px",
+        threshold: [0.18, 0.3, 0.35, 0.55],
+        rootMargin: "8% 0px -8% 0px",
       }
     );
 
@@ -1607,9 +1622,7 @@ export default function Home() {
 
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       const fallbackTimeoutId = window.setTimeout(() => {
-        setLocalLocationLabel("Charlotte, NC");
-        setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
-        setLocalQueryDraft("Charlotte, NC");
+        applyLocalCitySelection("Charlotte, NC");
         setLocalSearchStatus("Choose a nearby city.");
       }, 0);
 
@@ -1653,29 +1666,21 @@ export default function Home() {
           });
 
           if (supportedMetro) {
-            setLocalLocationLabel(supportedMetro);
-            setLocalQuery(buildLocalNewsQuery({ city, state, label: supportedMetro }));
-            setLocalQueryDraft(supportedMetro);
+            applyLocalCitySelection(supportedMetro);
             setLocalSearchStatus("Choose a nearby city.");
             return;
           }
 
-          setLocalLocationLabel("Charlotte, NC");
-          setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
-          setLocalQueryDraft("Charlotte, NC");
+          applyLocalCitySelection("Charlotte, NC");
           setLocalSearchStatus("Choose a nearby city.");
         } catch (error) {
           console.error("Error resolving local location:", error);
-          setLocalLocationLabel("Charlotte, NC");
-          setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
-          setLocalQueryDraft("Charlotte, NC");
+          applyLocalCitySelection("Charlotte, NC");
           setLocalSearchStatus("Choose a nearby city.");
         }
       },
       () => {
-        setLocalLocationLabel("Charlotte, NC");
-        setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
-        setLocalQueryDraft("Charlotte, NC");
+        applyLocalCitySelection("Charlotte, NC");
         setLocalSearchStatus("Choose a nearby city.");
       },
       {
@@ -1684,7 +1689,7 @@ export default function Home() {
         maximumAge: 600000,
       }
     );
-  }, [localQuery, sortMode]);
+  }, [applyLocalCitySelection, localQuery, sortMode]);
 
   const handleUpdateLocalQuery = useCallback(async () => {
     const trimmedDraft = localQueryDraft.trim();
@@ -1699,9 +1704,7 @@ export default function Home() {
     };
 
     if (!trimmedDraft) {
-      setLocalLocationLabel("Charlotte, NC");
-      setLocalQuery(buildLocalNewsQuery({ label: "Charlotte, NC" }));
-      setLocalQueryDraft("Charlotte, NC");
+      applyLocalCitySelection("Charlotte, NC");
       setLocalSearchStatus("Choose a nearby city.");
       return;
     }
@@ -1741,9 +1744,7 @@ export default function Home() {
             resolveSupportedMetroCity({ city, state, label: nextLabel });
 
           if (supportedCity) {
-            setLocalLocationLabel(supportedCity);
-            setLocalQuery(buildLocalNewsQuery({ city, state, label: supportedCity }));
-            setLocalQueryDraft(supportedCity);
+            applyLocalCitySelection(supportedCity);
             setLocalSearchStatus(null);
             return;
           }
@@ -1763,11 +1764,9 @@ export default function Home() {
       return;
     }
 
-    setLocalLocationLabel(supportedCity);
-    setLocalQuery(buildLocalNewsQuery({ label: supportedCity }));
-    setLocalQueryDraft(supportedCity);
+    applyLocalCitySelection(supportedCity);
     setLocalSearchStatus(null);
-  }, [localQueryDraft]);
+  }, [applyLocalCitySelection, localQueryDraft]);
 
   const createNotification = useCallback(
     async ({
@@ -2973,6 +2972,12 @@ export default function Home() {
                 <div className="trending-source-brand">
                   <SourceBadge sourceName={safeSourceName} />
                   <span className="trending-source-name">{safeSourceName}</span>
+                  <span className="trending-source-category-separator" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="trending-source-category-inline">
+                    {getCategoryLabel(safeCategoryName)}
+                  </span>
                 </div>
               </Link>
               <span className="trending-published-date trending-published-date-inline">
@@ -3005,9 +3010,6 @@ export default function Home() {
                         .trim()}
                     </p>
                   ) : null}
-                  <span className="chip chip-accent trending-category-pill trending-category-pill-body">
-                    {getCategoryLabel(safeCategoryName)}
-                  </span>
                 </div>
                 <div className="article-hero-shell">
                   <img
@@ -3048,9 +3050,6 @@ export default function Home() {
                         .trim()}
                     </p>
                   ) : null}
-                  <span className="chip chip-accent trending-category-pill trending-category-pill-body">
-                    {getCategoryLabel(safeCategoryName)}
-                  </span>
                 </div>
 
                 {shouldShowImage ? (
@@ -3406,10 +3405,7 @@ export default function Home() {
                       className="local-city-dropdown-item"
                       onMouseDown={(event) => {
                         event.preventDefault();
-                        setLocalQueryDraft(city);
-                        setLocalLocationLabel(city);
-                        setLocalQuery(buildLocalNewsQuery({ label: city }));
-                        setLocalSearchStatus(null);
+                        applyLocalCitySelection(city);
                         setIsLocalAutocompleteOpen(false);
                       }}
                     >
@@ -3439,10 +3435,7 @@ export default function Home() {
                   localLocationLabel === city ? "local-feed-city-chip-active" : ""
                 }`}
                 onClick={() => {
-                  setLocalQueryDraft(city);
-                  setLocalLocationLabel(city);
-                  setLocalQuery(buildLocalNewsQuery({ label: city }));
-                  setLocalSearchStatus(null);
+                  applyLocalCitySelection(city);
                 }}
               >
                 {city}

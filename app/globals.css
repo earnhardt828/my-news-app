@@ -938,6 +938,18 @@ input {
   min-width: 0;
 }
 
+.trending-source-category-separator {
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.trending-source-category-inline {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .source-avatar {
   display: inline-flex;
   align-items: center;
@@ -4614,11 +4626,22 @@ input {
   pointer-events: none;
 }
 
-.reel-meta {
+.reel-source-meta {
   position: absolute;
   left: 18px;
   right: 92px;
-  bottom: calc(112px + env(safe-area-inset-bottom));
+  top: calc(var(--header-height, 72px) + env(safe-area-inset-top) + 20px);
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  color: white;
+}
+
+.reel-meta {
+  position: absolute;
+  left: 24px;
+  right: 92px;
+  bottom: calc(124px + env(safe-area-inset-bottom));
   z-index: 2;
   display: grid;
   gap: 8px;

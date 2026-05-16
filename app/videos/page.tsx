@@ -246,11 +246,14 @@ export default function VideosPage() {
 
                   <div className="reel-gradient" />
 
-                  <div className="reel-meta">
+                  <div className="reel-source-meta">
                     <div className="reel-source-row">
                       <SourceBadge sourceName={video.creator} />
                       <span className="reel-creator">{video.creator}</span>
                     </div>
+                  </div>
+
+                  <div className="reel-meta">
                     <h2 className="reel-title">{video.title}</h2>
                     {video.publishedAt ? (
                       <span className="reel-date">
