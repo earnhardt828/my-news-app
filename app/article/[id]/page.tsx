@@ -142,6 +142,7 @@ const actionIconProps = {
 };
 
 const COMPARE_SOURCES_TUTORIAL_KEY = "reflekt-compare-sources-tutorial-seen";
+const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 const ARTICLE_COMPARE_STOP_WORDS = new Set([
   "the",
   "a",
@@ -227,6 +228,52 @@ function formatRelativeTime(timestamp: string | null) {
   }
 
   return `${diffDays} days ago`;
+}
+
+function readStoredArticleMetadata(articleId: number) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawCache = window.localStorage.getItem(ARTICLE_METADATA_STORAGE_KEY);
+
+    if (!rawCache) {
+      return null;
+    }
+
+    const cache = JSON.parse(rawCache) as Record<string, Partial<ArticleRecord> & { id?: number }>;
+    const cachedArticle = cache[String(articleId)];
+
+    if (!cachedArticle?.id || cachedArticle.id !== articleId) {
+      return null;
+    }
+
+    if (!cachedArticle.title || !cachedArticle.source) {
+      return null;
+    }
+
+    return {
+      id: articleId,
+      title: cachedArticle.title,
+      source: cachedArticle.source,
+      category: cachedArticle.category ?? "News",
+      time: cachedArticle.time ?? "Recent story",
+      image: cachedArticle.image ?? null,
+      imageUrl: cachedArticle.imageUrl ?? null,
+      urlToImage: cachedArticle.urlToImage ?? null,
+      mediaContent: cachedArticle.mediaContent ?? null,
+      enclosureUrl: cachedArticle.enclosureUrl ?? null,
+      thumbnail: cachedArticle.thumbnail ?? null,
+      description: cachedArticle.description ?? null,
+      url: cachedArticle.url ?? null,
+      publishedAt: cachedArticle.publishedAt ?? null,
+      content: cachedArticle.content ?? null,
+    } satisfies ArticleRecord;
+  } catch (error) {
+    console.error("ARTICLE METADATA CACHE READ FAILED", error);
+    return null;
+  }
 }
 
 function normalizeSummaryText(value: string) {
@@ -877,8 +924,10 @@ export default function ArticleDetailPage() {
       });
 
       targetArticle = targetArticle ?? newsData.find((item) => item.id === articleId) ?? null;
+      const clientStoredArticle = targetArticle ? null : readStoredArticleMetadata(articleId);
       console.log("COMPARE TOTAL CANDIDATES", newsData.length);
       console.log("ARTICLE LIVE MATCH", targetArticle);
+      console.log("ARTICLE CLIENT CACHE MATCH", clientStoredArticle);
 
       if (targetArticle) {
         console.log("CURRENT ARTICLE FOR COMPARE", targetArticle);
@@ -995,6 +1044,7 @@ export default function ArticleDetailPage() {
       const storedBookmarkMetadata = storedBookmarkRows[0] ?? null;
       const storedArticle =
         targetArticle ??
+        clientStoredArticle ??
         (storedCommentMetadata || storedBookmarkMetadata
           ? {
               id: articleId,

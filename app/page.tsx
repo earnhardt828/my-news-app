@@ -38,6 +38,7 @@ import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../l
 const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
 const INITIAL_FEED_TIMEOUT_MS = 5000;
+const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 
 type Comment = {
   id: number;
@@ -190,6 +191,48 @@ function getArticleRouteId(article: { id?: number | null }) {
   return typeof article.id === "number" && Number.isFinite(article.id) && article.id > 0
     ? article.id
     : null;
+}
+
+function persistArticleMetadata(article: Article) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const articleRouteId = getArticleRouteId(article);
+
+  if (!articleRouteId) {
+    return;
+  }
+
+  try {
+    const existingRaw = window.localStorage.getItem(ARTICLE_METADATA_STORAGE_KEY);
+    const existingCache = existingRaw
+      ? (JSON.parse(existingRaw) as Record<string, Record<string, unknown>>)
+      : {};
+
+    existingCache[String(articleRouteId)] = {
+      id: articleRouteId,
+      title: article.title,
+      source: article.source,
+      category: article.category,
+      time: article.time,
+      image: article.image ?? null,
+      imageUrl: article.imageUrl ?? null,
+      urlToImage: article.urlToImage ?? null,
+      mediaContent: article.mediaContent ?? null,
+      enclosureUrl: article.enclosureUrl ?? null,
+      thumbnail: article.thumbnail ?? null,
+      description: article.description ?? null,
+      url: article.url ?? null,
+      publishedAt: article.publishedAt ?? null,
+      content: article.content ?? null,
+      storedAt: Date.now(),
+    };
+
+    window.localStorage.setItem(ARTICLE_METADATA_STORAGE_KEY, JSON.stringify(existingCache));
+  } catch (error) {
+    console.error("ARTICLE METADATA CACHE WRITE FAILED", error);
+  }
 }
 
 const LOCAL_CITY_SUGGESTIONS = [
@@ -3570,7 +3613,13 @@ export default function Home() {
               ) : null}
             </div>
           </div>
-          <Link href={`/article/${article.id}/`} className="article-link">
+          <Link
+            href={`/article/${article.id}/`}
+            className="article-link"
+            onClick={() => {
+              persistArticleMetadata(article);
+            }}
+          >
             {shouldUseLargeImage ? (
               <div className="news-card-body news-card-body-with-hero">
                 <div className="news-card-copy">
@@ -4345,7 +4394,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="section-card home-section-block">
+        <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Top Local Stories</strong>
@@ -4421,7 +4470,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="section-card home-section-block">
+        <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Local Categories</strong>
@@ -4439,21 +4488,17 @@ export default function Home() {
           ) : (
             <div className="local-category-grid">
               {localCategorySections.map((section) => (
-                <section key={section.key} className="compact-feed-module local-category-module">
-                  <div className="compact-feed-module-header">
-                    <strong>{section.label}</strong>
-                    <span>{section.articles.length} local stories</span>
+                <section key={section.key} className="home-section-block home-section-plain local-category-module">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">{section.label}</strong>
+                    </div>
                   </div>
-                  <div className="compact-feed-module-list">
+                  <div className="stack home-section-list">
                     {section.articles.map((article) => (
-                      <Link
-                        key={article.id || article.url || getArticleDeduplicationKey(article)}
-                        href={`/article/${article.id}/`}
-                        className="compact-feed-module-link"
-                      >
-                        <strong>{cleanDisplayText(article.title)}</strong>
-                        <span>{getSafeSourceLabel(article.source)}</span>
-                      </Link>
+                      <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                        {renderArticleFeedCard(article)}
+                      </div>
                     ))}
                   </div>
                 </section>
