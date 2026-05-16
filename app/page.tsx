@@ -291,7 +291,7 @@ const LOCAL_CITY_CONFIGS = {
   },
   "New York, NY": {
     query:
-      "New York local news NY1 Gothamist New York Daily News NBC New York CBS New York ABC7NY PIX11",
+      "New York local news NY1 Gothamist New York Daily News NBC New York CBS New York ABC7NY PIX11 The City NYC AMNY",
     sources: [
       "NY1",
       "Gothamist",
@@ -300,8 +300,20 @@ const LOCAL_CITY_CONFIGS = {
       "CBS New York",
       "ABC7NY",
       "PIX11",
+      "The City NYC",
+      "AMNY",
     ],
-    signals: ["new york", "nyc", "manhattan", "brooklyn", "queens", "bronx", "staten island"],
+    signals: [
+      "new york",
+      "nyc",
+      "manhattan",
+      "brooklyn",
+      "queens",
+      "bronx",
+      "staten island",
+      "harlem",
+      "long island city",
+    ],
   },
   "Atlanta, GA": {
     query: "Atlanta local news AJC WSB-TV FOX 5 Atlanta 11Alive Atlanta News First",
@@ -863,6 +875,36 @@ function mergeArticlesByIdentity(existing: Article[], incoming: Article[]) {
   });
 
   return merged;
+}
+
+function selectSourceBalancedVideos(videos: VideoItem[], limit: number) {
+  if (videos.length <= limit) {
+    return videos;
+  }
+
+  const normalizedSourceCounts = new Map<string, number>();
+  const normalizedSources = new Set(
+    videos.map((video) => cleanDisplayText(video.creator).trim().toLowerCase()).filter(Boolean)
+  );
+  const maxPerSource = normalizedSources.size > 1 ? 2 : limit;
+  const selected: VideoItem[] = [];
+  const deferred: VideoItem[] = [];
+
+  videos.forEach((video) => {
+    const normalizedSource = cleanDisplayText(video.creator).trim().toLowerCase() || "unknown";
+    const nextCount = (normalizedSourceCounts.get(normalizedSource) ?? 0) + 1;
+
+    if (nextCount <= maxPerSource) {
+      normalizedSourceCounts.set(normalizedSource, nextCount);
+      selected.push(video);
+      return;
+    }
+
+    deferred.push(video);
+  });
+
+  const remainingSlots = Math.max(0, limit - selected.length);
+  return [...selected, ...deferred.slice(0, remainingSlots)].slice(0, limit);
 }
 
 function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
@@ -3339,9 +3381,10 @@ export default function Home() {
 
   const quickWatchVideos = useMemo(
     () =>
-      videos
-        .filter((video) => !video.fallback && video.orientation === "vertical")
-        .slice(0, 8),
+      selectSourceBalancedVideos(
+        videos.filter((video) => !video.fallback && video.orientation === "vertical"),
+        8
+      ),
     [videos]
   );
 
@@ -3368,10 +3411,33 @@ export default function Home() {
 
   const sportsSectionArticles = useMemo(
     () =>
-      balancedTrendingArticles
-        .filter((article) => getCategoryLabel(getSafeCategoryLabel(article.category, article)) === "Sports")
-        .slice(0, 4),
-    [balancedTrendingArticles]
+      articles
+        .filter((article) => {
+          const category = getCategoryLabel(getSafeCategoryLabel(article.category, article));
+          const source = cleanDisplayText(article.source).toLowerCase();
+          const titleAndDescription = cleanDisplayText(
+            `${article.title} ${article.description ?? ""}`
+          ).toLowerCase();
+
+          return (
+            category === "Sports" ||
+            [
+              "espn",
+              "sports illustrated",
+              "si.com",
+              "cbs sports",
+              "nbc sports",
+              "fox sports",
+              "bleacher report",
+              "the athletic",
+            ].some((name) => source.includes(name)) ||
+            ["game", "playoff", "season", "league", "team", "final", "coach", "draft"].some(
+              (term) => titleAndDescription.includes(term)
+            )
+          );
+        })
+        .slice(0, 8),
+    [articles]
   );
 
   const todayLabel = useMemo(

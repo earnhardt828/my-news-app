@@ -1280,14 +1280,6 @@ export default function ArticleDetailPage() {
   }, [activeCompareArticle?.source]);
 
   useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("reflekt:article-url", {
-        detail: article?.url ?? null,
-      })
-    );
-  }, [article?.url]);
-
-  useEffect(() => {
     if (!showCompareTutorial) {
       return;
     }
@@ -2090,6 +2082,16 @@ export default function ArticleDetailPage() {
                 </p>
               ))}
             </div>
+            {compareArticle.url ? (
+              <a
+                href={compareArticle.url}
+                target="_blank"
+                rel="noreferrer"
+                className="button button-secondary article-original-button"
+              >
+                Original Source
+              </a>
+            ) : null}
           </div>
         </div>
       </section>

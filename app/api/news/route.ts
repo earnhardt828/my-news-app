@@ -289,6 +289,36 @@ const RSS_FEEDS: RssFeedConfig[] = [
     tags: ["sports", "nfl", "nba", "mlb"],
   },
   {
+    url: "https://www.si.com/rss/si_topstories.rss",
+    source: "Sports Illustrated",
+    category: "Sports",
+    tags: ["sports", "nfl", "nba", "mlb"],
+  },
+  {
+    url: "https://www.cbssports.com/rss/headlines/",
+    source: "CBS Sports",
+    category: "Sports",
+    tags: ["sports", "nfl", "nba", "mlb"],
+  },
+  {
+    url: "https://www.nbcsports.com/rss",
+    source: "NBC Sports",
+    category: "Sports",
+    tags: ["sports", "nfl", "nba", "mlb"],
+  },
+  {
+    url: "https://www.foxsports.com/rss",
+    source: "Fox Sports",
+    category: "Sports",
+    tags: ["sports", "nfl", "nba", "mlb"],
+  },
+  {
+    url: "https://bleacherreport.com/articles/feed",
+    source: "Bleacher Report",
+    category: "Sports",
+    tags: ["sports", "nfl", "nba", "mlb"],
+  },
+  {
     url: "https://www.tmz.com/rss.xml",
     source: "TMZ",
     category: "Entertainment",
@@ -438,6 +468,54 @@ const RSS_FEEDS: RssFeedConfig[] = [
     category: "Local News",
     tags: ["los angeles", "california", "local", "socal"],
   },
+  {
+    url: "https://gothamist.com/feed",
+    source: "Gothamist",
+    category: "Local News",
+    tags: ["new york", "nyc", "local"],
+  },
+  {
+    url: "https://www.nydailynews.com/feed/",
+    source: "New York Daily News",
+    category: "Local News",
+    tags: ["new york", "nyc", "local"],
+  },
+  {
+    url: "https://www.nbcnewyork.com/feed/",
+    source: "NBC New York",
+    category: "Local News",
+    tags: ["new york", "nyc", "local"],
+  },
+  {
+    url: "https://www.cbsnews.com/newyork/latest/rss/main",
+    source: "CBS New York",
+    category: "Local News",
+    tags: ["new york", "nyc", "local"],
+  },
+  {
+    url: "https://abc7ny.com/feed/",
+    source: "ABC7NY",
+    category: "Local News",
+    tags: ["new york", "nyc", "local"],
+  },
+  {
+    url: "https://pix11.com/feed/",
+    source: "PIX11",
+    category: "Local News",
+    tags: ["new york", "nyc", "local"],
+  },
+  {
+    url: "https://www.thecity.nyc/feed/",
+    source: "The City NYC",
+    category: "Local News",
+    tags: ["new york", "nyc", "local"],
+  },
+  {
+    url: "https://www.amny.com/feed/",
+    source: "AMNY",
+    category: "Local News",
+    tags: ["new york", "nyc", "local"],
+  },
 ];
 
 const CHARLOTTE_LOCAL_SOURCES = [
@@ -505,8 +583,20 @@ const LOCAL_CITY_CONFIGS = {
       "nbc new york",
       "abc7ny",
       "pix11",
+      "the city nyc",
+      "amny",
     ],
-    signals: ["new york", "nyc", "manhattan", "brooklyn", "queens", "bronx", "staten island"],
+    signals: [
+      "new york",
+      "nyc",
+      "manhattan",
+      "brooklyn",
+      "queens",
+      "bronx",
+      "staten island",
+      "harlem",
+      "long island city",
+    ],
   },
   "Atlanta, GA": {
     sources: ["ajc", "wsb-tv", "fox 5 atlanta", "11alive", "atlanta news first"],
