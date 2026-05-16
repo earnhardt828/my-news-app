@@ -491,6 +491,13 @@ input {
   box-shadow: none;
 }
 
+.home-section-plain {
+  background: transparent;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+
 .home-section-header {
   display: flex;
   align-items: flex-start;
@@ -2198,7 +2205,7 @@ input {
 }
 
 .quick-watch-row {
-  gap: 14px;
+  gap: 12px;
   overflow: hidden;
 }
 

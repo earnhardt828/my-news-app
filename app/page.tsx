@@ -186,6 +186,12 @@ function formatTopRankLabel(rank: number) {
   return `Top ${rank}`;
 }
 
+function getArticleRouteId(article: { id?: number | null }) {
+  return typeof article.id === "number" && Number.isFinite(article.id) && article.id > 0
+    ? article.id
+    : null;
+}
+
 const LOCAL_CITY_SUGGESTIONS = [
   "Chicago, IL",
   "Los Angeles, CA",
@@ -3284,6 +3290,14 @@ export default function Home() {
     [myFeedPolls]
   );
 
+  const sportsSectionArticles = useMemo(
+    () =>
+      balancedTrendingArticles
+        .filter((article) => getCategoryLabel(getSafeCategoryLabel(article.category, article)) === "Sports")
+        .slice(0, 4),
+    [balancedTrendingArticles]
+  );
+
   const todayLabel = useMemo(
     () =>
       new Intl.DateTimeFormat("en-US", {
@@ -3400,6 +3414,11 @@ export default function Home() {
       return true;
     });
   }, [balancedLocalArticles, localCategorySections, sortMode]);
+
+  const navigableTopLocalStories = useMemo(
+    () => topLocalStories.filter((article) => getArticleRouteId(article) !== null),
+    [topLocalStories]
+  );
 
   const localSourceSummaries = useMemo(() => {
     if (sortMode !== "local") {
@@ -3753,10 +3772,11 @@ export default function Home() {
     }
 
     return (
-      <section className="section-card quick-watch-row">
-        <div className="compact-feed-module-header">
-          <strong>Quick Watch</strong>
-          <span>Swipe through short video updates</span>
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Quick Watch</strong>
+          </div>
         </div>
         <div className="quick-watch-scroll" role="list" aria-label="Quick watch videos">
           {quickWatchVideos.map((video) => (
@@ -3822,16 +3842,13 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        <section className="home-section-block home-top-trending-block">
+        <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <div className="home-section-title-row">
                 <strong className="profile-section-title home-section-title">Top 10 Trending</strong>
                 <span className="home-section-date">{todayLabel}</span>
               </div>
-              <span className="muted">
-                Ranked for launch day by freshness, provider relevance, source variety, and activity.
-              </span>
             </div>
           </div>
           <div className="stack home-section-list">
@@ -3847,11 +3864,10 @@ export default function Home() {
 
         {renderQuickWatchRow()}
 
-        <section className="section-card home-section-block">
+        <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">My Feed</strong>
-              <span className="muted">Choose categories to shape your personalized section.</span>
             </div>
             <button
               type="button"
@@ -4118,6 +4134,29 @@ export default function Home() {
           )}
         </section>
 
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Sports</strong>
+            </div>
+          </div>
+
+          {sportsSectionArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No sports stories yet</strong>
+              <span>Check back shortly for fresh sports coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {sportsSectionArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {isCategorySheetOpen ? (
           <div
             className="bottom-sheet-backdrop"
@@ -4316,9 +4355,9 @@ export default function Home() {
             </div>
           </div>
 
-          {isLocalAreaLoading && topLocalStories.length === 0 ? (
+          {isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
             <div className="muted">Loading local stories...</div>
-          ) : topLocalStories.length === 0 ? (
+          ) : navigableTopLocalStories.length === 0 ? (
             <div className="empty-state compact-empty-state">
               <strong>{localEmptyStateHeadline}</strong>
               <span>Choose a supported nearby city to explore local coverage.</span>
@@ -4338,20 +4377,16 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className="compact-feed-module-list">
-              {topLocalStories.map((article) => (
-                <Link
-                  key={article.id || article.url || getArticleDeduplicationKey(article)}
-                  href={`/article/${article.id}/`}
-                  className="compact-feed-module-link compact-feed-module-link-rich"
-                >
-                  <strong>{cleanDisplayText(article.title)}</strong>
-                  <span>
-                    {getSafeSourceLabel(article.source)} ·{" "}
-                    {formatPublishedDate(article.publishedAt, article.time)}
-                  </span>
-                </Link>
-              ))}
+            <div className="stack home-section-list">
+              {navigableTopLocalStories.map((article) => {
+                const articleKey =
+                  article.id || article.url || getArticleDeduplicationKey(article);
+                return (
+                  <div key={articleKey}>
+                    {renderArticleFeedCard(article)}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
