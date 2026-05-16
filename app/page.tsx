@@ -228,7 +228,7 @@ const LOCAL_CITY_CONFIGS = {
   },
   "Charlotte, NC": {
     query:
-      "Charlotte NC local news Charlotte Observer WSOC Charlotte WBTV Charlotte WCNC Charlotte Queen City News WFAE Charlotte Axios Charlotte",
+      "Charlotte local news WSOC Charlotte WBTV Charlotte WCNC Charlotte Queen City News WFAE Charlotte Axios Charlotte Charlotte Observer",
     sources: [
       "Charlotte Observer",
       "WSOC-TV",
@@ -766,7 +766,7 @@ export default function Home() {
   const [pollFollowingIds, setPollFollowingIds] = useState<string[]>([]);
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
-  const [autoplayTrendingVideoId, setAutoplayTrendingVideoId] = useState<string | null>(null);
+  const [autoplayTrendingVideoKeys, setAutoplayTrendingVideoKeys] = useState<string[]>([]);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
   const [categorySheetStatus, setCategorySheetStatus] = useState<{
@@ -834,10 +834,16 @@ export default function Home() {
       resolveSupportedMetroCity({
         label: localLocationLabel,
         city: localQueryDraft,
-        state: localQuery,
       }),
-    [localLocationLabel, localQuery, localQueryDraft]
+    [localLocationLabel, localQueryDraft]
   );
+  const localEmptyStateHeadline = useMemo(() => {
+    const cityLabel = selectedLocalCity ?? localLocationLabel;
+    const cityName = cleanDisplayText(cityLabel).split(",")[0]?.trim();
+    return cityName
+      ? `No local stories found for ${cityName} yet.`
+      : "No local stories found for this city yet.";
+  }, [localLocationLabel, selectedLocalCity]);
 
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
@@ -992,8 +998,13 @@ export default function Home() {
           return;
         }
 
+        const activeLocalCity = selectedLocalCity ?? resolveSupportedMetroCity({
+          label: localLocationLabel,
+        });
+        const cityConfig = activeLocalCity ? LOCAL_CITY_CONFIGS[activeLocalCity] : null;
         const localSearchQuery =
-          localQuery.trim() || buildLocalNewsQuery({ label: selectedLocalCity ?? localLocationLabel });
+          cityConfig?.query ??
+          buildLocalNewsQuery({ label: activeLocalCity ?? localLocationLabel });
         const params = new URLSearchParams({
           mode: "local",
           location: localSearchQuery,
@@ -1070,7 +1081,7 @@ export default function Home() {
         if (cachedFeed) {
           setFeedLoadError(
             sortMode === "local"
-              ? "No local stories found for this city yet."
+              ? localEmptyStateHeadline
               : "Showing the last loaded stories while we retry."
           );
           setArticles(cachedFeed.articles);
@@ -1324,7 +1335,7 @@ export default function Home() {
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
-  }, [feedMode, localLocationLabel, localQuery, selectedLocalCity, sortMode]);
+  }, [feedMode, localEmptyStateHeadline, localLocationLabel, localQuery, selectedLocalCity, sortMode]);
 
   const handleRetryFeedLoad = useCallback(() => {
     void loadFeedPage(1, { replace: true });
@@ -1444,9 +1455,22 @@ export default function Home() {
           });
         }
 
-        const normalizedVideos = normalizeVideoFeedItems(data.videos).filter(
-          (video) => !video.fallback
-        );
+        const normalizedVideos = normalizeVideoFeedItems(data.videos)
+          .filter((video) => !video.fallback)
+          .sort((left, right) => {
+            const leftHint = `${left.title} ${left.watchUrl} ${left.thumbnailUrl ?? ""}`.toLowerCase();
+            const rightHint = `${right.title} ${right.watchUrl} ${right.thumbnailUrl ?? ""}`.toLowerCase();
+            const leftVerticalScore =
+              (left.orientation === "vertical" ? 2 : 0) + (/shorts?/i.test(leftHint) ? 1 : 0);
+            const rightVerticalScore =
+              (right.orientation === "vertical" ? 2 : 0) + (/shorts?/i.test(rightHint) ? 1 : 0);
+
+            if (rightVerticalScore !== leftVerticalScore) {
+              return rightVerticalScore - leftVerticalScore;
+            }
+
+            return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+          });
         setVideos(normalizedVideos);
       } catch (error) {
         console.error("Error loading trending videos:", error);
@@ -1516,7 +1540,13 @@ export default function Home() {
     setLocalQuery(buildLocalNewsQuery({ label: city }));
     setLocalSearchStatus(null);
     setFeedLoadError(null);
-  }, []);
+    if (sortMode === "local") {
+      setArticles([]);
+      setFeedPage(1);
+      setHasMoreArticles(false);
+      setIsLocalAreaLoading(true);
+    }
+  }, [sortMode]);
 
   useEffect(() => {
     if (replyTarget) {
@@ -1564,9 +1594,11 @@ export default function Home() {
       return;
     }
 
-    const playableVideos = videos.filter((video) => !video.fallback && Boolean(video.youtubeId));
+    const frameEntries = Object.entries(trendingVideoFrameRefs.current).filter(
+      ([, node]) => Boolean(node)
+    );
 
-    if (playableVideos.length === 0) {
+    if (frameEntries.length === 0) {
       return;
     }
 
@@ -1574,38 +1606,31 @@ export default function Home() {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          const videoId = (entry.target as HTMLDivElement).dataset.videoId;
+          const videoKey = (entry.target as HTMLDivElement).dataset.videoKey;
 
-          if (!videoId) {
+          if (!videoKey) {
             return;
           }
 
-          visibilityMap.set(videoId, entry.isIntersecting ? entry.intersectionRatio : 0);
+          visibilityMap.set(videoKey, entry.isIntersecting ? entry.intersectionRatio : 0);
         });
 
-        let nextAutoplayId: string | null = null;
-        let highestRatio = 0;
+        const nextAutoplayKeys = Array.from(visibilityMap.entries())
+          .filter(([, ratio]) => ratio >= 0.3)
+          .sort((left, right) => right[1] - left[1])
+          .map(([videoKey]) => videoKey);
 
-        visibilityMap.forEach((ratio, videoId) => {
-          if (ratio > highestRatio) {
-            highestRatio = ratio;
-            nextAutoplayId = videoId;
-          }
-        });
-
-        setAutoplayTrendingVideoId(highestRatio >= 0.35 ? nextAutoplayId : null);
+        setAutoplayTrendingVideoKeys(nextAutoplayKeys);
       },
       {
-        threshold: [0.18, 0.3, 0.35, 0.55],
+        threshold: [0.16, 0.24, 0.3, 0.45, 0.65],
         rootMargin: "8% 0px -8% 0px",
       }
     );
 
-    playableVideos.forEach((video) => {
-      const node = trendingVideoFrameRefs.current[video.id];
-
+    frameEntries.forEach(([videoKey, node]) => {
       if (node) {
-        visibilityMap.set(video.id, 0);
+        visibilityMap.set(videoKey, 0);
         observer.observe(node);
       }
     });
@@ -1613,7 +1638,7 @@ export default function Home() {
     return () => {
       observer.disconnect();
     };
-  }, [sortMode, videos]);
+  }, [articles.length, sortMode, videos]);
 
   useEffect(() => {
     if (sortMode !== "local" || localQuery) {
@@ -2859,7 +2884,10 @@ export default function Home() {
   }, [balancedTrendingArticles, myFeedPolls]);
 
   const quickWatchVideos = useMemo(
-    () => videos.filter((video) => !video.fallback).slice(0, 8),
+    () =>
+      videos
+        .filter((video) => !video.fallback && video.orientation === "vertical")
+        .slice(0, 8),
     [videos]
   );
 
@@ -3252,14 +3280,18 @@ export default function Home() {
         return (
           <VideoFeedCard
             video={item.video}
-            isAutoplaying={autoplayTrendingVideoId === item.video.id && !item.video.fallback}
+            isAutoplaying={
+              autoplayTrendingVideoKeys.includes(`inline:${item.video.id}`) &&
+              !item.video.fallback
+            }
             onToggleLike={handleToggleVideoLike}
             onToggleSave={handleToggleVideoSave}
             onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
             onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
             frameRef={(node) => {
-              trendingVideoFrameRefs.current[item.video.id] = node;
+              trendingVideoFrameRefs.current[`inline:${item.video.id}`] = node;
             }}
+            autoplayKey={`inline:${item.video.id}`}
             label="Video"
             rankBadgeLabel={rankedIndex < 25 ? `Top ${rankedIndex + 1}` : null}
             className="video-card-inline"
@@ -3288,14 +3320,19 @@ export default function Home() {
             <div key={video.id} className="quick-watch-item" role="listitem">
               <VideoFeedCard
                 video={video}
-                isAutoplaying={autoplayTrendingVideoId === video.id && !video.fallback}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`quickwatch:${video.id}`) &&
+                  !video.fallback
+                }
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
                 onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
                 frameRef={(node) => {
-                  trendingVideoFrameRefs.current[video.id] = node;
+                  trendingVideoFrameRefs.current[`quickwatch:${video.id}`] = node;
                 }}
+                autoplayKey={`quickwatch:${video.id}`}
+                previewDurationMs={4000}
                 label="Quick Watch"
                 className="video-card-inline quick-watch-video-card"
                 variant="article"
@@ -3492,7 +3529,7 @@ export default function Home() {
               : sortMode === "polls"
               ? "No polls yet"
               : sortMode === "local"
-              ? "No local stories found for this city yet."
+              ? localEmptyStateHeadline
               : "No stories yet"}
           </strong>
           <span>
@@ -3519,7 +3556,7 @@ export default function Home() {
                   {sortMode === "trending"
                     ? "Couldn’t load stories. Tap to retry."
                     : sortMode === "local"
-                    ? "No local stories found for this city yet."
+                    ? localEmptyStateHeadline
                     : feedLoadError}
                 </span>
                 {sortMode === "trending" || sortMode === "local" ? (

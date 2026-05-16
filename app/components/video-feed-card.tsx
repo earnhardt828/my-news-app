@@ -23,6 +23,8 @@ type VideoFeedCardProps = {
   rankBadgeLabel?: string | null;
   className?: string;
   variant?: "default" | "article";
+  autoplayKey?: string;
+  previewDurationMs?: number | null;
 };
 
 const actionIconProps = {
@@ -49,6 +51,8 @@ export default function VideoFeedCard({
   rankBadgeLabel = null,
   className = "",
   variant = "default",
+  autoplayKey,
+  previewDurationMs = null,
 }: VideoFeedCardProps) {
   const isArticleVariant = variant === "article";
   const defaultTrendingOrientation = inferVideoOrientation(undefined, undefined, {
@@ -65,6 +69,35 @@ export default function VideoFeedCard({
     thumbnailUrl: video.thumbnailUrl,
     value: null,
   });
+  const [isPreviewActive, setIsPreviewActive] = useState(true);
+
+  useEffect(() => {
+    if (!previewDurationMs) {
+      return;
+    }
+
+    if (!isAutoplaying) {
+      const resetTimeoutId = window.setTimeout(() => {
+        setIsPreviewActive(true);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(resetTimeoutId);
+      };
+    }
+
+    const startTimeoutId = window.setTimeout(() => {
+      setIsPreviewActive(true);
+    }, 0);
+    const stopTimeoutId = window.setTimeout(() => {
+      setIsPreviewActive(false);
+    }, previewDurationMs);
+
+    return () => {
+      window.clearTimeout(startTimeoutId);
+      window.clearTimeout(stopTimeoutId);
+    };
+  }, [isAutoplaying, previewDurationMs]);
 
   useEffect(() => {
     if (
@@ -134,6 +167,7 @@ export default function VideoFeedCard({
     resolvedOrientation === "vertical"
       ? "video-card-article-vertical"
       : "video-card-article-horizontal";
+  const shouldAutoplayFrame = isAutoplaying && (!previewDurationMs || isPreviewActive);
 
   if (isArticleVariant) {
     return (
@@ -173,12 +207,13 @@ export default function VideoFeedCard({
 
         <div
           ref={frameRef}
+          data-video-key={autoplayKey ?? video.id}
           data-video-id={video.id}
           className={`video-frame video-frame-article ${articleFrameClass} ${
             video.theme ?? "video-card-theme-rose"
           }`}
         >
-          {isAutoplaying && !video.fallback ? (
+          {shouldAutoplayFrame && !video.fallback ? (
             <iframe
               src={buildVideoEmbedUrl(video.youtubeId, true)}
               title={video.title}
