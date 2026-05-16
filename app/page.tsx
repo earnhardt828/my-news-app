@@ -228,7 +228,7 @@ const LOCAL_CITY_CONFIGS = {
   },
   "Charlotte, NC": {
     query:
-      "Charlotte local news WSOC Charlotte WBTV Charlotte WCNC Charlotte Queen City News WFAE Charlotte Axios Charlotte Charlotte Observer",
+      "Charlotte local news WSOC Charlotte WBTV Charlotte WCNC Charlotte Queen City News WFAE Charlotte Axios Charlotte Charlotte Observer WCCB Charlotte",
     sources: [
       "Charlotte Observer",
       "WSOC-TV",
@@ -238,6 +238,7 @@ const LOCAL_CITY_CONFIGS = {
       "Queen City News",
       "WFAE",
       "Axios Charlotte",
+      "WCCB Charlotte",
     ],
     signals: ["charlotte", "mecklenburg", "queen city", "gastonia", "rock hill", "fort mill"],
   },
@@ -762,7 +763,7 @@ export default function Home() {
   >("top");
   const [isCommentSortMenuOpen, setIsCommentSortMenuOpen] = useState(false);
   const [myFeedPolls, setMyFeedPolls] = useState<PollWithResults[]>([]);
-  const [pollFilter, setPollFilter] = useState<"top" | "following" | "recent">("top");
+  const [pollFilter, setPollFilter] = useState<"top" | "following" | "trending">("top");
   const [pollFollowingIds, setPollFollowingIds] = useState<string[]>([]);
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -2901,7 +2902,7 @@ export default function Home() {
         pollFilter === "following" ? pollFollowingIds.includes(poll.user_id) : true
       )
       .sort((left, right) => {
-        if (pollFilter === "recent") {
+        if (pollFilter === "trending") {
           return getPublishedAtTimestamp(right.created_at) - getPublishedAtTimestamp(left.created_at);
         }
 
@@ -3489,25 +3490,22 @@ export default function Home() {
       ) : null}
 
       {sortMode === "polls" ? (
-        <div className="toolbar polls-filter-toolbar">
-          <button
-            className={`toolbar-pill ${pollFilter === "top" ? "toolbar-pill-active" : ""}`}
-            onClick={() => setPollFilter("top")}
-          >
-            Top Polls
-          </button>
-          <button
-            className={`toolbar-pill ${pollFilter === "following" ? "toolbar-pill-active" : ""}`}
-            onClick={() => setPollFilter("following")}
-          >
-            Following
-          </button>
-          <button
-            className={`toolbar-pill ${pollFilter === "recent" ? "toolbar-pill-active" : ""}`}
-            onClick={() => setPollFilter("recent")}
-          >
-            Recent
-          </button>
+        <div className="polls-filter-toolbar">
+          <label className="polls-filter-select-wrap">
+            <span className="polls-filter-select-label">Filter</span>
+            <select
+              className="polls-filter-select"
+              value={pollFilter}
+              onChange={(event) =>
+                setPollFilter(event.target.value as "top" | "following" | "trending")
+              }
+              aria-label="Poll feed filter"
+            >
+              <option value="top">Top Polls</option>
+              <option value="following">Following</option>
+              <option value="trending">Trending</option>
+            </select>
+          </label>
         </div>
       ) : null}
 

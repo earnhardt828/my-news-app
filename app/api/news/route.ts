@@ -477,6 +477,34 @@ const LOCAL_CITY_CONFIGS = {
   },
 } as const;
 
+function isQualifiedLocalArticle(article: NormalizedArticle, location: string) {
+  const normalizedLocation = location.trim().toLowerCase();
+  const localCityConfig = getLocalCityConfig(normalizedLocation);
+
+  if (!localCityConfig) {
+    return false;
+  }
+
+  const [, config] = localCityConfig;
+  const sourceName = article.source.trim().toLowerCase();
+  const articleText = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
+    article.source
+  } ${article.category}`.toLowerCase();
+  const hasLocalSourceMatch = config.sources.some((source) => sourceName.includes(source));
+  const hasLocalSignalMatch = config.signals.some((signal) => articleText.includes(signal));
+  const localScore = getLocalMatchScore(article, location);
+
+  if (hasLocalSourceMatch) {
+    return true;
+  }
+
+  if (hasLocalSignalMatch && localScore >= 45) {
+    return true;
+  }
+
+  return false;
+}
+
 const FALLBACK_ARTICLE_SEEDS = [
   {
     title: "Congress returns with a packed agenda on budget, border, and aid talks",
@@ -1690,9 +1718,13 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
     getLocalCityConfig(params.location || params.query)
       ? RSS_FEEDS.filter(
           (feed) =>
-            feed.category === "Local News" ||
             (getLocalCityConfig(params.location || params.query)?.[1].sources ?? []).some(
               (source) => feed.source.toLowerCase().includes(source)
+            ) ||
+            (getLocalCityConfig(params.location || params.query)?.[1].signals ?? []).some(
+              (signal) =>
+                feed.source.toLowerCase().includes(signal) ||
+                feed.tags.some((tag) => tag.toLowerCase().includes(signal))
             )
         )
       : candidateFeeds.length > 0
@@ -1746,7 +1778,7 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
 
   if (params.mode === "local") {
     const locationQuery = params.location || params.query;
-    articles = articles.filter((article) => getLocalMatchScore(article, locationQuery) > 0);
+    articles = articles.filter((article) => isQualifiedLocalArticle(article, locationQuery));
   }
 
   articles.sort((left, right) => {
@@ -1843,7 +1875,13 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   const deduped = dedupeArticles(combined);
   const sorted = sortArticlesForMode(deduped, params);
-  const realArticles = sorted.filter((article) => !isFallbackArticle(article));
+  const locallyFiltered =
+    params.mode === "local"
+      ? sorted.filter((article) =>
+          isQualifiedLocalArticle(article, params.location || params.query)
+        )
+      : sorted;
+  const realArticles = locallyFiltered.filter((article) => !isFallbackArticle(article));
   const enrichedRealArticles =
     params.mode === "trending" && params.page === 1
       ? await enrichTrendingArticleImages(realArticles)
@@ -1884,6 +1922,14 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           articles: realSliced,
           nextPage: hasMore ? params.page + 1 : null,
           hasMore,
+          page: params.page,
+          pageSize: params.pageSize,
+        }
+      : params.mode === "local"
+      ? {
+          articles: [],
+          nextPage: null,
+          hasMore: false,
           page: params.page,
           pageSize: params.pageSize,
         }
