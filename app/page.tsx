@@ -1503,10 +1503,6 @@ export default function Home() {
     }
   }, [feedMode, localEmptyStateHeadline, localLocationLabel, localQuery, selectedLocalCity, sortMode]);
 
-  const handleRetryFeedLoad = useCallback(() => {
-    void loadFeedPage(1, { replace: true });
-  }, [loadFeedPage]);
-
   useEffect(() => {
     if (isMyFeedWithoutCategories) {
       const timeoutId = window.setTimeout(() => {
@@ -3288,6 +3284,15 @@ export default function Home() {
     [myFeedPolls]
   );
 
+  const todayLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+      }).format(new Date()),
+    []
+  );
+
   const localCategorySections = useMemo(() => {
     if (sortMode !== "local") {
       return [];
@@ -3369,6 +3374,32 @@ export default function Home() {
       }))
       .filter((section) => section.articles.length > 0);
   }, [balancedLocalArticles, sortMode]);
+
+  const topLocalStories = useMemo(() => {
+    if (sortMode !== "local") {
+      return [];
+    }
+
+    if (balancedLocalArticles.length > 0) {
+      return balancedLocalArticles.slice(0, 6);
+    }
+
+    const fallbackStories = localCategorySections.flatMap((section) => section.articles);
+    const seenArticleKeys = new Set<string>();
+
+    return fallbackStories.filter((article) => {
+      const articleKey = String(
+        article.id || article.url || getArticleDeduplicationKey(article)
+      );
+
+      if (seenArticleKeys.has(articleKey)) {
+        return false;
+      }
+
+      seenArticleKeys.add(articleKey);
+      return true;
+    });
+  }, [balancedLocalArticles, localCategorySections, sortMode]);
 
   const localSourceSummaries = useMemo(() => {
     if (sortMode !== "local") {
@@ -3767,15 +3798,6 @@ export default function Home() {
           Trending
         </button>
         <button
-          className="toolbar-pill"
-          type="button"
-          onClick={() => {
-            router.push("/my-feed/");
-          }}
-        >
-          My Feed
-        </button>
-        <button
           className={`toolbar-pill ${activeMode === "local" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("local")}
@@ -3800,10 +3822,13 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        <section className="section-card home-section-block">
+        <section className="home-section-block home-top-trending-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Top 10 Trending</strong>
+              <div className="home-section-title-row">
+                <strong className="profile-section-title home-section-title">Top 10 Trending</strong>
+                <span className="home-section-date">{todayLabel}</span>
+              </div>
               <span className="muted">
                 Ranked for launch day by freshness, provider relevance, source variety, and activity.
               </span>
@@ -3825,7 +3850,7 @@ export default function Home() {
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">My Feed</strong>
+              <strong className="profile-section-title home-section-title">My Feed</strong>
               <span className="muted">Choose categories to shape your personalized section.</span>
             </div>
             <button
@@ -3881,7 +3906,7 @@ export default function Home() {
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Source Rankings</strong>
+              <strong className="profile-section-title home-section-title">Source Rankings</strong>
               <span className="muted">News companies people are hearting right now.</span>
             </div>
             <Link href="/source-rankings/" className="button button-secondary">
@@ -3941,7 +3966,7 @@ export default function Home() {
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Weather</strong>
+              <strong className="profile-section-title home-section-title">Weather</strong>
               <span className="muted">Forecast and weather-related stories for your selected city.</span>
             </div>
           </div>
@@ -4069,7 +4094,7 @@ export default function Home() {
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Polls</strong>
+              <strong className="profile-section-title home-section-title">Polls</strong>
               <span className="muted">Top questions people are reacting to right now.</span>
             </div>
           </div>
@@ -4186,7 +4211,7 @@ export default function Home() {
         <section className="section-card home-section-block local-page-hero">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Local</strong>
+              <strong className="profile-section-title home-section-title">Local</strong>
               <span className="muted">
                 City-specific news only. No generic national fallback stories.
               </span>
@@ -4284,16 +4309,16 @@ export default function Home() {
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Top Local Stories</strong>
+              <strong className="profile-section-title home-section-title">Top Local Stories</strong>
               <span className="muted">
                 The strongest local matches for {selectedLocalCity ?? localLocationLabel}.
               </span>
             </div>
           </div>
 
-          {isLocalAreaLoading ? (
+          {isLocalAreaLoading && topLocalStories.length === 0 ? (
             <div className="muted">Loading local stories...</div>
-          ) : balancedLocalArticles.length === 0 ? (
+          ) : topLocalStories.length === 0 ? (
             <div className="empty-state compact-empty-state">
               <strong>{localEmptyStateHeadline}</strong>
               <span>Choose a supported nearby city to explore local coverage.</span>
@@ -4314,7 +4339,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="compact-feed-module-list">
-              {balancedLocalArticles.slice(0, 6).map((article) => (
+              {topLocalStories.map((article) => (
                 <Link
                   key={article.id || article.url || getArticleDeduplicationKey(article)}
                   href={`/article/${article.id}/`}
@@ -4334,7 +4359,7 @@ export default function Home() {
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Weather</strong>
+              <strong className="profile-section-title home-section-title">Weather</strong>
               <span className="muted">Current conditions for your selected local city.</span>
             </div>
           </div>
@@ -4364,7 +4389,7 @@ export default function Home() {
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Local Categories</strong>
+              <strong className="profile-section-title home-section-title">Local Categories</strong>
               <span className="muted">
                 Crime, development, sports, weather, and event coverage for this city.
               </span>
@@ -4405,7 +4430,7 @@ export default function Home() {
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title">Local Sources</strong>
+              <strong className="profile-section-title home-section-title">Local Sources</strong>
               <span className="muted">Publishers showing up in this city right now.</span>
             </div>
           </div>
