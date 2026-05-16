@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../lib/api-base";
+import {
+  consumePendingArticleReturnState,
+  saveArticleReturnState,
+} from "../../lib/article-navigation";
 import { getBestArticleImage } from "../../lib/article-images";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
@@ -14,6 +18,7 @@ import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
 const SEARCH_PAGE_SIZE = 25;
+const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 
 type NewsArticle = {
   id: number;
@@ -177,6 +182,42 @@ function formatSearchDate(publishedAt?: string | null, fallback?: string) {
     month: "short",
     day: "numeric",
   }).format(new Date(timestamp));
+}
+
+function persistSearchArticleMetadata(article: NewsArticle) {
+  if (typeof window === "undefined" || typeof article.id !== "number" || article.id <= 0) {
+    return;
+  }
+
+  try {
+    const existingRaw = window.localStorage.getItem(ARTICLE_METADATA_STORAGE_KEY);
+    const existingCache = existingRaw
+      ? (JSON.parse(existingRaw) as Record<string, Record<string, unknown>>)
+      : {};
+
+    existingCache[String(article.id)] = {
+      id: article.id,
+      title: article.title,
+      source: article.source,
+      category: article.category,
+      time: article.time,
+      image: article.image ?? null,
+      imageUrl: article.imageUrl ?? null,
+      urlToImage: article.urlToImage ?? null,
+      mediaContent: article.mediaContent ?? null,
+      enclosureUrl: article.enclosureUrl ?? null,
+      thumbnail: article.thumbnail ?? null,
+      description: article.description ?? null,
+      url: article.url ?? null,
+      publishedAt: article.publishedAt ?? null,
+      content: article.content ?? null,
+      storedAt: Date.now(),
+    };
+
+    window.localStorage.setItem(ARTICLE_METADATA_STORAGE_KEY, JSON.stringify(existingCache));
+  } catch (error) {
+    console.error("SEARCH ARTICLE METADATA CACHE WRITE FAILED", error);
+  }
 }
 
 function getArticleTimestamp(article: NewsArticle) {
@@ -426,6 +467,29 @@ export default function Search() {
   const [failedSearchImages, setFailedSearchImages] = useState<Record<string, boolean>>({});
   const loadMoreSearchSentinelRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextSearchPageRef = useRef(false);
+
+  useEffect(() => {
+    const pendingReturnState = consumePendingArticleReturnState();
+
+    if (!pendingReturnState || pendingReturnState.path !== "/search/") {
+      return;
+    }
+
+    const restoreFrameId = window.requestAnimationFrame(() => {
+      if (pendingReturnState.searchQuery) {
+        setQuery(pendingReturnState.searchQuery);
+      }
+
+      window.scrollTo({
+        top: pendingReturnState.scrollY ?? 0,
+        behavior: "auto",
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(restoreFrameId);
+    };
+  }, []);
 
   useEffect(() => {
     async function loadSearchData() {
@@ -1205,6 +1269,15 @@ export default function Search() {
                         key={article.id}
                         href={`/article/${article.id}/`}
                         className="section-card search-result-card"
+                        onClick={() => {
+                          persistSearchArticleMetadata(article);
+                          saveArticleReturnState({
+                            path: "/search/",
+                            scrollY: window.scrollY,
+                            source: "search",
+                            searchQuery: query,
+                          });
+                        }}
                       >
                         <div className="search-result-layout">
                           <div className="search-result-copy">

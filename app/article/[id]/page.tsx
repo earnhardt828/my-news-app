@@ -117,10 +117,7 @@ type DbCommentReply = {
   created_at: string | null;
 };
 
-type SummaryItem = {
-  label: string;
-  text: string;
-};
+type SummaryParagraph = string;
 
 type PaginatedNewsResponse = {
   articles: ArticleRecord[];
@@ -689,13 +686,13 @@ function sortComments(
   });
 }
 
-function buildSummaryItems(
+function buildSummaryParagraphs(
   title: string,
   source?: string | null,
   category?: string | null,
   description?: string | null,
   content?: string | null
-): SummaryItem[] {
+): SummaryParagraph[] {
   const normalizedTitle = cleanDisplayText(title);
   const normalizedDescription = trimToLastFullSentence(cleanDisplayText(description ?? ""));
   const normalizedContent = trimToLastFullSentence(cleanDisplayText(content ?? ""));
@@ -757,15 +754,18 @@ function buildSummaryItems(
       uniquePoints[0].charAt(0).toUpperCase() + uniquePoints[0].slice(1);
   }
 
-  const emojiLabels = ["🧠 Key point", "⚠️ Why it matters", "📍 Context"];
   const groupedPoints: string[] = [];
 
   if (uniquePoints.length > 0) {
     groupedPoints.push(uniquePoints.slice(0, 2).join(" ").trim());
   }
 
-  if (uniquePoints.length > 2) {
-    groupedPoints.push(uniquePoints.slice(2, 4).join(" ").trim());
+  if (uniquePoints.length > 2 && groupedPoints.length < 3) {
+    groupedPoints.push(uniquePoints[2].trim());
+  }
+
+  if (uniquePoints.length > 3 && groupedPoints.length < 4) {
+    groupedPoints.push(uniquePoints[3].trim());
   }
 
   const normalizedSource = cleanDisplayText(source ?? "").trim();
@@ -784,12 +784,9 @@ function buildSummaryItems(
   }
 
   return groupedPoints
-    .slice(0, emojiLabels.length)
-    .map((text, index) => ({
-      label: emojiLabels[index] ?? "🧠 Key point",
-      text,
-    }))
-    .filter((item) => item.text);
+    .slice(0, 4)
+    .map((paragraph) => cleanSummarySentence(paragraph))
+    .filter(Boolean);
 }
 
 export default function ArticleDetailPage() {
@@ -1918,7 +1915,7 @@ export default function ArticleDetailPage() {
     .replace(/\s*\[\+\d+\s+chars\]\s*$/i, "")
     .replace(/(\.\.\.|…)\s*$/g, "")
     .trim();
-  const summaryItems = buildSummaryItems(
+  const summaryParagraphs = buildSummaryParagraphs(
     cleanDisplayText(compareArticle.title),
     compareArticle.source,
     compareArticle.category,
@@ -2086,15 +2083,13 @@ export default function ArticleDetailPage() {
         <div className="article-detail-body">
           <div className="article-detail-section article-summary-section">
             <p className="article-detail-label">Summary</p>
-            <p className="article-summary-note">AI-assisted summary</p>
-            <ul className="article-summary-list">
-              {summaryItems.map((item) => (
-                <li key={`${item.label}-${item.text}`} className="article-summary-item">
-                  <strong className="article-summary-item-label">{item.label}</strong>
-                  <span>{item.text}</span>
-                </li>
+            <div className="article-summary-paragraphs">
+              {summaryParagraphs.map((paragraph, index) => (
+                <p key={`${index}-${paragraph}`} className="article-summary-paragraph">
+                  {paragraph}
+                </p>
               ))}
-            </ul>
+            </div>
           </div>
         </div>
       </section>

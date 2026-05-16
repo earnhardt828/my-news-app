@@ -4,6 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  readArticleReturnState,
+  savePendingArticleReturnState,
+} from "../../lib/article-navigation";
 import { getSourceNameFromSlug } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -124,6 +128,7 @@ export default function AppHeader() {
 
   const closeTo = (fallbackPath: string) => {
     if (typeof window !== "undefined") {
+      const storedArticleReturnState = readArticleReturnState();
       const referrer = document.referrer;
       const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       const referrerPath = referrer.startsWith(window.location.origin)
@@ -134,7 +139,16 @@ export default function AppHeader() {
         (!referrer || (referrer.startsWith(window.location.origin) && referrerPath !== currentPath));
 
       if (canGoBack) {
+        if (storedArticleReturnState) {
+          savePendingArticleReturnState(storedArticleReturnState);
+        }
         router.back();
+        return;
+      }
+
+      if (storedArticleReturnState?.path) {
+        savePendingArticleReturnState(storedArticleReturnState);
+        router.push(storedArticleReturnState.path);
         return;
       }
     }

@@ -21,6 +21,10 @@ import {
 } from "../lib/article-images";
 import { cleanDisplayText } from "../lib/display-text";
 import {
+  consumePendingArticleReturnState,
+  saveArticleReturnState,
+} from "../lib/article-navigation";
+import {
   applyPollVoteUpdate,
   getPollFeedScore,
   hydratePolls,
@@ -2134,14 +2138,17 @@ export default function Home() {
   }, [articles.length, sortMode, videos]);
 
   useEffect(() => {
+    if (sortMode !== "local") {
+      return;
+    }
+
     if (selectedLocalCity || localQuery.trim()) {
       return;
     }
 
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       const fallbackTimeoutId = window.setTimeout(() => {
-        applyLocalCitySelection("Charlotte, NC");
-        setLocalSearchStatus("Choose a nearby city.");
+        setLocalSearchStatus("Location unavailable. Choose a nearby city.");
       }, 0);
 
       return () => {
@@ -2156,11 +2163,10 @@ export default function Home() {
           position.coords.longitude
         );
         applyLocalCitySelection(nearestMetro);
-        setLocalSearchStatus("Choose a nearby city.");
+        setLocalSearchStatus(`Showing news for ${nearestMetro}.`);
       },
       () => {
-        applyLocalCitySelection("Charlotte, NC");
-        setLocalSearchStatus("Choose a nearby city.");
+        setLocalSearchStatus("Location denied. Choose a nearby city.");
       },
       {
         enableHighAccuracy: false,
@@ -2168,7 +2174,34 @@ export default function Home() {
         maximumAge: 600000,
       }
     );
-  }, [applyLocalCitySelection, localQuery, selectedLocalCity]);
+  }, [applyLocalCitySelection, localQuery, selectedLocalCity, sortMode]);
+
+  useEffect(() => {
+    const pendingReturnState = consumePendingArticleReturnState();
+
+    if (!pendingReturnState || pendingReturnState.path !== "/") {
+      return;
+    }
+
+    const restoreFrameId = window.requestAnimationFrame(() => {
+      if (pendingReturnState.sortMode) {
+        setSortMode(pendingReturnState.sortMode);
+      }
+
+      if (pendingReturnState.sortMode === "local" && pendingReturnState.selectedLocalCity) {
+        applyLocalCitySelection(pendingReturnState.selectedLocalCity);
+      }
+
+      window.scrollTo({
+        top: pendingReturnState.scrollY ?? 0,
+        behavior: "auto",
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(restoreFrameId);
+    };
+  }, [applyLocalCitySelection]);
 
   const handleUpdateLocalQuery = useCallback(async () => {
     const trimmedDraft = localQueryDraft.trim();
@@ -3618,6 +3651,14 @@ export default function Home() {
             className="article-link"
             onClick={() => {
               persistArticleMetadata(article);
+              saveArticleReturnState({
+                path: "/",
+                scrollY: window.scrollY,
+                source: "home",
+                sortMode,
+                selectedLocalCity,
+                localLocationLabel,
+              });
             }}
           >
             {shouldUseLargeImage ? (

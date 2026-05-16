@@ -1536,12 +1536,6 @@ input {
   padding: 2px 0 4px;
 }
 
-.article-summary-item-label {
-  display: inline-flex;
-  margin-right: 8px;
-  font-weight: 800;
-}
-
 .compare-sources-dots {
   display: flex;
   align-items: center;
@@ -1666,25 +1660,19 @@ input {
   text-transform: none;
 }
 
-.article-summary-note {
-  margin: -4px 0 2px;
-  color: var(--text-soft);
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.article-summary-list {
+.article-summary-paragraphs {
   margin: 0;
-  padding-left: 1.15rem;
   display: grid;
-  gap: 12px;
+  gap: 14px;
   color: var(--foreground);
 }
 
-.article-summary-item {
-  display: grid;
-  gap: 4px;
-  line-height: 1.65;
+.article-summary-paragraph {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.72;
+  color: color-mix(in srgb, var(--foreground) 94%, var(--text-soft));
+  text-wrap: pretty;
 }
 
 .article-detail-stats-row {
