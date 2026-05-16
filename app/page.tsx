@@ -175,6 +175,7 @@ const LOCAL_CITY_SUGGESTIONS = [
   "Miami, FL",
   "Charlotte, NC",
   "Cincinnati, OH",
+  "Dallas, TX",
   "Detroit, MI",
   "Minneapolis, MN",
   "Phoenix, AZ",
@@ -202,13 +203,29 @@ const LOCAL_CITY_CONFIGS = {
   "Los Angeles, CA": {
     query:
       "Los Angeles local news LA Times KTLA ABC7 Los Angeles NBC Los Angeles CBS Los Angeles LAist",
-    sources: ["LA Times", "KTLA", "ABC7 Los Angeles", "NBC Los Angeles", "CBS Los Angeles", "LAist"],
+    sources: [
+      "LA Times",
+      "Los Angeles Times",
+      "KTLA",
+      "ABC7 Los Angeles",
+      "NBC Los Angeles",
+      "CBS Los Angeles",
+      "LAist",
+    ],
     signals: ["los angeles", "la county", "hollywood", "pasadena", "santa monica"],
   },
   "New York, NY": {
     query:
-      "New York local news NY1 Gothamist New York Daily News CBS New York NBC New York ABC7NY",
-    sources: ["NY1", "Gothamist", "New York Daily News", "CBS New York", "NBC New York", "ABC7NY"],
+      "New York local news NY1 Gothamist New York Daily News NBC New York CBS New York ABC7NY PIX11",
+    sources: [
+      "NY1",
+      "Gothamist",
+      "New York Daily News",
+      "NBC New York",
+      "CBS New York",
+      "ABC7NY",
+      "PIX11",
+    ],
     signals: ["new york", "nyc", "manhattan", "brooklyn", "queens", "bronx", "staten island"],
   },
   "Atlanta, GA": {
@@ -217,8 +234,8 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
   },
   "Houston, TX": {
-    query: "Houston local news Houston Chronicle KHOU ABC13 Houston FOX 26 Houston KPRC",
-    sources: ["Houston Chronicle", "KHOU", "ABC13 Houston", "FOX 26 Houston", "KPRC"],
+    query: "Houston local news Houston Chronicle KHOU ABC13 Houston FOX 26 Houston KPRC 2",
+    sources: ["Houston Chronicle", "KHOU", "ABC13 Houston", "FOX 26 Houston", "KPRC 2", "KPRC"],
     signals: ["houston", "texas", "harris county", "katy", "sugar land"],
   },
   "Miami, FL": {
@@ -247,6 +264,18 @@ const LOCAL_CITY_CONFIGS = {
     sources: ["Cincinnati Enquirer", "WCPO", "WLWT", "FOX19"],
     signals: ["cincinnati", "ohio", "hamilton county", "covington", "newport"],
   },
+  "Dallas, TX": {
+    query:
+      "Dallas local news Dallas Morning News WFAA NBC 5 Dallas-Fort Worth CBS News Texas FOX 4 Dallas",
+    sources: [
+      "Dallas Morning News",
+      "WFAA",
+      "NBC 5 Dallas-Fort Worth",
+      "CBS News Texas",
+      "FOX 4 Dallas",
+    ],
+    signals: ["dallas", "fort worth", "dfw", "north texas", "plano", "arlington", "frisco"],
+  },
   "Detroit, MI": {
     query: "Detroit local news Detroit Free Press Detroit News WXYZ ClickOnDetroit FOX 2 Detroit",
     sources: ["Detroit Free Press", "Detroit News", "WXYZ", "ClickOnDetroit", "FOX 2 Detroit"],
@@ -263,8 +292,17 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["phoenix", "arizona", "maricopa county", "mesa", "scottsdale"],
   },
   "San Francisco, CA": {
-    query: "San Francisco local news SF Chronicle KQED ABC7 Bay Area NBC Bay Area CBS News Bay Area",
-    sources: ["SF Chronicle", "KQED", "ABC7 Bay Area", "NBC Bay Area", "CBS News Bay Area"],
+    query:
+      "San Francisco local news San Francisco Chronicle KQED ABC7 Bay Area NBC Bay Area CBS News Bay Area KRON4",
+    sources: [
+      "SF Chronicle",
+      "San Francisco Chronicle",
+      "KQED",
+      "ABC7 Bay Area",
+      "NBC Bay Area",
+      "CBS News Bay Area",
+      "KRON4",
+    ],
     signals: ["san francisco", "bay area", "oakland", "san jose", "berkeley"],
   },
   "Philadelphia, PA": {
@@ -294,6 +332,7 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
   { city: "San Francisco, CA", states: ["california"], tokens: ["san francisco", "oakland", "berkeley", "marin", "bay area"] },
   { city: "New York, NY", states: ["new york", "new jersey", "connecticut"], tokens: ["new york", "nyc", "brooklyn", "queens", "bronx", "manhattan", "jersey city"] },
   { city: "Atlanta, GA", states: ["georgia"], tokens: ["atlanta", "fulton county", "buckhead", "decatur"] },
+  { city: "Dallas, TX", states: ["texas"], tokens: ["dallas", "fort worth", "dfw", "north texas", "plano", "arlington", "frisco"] },
   { city: "Houston, TX", states: ["texas"], tokens: ["houston", "harris county", "sugar land"] },
   { city: "Miami, FL", states: ["florida"], tokens: ["miami", "broward", "south florida", "fort lauderdale"] },
   { city: "Cincinnati, OH", states: ["ohio", "kentucky"], tokens: ["cincinnati", "hamilton county", "northern kentucky"] },

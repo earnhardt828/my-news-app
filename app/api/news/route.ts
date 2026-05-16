@@ -432,19 +432,45 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["chicago", "illinois", "cook county", "evanston", "oak park", "naperville"],
   },
   "Los Angeles, CA": {
-    sources: ["la times", "ktla", "abc7 los angeles", "nbc los angeles", "cbs los angeles", "laist"],
+    sources: [
+      "la times",
+      "los angeles times",
+      "ktla",
+      "abc7 los angeles",
+      "nbc los angeles",
+      "cbs los angeles",
+      "laist",
+    ],
     signals: ["los angeles", "la county", "hollywood", "pasadena", "santa monica", "burbank"],
   },
   "New York, NY": {
-    sources: ["ny1", "gothamist", "new york daily news", "cbs new york", "nbc new york", "abc7ny"],
+    sources: [
+      "ny1",
+      "gothamist",
+      "new york daily news",
+      "cbs new york",
+      "nbc new york",
+      "abc7ny",
+      "pix11",
+    ],
     signals: ["new york", "nyc", "manhattan", "brooklyn", "queens", "bronx", "staten island"],
   },
   "Atlanta, GA": {
     sources: ["ajc", "wsb-tv", "fox 5 atlanta", "11alive", "atlanta news first"],
     signals: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
   },
+  "Dallas, TX": {
+    sources: [
+      "dallas morning news",
+      "wfaa",
+      "nbc 5 dallas-fort worth",
+      "cbs news texas",
+      "fox 4 dallas",
+    ],
+    signals: ["dallas", "fort worth", "dfw", "north texas", "plano", "arlington", "frisco"],
+  },
   "Houston, TX": {
-    sources: ["houston chronicle", "khou", "abc13 houston", "fox 26 houston", "kprc"],
+    sources: ["houston chronicle", "khou", "abc13 houston", "fox 26 houston", "kprc", "kprc 2"],
     signals: ["houston", "texas", "harris county", "sugar land"],
   },
   "Miami, FL": {
@@ -468,7 +494,15 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["phoenix", "arizona", "mesa", "tempe", "scottsdale"],
   },
   "San Francisco, CA": {
-    sources: ["sf chronicle", "kqed", "abc7 bay area", "nbc bay area", "cbs news bay area"],
+    sources: [
+      "sf chronicle",
+      "san francisco chronicle",
+      "kqed",
+      "abc7 bay area",
+      "nbc bay area",
+      "cbs news bay area",
+      "kron4",
+    ],
     signals: ["san francisco", "bay area", "oakland", "berkeley", "marin"],
   },
   "Philadelphia, PA": {

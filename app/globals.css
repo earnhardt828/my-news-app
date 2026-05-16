@@ -1762,11 +1762,12 @@ input {
 }
 
 .search-shell {
-  gap: 4px;
+  gap: 0;
 }
 
 .search-bar-shell {
   display: block;
+  margin-bottom: -2px;
 }
 
 .search-card {
@@ -2358,7 +2359,7 @@ input {
 
 .source-page-card {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .source-page-brand {
@@ -2366,6 +2367,11 @@ input {
   align-items: center;
   gap: 12px;
   min-width: 0;
+}
+
+.source-page-brand-copy {
+  display: grid;
+  gap: 4px;
 }
 
 .source-page-header {
@@ -2400,6 +2406,13 @@ input {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.source-page-subtitle {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .source-rankings-shell {
@@ -3347,6 +3360,14 @@ input {
   animation: loading-logo-float 2.2s ease-in-out 240ms infinite;
 }
 
+.loading-screen-center-stack {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+}
+
 .loading-screen-spray,
 .loading-screen-pulse,
 .loading-screen-speckles {
@@ -3408,10 +3429,7 @@ input {
 }
 
 .loading-screen-status-text {
-  position: absolute;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 96px);
-  transform: translateX(-50%);
+  position: static;
   width: min(82vw, 320px);
   margin: 0;
   color: var(--text-soft);
@@ -3419,29 +3437,6 @@ input {
   font-weight: 700;
   letter-spacing: 0.01em;
   text-align: center;
-}
-
-.loading-screen-bottom-wrap {
-  position: absolute;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 26px);
-  transform: translateX(-50%);
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-}
-
-.loading-screen-bottom-logo {
-  width: clamp(132px, 36vw, 178px);
-  height: auto;
-  object-fit: contain;
-  background: transparent;
-  box-shadow: none;
-  animation: loading-logo-fade 520ms ease-out both;
 }
 
 @keyframes loading-logo-fade {
@@ -3509,7 +3504,6 @@ input {
 @media (prefers-reduced-motion: reduce) {
   .loading-screen-logo,
   .loading-screen-logo-wrap,
-  .loading-screen-bottom-logo,
   .loading-screen-spray-primary,
   .loading-screen-spray-secondary,
   .loading-screen-pulse,
@@ -4660,7 +4654,7 @@ input {
 
 .reel-source-meta {
   position: absolute;
-  left: 18px;
+  left: 26px;
   right: 92px;
   top: calc(var(--header-height, 72px) + env(safe-area-inset-top) + 20px);
   z-index: 2;
@@ -4712,7 +4706,7 @@ input {
 
 .reel-actions {
   position: absolute;
-  right: 16px;
+  right: 24px;
   bottom: calc(110px + env(safe-area-inset-bottom));
   z-index: 2;
   display: grid;

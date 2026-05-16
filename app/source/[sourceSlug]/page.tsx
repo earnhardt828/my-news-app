@@ -391,7 +391,7 @@ export default function SourcePage({
         <div className="source-page-header">
           <div className="source-page-brand">
             <SourceBadge sourceName={sourceName} />
-            <div className="stack" style={{ gap: "4px" }}>
+            <div className="source-page-brand-copy">
               <strong className="search-source-name">{sourceName}</strong>
               <span className="search-source-kind">News source</span>
             </div>
@@ -429,6 +429,9 @@ export default function SourcePage({
             </button>
           </div>
         </div>
+        <p className="source-page-subtitle">
+          Heart this source to see more of it in Polls and personalized areas, or show less in My Feed.
+        </p>
       </section>
 
       {isLoading ? (
@@ -439,7 +442,9 @@ export default function SourcePage({
           <span>Check back soon or explore another source from Search.</span>
         </div>
       ) : (
-        <div className="search-results-list">
+        <div className="search-results-section">
+          <p className="search-results-section-heading">Recent Articles</p>
+          <div className="search-results-list">
           {articles.map((article) => (
             <Link
               key={article.id}
@@ -469,6 +474,7 @@ export default function SourcePage({
               ) : null}
             </Link>
           ))}
+          </div>
         </div>
       )}
     </section>
