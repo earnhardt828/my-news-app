@@ -599,7 +599,14 @@ const LOCAL_CITY_CONFIGS = {
     ],
   },
   "Atlanta, GA": {
-    sources: ["ajc", "wsb-tv", "fox 5 atlanta", "11alive", "atlanta news first"],
+    sources: [
+      "atlanta journal-constitution",
+      "ajc",
+      "wsb-tv",
+      "fox 5 atlanta",
+      "11alive",
+      "atlanta news first",
+    ],
     signals: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
   },
   "Dallas, TX": {

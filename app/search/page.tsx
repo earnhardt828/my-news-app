@@ -1100,7 +1100,7 @@ export default function Search() {
       ) : (
         <section className="stack search-results-shell">
           {userResults.length > 0 ? (
-            <div className="search-results-section">
+            <div className="search-results-section search-results-section-sources">
               <p className="search-results-section-heading">Users</p>
               <div className="search-results-list">
                 {userResults.map((user) => (
@@ -1211,7 +1211,7 @@ export default function Search() {
             </div>
           ) : null}
 
-          <div className="search-results-section">
+          <div className="search-results-section search-results-section-filters">
             <p className="search-results-section-heading">Date filters</p>
             <div className="search-results-filter-row" role="tablist" aria-label="Search date filter">
               {[

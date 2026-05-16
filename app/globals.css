@@ -1879,7 +1879,7 @@ input {
 
 .search-bar-shell {
   display: block;
-  margin-bottom: -2px;
+  margin-bottom: 8px;
 }
 
 .search-card {
@@ -1922,6 +1922,14 @@ input {
 .search-results-section {
   display: grid;
   gap: 10px;
+}
+
+.search-results-section-sources {
+  margin-top: 0;
+}
+
+.search-results-section-filters {
+  margin-top: 8px;
 }
 
 .search-results-section-heading {
@@ -1988,7 +1996,7 @@ input {
 }
 
 .search-results-shell {
-  gap: 8px;
+  gap: 12px;
 }
 
 .search-inline-loading {
@@ -3440,7 +3448,7 @@ input {
     max(env(safe-area-inset-right), 16px)
     max(env(safe-area-inset-bottom), 16px)
     max(env(safe-area-inset-left), 16px);
-  background: #ffffff;
+  background: rgb(253 253 253);
   overflow: hidden;
 }
 

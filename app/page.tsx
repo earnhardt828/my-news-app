@@ -316,8 +316,16 @@ const LOCAL_CITY_CONFIGS = {
     ],
   },
   "Atlanta, GA": {
-    query: "Atlanta local news AJC WSB-TV FOX 5 Atlanta 11Alive Atlanta News First",
-    sources: ["AJC", "WSB-TV", "FOX 5 Atlanta", "11Alive", "Atlanta News First"],
+    query:
+      "Atlanta local news Atlanta Journal-Constitution WSB-TV FOX 5 Atlanta 11Alive Atlanta News First",
+    sources: [
+      "Atlanta Journal-Constitution",
+      "AJC",
+      "WSB-TV",
+      "FOX 5 Atlanta",
+      "11Alive",
+      "Atlanta News First",
+    ],
     signals: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
   },
   "Houston, TX": {
