@@ -500,6 +500,23 @@ input {
   padding: 18px;
 }
 
+.local-page-shell {
+  gap: 14px;
+}
+
+.local-page-hero {
+  gap: 12px;
+}
+
+.local-category-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.local-category-module {
+  gap: 10px;
+}
+
 .home-weather-card {
   display: flex;
   align-items: flex-end;

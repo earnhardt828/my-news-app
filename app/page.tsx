@@ -953,8 +953,6 @@ export default function Home() {
   const [isWeatherNewsLoading, setIsWeatherNewsLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
-  const myFeedSectionRef = useRef<HTMLElement | null>(null);
-  const localSectionRef = useRef<HTMLElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isFetchingNextPageRef = useRef(false);
   const activeFeedRequestIdRef = useRef(0);
@@ -3290,6 +3288,109 @@ export default function Home() {
     [myFeedPolls]
   );
 
+  const localCategorySections = useMemo(() => {
+    if (sortMode !== "local") {
+      return [];
+    }
+
+    const categoryDefinitions = [
+      {
+        key: "crime",
+        label: "Crime",
+        matcher: (article: Article) => {
+          const haystack = normalizeLookupValue(
+            `${article.title} ${article.description ?? ""} ${article.category ?? ""}`
+          );
+          return ["crime", "police", "shooting", "arrest", "suspect", "officer", "court"].some(
+            (term) => haystack.includes(term)
+          );
+        },
+      },
+      {
+        key: "development",
+        label: "Development",
+        matcher: (article: Article) => {
+          const haystack = normalizeLookupValue(
+            `${article.title} ${article.description ?? ""} ${article.category ?? ""}`
+          );
+          return [
+            "development",
+            "housing",
+            "construction",
+            "transit",
+            "rezoning",
+            "project",
+            "downtown",
+            "council",
+          ].some((term) => haystack.includes(term));
+        },
+      },
+      {
+        key: "sports",
+        label: "Sports",
+        matcher: (article: Article) => {
+          const category = getCategoryLabel(getSafeCategoryLabel(article.category, article));
+          const haystack = normalizeLookupValue(`${article.title} ${article.description ?? ""}`);
+          return (
+            category === "Sports" ||
+            ["game", "playoff", "season", "team", "match", "coach"].some((term) =>
+              haystack.includes(term)
+            )
+          );
+        },
+      },
+      {
+        key: "weather",
+        label: "Weather",
+        matcher: (article: Article) => {
+          const haystack = normalizeLookupValue(`${article.title} ${article.description ?? ""}`);
+          return ["weather", "forecast", "storm", "rain", "snow", "heat", "wind"].some((term) =>
+            haystack.includes(term)
+          );
+        },
+      },
+      {
+        key: "events",
+        label: "Events",
+        matcher: (article: Article) => {
+          const haystack = normalizeLookupValue(`${article.title} ${article.description ?? ""}`);
+          return ["event", "festival", "concert", "parade", "fair", "weekend", "celebration"].some(
+            (term) => haystack.includes(term)
+          );
+        },
+      },
+    ] as const;
+
+    return categoryDefinitions
+      .map((definition) => ({
+        key: definition.key,
+        label: definition.label,
+        articles: balancedLocalArticles.filter(definition.matcher).slice(0, 3),
+      }))
+      .filter((section) => section.articles.length > 0);
+  }, [balancedLocalArticles, sortMode]);
+
+  const localSourceSummaries = useMemo(() => {
+    if (sortMode !== "local") {
+      return [];
+    }
+
+    const sourceCounts = new Map<string, number>();
+
+    balancedLocalArticles.forEach((article) => {
+      const sourceName = getSafeSourceLabel(article.source);
+      sourceCounts.set(sourceName, (sourceCounts.get(sourceName) ?? 0) + 1);
+    });
+
+    return [...sourceCounts.entries()]
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .slice(0, 6)
+      .map(([sourceName, count]) => ({
+        sourceName,
+        count,
+      }));
+  }, [balancedLocalArticles, sortMode]);
+
   const myFeedRenderItems = useMemo(() => {
     if (sortMode !== "polls") {
       return [];
@@ -3655,6 +3756,36 @@ export default function Home() {
     );
   };
 
+  const renderHomeTopNavigation = (activeMode: "trending" | "local") => (
+    <div className="trending-tabs-wrap home-sections-nav">
+      <div className="toolbar toolbar-centered">
+        <button
+          className={`toolbar-pill ${activeMode === "trending" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("trending")}
+        >
+          Trending
+        </button>
+        <button
+          className="toolbar-pill"
+          type="button"
+          onClick={() => {
+            router.push("/my-feed/");
+          }}
+        >
+          My Feed
+        </button>
+        <button
+          className={`toolbar-pill ${activeMode === "local" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("local")}
+        >
+          Local
+        </button>
+      </div>
+    </div>
+  );
+
   if (
     sortMode === "trending" &&
     isInitialFeedLoading &&
@@ -3667,31 +3798,7 @@ export default function Home() {
   if (sortMode === "trending") {
     return (
       <section className="page-shell home-sections-shell">
-        <div className="trending-tabs-wrap home-sections-nav">
-          <div className="toolbar toolbar-centered">
-            <button className="toolbar-pill toolbar-pill-active" type="button">
-              Trending
-            </button>
-            <button
-              className="toolbar-pill"
-              type="button"
-              onClick={() => {
-                myFeedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            >
-              My Feed
-            </button>
-            <button
-              className="toolbar-pill"
-              type="button"
-              onClick={() => {
-                localSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            >
-              Local
-            </button>
-          </div>
-        </div>
+        {renderHomeTopNavigation("trending")}
 
         <section className="section-card home-section-block">
           <div className="home-section-header">
@@ -3715,7 +3822,7 @@ export default function Home() {
 
         {renderQuickWatchRow()}
 
-        <section ref={myFeedSectionRef} className="section-card home-section-block">
+        <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title">My Feed</strong>
@@ -3831,7 +3938,7 @@ export default function Home() {
           )}
         </section>
 
-        <section ref={localSectionRef} className="section-card home-section-block">
+        <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title">Weather</strong>
@@ -4071,6 +4178,350 @@ export default function Home() {
     );
   }
 
+  if (sortMode === "local") {
+    return (
+      <section className="page-shell home-sections-shell local-page-shell">
+        {renderHomeTopNavigation("local")}
+
+        <section className="section-card home-section-block local-page-hero">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Local</strong>
+              <span className="muted">
+                City-specific news only. No generic national fallback stories.
+              </span>
+            </div>
+          </div>
+
+          <div className="stack local-feed-shell">
+            <div className="local-feed-top-row">
+              <span className="local-feed-selected-label">
+                Selected city: {selectedLocalCity ?? localLocationLabel}
+              </span>
+            </div>
+            <div className="local-feed-controls">
+              <div className="local-feed-input-shell">
+                <input
+                  className="search-input local-feed-input"
+                  type="text"
+                  placeholder="Enter a major city"
+                  value={localQueryDraft}
+                  onFocus={() => setIsLocalAutocompleteOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => {
+                      setIsLocalAutocompleteOpen(false);
+                    }, 120);
+                  }}
+                  onChange={(event) => {
+                    setLocalQueryDraft(event.target.value);
+                    setLocalSearchStatus(null);
+                    setIsLocalAutocompleteOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      setIsLocalAutocompleteOpen(false);
+                      void handleUpdateLocalQuery();
+                    }
+                  }}
+                />
+                {isLocalAutocompleteOpen && localCitySuggestions.length > 0 ? (
+                  <div
+                    className="local-city-dropdown"
+                    role="listbox"
+                    aria-label="Suggested cities"
+                  >
+                    {localCitySuggestions.map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        className="local-city-dropdown-item"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          applyLocalCitySelection(city);
+                          setIsLocalAutocompleteOpen(false);
+                        }}
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="button button-secondary local-feed-button"
+                onClick={() => {
+                  setIsLocalAutocompleteOpen(false);
+                  void handleUpdateLocalQuery();
+                }}
+              >
+                Update
+              </button>
+            </div>
+            <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
+              {LOCAL_CITY_SUGGESTIONS.map((city) => (
+                <button
+                  key={city}
+                  type="button"
+                  className={`chip local-feed-city-chip ${
+                    localLocationLabel === city ? "local-feed-city-chip-active" : ""
+                  }`}
+                  onClick={() => {
+                    applyLocalCitySelection(city);
+                  }}
+                >
+                  {city}
+                </button>
+              ))}
+            </div>
+            {localSearchStatus ? (
+              <p className="settings-detail-note">{localSearchStatus}</p>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Top Local Stories</strong>
+              <span className="muted">
+                The strongest local matches for {selectedLocalCity ?? localLocationLabel}.
+              </span>
+            </div>
+          </div>
+
+          {isLocalAreaLoading ? (
+            <div className="muted">Loading local stories...</div>
+          ) : balancedLocalArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>{localEmptyStateHeadline}</strong>
+              <span>Choose a supported nearby city to explore local coverage.</span>
+              <div className="local-feed-chip-row" role="list" aria-label="Suggested cities">
+                {LOCAL_CITY_SUGGESTIONS.slice(0, 6).map((city) => (
+                  <button
+                    key={`suggested-${city}`}
+                    type="button"
+                    className="chip local-feed-city-chip"
+                    onClick={() => {
+                      applyLocalCitySelection(city);
+                    }}
+                  >
+                    {city}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="compact-feed-module-list">
+              {balancedLocalArticles.slice(0, 6).map((article) => (
+                <Link
+                  key={article.id || article.url || getArticleDeduplicationKey(article)}
+                  href={`/article/${article.id}/`}
+                  className="compact-feed-module-link compact-feed-module-link-rich"
+                >
+                  <strong>{cleanDisplayText(article.title)}</strong>
+                  <span>
+                    {getSafeSourceLabel(article.source)} ·{" "}
+                    {formatPublishedDate(article.publishedAt, article.time)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Weather</strong>
+              <span className="muted">Current conditions for your selected local city.</span>
+            </div>
+          </div>
+
+          <div className="home-weather-card">
+            <div className="stack" style={{ gap: "4px" }}>
+              <span className="home-weather-city">{selectedLocalCity ?? localLocationLabel}</span>
+              <strong className="home-weather-temp">
+                {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
+              </strong>
+              <span className="muted">
+                {weatherCard
+                  ? weatherCard.weatherLabel
+                  : isWeatherLoading
+                  ? "Loading forecast..."
+                  : "Forecast unavailable"}
+              </span>
+            </div>
+            <div className="stack home-weather-meta" style={{ gap: "6px" }}>
+              <span className="muted">
+                {weatherCard?.windMph ? `Wind ${Math.round(weatherCard.windMph)} mph` : "Local outlook"}
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Local Categories</strong>
+              <span className="muted">
+                Crime, development, sports, weather, and event coverage for this city.
+              </span>
+            </div>
+          </div>
+
+          {localCategorySections.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No local category clusters yet</strong>
+              <span>Try another city or check back for more local reporting.</span>
+            </div>
+          ) : (
+            <div className="local-category-grid">
+              {localCategorySections.map((section) => (
+                <section key={section.key} className="compact-feed-module local-category-module">
+                  <div className="compact-feed-module-header">
+                    <strong>{section.label}</strong>
+                    <span>{section.articles.length} local stories</span>
+                  </div>
+                  <div className="compact-feed-module-list">
+                    {section.articles.map((article) => (
+                      <Link
+                        key={article.id || article.url || getArticleDeduplicationKey(article)}
+                        href={`/article/${article.id}/`}
+                        className="compact-feed-module-link"
+                      >
+                        <strong>{cleanDisplayText(article.title)}</strong>
+                        <span>{getSafeSourceLabel(article.source)}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title">Local Sources</strong>
+              <span className="muted">Publishers showing up in this city right now.</span>
+            </div>
+          </div>
+
+          {localSourceSummaries.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No local sources yet</strong>
+              <span>Pick another supported city to view local publisher coverage.</span>
+            </div>
+          ) : (
+            <div className="source-rankings-list">
+              {localSourceSummaries.map((source, index) => (
+                <Link
+                  key={source.sourceName}
+                  href={`/source/${slugifySourceName(source.sourceName)}/`}
+                  className="source-rankings-row"
+                >
+                  <span className="source-rankings-rank">#{index + 1}</span>
+                  <div className="source-rankings-brand">
+                    <SourceBadge sourceName={source.sourceName} />
+                    <span className="source-rankings-name">{source.sourceName}</span>
+                  </div>
+                  <div className="source-rankings-metrics">
+                    <strong>{source.count}</strong>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {isCategorySheetOpen ? (
+          <div
+            className="bottom-sheet-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-sheet-title"
+          >
+            <div className="bottom-sheet">
+              <div className="bottom-sheet-handle" aria-hidden="true" />
+              <div className="bottom-sheet-header">
+                <div className="stack" style={{ gap: "6px" }}>
+                  <h3 id="category-sheet-title" className="modal-title">
+                    Customize feed
+                  </h3>
+                  <p className="muted bottom-sheet-title">
+                    Choose categories to shape your Graffiti feed.
+                  </p>
+                </div>
+                <button
+                  className="button button-secondary"
+                  onClick={() => {
+                    if (isSavingCategories) {
+                      return;
+                    }
+
+                    setIsCategorySheetOpen(false);
+                    setCategorySheetStatus(null);
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="category-sheet-grid">
+                {CATEGORY_OPTIONS.map((category) => (
+                  <button
+                    key={category}
+                    className={`category-pill ${
+                      categoryDraft.includes(category) ? "category-pill-active" : ""
+                    }`}
+                    onClick={() => handleToggleCategoryDraft(category)}
+                  >
+                    {getCategoryLabel(category)}
+                  </button>
+                ))}
+              </div>
+
+              {categorySheetStatus ? (
+                <div
+                  className={`status-message ${
+                    categorySheetStatus.type === "success"
+                      ? "status-success"
+                      : "status-error"
+                  }`}
+                >
+                  {categorySheetStatus.text}
+                </div>
+              ) : null}
+
+              <div className="modal-actions">
+                <button
+                  className="button button-secondary"
+                  onClick={() => {
+                    setCategoryDraft(categories);
+                    setCategorySheetStatus(null);
+                  }}
+                  disabled={isSavingCategories}
+                >
+                  Reset
+                </button>
+                <button
+                  className="button button-accent"
+                  onClick={handleSaveCategories}
+                  disabled={isSavingCategories || !userId}
+                >
+                  {isSavingCategories ? "Saving..." : "Save categories"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <section className="page-shell">
       <div className="page-hero">
@@ -4099,110 +4550,10 @@ export default function Home() {
               >
                 Latest
               </button>
-              <button
-                className={`toolbar-pill ${
-                  sortMode === "local" ? "toolbar-pill-active" : ""
-                }`}
-                onClick={() => setSortMode("local")}
-              >
-                Local
-              </button>
             </div>
           </div>
         </div>
       </div>
-
-      {sortMode === "local" ? (
-        <div className="section-card stack local-feed-shell">
-          <div className="local-feed-top-row">
-            <span className="local-feed-selected-label">
-              {!localQuery ? "Finding nearby news..." : `Selected city: ${localLocationLabel}`}
-            </span>
-          </div>
-          <div className="local-feed-controls">
-            <div className="local-feed-input-shell">
-              <input
-                className="search-input local-feed-input"
-                type="text"
-                placeholder="Enter a major city"
-                value={localQueryDraft}
-                onFocus={() => setIsLocalAutocompleteOpen(true)}
-                onBlur={() => {
-                  window.setTimeout(() => {
-                    setIsLocalAutocompleteOpen(false);
-                  }, 120);
-                }}
-                onChange={(event) => {
-                  setLocalQueryDraft(event.target.value);
-                  setLocalSearchStatus(null);
-                  setIsLocalAutocompleteOpen(true);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    setIsLocalAutocompleteOpen(false);
-                    void handleUpdateLocalQuery();
-                  }
-                }}
-              />
-              {isLocalAutocompleteOpen && localCitySuggestions.length > 0 ? (
-                <div
-                  className="local-city-dropdown"
-                  role="listbox"
-                  aria-label="Suggested cities"
-                >
-                  {localCitySuggestions.map((city) => (
-                    <button
-                      key={city}
-                      type="button"
-                      className="local-city-dropdown-item"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        applyLocalCitySelection(city);
-                        setIsLocalAutocompleteOpen(false);
-                      }}
-                    >
-                      {city}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="button button-secondary local-feed-button"
-              onClick={() => {
-                setIsLocalAutocompleteOpen(false);
-                void handleUpdateLocalQuery();
-              }}
-            >
-              Update
-            </button>
-          </div>
-          <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
-            {LOCAL_CITY_SUGGESTIONS.map((city) => (
-              <button
-                key={city}
-                type="button"
-                className={`chip local-feed-city-chip ${
-                  localLocationLabel === city ? "local-feed-city-chip-active" : ""
-                }`}
-                onClick={() => {
-                  applyLocalCitySelection(city);
-                }}
-              >
-                {city}
-              </button>
-            ))}
-          </div>
-          {localSearchStatus ? (
-            <p className="settings-detail-note">{localSearchStatus}</p>
-          ) : null}
-          {isLocalAreaLoading ? (
-            <p className="settings-detail-note">Loading local stories...</p>
-          ) : null}
-        </div>
-      ) : null}
 
       {sortMode === "polls" ? (
         <div className="polls-filter-toolbar">
@@ -4241,8 +4592,6 @@ export default function Home() {
               ? "Couldn’t load stories."
               : sortMode === "polls"
               ? "No polls yet"
-              : sortMode === "local"
-              ? localEmptyStateHeadline
               : "No stories yet"}
           </strong>
           <span>
@@ -4250,28 +4599,15 @@ export default function Home() {
               ? "Tap to retry."
               : sortMode === "polls"
               ? "Create the first one."
-              : sortMode === "local"
-              ? "Choose a nearby city."
               : "Check back in a moment for fresh stories."}
           </span>
         </div>
       ) : (
         <div className="stack feed-results-stack">
-          {feedLoadError && !(sortMode === "local" && visibleArticles.length > 0) ? (
+          {feedLoadError ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
               <div className="stack" style={{ gap: "10px" }}>
-                <span>
-                  {sortMode === "local"
-                    ? localEmptyStateHeadline
-                    : feedLoadError}
-                </span>
-                {sortMode === "local" ? (
-                  <div>
-                    <button className="button button-secondary" onClick={handleRetryFeedLoad}>
-                      Retry
-                    </button>
-                  </div>
-                ) : null}
+                <span>{feedLoadError}</span>
               </div>
             </div>
           ) : null}
