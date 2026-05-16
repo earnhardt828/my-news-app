@@ -1164,6 +1164,18 @@ export default function Profile() {
 
               <div className="profile-divider" />
 
+              <Link href="/profile/categories/" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>My Feed Categories</strong>
+                  <span>Add or edit the topics used for your personalized feed.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
+
+              <div className="profile-divider" />
+
               <Link href="/profile/comments/" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>My Comments</strong>

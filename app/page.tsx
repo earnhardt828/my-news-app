@@ -179,6 +179,13 @@ type WeatherCardData = {
   cityLabel: string;
 };
 
+function formatTopRankLabel(rank: number) {
+  if (rank === 1) return "Top 1 🥇";
+  if (rank === 2) return "Top 2 🥈";
+  if (rank === 3) return "Top 3 🥉";
+  return `Top ${rank}`;
+}
+
 const LOCAL_CITY_SUGGESTIONS = [
   "Chicago, IL",
   "Los Angeles, CA",
@@ -936,15 +943,18 @@ export default function Home() {
   const [isLocalAutocompleteOpen, setIsLocalAutocompleteOpen] = useState(false);
   const [localSearchStatus, setLocalSearchStatus] = useState<string | null>(null);
   const [isLocalAreaLoading, setIsLocalAreaLoading] = useState(false);
-  const [localSectionArticles, setLocalSectionArticles] = useState<Article[]>([]);
   const [categorySectionArticles, setCategorySectionArticles] = useState<Article[]>([]);
   const [isCategorySectionLoading, setIsCategorySectionLoading] = useState(false);
   const [homeSourceRankings, setHomeSourceRankings] = useState<RankedSourceSummary[]>([]);
   const [isHomeSourceRankingsLoading, setIsHomeSourceRankingsLoading] = useState(false);
   const [weatherCard, setWeatherCard] = useState<WeatherCardData | null>(null);
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+  const [weatherNewsArticles, setWeatherNewsArticles] = useState<Article[]>([]);
+  const [isWeatherNewsLoading, setIsWeatherNewsLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const myFeedSectionRef = useRef<HTMLElement | null>(null);
+  const localSectionRef = useRef<HTMLElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isFetchingNextPageRef = useRef(false);
   const activeFeedRequestIdRef = useRef(0);
@@ -1706,56 +1716,6 @@ export default function Home() {
   }, [categories]);
 
   useEffect(() => {
-    if (!selectedLocalCity) {
-      return;
-    }
-
-    const city = selectedLocalCity;
-    let isCancelled = false;
-
-    async function loadLocalSection() {
-      setIsLocalAreaLoading(true);
-
-      try {
-        const localQueryValue =
-          LOCAL_CITY_CONFIGS[city]?.query ?? buildLocalNewsQuery({ label: city });
-        const response = await apiFetch(
-          `/api/news?mode=local&location=${encodeURIComponent(localQueryValue)}&page=1&pageSize=6`
-        );
-
-        if (!response.ok) {
-          throw new Error(`Local section request failed (${response.status})`);
-        }
-
-        const payload = normalizeNewsPayload(
-          (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
-        );
-
-        if (isCancelled) {
-          return;
-        }
-
-        setLocalSectionArticles(hydrateFeedArticles(payload.articles));
-      } catch (error) {
-        console.error("LOCAL SECTION FETCH ERROR", error);
-        if (!isCancelled) {
-          setLocalSectionArticles([]);
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLocalAreaLoading(false);
-        }
-      }
-    }
-
-    void loadLocalSection();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [localEmptyStateHeadline, selectedLocalCity]);
-
-  useEffect(() => {
     let isCancelled = false;
 
     async function loadHomeSourceRankings() {
@@ -1903,6 +1863,68 @@ export default function Home() {
     }
 
     void loadWeatherCard();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedLocalCity]);
+
+  useEffect(() => {
+    if (!selectedLocalCity) {
+      return;
+    }
+
+    const city = selectedLocalCity;
+    let isCancelled = false;
+
+    async function loadWeatherNews() {
+      setIsWeatherNewsLoading(true);
+
+      try {
+        const weatherQuery = `${city} weather forecast storm heat rain climate`;
+        const response = await apiFetch(
+          `/api/news?mode=search&query=${encodeURIComponent(weatherQuery)}&page=1&pageSize=6`
+        );
+
+        if (!response.ok) {
+          throw new Error(`Weather news request failed (${response.status})`);
+        }
+
+        const payload = normalizeNewsPayload(
+          (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+        );
+        const cityTerms = normalizeLookupValue(city)
+          .split(/[\s,]+/)
+          .filter((term) => term.length > 1);
+        const weatherTerms = ["weather", "forecast", "storm", "rain", "snow", "heat", "wind"];
+
+        const matchingArticles = hydrateFeedArticles(payload.articles).filter((article) => {
+          const haystack = normalizeLookupValue(
+            `${article.title} ${article.description ?? ""} ${article.source ?? ""}`
+          );
+
+          return (
+            cityTerms.some((term) => haystack.includes(term)) &&
+            weatherTerms.some((term) => haystack.includes(term))
+          );
+        });
+
+        if (!isCancelled) {
+          setWeatherNewsArticles(matchingArticles.slice(0, 3));
+        }
+      } catch (error) {
+        console.error("Error loading weather news:", error);
+        if (!isCancelled) {
+          setWeatherNewsArticles([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsWeatherNewsLoading(false);
+        }
+      }
+    }
+
+    void loadWeatherNews();
 
     return () => {
       isCancelled = true;
@@ -3239,39 +3261,6 @@ export default function Home() {
     return items;
   }, [balancedTrendingArticles, sortMode, videos]);
 
-  const trendingBreakModules = useMemo(() => {
-    const modules: TrendingFeedItem[] = [];
-    const celebrityArticle =
-      balancedTrendingArticles.find(
-        (article) => getCategoryLabel(getSafeCategoryLabel(article.category, article)) === "Celebrity"
-      ) ?? null;
-    const topPolls = myFeedPolls.slice(0, 2);
-
-    if (topPolls.length > 0) {
-      modules.push({
-        type: "module",
-        key: "module:top-polls",
-        module: {
-          kind: "top-polls",
-          polls: topPolls,
-        },
-      });
-    }
-
-    if (celebrityArticle) {
-      modules.push({
-        type: "module",
-        key: `module:celebrity-buzz:${celebrityArticle.id}`,
-        module: {
-          kind: "celebrity-buzz",
-          article: celebrityArticle,
-        },
-      });
-    }
-
-    return modules;
-  }, [balancedTrendingArticles, myFeedPolls]);
-
   const quickWatchVideos = useMemo(
     () =>
       videos
@@ -3626,94 +3615,6 @@ export default function Home() {
     }
   };
 
-  const renderTrendingFeedItem = (item: TrendingFeedItem, rankedIndex: number) => {
-    try {
-      if (item.type === "article") {
-        if (!item.article?.id || !item.article?.title) {
-          console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed article item"));
-          return null;
-        }
-
-        return renderArticleFeedCard(item.article, {
-          rankLabel: rankedIndex < 25 ? `Top ${rankedIndex + 1}` : null,
-        });
-      }
-
-      if (item.type === "module") {
-        if (item.module.kind === "top-polls") {
-          return (
-            <section className="section-card compact-feed-module">
-              <div className="compact-feed-module-header">
-                <strong>Top Polls</strong>
-                <span>What people are weighing in on</span>
-              </div>
-              <div className="compact-feed-module-list">
-                {item.module.polls.map((poll) => (
-                  <Link key={poll.id} href={`/poll/${poll.id}/`} className="compact-feed-module-link">
-                    <strong>{poll.question}</strong>
-                    <span>
-                      {getCategoryLabel(poll.category)} · {poll.totalVotes} votes
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          );
-        }
-
-        if (item.module.kind === "celebrity-buzz") {
-          return (
-            <section className="section-card compact-feed-module">
-              <div className="compact-feed-module-header">
-                <strong>Celebrity Buzz</strong>
-                <span>Trending entertainment headlines</span>
-              </div>
-              <Link
-                href={`/article/${item.module.article.id}/`}
-                className="compact-feed-module-link compact-feed-module-link-rich"
-              >
-                <strong>{cleanDisplayText(item.module.article.title)}</strong>
-                <span>{getSafeSourceLabel(item.module.article.source)}</span>
-              </Link>
-            </section>
-          );
-        }
-
-        return null;
-      }
-
-      if (!item.video?.id || !item.video?.title || !item.video?.creator) {
-        console.error("TRENDING ITEM RENDER FAILED", item, new Error("Malformed video item"));
-        return null;
-      }
-
-        return (
-          <VideoFeedCard
-            video={item.video}
-            isAutoplaying={
-              autoplayTrendingVideoKeys.includes(`inline:${item.video.id}`) &&
-              !item.video.fallback
-            }
-            onToggleLike={handleToggleVideoLike}
-            onToggleSave={handleToggleVideoSave}
-            onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-            onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-            frameRef={(node) => {
-              trendingVideoFrameRefs.current[`inline:${item.video.id}`] = node;
-            }}
-            autoplayKey={`inline:${item.video.id}`}
-            label="Video"
-            rankBadgeLabel={rankedIndex < 25 ? `Top ${rankedIndex + 1}` : null}
-            className="video-card-inline"
-          variant="article"
-        />
-      );
-    } catch (error) {
-      console.error("TRENDING ITEM RENDER FAILED", item, error);
-      return null;
-    }
-  };
-
   const renderQuickWatchRow = () => {
     if (quickWatchVideos.length === 0) {
       return null;
@@ -3766,6 +3667,32 @@ export default function Home() {
   if (sortMode === "trending") {
     return (
       <section className="page-shell home-sections-shell">
+        <div className="trending-tabs-wrap home-sections-nav">
+          <div className="toolbar toolbar-centered">
+            <button className="toolbar-pill toolbar-pill-active" type="button">
+              Trending
+            </button>
+            <button
+              className="toolbar-pill"
+              type="button"
+              onClick={() => {
+                myFeedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              My Feed
+            </button>
+            <button
+              className="toolbar-pill"
+              type="button"
+              onClick={() => {
+                localSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              Local
+            </button>
+          </div>
+        </div>
+
         <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
@@ -3779,14 +3706,16 @@ export default function Home() {
             {topTenTrendingArticles.map((article, index) => (
               <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                 {renderArticleFeedCard(article, {
-                  rankLabel: `Top ${index + 1}`,
+                  rankLabel: formatTopRankLabel(index + 1),
                 })}
               </div>
             ))}
           </div>
         </section>
 
-        <section className="section-card home-section-block">
+        {renderQuickWatchRow()}
+
+        <section ref={myFeedSectionRef} className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title">My Feed</strong>
@@ -3902,11 +3831,11 @@ export default function Home() {
           )}
         </section>
 
-        <section className="section-card home-section-block">
+        <section ref={localSectionRef} className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title">Weather</strong>
-              <span className="muted">Forecast and local headlines for your selected city.</span>
+              <span className="muted">Forecast and weather-related stories for your selected city.</span>
             </div>
           </div>
 
@@ -4006,17 +3935,16 @@ export default function Home() {
               ))}
             </div>
 
-            {localSearchStatus ? <p className="settings-detail-note">{localSearchStatus}</p> : null}
-            {isLocalAreaLoading ? <p className="settings-detail-note">Loading local stories...</p> : null}
+            {isWeatherNewsLoading ? <p className="settings-detail-note">Loading weather stories...</p> : null}
 
-            {localSectionArticles.length === 0 && !isLocalAreaLoading ? (
+            {weatherNewsArticles.length === 0 && !isWeatherNewsLoading ? (
               <div className="empty-state compact-empty-state">
-                <strong>{localEmptyStateHeadline}</strong>
-                <span>Choose a supported city to refresh local coverage.</span>
+                <strong>No weather stories for {selectedLocalCity ?? "this city"} right now.</strong>
+                <span>Try another supported city or check back shortly.</span>
               </div>
             ) : (
               <div className="compact-feed-module-list">
-                {localSectionArticles.slice(0, 3).map((article) => (
+                {weatherNewsArticles.map((article) => (
                   <Link
                     key={article.id || article.url || getArticleDeduplicationKey(article)}
                     href={`/article/${article.id}/`}
@@ -4057,8 +3985,6 @@ export default function Home() {
             </div>
           )}
         </section>
-
-        {renderQuickWatchRow()}
 
         {isCategorySheetOpen ? (
           <div
