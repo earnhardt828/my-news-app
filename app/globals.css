@@ -667,6 +667,10 @@ input {
   white-space: nowrap;
 }
 
+.toolbar-centered .toolbar-pill {
+  min-width: 92px;
+}
+
 .toolbar-pill-active {
   background: var(--foreground);
   color: white;
@@ -2019,6 +2023,7 @@ input {
 
 .search-results-shell {
   gap: 10px;
+  margin-top: 2px;
 }
 
 .following-compact-list {
@@ -2354,9 +2359,26 @@ input {
   color: inherit;
 }
 
+.search-source-empty-state {
+  padding: 14px 16px;
+}
+
 .search-user-card {
   text-decoration: none;
   color: inherit;
+}
+
+.local-inline-loading {
+  margin-top: 2px;
+  padding: 4px 0 0;
+}
+
+.local-inline-placeholder {
+  padding: 4px 0 0;
+}
+
+.settings-contact-fields {
+  gap: 10px;
 }
 
 .search-source-card-row,

@@ -1199,6 +1199,11 @@ export default function Search() {
                   </div>
                 </div>
               </Link>
+              {!isSearchLoading && filteredResults.length === 0 ? (
+                <div className="empty-state compact-empty-state search-source-empty-state">
+                  <strong>No recent articles found for this source yet.</strong>
+                </div>
+              ) : null}
             </div>
           ) : null}
 

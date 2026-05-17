@@ -1,6 +1,5 @@
 import { looksLikeLowQualityImageUrl } from "../../../lib/article-images";
 import {
-  getLocalCityConfigByText,
   LOCAL_CITY_CONFIGS as SHARED_LOCAL_CITY_CONFIGS,
 } from "../../../lib/local-news";
 

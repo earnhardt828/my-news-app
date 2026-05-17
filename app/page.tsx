@@ -829,7 +829,7 @@ export default function Home() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-  const [sortMode, setSortMode] = useState<"trending" | "polls" | "latest" | "local">(
+  const [sortMode, setSortMode] = useState<"trending" | "polls" | "latest" | "local" | "sports">(
     "trending"
   );
   const [userId, setUserId] = useState<string | null>(null);
@@ -1098,6 +1098,7 @@ export default function Home() {
         setCategories((prev) =>
           arraysShallowEqual(prev, nextCategories) ? prev : nextCategories
         );
+        console.log("PROFILE LOCAL CITY", profile?.local_city ?? null, profile?.local_state ?? null);
         setSavedLocalCity(profile?.local_city ?? null);
         setSavedLocalState(profile?.local_state ?? null);
         setPreferredSources(profile?.preferred_sources ?? []);
@@ -1957,16 +1958,17 @@ export default function Home() {
       setIsLocalAreaLoading(true);
     }
 
-    if (userId && userEmail && nextConfig) {
+    if (userId && nextConfig) {
       const currentCity = savedLocalCity?.trim() ?? "";
       const currentState = savedLocalState?.trim() ?? "";
 
       if (currentCity !== nextConfig.city || currentState !== nextConfig.state) {
+        console.log("SAVING LOCAL CITY", nextConfig.city, nextConfig.state);
         void (async () => {
           const result = await saveProfilePatch(
             {
               id: userId,
-              email: userEmail,
+              email: userEmail ?? null,
             },
             {
               local_city: nextConfig.city,
@@ -3735,7 +3737,7 @@ export default function Home() {
     );
   };
 
-  const renderHomeTopNavigation = (activeMode: "trending" | "local") => (
+  const renderHomeTopNavigation = (activeMode: "trending" | "local" | "sports") => (
     <div className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
         <button
@@ -3752,12 +3754,19 @@ export default function Home() {
         >
           Local
         </button>
+        <button
+          className={`toolbar-pill ${activeMode === "sports" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("sports")}
+        >
+          Sports
+        </button>
       </div>
     </div>
   );
 
   if (
-    sortMode === "trending" &&
+    (sortMode === "trending" || sortMode === "sports") &&
     isInitialFeedLoading &&
     visibleArticles.length === 0 &&
     !feedLoadError
@@ -4168,6 +4177,38 @@ export default function Home() {
     );
   }
 
+  if (sortMode === "sports") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("sports")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Sports</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {sportsSectionArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No sports stories yet</strong>
+              <span>Check back shortly for fresh sports coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {sportsSectionArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
   if (sortMode === "local") {
     return (
       <section className="page-shell home-sections-shell local-page-shell">
@@ -4266,7 +4307,7 @@ export default function Home() {
             {localSearchStatus ? (
               <p className="settings-detail-note">{localSearchStatus}</p>
             ) : null}
-            {isLocalAreaLoading ? (
+            {isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
               <div className="search-inline-loading local-inline-loading" role="status" aria-live="polite">
                 Loading local stories...
               </div>
