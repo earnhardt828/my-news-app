@@ -38,8 +38,36 @@ const WEATHER_SIGNALS = [
   "alert",
 ];
 
+const WEATHER_QUERY_SOURCE_TERMS = new Set(
+  WEATHER_QUERIES.map((query) => normalize(query))
+);
+
+const PREFERRED_WEATHER_SOURCES = [
+  "Fox Weather",
+  "AccuWeather",
+  "The Weather Channel",
+  "NOAA",
+  "National Weather Service",
+  "AP News",
+  "CNN Weather",
+];
+
 function normalize(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function cleanWeatherSourceName(source: string | null | undefined) {
+  const normalizedSource = normalize(source);
+  if (!normalizedSource || WEATHER_QUERY_SOURCE_TERMS.has(normalizedSource)) {
+    return "Weather News";
+  }
+
+  const preferredSource = PREFERRED_WEATHER_SOURCES.find(
+    (candidate) => normalize(candidate) === normalizedSource
+  );
+
+  const fallbackSource = String(source ?? "Weather News").trim() || "Weather News";
+  return preferredSource ?? fallbackSource;
 }
 
 function createGoogleNewsSearchFeed(query: string): RssFeedConfig {
@@ -76,6 +104,14 @@ export async function GET() {
       );
 
       return WEATHER_SIGNALS.some((signal) => haystack.includes(signal) || source.includes(signal));
+    }).map((article) => {
+      const cleanedSource = cleanWeatherSourceName(article.sourceName || article.source);
+
+      return {
+        ...article,
+        source: cleanedSource,
+        sourceName: cleanedSource,
+      };
     });
 
     console.log("WEATHER FINAL COUNT", articles.length);

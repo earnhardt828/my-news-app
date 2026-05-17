@@ -1257,7 +1257,10 @@ export default function Home() {
       let newsPayload: PaginatedNewsResponse | null = null;
 
       if (feedMode === "local") {
-        newsPath = "/api/local/charlotte";
+        newsPath =
+          selectedLocalCityKey === "new-york-ny"
+            ? "/api/local/new-york"
+            : "/api/local/charlotte";
       } else {
         const params = new URLSearchParams({
           mode: feedMode,
@@ -1604,6 +1607,7 @@ export default function Home() {
     localEmptyStateHeadline,
     localLocationLabel,
     selectedLocalCity,
+    selectedLocalCityKey,
     sortMode,
   ]);
 
@@ -4841,6 +4845,7 @@ export default function Home() {
 
   if (sortMode === "local") {
     const localCityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
+    const localEmptyLabel = localCityLabel.split(",")[0]?.trim() || "Charlotte";
 
     return (
       <section className="page-shell home-sections-shell local-page-shell">
@@ -4856,6 +4861,22 @@ export default function Home() {
           <div className="section-card stack local-feed-shell local-search-card">
             <div className="local-feed-top-row">
               <span className="local-feed-selected-label">{localCityLabel}</span>
+            </div>
+            <div className="local-feed-chip-row" role="list" aria-label="Local city options">
+              {cityOptions.map((city) => (
+                <button
+                  key={city.cityKey}
+                  type="button"
+                  className={`chip local-feed-city-chip ${
+                    localCityLabel === city.displayName ? "local-feed-city-chip-active" : ""
+                  }`}
+                  onClick={() => {
+                    applyLocalCitySelection(city.displayName);
+                  }}
+                >
+                  {city.displayName}
+                </button>
+              ))}
             </div>
             {isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
               <div className="search-inline-loading local-inline-loading" role="status" aria-live="polite">
@@ -4905,7 +4926,7 @@ export default function Home() {
             <div className="muted local-inline-placeholder">Updating stories...</div>
           ) : navigableTopLocalStories.length === 0 ? (
             <div className="empty-state compact-empty-state">
-              <strong>No Charlotte stories found yet.</strong>
+              <strong>No {localEmptyLabel} stories found yet.</strong>
             </div>
           ) : (
             <div className="stack home-section-list">

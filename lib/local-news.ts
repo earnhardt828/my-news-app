@@ -522,6 +522,7 @@ export const DEFAULT_LOCAL_CITY = "Charlotte, NC" as const;
 
 const ACTIVE_LOCAL_CITY_DISPLAY_NAMES = [
   "Charlotte, NC",
+  "New York, NY",
 ] as const;
 
 export const SUPPORTED_LOCAL_CITIES = ACTIVE_LOCAL_CITY_DISPLAY_NAMES.map(
