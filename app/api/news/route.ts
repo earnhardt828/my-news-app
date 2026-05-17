@@ -55,7 +55,15 @@ type NormalizedArticle = {
   comments: null[];
 };
 
-type NewsMode = "trending" | "latest" | "myfeed" | "search" | "compare" | "local" | "sports";
+type NewsMode =
+  | "trending"
+  | "latest"
+  | "myfeed"
+  | "search"
+  | "compare"
+  | "local"
+  | "sports"
+  | "celebrity";
 
 type ProviderFetchParams = {
   mode: NewsMode;
@@ -180,6 +188,33 @@ const SPORTS_SOURCE_SEARCHES = [
   "SB Nation",
   "The Athletic",
   "SportsCenter",
+] as const;
+const CELEBRITY_SOURCE_NAMES = [
+  "TMZ",
+  "People",
+  "Entertainment Weekly",
+  "E! News",
+  "Variety",
+  "The Hollywood Reporter",
+  "Page Six",
+  "Us Weekly",
+  "Billboard",
+] as const;
+const CELEBRITY_QUERY_TERMS = [
+  "celebrity news",
+  "celebrity gossip",
+  "entertainment news",
+  "Hollywood news",
+  "music celebrity news",
+  "TMZ",
+  "People",
+  "Entertainment Weekly",
+  "E! News",
+  "Variety",
+  "The Hollywood Reporter",
+  "Page Six",
+  "Us Weekly",
+  "Billboard",
 ] as const;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
 const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
@@ -333,6 +368,42 @@ const RSS_FEEDS: RssFeedConfig[] = [
     source: "Axios",
     category: "Politics",
     tags: ["politics", "business", "tech"],
+  },
+  {
+    url: "https://variety.com/feed/",
+    source: "Variety",
+    category: "Celebrity",
+    tags: ["celebrity", "entertainment", "hollywood"],
+  },
+  {
+    url: "https://www.billboard.com/feed/",
+    source: "Billboard",
+    category: "Celebrity",
+    tags: ["celebrity", "music", "entertainment"],
+  },
+  {
+    url: "https://pagesix.com/feed/",
+    source: "Page Six",
+    category: "Celebrity",
+    tags: ["celebrity", "gossip", "entertainment"],
+  },
+  {
+    url: "https://www.tmz.com/rss.xml",
+    source: "TMZ",
+    category: "Celebrity",
+    tags: ["celebrity", "gossip", "entertainment"],
+  },
+  {
+    url: "https://ew.com/feed/",
+    source: "Entertainment Weekly",
+    category: "Celebrity",
+    tags: ["celebrity", "entertainment", "hollywood"],
+  },
+  {
+    url: "https://people.com/feed/",
+    source: "People",
+    category: "Celebrity",
+    tags: ["celebrity", "entertainment", "people"],
   },
   {
     url: "https://www.espn.com/espn/rss/news",
@@ -948,6 +1019,10 @@ function getModeCategories(mode: NewsMode, categories: string[]) {
     return ["Sports"];
   }
 
+  if (mode === "celebrity") {
+    return ["Celebrity"];
+  }
+
   if (mode === "myfeed" && categories.length > 0) {
     return categories.slice(0, 5);
   }
@@ -972,6 +1047,13 @@ function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | 
     return (
       params.query.trim() ||
       "sports news OR NFL news OR NBA news OR MLB news OR NHL news OR college football news OR college basketball news OR soccer news OR golf news OR NASCAR news"
+    );
+  }
+
+  if (params.mode === "celebrity") {
+    return (
+      params.query.trim() ||
+      "celebrity news OR celebrity gossip OR entertainment news OR hollywood news OR music celebrity news OR TMZ OR People OR Entertainment Weekly OR E! News OR Variety OR The Hollywood Reporter OR Page Six OR Us Weekly OR Billboard"
     );
   }
 
@@ -1542,7 +1624,7 @@ function sortArticlesForMode(
     });
   }
 
-  if (params.mode === "sports") {
+  if (params.mode === "sports" || params.mode === "celebrity") {
     return [...articles].sort((left, right) => {
       const scoreDiff = getMatchScore(right, getEffectiveQuery(params)) - getMatchScore(left, getEffectiveQuery(params));
 
@@ -1613,7 +1695,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
     (params.mode === "search" ||
       params.mode === "compare" ||
       params.mode === "local" ||
-      params.mode === "sports") &&
+      params.mode === "sports" ||
+      params.mode === "celebrity") &&
     effectiveQuery
   ) {
     const encodedQuery = encodeURIComponent(effectiveQuery);
@@ -1621,14 +1704,26 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
     requests.push(
       {
         url: `https://newsapi.org/v2/everything?q=${exactQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
-          params.mode === "compare" ? 20 : params.mode === "local" ? 14 : params.mode === "sports" ? 18 : 8,
+          params.mode === "compare"
+            ? 20
+            : params.mode === "local"
+              ? 14
+              : params.mode === "sports" || params.mode === "celebrity"
+                ? 18
+                : 8,
           Math.ceil(params.pageSize / 2)
         )}`,
         category: "Search",
       },
       {
         url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
-          params.mode === "compare" ? 30 : params.mode === "local" ? 20 : params.mode === "sports" ? 28 : 10,
+          params.mode === "compare"
+            ? 30
+            : params.mode === "local"
+              ? 20
+              : params.mode === "sports" || params.mode === "celebrity"
+                ? 28
+                : 10,
           params.pageSize
         )}`,
         category: "Search",
@@ -1746,7 +1841,8 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
     (params.mode === "search" ||
       params.mode === "compare" ||
       params.mode === "local" ||
-      params.mode === "sports") &&
+      params.mode === "sports" ||
+      params.mode === "celebrity") &&
     effectiveQuery
   ) {
     requests.push({
@@ -1865,7 +1961,8 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
     (params.mode === "search" ||
       params.mode === "compare" ||
       params.mode === "local" ||
-      params.mode === "sports") &&
+      params.mode === "sports" ||
+      params.mode === "celebrity") &&
     effectiveQuery
   ) {
     baseUrl.searchParams.set("q", effectiveQuery);
@@ -2037,7 +2134,8 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
     (params.mode === "search" ||
       params.mode === "compare" ||
       params.mode === "local" ||
-      params.mode === "sports") &&
+      params.mode === "sports" ||
+      params.mode === "celebrity") &&
     getEffectiveQuery(params)
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
@@ -2275,6 +2373,46 @@ async function fetchSportsArticles(params: ProviderFetchParams): Promise<NewsRou
   };
 }
 
+async function fetchCelebrityArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const celebrityFeeds = RSS_FEEDS.filter((feed) =>
+    CELEBRITY_SOURCE_NAMES.some((source) => feed.source.toLowerCase() === source.toLowerCase())
+  );
+  const rssArticles = await fetchRssFeedSet(celebrityFeeds, celebrityFeeds.length);
+  const effectiveQueries = Array.from(new Set([...CELEBRITY_QUERY_TERMS, ...CELEBRITY_SOURCE_NAMES]));
+  const queryResponses = await Promise.allSettled(
+    effectiveQueries.map((query) =>
+      Promise.all([
+        fetchNewsApiArticles({ ...params, mode: "search", query }),
+        fetchGNewsArticles({ ...params, mode: "search", query }),
+        fetchNewsDataArticles({ ...params, mode: "search", query }),
+      ])
+    )
+  );
+  const queryArticles = queryResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
+  );
+  const combined = dedupeArticles([...rssArticles, ...queryArticles]);
+  const celebrityPattern =
+    /(celebrity|gossip|hollywood|entertainment|music|tmz|people|ew|e!\s*news|variety|hollywood reporter|page six|us weekly|billboard)/i;
+  const celebrityArticles = sortArticlesForMode(combined, params).filter((article) => {
+    const source = article.source.toLowerCase();
+    const text = `${article.title} ${article.description ?? ""} ${article.category}`.toLowerCase();
+    return (
+      article.category.toLowerCase() === "celebrity" ||
+      CELEBRITY_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase())) ||
+      celebrityPattern.test(text)
+    );
+  });
+
+  return {
+    articles: celebrityArticles.slice(0, params.pageSize),
+    nextPage: celebrityArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: celebrityArticles.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
 async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
   if (params.mode === "local" && !getLocalCityConfig(params.cityKey, params.location || params.query)) {
     return {
@@ -2292,6 +2430,10 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   if (params.mode === "sports") {
     return fetchSportsArticles(params);
+  }
+
+  if (params.mode === "celebrity") {
+    return fetchCelebrityArticles(params);
   }
 
   const cacheKey = JSON.stringify({
@@ -2443,6 +2585,7 @@ function parseMode(value: string | null): NewsMode {
     value === "myfeed" ||
     value === "local" ||
     value === "sports" ||
+    value === "celebrity" ||
     value === "search" ||
     value === "compare"
   ) {

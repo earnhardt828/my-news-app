@@ -31,6 +31,7 @@ type VideoFeedItem = {
 };
 
 const APPROVED_CHANNELS: ApprovedChannel[] = [
+  { channelId: "UCiWLfSweyRNmLpgEHekhoAg", name: "ESPN" },
   { channelId: "UC16niRr50-MSBwiO3YDb3RA", name: "BBC News" },
   { channelId: "UCupvZG-5ko_eiXAupbDfxWw", name: "CNN" },
   { channelId: "UCXIJgqnII2ZOINSWNOGFThA", name: "Fox News" },

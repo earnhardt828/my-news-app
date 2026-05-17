@@ -70,6 +70,8 @@ const SPORTS_CATEGORY_QUERIES = {
   Golf: ["PGA Tour news", "golf news"],
 } as const;
 type SportsCategory = keyof typeof SPORTS_CATEGORY_QUERIES;
+const CELEBRITY_FEED_QUERY =
+  "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 
 type Comment = {
   id: number;
@@ -314,7 +316,7 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
 ];
 
 function getFeedCacheKey(
-  mode: "trending" | "latest" | "polls" | "local" | "sports",
+  mode: "trending" | "latest" | "polls" | "local" | "sports" | "celebrity",
   localLabel: string,
   localCityKey?: string | null,
   sportsCategory?: SportsCategory
@@ -323,6 +325,8 @@ function getFeedCacheKey(
     ? `graffiti:last-feed:${mode}:${normalizeLookupValue(localCityKey || localLabel) || "regional"}`
     : mode === "sports"
       ? `graffiti:last-feed:${mode}:${normalizeLookupValue(sportsCategory || "all-sports")}`
+      : mode === "celebrity"
+        ? `graffiti:last-feed:${mode}`
       : `graffiti:last-feed:${mode}`;
 }
 
@@ -795,6 +799,36 @@ function selectSourceBalancedVideos(videos: VideoItem[], limit: number) {
   return [...selected, ...deferred.slice(0, remainingSlots)].slice(0, limit);
 }
 
+function selectSourceBalancedArticles<T extends { source: string }>(articles: T[], limit: number) {
+  if (articles.length <= limit) {
+    return articles;
+  }
+
+  const normalizedSourceCounts = new Map<string, number>();
+  const normalizedSources = new Set(
+    articles.map((article) => cleanDisplayText(article.source).trim().toLowerCase()).filter(Boolean)
+  );
+  const maxPerSource = normalizedSources.size > 1 ? 2 : limit;
+  const selected: T[] = [];
+  const deferred: T[] = [];
+
+  articles.forEach((article) => {
+    const normalizedSource = cleanDisplayText(article.source).trim().toLowerCase() || "unknown";
+    const nextCount = (normalizedSourceCounts.get(normalizedSource) ?? 0) + 1;
+
+    if (nextCount <= maxPerSource) {
+      normalizedSourceCounts.set(normalizedSource, nextCount);
+      selected.push(article);
+      return;
+    }
+
+    deferred.push(article);
+  });
+
+  const remainingSlots = Math.max(0, limit - selected.length);
+  return [...selected, ...deferred.slice(0, remainingSlots)].slice(0, limit);
+}
+
 function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
   if (Array.isArray(payload)) {
     return {
@@ -869,7 +903,9 @@ export default function Home() {
   const cityOptions = SUPPORTED_LOCAL_CITIES;
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-  const [sortMode, setSortMode] = useState<"trending" | "polls" | "latest" | "local" | "sports">(
+  const [sortMode, setSortMode] = useState<
+    "trending" | "polls" | "latest" | "local" | "sports" | "celebrity"
+  >(
     "trending"
   );
   const [sportsCategory, setSportsCategory] = useState<SportsCategory>("All Sports");
@@ -980,7 +1016,7 @@ export default function Home() {
   }, [articles.length, isLoading]);
 
 
-  const feedMode: "trending" | "latest" | "local" | "polls" | "sports" = useMemo(() => {
+  const feedMode: "trending" | "latest" | "local" | "polls" | "sports" | "celebrity" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
@@ -995,6 +1031,10 @@ export default function Home() {
 
     if (sortMode === "sports") {
       return "sports";
+    }
+
+    if (sortMode === "celebrity") {
+      return "celebrity";
     }
 
     return "trending";
@@ -1230,6 +1270,8 @@ export default function Home() {
 
         if (feedMode === "sports") {
           params.set("query", SPORTS_CATEGORY_QUERIES[sportsCategory].join(" | "));
+        } else if (feedMode === "celebrity") {
+          params.set("query", CELEBRITY_FEED_QUERY);
         }
 
         newsPath = `/api/news?${params.toString()}`;
@@ -3246,6 +3288,14 @@ export default function Home() {
     return visibleArticles.slice(0, 25);
   }, [sortMode, visibleArticles]);
 
+  const celebrityTabArticles = useMemo(() => {
+    if (sortMode !== "celebrity") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
+  }, [sortMode, visibleArticles]);
+
   useEffect(() => {
     if (sortMode === "sports") {
       console.log("SPORTS CATEGORY", sportsCategory);
@@ -3416,7 +3466,8 @@ export default function Home() {
   const sportsQuickWatchVideos = useMemo(
     () =>
       selectSourceBalancedVideos(
-        videos.filter((video) => {
+        [...videos]
+          .filter((video) => {
           if (video.fallback) {
             return false;
           }
@@ -3432,7 +3483,33 @@ export default function Home() {
             selectedSportsTerms.some((term) => haystack.includes(term));
 
           return matchesSports && matchesCategory && video.orientation === "vertical";
-        }),
+          })
+          .sort((left, right) => {
+            const scoreVideo = (video: VideoItem) => {
+              const haystack = `${video.title} ${video.creator} ${video.category}`.toLowerCase();
+              let score = 0;
+
+              if (/(highlights|top plays|goals|dunk|touchdown|home run|save|replay)/.test(haystack)) {
+                score += 120;
+              }
+
+              if (/(sportscenter|espn highlights|nfl highlights|nba highlights|mlb highlights|nhl highlights|soccer goals|pga tour|nascar highlights|bleacher report highlights)/.test(haystack)) {
+                score += 90;
+              }
+
+              if (video.orientation === "vertical") {
+                score += 24;
+              }
+
+              if (/(debate|podcast|interview|reaction|preview|rumors)/.test(haystack)) {
+                score -= 110;
+              }
+
+              return score;
+            };
+
+            return scoreVideo(right) - scoreVideo(left);
+          }),
         8
       ),
     [selectedSportsTerms, sportsCategory, videos]
@@ -3872,7 +3949,7 @@ export default function Home() {
     );
   };
 
-  const renderHomeTopNavigation = (activeMode: "trending" | "local" | "sports") => (
+  const renderHomeTopNavigation = (activeMode: "trending" | "local" | "sports" | "celebrity") => (
     <div className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
         <button
@@ -3896,12 +3973,19 @@ export default function Home() {
         >
           Sports
         </button>
+        <button
+          className={`toolbar-pill ${activeMode === "celebrity" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("celebrity")}
+        >
+          Celebrity
+        </button>
       </div>
     </div>
   );
 
   if (
-    (sortMode === "trending" || sortMode === "sports") &&
+    (sortMode === "trending" || sortMode === "sports" || sortMode === "celebrity") &&
     isInitialFeedLoading &&
     visibleArticles.length === 0 &&
     !feedLoadError
@@ -4486,6 +4570,38 @@ export default function Home() {
               ) : null}
 
               {sportsTabArticles.slice(4).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  if (sortMode === "celebrity") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("celebrity")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Celebrity</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {celebrityTabArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No celebrity stories yet</strong>
+              <span>Check back shortly for fresh entertainment coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {celebrityTabArticles.map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
