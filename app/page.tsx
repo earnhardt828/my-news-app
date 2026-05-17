@@ -256,6 +256,8 @@ const LOCAL_CITY_SUGGESTIONS = [
   "Philadelphia, PA",
 ] as const;
 
+const DEFAULT_LOCAL_CITY = "New York, NY" as const;
+
 const LOCAL_CITY_CONFIGS = {
   "Chicago, IL": {
     query:
@@ -2244,22 +2246,13 @@ export default function Home() {
       return;
     }
 
-    const savedCityLabel =
-      savedLocalCity && savedLocalState ? `${savedLocalCity}, ${savedLocalState}` : null;
-
-    if (savedCityLabel) {
-      const timeoutId = window.setTimeout(() => {
-        applyLocalCitySelection(savedCityLabel);
-      }, 0);
-
-      return () => {
-        window.clearTimeout(timeoutId);
-      };
-    }
-
     const timeoutId = window.setTimeout(() => {
-      setIsLocalAreaLoading(false);
-      setLocalSearchStatus("Choose your city to see local stories.");
+      const nextCityLabel =
+        savedLocalCity && savedLocalState
+          ? `${savedLocalCity}, ${savedLocalState}`
+          : DEFAULT_LOCAL_CITY;
+
+      applyLocalCitySelection(nextCityLabel);
     }, 0);
 
     return () => {
@@ -3936,32 +3929,6 @@ export default function Home() {
     );
   };
 
-  const goToMyNewsSection = useCallback(() => {
-    const scrollToSection = () => {
-      if (typeof window === "undefined") {
-        return;
-      }
-
-      const section = document.getElementById("my-news-section");
-      if (!section) {
-        return;
-      }
-
-      section.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    };
-
-    if (sortMode !== "trending") {
-      setSortMode("trending");
-      window.setTimeout(scrollToSection, 80);
-      return;
-    }
-
-    scrollToSection();
-  }, [sortMode]);
-
   const renderHomeTopNavigation = (activeMode: "trending" | "local") => (
     <div className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
@@ -3971,15 +3938,6 @@ export default function Home() {
           onClick={() => setSortMode("trending")}
         >
           Trending
-        </button>
-        <button
-          className={`toolbar-pill ${
-            activeMode === "trending" ? "toolbar-pill-secondary-active" : ""
-          }`}
-          type="button"
-          onClick={goToMyNewsSection}
-        >
-          My News
         </button>
         <button
           className={`toolbar-pill ${activeMode === "local" ? "toolbar-pill-active" : ""}`}
