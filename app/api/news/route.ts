@@ -68,7 +68,8 @@ type NewsMode =
   | "trump"
   | "weather"
   | "technology"
-  | "travel";
+  | "travel"
+  | "food";
 
 type ProviderFetchParams = {
   mode: NewsMode;
@@ -329,6 +330,33 @@ const TRAVEL_QUERY_TERMS = [
   "Lonely Planet",
   "USA Today Travel",
 ] as const;
+const FOOD_SOURCE_NAMES = [
+  "Eater",
+  "Food & Wine",
+  "Bon Appétit",
+  "Serious Eats",
+  "Restaurant Business",
+  "Food Network",
+  "CNN Food",
+  "USA Today Food",
+] as const;
+const FOOD_QUERY_TERMS = [
+  "food news",
+  "restaurant news",
+  "fast food news",
+  "food safety",
+  "grocery news",
+  "recipes news",
+  "dining news",
+  "Eater",
+  "Food & Wine",
+  "Bon Appétit",
+  "Serious Eats",
+  "Restaurant Business",
+  "Food Network",
+  "CNN Food",
+  "USA Today Food",
+] as const;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
 const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
 const SPORTSDATA_API_KEY = process.env.SPORTSDATA_API_KEY ?? "";
@@ -558,6 +586,54 @@ const RSS_FEEDS: RssFeedConfig[] = [
     source: "USA Today Travel",
     category: "Travel",
     tags: ["travel", "airline", "tourism"],
+  },
+  {
+    url: "https://www.eater.com/rss/index.xml",
+    source: "Eater",
+    category: "Food",
+    tags: ["food", "restaurant", "dining"],
+  },
+  {
+    url: "https://www.foodandwine.com/rss",
+    source: "Food & Wine",
+    category: "Food",
+    tags: ["food", "dining", "recipes"],
+  },
+  {
+    url: "https://www.bonappetit.com/feed/rss",
+    source: "Bon Appétit",
+    category: "Food",
+    tags: ["food", "recipes", "dining"],
+  },
+  {
+    url: "https://www.seriouseats.com/rss",
+    source: "Serious Eats",
+    category: "Food",
+    tags: ["food", "recipes", "restaurant"],
+  },
+  {
+    url: "https://www.restaurantbusinessonline.com/rss.xml",
+    source: "Restaurant Business",
+    category: "Food",
+    tags: ["food", "restaurant", "business"],
+  },
+  {
+    url: "https://www.foodnetwork.com/content/food-com/en/rss/food-network-top-stories.rss",
+    source: "Food Network",
+    category: "Food",
+    tags: ["food", "recipes", "dining"],
+  },
+  {
+    url: "https://www.cnn.com/rss/cnn_latest.rss",
+    source: "CNN Food",
+    category: "Food",
+    tags: ["food", "restaurant", "dining"],
+  },
+  {
+    url: "https://rssfeeds.usatoday.com/usatoday-NewsTopStories",
+    source: "USA Today Food",
+    category: "Food",
+    tags: ["food", "grocery", "restaurant"],
   },
   {
     url: "https://feeds.bloomberg.com/markets/news.rss",
@@ -1259,6 +1335,10 @@ function getModeCategories(mode: NewsMode, categories: string[]) {
     return ["Travel"];
   }
 
+  if (mode === "food") {
+    return ["Food"];
+  }
+
   if (mode === "myfeed" && categories.length > 0) {
     return categories.slice(0, 5);
   }
@@ -1319,6 +1399,13 @@ function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | 
     return (
       params.query.trim() ||
       "travel news OR airline news OR airport news OR cruise news OR tourism news OR travel warning OR travel advisory OR hotel news OR vacation travel news OR Travel + Leisure OR Condé Nast Traveler OR AFAR OR Skift OR The Points Guy OR CNN Travel OR National Geographic Travel OR Lonely Planet OR USA Today Travel"
+    );
+  }
+
+  if (params.mode === "food") {
+    return (
+      params.query.trim() ||
+      "food news OR restaurant news OR fast food news OR food safety OR grocery news OR recipes news OR dining news OR Eater OR Food & Wine OR Bon Appétit OR Serious Eats OR Restaurant Business OR Food Network OR CNN Food OR USA Today Food"
     );
   }
 
@@ -1895,7 +1982,8 @@ function sortArticlesForMode(
     params.mode === "trump" ||
     params.mode === "weather" ||
     params.mode === "technology" ||
-    params.mode === "travel"
+    params.mode === "travel" ||
+    params.mode === "food"
   ) {
     return [...articles].sort((left, right) => {
       const scoreDiff = getMatchScore(right, getEffectiveQuery(params)) - getMatchScore(left, getEffectiveQuery(params));
@@ -1972,7 +2060,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
       params.mode === "trump" ||
       params.mode === "weather" ||
       params.mode === "technology" ||
-      params.mode === "travel") &&
+      params.mode === "travel" ||
+      params.mode === "food") &&
     effectiveQuery
   ) {
     const encodedQuery = encodeURIComponent(effectiveQuery);
@@ -1989,7 +2078,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
                     params.mode === "trump" ||
                     params.mode === "weather" ||
                     params.mode === "technology" ||
-                    params.mode === "travel"
+                    params.mode === "travel" ||
+                    params.mode === "food"
                   ? 18
                 : 8,
           Math.ceil(params.pageSize / 2)
@@ -2007,7 +2097,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
                   params.mode === "trump" ||
                   params.mode === "weather" ||
                   params.mode === "technology" ||
-                  params.mode === "travel"
+                  params.mode === "travel" ||
+                  params.mode === "food"
                 ? 28
               : 10,
           params.pageSize
@@ -2132,7 +2223,8 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
       params.mode === "trump" ||
       params.mode === "weather" ||
       params.mode === "technology" ||
-      params.mode === "travel") &&
+      params.mode === "travel" ||
+      params.mode === "food") &&
     effectiveQuery
   ) {
     requests.push({
@@ -2256,7 +2348,8 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
       params.mode === "trump" ||
       params.mode === "weather" ||
       params.mode === "technology" ||
-      params.mode === "travel") &&
+      params.mode === "travel" ||
+      params.mode === "food") &&
     effectiveQuery
   ) {
     baseUrl.searchParams.set("q", effectiveQuery);
@@ -2433,7 +2526,8 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
       params.mode === "trump" ||
       params.mode === "weather" ||
       params.mode === "technology" ||
-      params.mode === "travel") &&
+      params.mode === "travel" ||
+      params.mode === "food") &&
     getEffectiveQuery(params)
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
@@ -2787,16 +2881,30 @@ async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRo
     result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
   );
   const combined = dedupeArticles([...rssArticles, ...queryArticles]);
+  const categoryQueries = params.query.trim()
+    ? params.query
+        .split("|")
+        .map((query) => query.trim())
+        .filter(Boolean)
+    : [];
   const weatherPattern =
-    /(weather|severe weather|hurricane|tornado|climate weather|winter storm|flooding|wildfire weather|forecast|accuweather|noaa|national weather service|cnn weather|fox weather|the weather channel|ap news|weather underground|storm|alert)/i;
-  const localPattern = params.location.trim() ? new RegExp(params.location.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : null;
+    /(weather|severe weather|hurricane|tornado|climate weather|winter storm|flooding|wildfire weather|forecast|accuweather|noaa|national weather service|cnn weather|fox weather|the weather channel|ap news|storm|alert)/i;
+  const categoryPattern = new RegExp(
+    categoryQueries.length > 0
+      ? categoryQueries
+          .flatMap((query) => query.toLowerCase().split(/[^a-z0-9]+/i))
+          .filter((term) => term.length > 2)
+          .join("|")
+      : "weather|storm|hurricane|tornado|flooding|wildfire|forecast|alert|climate",
+    "i"
+  );
   const weatherArticles = sortArticlesForMode(combined, params).filter((article) => {
     const source = article.source.toLowerCase();
     const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
     return (
-      weatherPattern.test(haystack) ||
-      WEATHER_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase())) ||
-      (localPattern ? localPattern.test(haystack) : false)
+      (weatherPattern.test(haystack) ||
+        WEATHER_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase()))) &&
+      categoryPattern.test(haystack)
     );
   });
 
@@ -2804,6 +2912,45 @@ async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRo
     articles: weatherArticles.slice(0, params.pageSize),
     nextPage: weatherArticles.length > params.pageSize ? params.page + 1 : null,
     hasMore: weatherArticles.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
+async function fetchFoodArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const foodFeeds = RSS_FEEDS.filter((feed) =>
+    FOOD_SOURCE_NAMES.some((source) => feed.source.toLowerCase() === source.toLowerCase())
+  );
+  const rssArticles = await fetchRssFeedSet(foodFeeds, foodFeeds.length);
+  const effectiveQueries = Array.from(new Set([...FOOD_QUERY_TERMS, ...FOOD_SOURCE_NAMES]));
+  const queryResponses = await Promise.allSettled(
+    effectiveQueries.map((query) =>
+      Promise.all([
+        fetchNewsApiArticles({ ...params, mode: "search", query }),
+        fetchGNewsArticles({ ...params, mode: "search", query }),
+        fetchNewsDataArticles({ ...params, mode: "search", query }),
+      ])
+    )
+  );
+  const queryArticles = queryResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
+  );
+  const combined = dedupeArticles([...rssArticles, ...queryArticles]);
+  const foodPattern =
+    /(food|restaurant|fast food|food safety|grocery|recipes|dining|chef|menu|eater|food network|bon appétit|serious eats)/i;
+  const foodArticles = sortArticlesForMode(combined, params).filter((article) => {
+    const source = article.source.toLowerCase();
+    const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`;
+    return (
+      foodPattern.test(haystack) ||
+      FOOD_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase()))
+    );
+  });
+
+  return {
+    articles: foodArticles.slice(0, params.pageSize),
+    nextPage: foodArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: foodArticles.length > params.pageSize,
     page: params.page,
     pageSize: params.pageSize,
   };
@@ -2924,6 +3071,10 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   if (params.mode === "travel") {
     return fetchTravelArticles(params);
+  }
+
+  if (params.mode === "food") {
+    return fetchFoodArticles(params);
   }
 
   const cacheKey = JSON.stringify({
@@ -3081,6 +3232,7 @@ function parseMode(value: string | null): NewsMode {
     value === "weather" ||
     value === "technology" ||
     value === "travel" ||
+    value === "food" ||
     value === "search" ||
     value === "compare"
   ) {

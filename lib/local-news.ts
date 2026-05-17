@@ -518,14 +518,10 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
   },
 } as const;
 
-export const DEFAULT_LOCAL_CITY = "New York, NY" as const;
+export const DEFAULT_LOCAL_CITY = "Charlotte, NC" as const;
 
 const ACTIVE_LOCAL_CITY_DISPLAY_NAMES = [
   "Charlotte, NC",
-  "Chicago, IL",
-  "Atlanta, GA",
-  "New York, NY",
-  "Los Angeles, CA",
 ] as const;
 
 export const SUPPORTED_LOCAL_CITIES = ACTIVE_LOCAL_CITY_DISPLAY_NAMES.map(

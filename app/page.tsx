@@ -64,6 +64,8 @@ const TECHNOLOGY_FEED_QUERY =
   "technology news | AI news | tech startups | Apple news | Google news | Microsoft news | cybersecurity news | social media news | The Verge | TechCrunch | Wired | Ars Technica | Engadget | CNET | CNBC Tech | Bloomberg Technology";
 const TRAVEL_FEED_QUERY =
   "travel news | airline news | airport news | cruise news | tourism news | travel warning | travel advisory | hotel news | vacation travel news | Travel + Leisure | Condé Nast Traveler | AFAR | Skift | The Points Guy | CNN Travel | National Geographic Travel | Lonely Planet | USA Today Travel";
+const FOOD_FEED_QUERY =
+  "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
 
 type Comment = {
   id: number;
@@ -300,7 +302,8 @@ function getFeedCacheKey(
     | "trump"
     | "weather"
     | "technology"
-    | "travel",
+    | "travel"
+    | "food",
   localLabel: string,
   localCityKey?: string | null
 ) {
@@ -883,6 +886,7 @@ function getSafeCategoryLabel(value: unknown, article?: Pick<Article, "source" |
 
 export default function Home() {
   const router = useRouter();
+  const topTabsRef = useRef<HTMLDivElement | null>(null);
   const cityOptions = SUPPORTED_LOCAL_CITIES;
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
@@ -897,6 +901,7 @@ export default function Home() {
     | "weather"
     | "technology"
     | "travel"
+    | "food"
   >(
     "trending"
   );
@@ -1017,7 +1022,8 @@ export default function Home() {
     | "trump"
     | "weather"
     | "technology"
-    | "travel" = useMemo(() => {
+    | "travel"
+    | "food" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
@@ -1052,6 +1058,10 @@ export default function Home() {
 
     if (sortMode === "travel") {
       return "travel";
+    }
+
+    if (sortMode === "food") {
+      return "food";
     }
 
     return "trending";
@@ -1302,6 +1312,8 @@ export default function Home() {
           params.set("query", TECHNOLOGY_FEED_QUERY);
         } else if (feedMode === "travel") {
           params.set("query", TRAVEL_FEED_QUERY);
+        } else if (feedMode === "food") {
+          params.set("query", FOOD_FEED_QUERY);
         }
 
         newsPath = `/api/news?${params.toString()}`;
@@ -2258,10 +2270,11 @@ export default function Home() {
     }
 
     const timeoutId = window.setTimeout(() => {
-      const nextCityLabel =
-        savedLocalCity && savedLocalState
-          ? `${savedLocalCity}, ${savedLocalState}`
-          : DEFAULT_LOCAL_CITY;
+      const savedCityLabel =
+        savedLocalCity && savedLocalState ? `${savedLocalCity}, ${savedLocalState}` : "";
+      const nextCityLabel = getLocalCityConfigByName(savedCityLabel)
+        ? savedCityLabel
+        : DEFAULT_LOCAL_CITY;
 
       applyLocalCitySelection(nextCityLabel);
     }, 0);
@@ -3347,6 +3360,14 @@ export default function Home() {
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [sortMode, visibleArticles]);
 
+  const foodTabArticles = useMemo(() => {
+    if (sortMode !== "food") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
+  }, [sortMode, visibleArticles]);
+
   useEffect(() => {
     if (sortMode === "sports") {
       console.log("SPORTS ARTICLE COUNT", sportsTabArticles.length);
@@ -3367,6 +3388,12 @@ export default function Home() {
       console.log("LOCAL ARTICLES COUNT", visibleArticles.length);
     }
   }, [localLocationLabel, selectedLocalCity, selectedLocalCityKey, sortMode, visibleArticles]);
+
+  useEffect(() => {
+    if (sortMode === "trending") {
+      topTabsRef.current?.scrollTo({ left: 0, behavior: "auto" });
+    }
+  }, [sortMode]);
 
   const localCitySuggestions = useMemo(() => {
     if (sortMode !== "local") {
@@ -4006,8 +4033,9 @@ export default function Home() {
       | "weather"
       | "technology"
       | "travel"
+      | "food"
   ) => (
-    <div className="trending-tabs-wrap home-sections-nav">
+    <div ref={topTabsRef} className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
         <button
           className={`toolbar-pill ${activeMode === "trending" ? "toolbar-pill-active" : ""}`}
@@ -4015,6 +4043,13 @@ export default function Home() {
           onClick={() => setSortMode("trending")}
         >
           Trending
+        </button>
+        <button
+          className={`toolbar-pill ${activeMode === "local" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("local")}
+        >
+          Local
         </button>
         <button
           className={`toolbar-pill ${activeMode === "sports" ? "toolbar-pill-active" : ""}`}
@@ -4058,18 +4093,27 @@ export default function Home() {
         >
           Travel
         </button>
+        <button
+          className={`toolbar-pill ${activeMode === "food" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("food")}
+        >
+          Food
+        </button>
       </div>
     </div>
   );
 
   if (
     (sortMode === "trending" ||
+      sortMode === "local" ||
       sortMode === "sports" ||
       sortMode === "celebrity" ||
       sortMode === "trump" ||
       sortMode === "weather" ||
       sortMode === "technology" ||
-      sortMode === "travel") &&
+      sortMode === "travel" ||
+      sortMode === "food") &&
     isInitialFeedLoading &&
     visibleArticles.length === 0 &&
     !feedLoadError
@@ -4799,6 +4843,38 @@ export default function Home() {
           ) : (
             <div className="stack home-section-list">
               {travelTabArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  if (sortMode === "food") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("food")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Food</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {foodTabArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No food stories yet</strong>
+              <span>Check back shortly for fresh food coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {foodTabArticles.map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
