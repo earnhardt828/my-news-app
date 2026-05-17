@@ -2219,6 +2219,7 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
   }
 
   console.log("LOCAL CITY CONFIG USED", localCity.cityKey, localCity);
+  console.log("WORKING LOCAL PATTERN USED FOR", localCity.cityKey);
 
   const cityFeeds = RSS_FEEDS.filter((feed) =>
     localCity.rssFeeds.some((source) => feed.source.toLowerCase() === source.toLowerCase())

@@ -52,24 +52,8 @@ const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
 const INITIAL_FEED_TIMEOUT_MS = 5000;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
-const SPORTS_CATEGORY_QUERIES = {
-  "All Sports": [
-    "sports news",
-    "NFL news",
-    "NBA news",
-    "MLB news",
-    "NHL news",
-    "soccer news",
-  ],
-  Football: ["NFL news", "college football news"],
-  Basketball: ["NBA news", "WNBA news", "college basketball news"],
-  Baseball: ["MLB news"],
-  Hockey: ["NHL news"],
-  Soccer: ["soccer news", "MLS news", "Premier League news"],
-  "Auto Racing": ["NASCAR news", "Formula 1 news"],
-  Golf: ["PGA Tour news", "golf news"],
-} as const;
-type SportsCategory = keyof typeof SPORTS_CATEGORY_QUERIES;
+const SPORTS_UNIFIED_QUERY =
+  "sports news | ESPN top headlines | NFL NBA MLB NHL sports news | Sports Illustrated latest | CBS Sports latest";
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 
@@ -318,13 +302,12 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
 function getFeedCacheKey(
   mode: "trending" | "latest" | "polls" | "local" | "sports" | "celebrity",
   localLabel: string,
-  localCityKey?: string | null,
-  sportsCategory?: SportsCategory
+  localCityKey?: string | null
 ) {
   return mode === "local"
     ? `graffiti:last-feed:${mode}:${normalizeLookupValue(localCityKey || localLabel) || "regional"}`
     : mode === "sports"
-      ? `graffiti:last-feed:${mode}:${normalizeLookupValue(sportsCategory || "all-sports")}`
+      ? `graffiti:last-feed:${mode}`
       : mode === "celebrity"
         ? `graffiti:last-feed:${mode}`
       : `graffiti:last-feed:${mode}`;
@@ -908,7 +891,6 @@ export default function Home() {
   >(
     "trending"
   );
-  const [sportsCategory, setSportsCategory] = useState<SportsCategory>("All Sports");
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -1070,12 +1052,7 @@ export default function Home() {
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
     const requestId = activeFeedRequestIdRef.current + 1;
-    const feedCacheKey = getFeedCacheKey(
-      feedMode,
-      localLocationLabel,
-      selectedLocalCityKey,
-      sportsCategory
-    );
+    const feedCacheKey = getFeedCacheKey(feedMode, localLocationLabel, selectedLocalCityKey);
     const cachedFeed = replace ? readCachedFeedPayload(feedCacheKey) : null;
     activeFeedRequestIdRef.current = requestId;
 
@@ -1269,7 +1246,7 @@ export default function Home() {
         });
 
         if (feedMode === "sports") {
-          params.set("query", SPORTS_CATEGORY_QUERIES[sportsCategory].join(" | "));
+          params.set("query", SPORTS_UNIFIED_QUERY);
         } else if (feedMode === "celebrity") {
           params.set("query", CELEBRITY_FEED_QUERY);
         }
@@ -1598,7 +1575,6 @@ export default function Home() {
     selectedLocalCity,
     selectedLocalCityKey,
     sortMode,
-    sportsCategory,
   ]);
 
   useEffect(() => {
@@ -3269,17 +3245,6 @@ export default function Home() {
 
   const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
 
-  const selectedSportsTerms = useMemo(
-    () =>
-      SPORTS_CATEGORY_QUERIES[sportsCategory].flatMap((query) =>
-        cleanDisplayText(query)
-          .toLowerCase()
-          .split(/[^a-z0-9]+/i)
-          .filter((term) => term.length > 2)
-      ),
-    [sportsCategory]
-  );
-
   const sportsTabArticles = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as Article[];
@@ -3298,10 +3263,9 @@ export default function Home() {
 
   useEffect(() => {
     if (sortMode === "sports") {
-      console.log("SPORTS CATEGORY", sportsCategory);
       console.log("SPORTS ARTICLE COUNT", sportsTabArticles.length);
     }
-  }, [sortMode, sportsCategory, sportsTabArticles.length]);
+  }, [sortMode, sportsTabArticles.length]);
 
   useEffect(() => {
     if (sortMode === "local") {
@@ -3478,11 +3442,8 @@ export default function Home() {
             /(espn|sportscenter|nba|nfl|mlb|nhl|soccer|golf|nascar|cbs sports|nbc sports|fox sports|highlight)/.test(
               haystack
             );
-          const matchesCategory =
-            sportsCategory === "All Sports" ||
-            selectedSportsTerms.some((term) => haystack.includes(term));
 
-          return matchesSports && matchesCategory && video.orientation === "vertical";
+          return matchesSports && video.orientation === "vertical";
           })
           .sort((left, right) => {
             const scoreVideo = (video: VideoItem) => {
@@ -3512,7 +3473,7 @@ export default function Home() {
           }),
         8
       ),
-    [selectedSportsTerms, sportsCategory, videos]
+    [videos]
   );
 
   const sportsInlineVideos = useMemo(
@@ -4476,21 +4437,6 @@ export default function Home() {
               <strong className="profile-section-title home-section-title">Sports</strong>
               <span className="home-section-date">{todayLabel}</span>
             </div>
-          </div>
-
-          <div className="filter-chip-row" role="tablist" aria-label="Sports categories">
-            {Object.keys(SPORTS_CATEGORY_QUERIES).map((category) => (
-              <button
-                key={category}
-                type="button"
-                role="tab"
-                aria-selected={sportsCategory === category}
-                className={`filter-chip ${sportsCategory === category ? "filter-chip-active" : ""}`}
-                onClick={() => setSportsCategory(category as SportsCategory)}
-              >
-                {category}
-              </button>
-            ))}
           </div>
 
           {sportsTabArticles.length === 0 ? (

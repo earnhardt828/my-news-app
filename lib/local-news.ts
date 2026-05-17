@@ -271,6 +271,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "Local 10 Miami",
       "WLRN Miami",
       "Miami New Times",
+      "Axios Miami",
     ],
     allowedSources: [
       "miami herald",
