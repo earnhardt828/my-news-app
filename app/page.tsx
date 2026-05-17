@@ -1260,6 +1260,8 @@ export default function Home() {
         newsPath =
           selectedLocalCityKey === "new-york-ny"
             ? "/api/local/new-york"
+            : selectedLocalCityKey === "los-angeles-ca"
+              ? "/api/local/los-angeles"
             : "/api/local/charlotte";
       } else {
         const params = new URLSearchParams({

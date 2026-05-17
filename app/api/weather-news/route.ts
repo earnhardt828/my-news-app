@@ -52,22 +52,42 @@ const PREFERRED_WEATHER_SOURCES = [
   "CNN Weather",
 ];
 
+const WEATHER_SOURCE_URL_HINTS: Array<{ match: string; source: string }> = [
+  { match: "foxweather.com", source: "Fox Weather" },
+  { match: "accuweather.com", source: "AccuWeather" },
+  { match: "weather.com", source: "The Weather Channel" },
+  { match: "noaa.gov", source: "NOAA" },
+  { match: "weather.gov", source: "National Weather Service" },
+  { match: "cnn.com/weather", source: "CNN Weather" },
+  { match: "apnews.com", source: "AP News" },
+];
+
 function normalize(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
-function cleanWeatherSourceName(source: string | null | undefined) {
+function cleanWeatherSourceName(article: DirectFeedArticle) {
+  const source = article.sourceName || article.source;
   const normalizedSource = normalize(source);
+  const preferredSource = PREFERRED_WEATHER_SOURCES.find(
+    (candidate) => normalize(candidate) === normalizedSource
+  );
+  if (preferredSource) {
+    return preferredSource;
+  }
+
+  const articleUrl = normalize(article.url);
+  const hintedSource = WEATHER_SOURCE_URL_HINTS.find(({ match }) => articleUrl.includes(match));
+  if (hintedSource) {
+    return hintedSource.source;
+  }
+
   if (!normalizedSource || WEATHER_QUERY_SOURCE_TERMS.has(normalizedSource)) {
     return "Weather News";
   }
 
-  const preferredSource = PREFERRED_WEATHER_SOURCES.find(
-    (candidate) => normalize(candidate) === normalizedSource
-  );
-
   const fallbackSource = String(source ?? "Weather News").trim() || "Weather News";
-  return preferredSource ?? fallbackSource;
+  return fallbackSource;
 }
 
 function createGoogleNewsSearchFeed(query: string): RssFeedConfig {
@@ -105,7 +125,7 @@ export async function GET() {
 
       return WEATHER_SIGNALS.some((signal) => haystack.includes(signal) || source.includes(signal));
     }).map((article) => {
-      const cleanedSource = cleanWeatherSourceName(article.sourceName || article.source);
+      const cleanedSource = cleanWeatherSourceName(article);
 
       return {
         ...article,
