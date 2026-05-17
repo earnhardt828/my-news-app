@@ -1236,7 +1236,16 @@ export default function Home() {
           (selectedLocalCityKey ? getLocalCityConfigByKey(selectedLocalCityKey) : null) ??
           (selectedLocalCity ? getLocalCityConfigByName(selectedLocalCity) : null);
 
+        console.log("LOCAL CITY KEY", selectedLocalCityKey ?? cityConfig?.cityKey ?? null);
+        console.log("LOCAL CONFIG FOUND", Boolean(cityConfig), cityConfig?.displayName ?? null);
+        console.log("LOCAL QUERIES USED", cityConfig?.searchQueries ?? []);
+
         if (!cityConfig) {
+          console.error("LOCAL CONFIG MISSING", {
+            cityKey: selectedLocalCityKey ?? null,
+            selectedLocalCity: selectedLocalCity ?? null,
+            localLocationLabel,
+          });
           setArticles([]);
           setFeedPage(1);
           setHasMoreArticles(false);

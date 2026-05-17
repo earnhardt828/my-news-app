@@ -491,6 +491,8 @@ input {
 .home-sections-nav .toolbar {
   flex-wrap: nowrap;
   min-height: 42px;
+  justify-content: flex-start;
+  width: max-content;
 }
 
 .home-section-block {

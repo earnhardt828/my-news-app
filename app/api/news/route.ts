@@ -220,10 +220,28 @@ const CELEBRITY_QUERY_TERMS = [
 ] as const;
 const TRUMP_QUERY_TERMS = [
   "Donald Trump news",
-  "Trump administration",
+  "Trump administration news",
+  "Trump policy news",
+  "Trump White House",
+  "Trump legal news",
+  "Trump economy",
+  "Trump immigration",
+  "Trump tariffs",
   "Trump latest",
-  "Trump policy",
-  "Trump legal",
+] as const;
+const TRUMP_SOURCE_NAMES = [
+  "AP News",
+  "Reuters",
+  "CNN",
+  "Fox News",
+  "NBC News",
+  "CBS News",
+  "ABC News",
+  "The Hill",
+  "Politico",
+  "Axios",
+  "Washington Post",
+  "New York Times",
 ] as const;
 const WEATHER_SOURCE_NAMES = [
   "The Weather Channel",
@@ -235,27 +253,36 @@ const WEATHER_SOURCE_NAMES = [
 ] as const;
 const WEATHER_QUERY_TERMS = [
   "weather news",
-  "severe weather",
+  "severe weather news",
   "hurricane news",
   "tornado news",
-  "climate weather",
-  "winter storm",
   "flooding news",
+  "winter storm news",
+  "wildfire weather news",
+  "NOAA weather alerts",
+  "National Weather Service news",
+  "climate weather news",
   "The Weather Channel",
   "AccuWeather",
   "NOAA",
   "National Weather Service",
   "CNN Weather",
   "Fox Weather",
+  "Weather Underground",
 ] as const;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
 const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
 const SPORTSDATA_API_KEY = process.env.SPORTSDATA_API_KEY ?? "";
+const MEDIASTACK_API_KEY = process.env.MEDIASTACK_API_KEY ?? "";
 
 const NATIONAL_SOURCE_PATTERN =
   /(bbc news|reuters|associated press|ap news|npr|bloomberg|the guardian|al jazeera|newsmax)/i;
 
-const NEWS_API_KEY = process.env.NEWS_API_KEY ?? process.env.NEXT_PUBLIC_NEWS_API_KEY ?? "";
+const NEWS_API_KEY =
+  process.env.NEWS_API_KEY ??
+  process.env.NEWSAPI_KEY ??
+  process.env.NEXT_PUBLIC_NEWS_API_KEY ??
+  "";
 const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
 
@@ -2282,7 +2309,16 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
 async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
   const localCity = getLocalCityConfigByKey(params.cityKey);
 
+  console.log("LOCAL CITY KEY", params.cityKey ?? null);
+  console.log("LOCAL CONFIG FOUND", Boolean(localCity), localCity?.displayName ?? null);
+
   if (!localCity) {
+    console.error("LOCAL CONFIG MISSING", {
+      cityKey: params.cityKey ?? null,
+      city: params.city ?? null,
+      state: params.state ?? null,
+      location: params.location ?? null,
+    });
     return {
       articles: [],
       nextPage: null,
@@ -2296,6 +2332,7 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
   console.log("WORKING LOCAL PATTERN USED FOR", localCity.cityKey);
   console.log("LOCAL CITY SELECTED", localCity.cityKey);
   console.log("LOCAL QUERIES", localCity.searchQueries);
+  console.log("LOCAL QUERIES USED", localCity.searchQueries);
 
   const cityFeeds = RSS_FEEDS.filter((feed) =>
     localCity.rssFeeds.some((source) => feed.source.toLowerCase() === source.toLowerCase())
@@ -2491,26 +2528,31 @@ async function fetchCelebrityArticles(params: ProviderFetchParams): Promise<News
 }
 
 async function fetchTrumpArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
-  const effectiveQueries = Array.from(new Set(TRUMP_QUERY_TERMS));
+  const trumpFeeds = RSS_FEEDS.filter((feed) =>
+    TRUMP_SOURCE_NAMES.some((source) => feed.source.toLowerCase() === source.toLowerCase())
+  );
+  const rssArticles = await fetchRssFeedSet(trumpFeeds, trumpFeeds.length);
+  const effectiveQueries = Array.from(new Set([...TRUMP_QUERY_TERMS, ...TRUMP_SOURCE_NAMES]));
   const queryResponses = await Promise.allSettled(
     effectiveQueries.map((query) =>
       Promise.all([
         fetchNewsApiArticles({ ...params, mode: "search", query }),
         fetchGNewsArticles({ ...params, mode: "search", query }),
         fetchNewsDataArticles({ ...params, mode: "search", query }),
-        fetchRssArticles({ ...params, mode: "search", query }),
       ])
     )
   );
   const queryArticles = queryResponses.flatMap((result) =>
     result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
   );
-  const combined = dedupeArticles(queryArticles);
+  const combined = dedupeArticles([...rssArticles, ...queryArticles]);
   const trumpPattern =
-    /(donald trump|trump administration|trump latest|trump policy|trump legal|white house|maga)/i;
-  const trumpArticles = sortArticlesForMode(combined, params).filter((article) =>
-    trumpPattern.test(`${article.title} ${article.description ?? ""} ${article.source} ${article.category}`)
-  );
+    /(donald trump|trump administration|trump latest|trump policy|trump legal|trump economy|trump immigration|trump tariffs|white house|maga)/i;
+  const trumpArticles = sortArticlesForMode(combined, params).filter((article) => {
+    const source = article.source.toLowerCase();
+    const text = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
+    return trumpPattern.test(text) || TRUMP_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase()));
+  });
 
   return {
     articles: trumpArticles.slice(0, params.pageSize),
@@ -2529,7 +2571,9 @@ async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRo
   const effectiveQueries = Array.from(
     new Set([
       ...WEATHER_QUERY_TERMS,
-      ...(params.location.trim() ? [`${params.location.trim()} weather news`] : []),
+      ...(params.location.trim()
+        ? [`${params.location.trim()} weather news`, `${params.location.trim()} severe weather`]
+        : []),
     ])
   );
   const queryResponses = await Promise.allSettled(
@@ -2546,11 +2590,16 @@ async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRo
   );
   const combined = dedupeArticles([...rssArticles, ...queryArticles]);
   const weatherPattern =
-    /(weather|severe weather|hurricane|tornado|climate weather|winter storm|flooding|forecast|accuweather|noaa|national weather service|cnn weather|fox weather)/i;
+    /(weather|severe weather|hurricane|tornado|climate weather|winter storm|flooding|wildfire weather|forecast|accuweather|noaa|national weather service|cnn weather|fox weather|weather underground)/i;
   const localPattern = params.location.trim() ? new RegExp(params.location.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : null;
   const weatherArticles = sortArticlesForMode(combined, params).filter((article) => {
+    const source = article.source.toLowerCase();
     const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`;
-    return weatherPattern.test(haystack) || (localPattern ? localPattern.test(haystack) : false);
+    return (
+      weatherPattern.test(haystack) ||
+      WEATHER_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase())) ||
+      (localPattern ? localPattern.test(haystack) : false)
+    );
   });
 
   return {
@@ -2666,6 +2715,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
       sportsApi: Boolean(SPORTS_API_KEY),
       apiSports: Boolean(API_SPORTS_KEY),
       sportsData: Boolean(SPORTSDATA_API_KEY),
+      mediastack: Boolean(MEDIASTACK_API_KEY),
     },
     providers: providerDiagnostics,
   });
