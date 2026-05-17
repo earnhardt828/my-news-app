@@ -415,20 +415,81 @@ function sanitizeSourceName(value: string | null | undefined) {
 }
 
 function dedupeSearchArticles(articles: NewsArticle[]) {
-  const seen = new Set<string>();
-
-  return articles.filter((article) => {
-    const key = article.url?.trim()
-      ? `url:${article.url.trim().toLowerCase()}`
-      : `id:${article.id}:${article.title.trim().toLowerCase()}`;
-
-    if (seen.has(key)) {
-      return false;
+  const normalizeArticleUrl = (url?: string | null) => {
+    if (!url?.trim()) {
+      return "";
     }
 
-    seen.add(key);
-    return true;
+    try {
+      const parsed = new URL(url.trim());
+      parsed.hash = "";
+      [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "fbclid",
+        "gclid",
+      ].forEach((key) => parsed.searchParams.delete(key));
+      return parsed.toString().toLowerCase();
+    } catch {
+      return url.trim().toLowerCase();
+    }
+  };
+
+  const normalizeArticleTitle = (title: string) =>
+    title
+      .toLowerCase()
+      .replace(/\[[^\]]+\]/g, " ")
+      .replace(/[^\w\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const bestByKey = new Map<string, NewsArticle>();
+  const getImageScore = (article: NewsArticle) =>
+    Number(Boolean(article.urlToImage || article.imageUrl || article.image || article.mediaContent));
+
+  const isBetterArticle = (candidate: NewsArticle, current: NewsArticle) => {
+    const candidateTime = candidate.publishedAt ? new Date(candidate.publishedAt).getTime() : 0;
+    const currentTime = current.publishedAt ? new Date(current.publishedAt).getTime() : 0;
+
+    if (candidateTime !== currentTime) {
+      return candidateTime > currentTime;
+    }
+
+    const candidateImageScore = getImageScore(candidate);
+    const currentImageScore = getImageScore(current);
+
+    if (candidateImageScore !== currentImageScore) {
+      return candidateImageScore > currentImageScore;
+    }
+
+    return candidate.title.length > current.title.length;
+  };
+
+  articles.forEach((article) => {
+    const normalizedUrl = normalizeArticleUrl(article.url);
+    const normalizedTitle = normalizeArticleTitle(article.title);
+    const sourceKey = sanitizeSourceName(article.source).toLowerCase();
+    const keys = [
+      normalizedUrl ? `url:${normalizedUrl}` : null,
+      normalizedTitle ? `title:${sourceKey}:${normalizedTitle}` : null,
+    ].filter(Boolean) as string[];
+
+    if (keys.length === 0) {
+      keys.push(`id:${article.id}`);
+    }
+
+    const existing = keys
+      .map((key) => bestByKey.get(key))
+      .find((value): value is NewsArticle => Boolean(value));
+    const bestArticle = existing && !isBetterArticle(article, existing) ? existing : article;
+
+    keys.forEach((key) => bestByKey.set(key, bestArticle));
   });
+
+  return Array.from(bestByKey.values());
 }
 
 function normalizeSearchPayload(payload: NewsArticle[] | SearchNewsResponse) {

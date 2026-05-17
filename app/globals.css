@@ -1879,7 +1879,7 @@ input {
 
 .search-bar-shell {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .search-card {
@@ -1996,7 +1996,7 @@ input {
 }
 
 .search-results-shell {
-  gap: 12px;
+  gap: 10px;
 }
 
 .following-compact-list {

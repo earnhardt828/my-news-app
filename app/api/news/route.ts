@@ -241,6 +241,12 @@ const RSS_FEEDS: RssFeedConfig[] = [
     tags: ["breaking", "politics", "world"],
   },
   {
+    url: "https://rss.cnn.com/rss/cnn_us.rss",
+    source: "CNN",
+    category: "Breaking News",
+    tags: ["breaking", "us", "politics"],
+  },
+  {
     url: "https://abcnews.go.com/abcnews/topstories",
     source: "ABC News",
     category: "Breaking News",
@@ -528,6 +534,12 @@ const RSS_FEEDS: RssFeedConfig[] = [
     category: "Local News",
     tags: ["atlanta", "georgia", "local"],
   },
+  {
+    url: "https://www.houstonpublicmedia.org/articles/feed/",
+    source: "Houston Public Media",
+    category: "Local News",
+    tags: ["houston", "texas", "local"],
+  },
 ];
 
 const CHARLOTTE_LOCAL_SOURCES = [
@@ -632,8 +644,16 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["dallas", "fort worth", "dfw", "north texas", "plano", "arlington", "frisco"],
   },
   "Houston, TX": {
-    sources: ["houston chronicle", "khou", "abc13 houston", "fox 26 houston", "kprc", "kprc 2"],
-    signals: ["houston", "texas", "harris county", "sugar land"],
+    sources: [
+      "houston chronicle",
+      "khou",
+      "abc13 houston",
+      "fox 26 houston",
+      "kprc",
+      "kprc 2",
+      "houston public media",
+    ],
+    signals: ["houston", "texas", "harris county", "sugar land", "the heights", "katy"],
   },
   "Miami, FL": {
     sources: ["miami herald", "wsvn", "nbc 6 south florida", "cbs miami", "local 10"],
@@ -1237,13 +1257,20 @@ function sortTrendingForLaunch(articles: NormalizedArticle[]) {
         1,
         (article.likes + article.comments.length * 2) / 18
       );
+      const sourceBoost =
+        sourceKey === "cnn"
+          ? 0.02
+          : sourceKey === "bbc news" || sourceKey === "npr"
+            ? -0.01
+            : 0;
       const launchScore =
         getLaunchRecencyScore(article) * 0.46 +
         getProviderOrderScore(index, articles.length) * 0.31 +
         (1 / sourceCount) * 0.15 +
         (1 / categoryCount) * 0.06 +
         engagementScore * 0.02 -
-        Math.max(0, sourceCount - 2) * 0.015;
+        Math.max(0, sourceCount - 2) * 0.015 +
+        sourceBoost;
 
       return {
         article,
@@ -1264,29 +1291,60 @@ function sortTrendingForLaunch(articles: NormalizedArticle[]) {
 }
 
 function dedupeArticles(articles: NormalizedArticle[]) {
-  const seenUrls = new Set<string>();
-  const seenTitles = new Set<string>();
+  const bestByKey = new Map<string, NormalizedArticle>();
 
-  return articles.filter((article) => {
+  const getImageScore = (article: NormalizedArticle) =>
+    Number(Boolean(article.urlToImage || article.imageUrl || article.image || article.ogImage)) +
+    Number(Boolean(article.mediaContent || article.enclosureUrl || article.twitterImage));
+
+  const isBetterArticle = (candidate: NormalizedArticle, current: NormalizedArticle) => {
+    const candidateTime = getPublishedTime(candidate);
+    const currentTime = getPublishedTime(current);
+    const candidateImageScore = getImageScore(candidate);
+    const currentImageScore = getImageScore(current);
+
+    if (candidateTime !== currentTime) {
+      return candidateTime > currentTime;
+    }
+
+    if (candidateImageScore !== currentImageScore) {
+      return candidateImageScore > currentImageScore;
+    }
+
+    return candidate.title.length > current.title.length;
+  };
+
+  articles.forEach((article) => {
     const normalizedUrl = normalizeUrl(article.url);
     const titleFingerprint = buildTitleFingerprint(article.title);
+    const sourceKey = article.source.trim().toLowerCase();
+    const keys = [
+      normalizedUrl ? `url:${normalizedUrl}` : null,
+      titleFingerprint ? `title:${sourceKey}:${titleFingerprint}` : null,
+    ].filter(Boolean) as string[];
 
-    if (normalizedUrl && seenUrls.has(normalizedUrl)) {
+    if (keys.length === 0) {
+      keys.push(`id:${article.id}`);
+    }
+
+    const existing = keys
+      .map((key) => bestByKey.get(key))
+      .find((value): value is NormalizedArticle => Boolean(value));
+
+    const bestArticle = existing && !isBetterArticle(article, existing) ? existing : article;
+
+    keys.forEach((key) => {
+      bestByKey.set(key, bestArticle);
+    });
+  });
+
+  const seenArticles = new Set<string>();
+  return Array.from(bestByKey.values()).filter((article) => {
+    const identity = `${article.id}:${normalizeUrl(article.url)}:${buildTitleFingerprint(article.title)}:${article.source}`;
+    if (seenArticles.has(identity)) {
       return false;
     }
-
-    if (titleFingerprint && seenTitles.has(titleFingerprint)) {
-      return false;
-    }
-
-    if (normalizedUrl) {
-      seenUrls.add(normalizedUrl);
-    }
-
-    if (titleFingerprint) {
-      seenTitles.add(titleFingerprint);
-    }
-
+    seenArticles.add(identity);
     return true;
   });
 }

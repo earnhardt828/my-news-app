@@ -329,9 +329,18 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
   },
   "Houston, TX": {
-    query: "Houston local news Houston Chronicle KHOU ABC13 Houston FOX 26 Houston KPRC 2",
-    sources: ["Houston Chronicle", "KHOU", "ABC13 Houston", "FOX 26 Houston", "KPRC 2", "KPRC"],
-    signals: ["houston", "texas", "harris county", "katy", "sugar land"],
+    query:
+      "Houston local news Houston Chronicle KHOU ABC13 Houston FOX 26 Houston KPRC 2 Houston Public Media",
+    sources: [
+      "Houston Chronicle",
+      "KHOU",
+      "ABC13 Houston",
+      "FOX 26 Houston",
+      "KPRC 2",
+      "KPRC",
+      "Houston Public Media",
+    ],
+    signals: ["houston", "texas", "harris county", "katy", "sugar land", "the heights"],
   },
   "Miami, FL": {
     query: "Miami local news Miami Herald WSVN NBC 6 South Florida CBS Miami Local 10",
@@ -858,27 +867,81 @@ function formatFreshnessTime(
 }
 
 function getArticleDeduplicationKey(article: Pick<Article, "id" | "url" | "title" | "source">) {
-  if (article.url?.trim()) {
-    return `url:${article.url.trim().toLowerCase()}`;
+  const normalizedUrl = (() => {
+    try {
+      if (!article.url?.trim()) {
+        return "";
+      }
+      const parsed = new URL(article.url.trim());
+      parsed.hash = "";
+      [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "fbclid",
+        "gclid",
+      ].forEach((key) => parsed.searchParams.delete(key));
+      return parsed.toString().toLowerCase();
+    } catch {
+      return article.url?.trim().toLowerCase() ?? "";
+    }
+  })();
+
+  if (normalizedUrl) {
+    return `url:${normalizedUrl}`;
   }
 
-  return `id:${article.id}:${article.title.trim().toLowerCase()}:${article.source
+  const normalizedTitle = article.title
     .trim()
-    .toLowerCase()}`;
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ");
+
+  return `title:${article.source.trim().toLowerCase()}:${normalizedTitle}`;
 }
 
 function mergeArticlesByIdentity(existing: Article[], incoming: Article[]) {
   const merged = [...existing];
-  const existingKeys = new Set(existing.map((article) => getArticleDeduplicationKey(article)));
+  const existingIndexByKey = new Map(
+    existing.map((article, index) => [getArticleDeduplicationKey(article), index])
+  );
+
+  const getImageScore = (article: Article) =>
+    Number(
+      Boolean(
+        article.urlToImage ||
+          article.imageUrl ||
+          article.image ||
+          article.ogImage ||
+          article.mediaContent ||
+          article.enclosureUrl
+      )
+    );
 
   incoming.forEach((article) => {
     const dedupeKey = getArticleDeduplicationKey(article);
+    const existingIndex = existingIndexByKey.get(dedupeKey);
 
-    if (existingKeys.has(dedupeKey)) {
+    if (existingIndex !== undefined) {
+      const current = merged[existingIndex];
+      const currentTime = current.publishedAt ? new Date(current.publishedAt).getTime() : 0;
+      const nextTime = article.publishedAt ? new Date(article.publishedAt).getTime() : 0;
+      const shouldReplace =
+        nextTime > currentTime ||
+        (nextTime === currentTime && getImageScore(article) > getImageScore(current));
+
+      if (shouldReplace) {
+        merged[existingIndex] = {
+          ...current,
+          ...article,
+        };
+      }
       return;
     }
 
-    existingKeys.add(dedupeKey);
+    existingIndexByKey.set(dedupeKey, merged.length);
     merged.push(article);
   });
 

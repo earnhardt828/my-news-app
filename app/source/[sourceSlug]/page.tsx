@@ -78,6 +78,76 @@ function normalizeSourceLabel(value?: string | null) {
     .toLowerCase();
 }
 
+function normalizeSourceArticleUrl(url?: string | null) {
+  if (!url?.trim()) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(url.trim());
+    parsed.hash = "";
+    [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "fbclid",
+      "gclid",
+    ].forEach((key) => parsed.searchParams.delete(key));
+    return parsed.toString().toLowerCase();
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+function normalizeSourceArticleTitle(title?: string | null) {
+  return cleanDisplayText(title ?? "")
+    .toLowerCase()
+    .replace(/\[[^\]]+\]/g, " ")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function dedupeSourceArticles(articles: SourceArticle[]) {
+  const bestByKey = new Map<string, SourceArticle>();
+
+  const isBetterArticle = (candidate: SourceArticle, current: SourceArticle) => {
+    const candidateTime = candidate.publishedAt ? new Date(candidate.publishedAt).getTime() : 0;
+    const currentTime = current.publishedAt ? new Date(current.publishedAt).getTime() : 0;
+
+    if (candidateTime !== currentTime) {
+      return candidateTime > currentTime;
+    }
+
+    return (candidate.description?.length ?? 0) > (current.description?.length ?? 0);
+  };
+
+  articles.forEach((article) => {
+    const normalizedUrl = normalizeSourceArticleUrl((article as SourceArticle & { url?: string | null }).url);
+    const normalizedTitle = normalizeSourceArticleTitle(article.title);
+    const sourceKey = normalizeSourceLabel(article.source);
+    const keys = [
+      normalizedUrl ? `url:${normalizedUrl}` : null,
+      normalizedTitle ? `title:${sourceKey}:${normalizedTitle}` : null,
+    ].filter(Boolean) as string[];
+
+    if (keys.length === 0) {
+      keys.push(`id:${article.id}`);
+    }
+
+    const existing = keys
+      .map((key) => bestByKey.get(key))
+      .find((value): value is SourceArticle => Boolean(value));
+    const bestArticle = existing && !isBetterArticle(article, existing) ? existing : article;
+
+    keys.forEach((key) => bestByKey.set(key, bestArticle));
+  });
+
+  return Array.from(bestByKey.values());
+}
+
 export default function SourcePage({
   params,
 }: {
@@ -163,7 +233,7 @@ export default function SourcePage({
 
         const sourceLabel = normalizeSourceLabel(sourceName);
 
-        const filtered = mergedNews
+        const filtered = dedupeSourceArticles(mergedNews)
           .filter((article) => {
             const articleSourceLabel = normalizeSourceLabel(article.source);
             const articleTitleLabel = normalizeSourceLabel(article.title);
