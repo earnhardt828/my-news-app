@@ -63,7 +63,9 @@ type NewsMode =
   | "compare"
   | "local"
   | "sports"
-  | "celebrity";
+  | "celebrity"
+  | "trump"
+  | "weather";
 
 type ProviderFetchParams = {
   mode: NewsMode;
@@ -215,6 +217,36 @@ const CELEBRITY_QUERY_TERMS = [
   "Page Six",
   "Us Weekly",
   "Billboard",
+] as const;
+const TRUMP_QUERY_TERMS = [
+  "Donald Trump news",
+  "Trump administration",
+  "Trump latest",
+  "Trump policy",
+  "Trump legal",
+] as const;
+const WEATHER_SOURCE_NAMES = [
+  "The Weather Channel",
+  "AccuWeather",
+  "NOAA",
+  "National Weather Service",
+  "CNN Weather",
+  "Fox Weather",
+] as const;
+const WEATHER_QUERY_TERMS = [
+  "weather news",
+  "severe weather",
+  "hurricane news",
+  "tornado news",
+  "climate weather",
+  "winter storm",
+  "flooding news",
+  "The Weather Channel",
+  "AccuWeather",
+  "NOAA",
+  "National Weather Service",
+  "CNN Weather",
+  "Fox Weather",
 ] as const;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
 const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
@@ -1023,6 +1055,14 @@ function getModeCategories(mode: NewsMode, categories: string[]) {
     return ["Celebrity"];
   }
 
+  if (mode === "trump") {
+    return ["Politics"];
+  }
+
+  if (mode === "weather") {
+    return ["Weather"];
+  }
+
   if (mode === "myfeed" && categories.length > 0) {
     return categories.slice(0, 5);
   }
@@ -1054,6 +1094,21 @@ function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | 
     return (
       params.query.trim() ||
       "celebrity news OR celebrity gossip OR entertainment news OR hollywood news OR music celebrity news OR TMZ OR People OR Entertainment Weekly OR E! News OR Variety OR The Hollywood Reporter OR Page Six OR Us Weekly OR Billboard"
+    );
+  }
+
+  if (params.mode === "trump") {
+    return (
+      params.query.trim() ||
+      "Donald Trump news OR Trump administration OR Trump latest OR Trump policy OR Trump legal"
+    );
+  }
+
+  if (params.mode === "weather") {
+    const localWeather = params.location.trim() ? ` OR ${params.location.trim()} weather news` : "";
+    return (
+      params.query.trim() ||
+      `weather news OR severe weather OR hurricane news OR tornado news OR climate weather OR winter storm OR flooding news OR The Weather Channel OR AccuWeather OR NOAA OR National Weather Service OR CNN Weather OR Fox Weather${localWeather}`
     );
   }
 
@@ -1624,7 +1679,12 @@ function sortArticlesForMode(
     });
   }
 
-  if (params.mode === "sports" || params.mode === "celebrity") {
+  if (
+    params.mode === "sports" ||
+    params.mode === "celebrity" ||
+    params.mode === "trump" ||
+    params.mode === "weather"
+  ) {
     return [...articles].sort((left, right) => {
       const scoreDiff = getMatchScore(right, getEffectiveQuery(params)) - getMatchScore(left, getEffectiveQuery(params));
 
@@ -1696,7 +1756,9 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
       params.mode === "compare" ||
       params.mode === "local" ||
       params.mode === "sports" ||
-      params.mode === "celebrity") &&
+      params.mode === "celebrity" ||
+      params.mode === "trump" ||
+      params.mode === "weather") &&
     effectiveQuery
   ) {
     const encodedQuery = encodeURIComponent(effectiveQuery);
@@ -1706,10 +1768,13 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
         url: `https://newsapi.org/v2/everything?q=${exactQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
           params.mode === "compare"
             ? 20
-            : params.mode === "local"
-              ? 14
-              : params.mode === "sports" || params.mode === "celebrity"
-                ? 18
+              : params.mode === "local"
+                ? 14
+                : params.mode === "sports" ||
+                    params.mode === "celebrity" ||
+                    params.mode === "trump" ||
+                    params.mode === "weather"
+                  ? 18
                 : 8,
           Math.ceil(params.pageSize / 2)
         )}`,
@@ -1719,11 +1784,14 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
         url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
           params.mode === "compare"
             ? 30
-            : params.mode === "local"
-              ? 20
-              : params.mode === "sports" || params.mode === "celebrity"
+              : params.mode === "local"
+                ? 20
+              : params.mode === "sports" ||
+                  params.mode === "celebrity" ||
+                  params.mode === "trump" ||
+                  params.mode === "weather"
                 ? 28
-                : 10,
+              : 10,
           params.pageSize
         )}`,
         category: "Search",
@@ -1842,7 +1910,9 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
       params.mode === "compare" ||
       params.mode === "local" ||
       params.mode === "sports" ||
-      params.mode === "celebrity") &&
+      params.mode === "celebrity" ||
+      params.mode === "trump" ||
+      params.mode === "weather") &&
     effectiveQuery
   ) {
     requests.push({
@@ -1962,7 +2032,9 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
       params.mode === "compare" ||
       params.mode === "local" ||
       params.mode === "sports" ||
-      params.mode === "celebrity") &&
+      params.mode === "celebrity" ||
+      params.mode === "trump" ||
+      params.mode === "weather") &&
     effectiveQuery
   ) {
     baseUrl.searchParams.set("q", effectiveQuery);
@@ -2135,7 +2207,9 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
       params.mode === "compare" ||
       params.mode === "local" ||
       params.mode === "sports" ||
-      params.mode === "celebrity") &&
+      params.mode === "celebrity" ||
+      params.mode === "trump" ||
+      params.mode === "weather") &&
     getEffectiveQuery(params)
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
@@ -2220,6 +2294,8 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
 
   console.log("LOCAL CITY CONFIG USED", localCity.cityKey, localCity);
   console.log("WORKING LOCAL PATTERN USED FOR", localCity.cityKey);
+  console.log("LOCAL CITY SELECTED", localCity.cityKey);
+  console.log("LOCAL QUERIES", localCity.searchQueries);
 
   const cityFeeds = RSS_FEEDS.filter((feed) =>
     localCity.rssFeeds.some((source) => feed.source.toLowerCase() === source.toLowerCase())
@@ -2294,16 +2370,16 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
           isRelaxedLocalArticle(article, localCity)
         );
   console.log("LOCAL FILTERED COUNT", filteredArticles.length);
-  const sliced = filteredArticles.slice(0, params.pageSize);
+  const finalArticles = filteredArticles.slice(0, params.pageSize);
 
   console.log(
     "LOCAL FINAL SOURCES",
-    Array.from(new Set(sliced.map((article) => article.sourceName || article.source))).sort()
+    finalArticles.map((article) => article.sourceName || article.source)
   );
-  console.log("LOCAL FINAL COUNT", sliced.length);
+  console.log("LOCAL FINAL COUNT", finalArticles.length);
 
   return {
-    articles: sliced,
+    articles: finalArticles,
     nextPage: filteredArticles.length > params.pageSize ? params.page + 1 : null,
     hasMore: filteredArticles.length > params.pageSize,
     page: params.page,
@@ -2414,6 +2490,78 @@ async function fetchCelebrityArticles(params: ProviderFetchParams): Promise<News
   };
 }
 
+async function fetchTrumpArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const effectiveQueries = Array.from(new Set(TRUMP_QUERY_TERMS));
+  const queryResponses = await Promise.allSettled(
+    effectiveQueries.map((query) =>
+      Promise.all([
+        fetchNewsApiArticles({ ...params, mode: "search", query }),
+        fetchGNewsArticles({ ...params, mode: "search", query }),
+        fetchNewsDataArticles({ ...params, mode: "search", query }),
+        fetchRssArticles({ ...params, mode: "search", query }),
+      ])
+    )
+  );
+  const queryArticles = queryResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
+  );
+  const combined = dedupeArticles(queryArticles);
+  const trumpPattern =
+    /(donald trump|trump administration|trump latest|trump policy|trump legal|white house|maga)/i;
+  const trumpArticles = sortArticlesForMode(combined, params).filter((article) =>
+    trumpPattern.test(`${article.title} ${article.description ?? ""} ${article.source} ${article.category}`)
+  );
+
+  return {
+    articles: trumpArticles.slice(0, params.pageSize),
+    nextPage: trumpArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: trumpArticles.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
+async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const weatherFeeds = RSS_FEEDS.filter((feed) =>
+    WEATHER_SOURCE_NAMES.some((source) => feed.source.toLowerCase() === source.toLowerCase())
+  );
+  const rssArticles = await fetchRssFeedSet(weatherFeeds, weatherFeeds.length);
+  const effectiveQueries = Array.from(
+    new Set([
+      ...WEATHER_QUERY_TERMS,
+      ...(params.location.trim() ? [`${params.location.trim()} weather news`] : []),
+    ])
+  );
+  const queryResponses = await Promise.allSettled(
+    effectiveQueries.map((query) =>
+      Promise.all([
+        fetchNewsApiArticles({ ...params, mode: "search", query }),
+        fetchGNewsArticles({ ...params, mode: "search", query }),
+        fetchNewsDataArticles({ ...params, mode: "search", query }),
+      ])
+    )
+  );
+  const queryArticles = queryResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
+  );
+  const combined = dedupeArticles([...rssArticles, ...queryArticles]);
+  const weatherPattern =
+    /(weather|severe weather|hurricane|tornado|climate weather|winter storm|flooding|forecast|accuweather|noaa|national weather service|cnn weather|fox weather)/i;
+  const localPattern = params.location.trim() ? new RegExp(params.location.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : null;
+  const weatherArticles = sortArticlesForMode(combined, params).filter((article) => {
+    const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`;
+    return weatherPattern.test(haystack) || (localPattern ? localPattern.test(haystack) : false);
+  });
+
+  return {
+    articles: weatherArticles.slice(0, params.pageSize),
+    nextPage: weatherArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: weatherArticles.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
 async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
   if (params.mode === "local" && !getLocalCityConfig(params.cityKey, params.location || params.query)) {
     return {
@@ -2435,6 +2583,14 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   if (params.mode === "celebrity") {
     return fetchCelebrityArticles(params);
+  }
+
+  if (params.mode === "trump") {
+    return fetchTrumpArticles(params);
+  }
+
+  if (params.mode === "weather") {
+    return fetchWeatherArticles(params);
   }
 
   const cacheKey = JSON.stringify({
@@ -2587,6 +2743,8 @@ function parseMode(value: string | null): NewsMode {
     value === "local" ||
     value === "sports" ||
     value === "celebrity" ||
+    value === "trump" ||
+    value === "weather" ||
     value === "search" ||
     value === "compare"
   ) {

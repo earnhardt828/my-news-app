@@ -5,7 +5,15 @@ export type ArticleReturnState = {
   path: string;
   scrollY: number;
   source?: "home" | "search";
-  sortMode?: "trending" | "polls" | "latest" | "local" | "sports" | "celebrity";
+  sortMode?:
+    | "trending"
+    | "polls"
+    | "latest"
+    | "local"
+    | "sports"
+    | "celebrity"
+    | "trump"
+    | "weather";
   selectedLocalCity?: string | null;
   localLocationLabel?: string | null;
   searchQuery?: string;

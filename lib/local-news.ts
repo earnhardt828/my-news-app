@@ -253,7 +253,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "kprc",
       "houston public media",
     ],
-    strictTerms: ["houston", "texas", "tx", "harris county", "sugar land", "the heights", "katy"],
+    strictTerms: ["houston", "harris county", "texas", "tx"],
     rssFeeds: ["Houston Public Media"],
   },
   "Miami, FL": {
@@ -277,6 +277,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "miami herald",
       "wsvn",
       "wsvn miami",
+      "axios miami",
       "nbc 6",
       "nbc 6 south florida",
       "cbs miami",
@@ -289,6 +290,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     sourceAliases: [
       "miami herald",
       "wsvn",
+      "axios miami",
       "nbc 6",
       "cbs miami",
       "local 10",
@@ -296,16 +298,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "miami new times",
       "south florida",
     ],
-    strictTerms: [
-      "miami",
-      "florida",
-      "fl",
-      "miami-dade",
-      "south florida",
-      "fort lauderdale",
-      "wynwood",
-      "brickell",
-    ],
+    strictTerms: ["miami", "miami-dade", "south florida", "florida", "fl"],
     rssFeeds: [
       "Miami Herald",
       "WSVN",

@@ -56,6 +56,10 @@ const SPORTS_UNIFIED_QUERY =
   "sports news | ESPN top headlines | NFL NBA MLB NHL sports news | Sports Illustrated latest | CBS Sports latest";
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
+const TRUMP_FEED_QUERY =
+  "Donald Trump news | Trump administration | Trump latest | Trump policy | Trump legal";
+const WEATHER_FEED_QUERY =
+  "weather news | severe weather | hurricane news | tornado news | climate weather | winter storm | flooding news | The Weather Channel | AccuWeather | NOAA | National Weather Service | CNN Weather | Fox Weather";
 
 type Comment = {
   id: number;
@@ -300,7 +304,7 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
 ];
 
 function getFeedCacheKey(
-  mode: "trending" | "latest" | "polls" | "local" | "sports" | "celebrity",
+  mode: "trending" | "latest" | "polls" | "local" | "sports" | "celebrity" | "trump" | "weather",
   localLabel: string,
   localCityKey?: string | null
 ) {
@@ -308,7 +312,7 @@ function getFeedCacheKey(
     ? `graffiti:last-feed:${mode}:${normalizeLookupValue(localCityKey || localLabel) || "regional"}`
     : mode === "sports"
       ? `graffiti:last-feed:${mode}`
-      : mode === "celebrity"
+      : mode === "celebrity" || mode === "trump" || mode === "weather"
         ? `graffiti:last-feed:${mode}`
       : `graffiti:last-feed:${mode}`;
 }
@@ -887,7 +891,7 @@ export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
-    "trending" | "polls" | "latest" | "local" | "sports" | "celebrity"
+    "trending" | "polls" | "latest" | "local" | "sports" | "celebrity" | "trump" | "weather"
   >(
     "trending"
   );
@@ -998,7 +1002,15 @@ export default function Home() {
   }, [articles.length, isLoading]);
 
 
-  const feedMode: "trending" | "latest" | "local" | "polls" | "sports" | "celebrity" = useMemo(() => {
+  const feedMode:
+    | "trending"
+    | "latest"
+    | "local"
+    | "polls"
+    | "sports"
+    | "celebrity"
+    | "trump"
+    | "weather" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
@@ -1017,6 +1029,14 @@ export default function Home() {
 
     if (sortMode === "celebrity") {
       return "celebrity";
+    }
+
+    if (sortMode === "trump") {
+      return "trump";
+    }
+
+    if (sortMode === "weather") {
+      return "weather";
     }
 
     return "trending";
@@ -1249,6 +1269,11 @@ export default function Home() {
           params.set("query", SPORTS_UNIFIED_QUERY);
         } else if (feedMode === "celebrity") {
           params.set("query", CELEBRITY_FEED_QUERY);
+        } else if (feedMode === "trump") {
+          params.set("query", TRUMP_FEED_QUERY);
+        } else if (feedMode === "weather") {
+          params.set("query", WEATHER_FEED_QUERY);
+          params.set("location", selectedLocalCity ?? savedLocalCity ?? localLocationLabel ?? "");
         }
 
         newsPath = `/api/news?${params.toString()}`;
@@ -1572,6 +1597,7 @@ export default function Home() {
     localEmptyStateHeadline,
     localLocationLabel,
     localQuery,
+    savedLocalCity,
     selectedLocalCity,
     selectedLocalCityKey,
     sortMode,
@@ -3261,6 +3287,22 @@ export default function Home() {
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [sortMode, visibleArticles]);
 
+  const trumpTabArticles = useMemo(() => {
+    if (sortMode !== "trump") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
+  }, [sortMode, visibleArticles]);
+
+  const weatherTabArticles = useMemo(() => {
+    if (sortMode !== "weather") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
+  }, [sortMode, visibleArticles]);
+
   useEffect(() => {
     if (sortMode === "sports") {
       console.log("SPORTS ARTICLE COUNT", sportsTabArticles.length);
@@ -3910,7 +3952,9 @@ export default function Home() {
     );
   };
 
-  const renderHomeTopNavigation = (activeMode: "trending" | "local" | "sports" | "celebrity") => (
+  const renderHomeTopNavigation = (
+    activeMode: "trending" | "local" | "sports" | "celebrity" | "trump" | "weather"
+  ) => (
     <div className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
         <button
@@ -3941,12 +3985,30 @@ export default function Home() {
         >
           Celebrity
         </button>
+        <button
+          className={`toolbar-pill ${activeMode === "trump" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("trump")}
+        >
+          Donald Trump
+        </button>
+        <button
+          className={`toolbar-pill ${activeMode === "weather" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("weather")}
+        >
+          Weather
+        </button>
       </div>
     </div>
   );
 
   if (
-    (sortMode === "trending" || sortMode === "sports" || sortMode === "celebrity") &&
+    (sortMode === "trending" ||
+      sortMode === "sports" ||
+      sortMode === "celebrity" ||
+      sortMode === "trump" ||
+      sortMode === "weather") &&
     isInitialFeedLoading &&
     visibleArticles.length === 0 &&
     !feedLoadError
@@ -4548,6 +4610,70 @@ export default function Home() {
           ) : (
             <div className="stack home-section-list">
               {celebrityTabArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  if (sortMode === "trump") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("trump")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Donald Trump</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {trumpTabArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No Donald Trump stories yet</strong>
+              <span>Check back shortly for fresh coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {trumpTabArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  if (sortMode === "weather") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("weather")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Weather</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {weatherTabArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No weather stories yet</strong>
+              <span>Check back shortly for fresh weather coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {weatherTabArticles.map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
