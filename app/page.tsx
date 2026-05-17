@@ -39,7 +39,6 @@ import {
   getLocalCityConfigByText,
   LOCAL_CITY_CONFIGS,
   SUPPORTED_LOCAL_CITIES,
-  SUPPORTED_LOCAL_CITY_NAMES,
 } from "../lib/local-news";
 import { isCommentAllowed } from "../lib/moderation";
 import { slugifySourceName } from "../lib/source-logos";
@@ -247,8 +246,6 @@ function persistArticleMetadata(article: Article) {
     console.error("ARTICLE METADATA CACHE WRITE FAILED", error);
   }
 }
-
-const LOCAL_CITY_SUGGESTIONS = SUPPORTED_LOCAL_CITY_NAMES;
 
 const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: number }> = {
   "Chicago, IL": { latitude: 41.8781, longitude: -87.6298 },
@@ -828,6 +825,7 @@ function getSafeCategoryLabel(value: unknown, article?: Pick<Article, "source" |
 
 export default function Home() {
   const router = useRouter();
+  const cityOptions = SUPPORTED_LOCAL_CITIES;
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<"trending" | "polls" | "latest" | "local" | "sports">(
@@ -920,6 +918,13 @@ export default function Home() {
       SUPPORTED_LOCAL_CITIES.map((city) => city.displayName)
     );
   }, []);
+
+  useEffect(() => {
+    console.log(
+      "LOCAL CITY OPTIONS RENDERED",
+      cityOptions.map((city) => city.displayName)
+    );
+  }, [cityOptions]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -2155,9 +2160,9 @@ export default function Home() {
       const normalizedValue = cleanDisplayText(value).trim().toLowerCase();
 
       return (
-        LOCAL_CITY_SUGGESTIONS.find(
-          (city) => city.trim().toLowerCase() === normalizedValue
-        ) ?? null
+        cityOptions.find(
+          (city) => city.displayName.trim().toLowerCase() === normalizedValue
+        )?.displayName ?? null
       );
     };
 
@@ -2227,7 +2232,7 @@ export default function Home() {
 
     applyLocalCitySelection(supportedCity);
     setLocalSearchStatus(null);
-  }, [applyLocalCitySelection, localQueryDraft]);
+  }, [applyLocalCitySelection, cityOptions, localQueryDraft]);
 
   const createNotification = useCallback(
     async ({
@@ -3166,15 +3171,15 @@ export default function Home() {
     const normalizedDraft = cleanDisplayText(localQueryDraft).trim().toLowerCase();
 
     if (normalizedDraft.length === 0) {
-      return LOCAL_CITY_SUGGESTIONS;
+      return cityOptions.map((city) => city.displayName);
     }
 
-    const startsWithMatches = LOCAL_CITY_SUGGESTIONS.filter((city) =>
-      city.toLowerCase().startsWith(normalizedDraft)
-    );
+    const startsWithMatches = cityOptions
+      .map((city) => city.displayName)
+      .filter((city) => city.toLowerCase().startsWith(normalizedDraft));
 
-    return startsWithMatches.slice(0, 8);
-  }, [localQueryDraft, sortMode]);
+    return startsWithMatches;
+  }, [cityOptions, localQueryDraft, sortMode]);
 
   const balancedTrendingArticles = useMemo(() => {
     if (sortMode !== "trending") {
@@ -4022,18 +4027,18 @@ export default function Home() {
             </div>
 
             <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
-              {LOCAL_CITY_SUGGESTIONS.map((city) => (
+              {cityOptions.map((city) => (
                 <button
-                  key={city}
+                  key={city.displayName}
                   type="button"
                   className={`chip local-feed-city-chip ${
-                    localLocationLabel === city ? "local-feed-city-chip-active" : ""
+                    localLocationLabel === city.displayName ? "local-feed-city-chip-active" : ""
                   }`}
                   onClick={() => {
-                    applyLocalCitySelection(city);
+                    applyLocalCitySelection(city.displayName);
                   }}
                 >
-                  {city}
+                  {city.displayName}
                 </button>
               ))}
             </div>
@@ -4309,18 +4314,18 @@ export default function Home() {
             </div>
 
             <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
-              {LOCAL_CITY_SUGGESTIONS.map((city) => (
+              {cityOptions.map((city) => (
                 <button
-                  key={city}
+                  key={city.displayName}
                   type="button"
                   className={`chip local-feed-city-chip ${
-                    localLocationLabel === city ? "local-feed-city-chip-active" : ""
+                    localLocationLabel === city.displayName ? "local-feed-city-chip-active" : ""
                   }`}
                   onClick={() => {
-                    applyLocalCitySelection(city);
+                    applyLocalCitySelection(city.displayName);
                   }}
                 >
-                  {city}
+                  {city.displayName}
                 </button>
                 ))}
               </div>
@@ -4377,16 +4382,16 @@ export default function Home() {
             <div className="empty-state compact-empty-state">
               <strong>Choose your city to see local stories.</strong>
               <div className="local-feed-chip-row" role="list" aria-label="Suggested cities">
-                {LOCAL_CITY_SUGGESTIONS.slice(0, 6).map((city) => (
+                {cityOptions.map((city) => (
                   <button
-                    key={`suggested-${city}`}
+                    key={`suggested-${city.displayName}`}
                     type="button"
                     className="chip local-feed-city-chip"
                     onClick={() => {
-                      applyLocalCitySelection(city);
+                      applyLocalCitySelection(city.displayName);
                     }}
                   >
-                    {city}
+                    {city.displayName}
                   </button>
                 ))}
               </div>
