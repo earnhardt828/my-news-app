@@ -149,6 +149,26 @@ const MAX_COMPARE_PAGE_SIZE = 150;
 const IMAGE_ENRICHMENT_CACHE_TTL_MS = 45 * 60 * 1000;
 const IMAGE_ENRICHMENT_TIMEOUT_MS = 2500;
 const CACHE_TTL_MS = 7 * 60 * 1000;
+const SPORTS_RSS_SOURCES = [
+  "ESPN",
+  "Sports Illustrated",
+  "CBS Sports",
+  "NBC Sports",
+  "Fox Sports",
+  "Bleacher Report",
+  "Yahoo Sports",
+  "SB Nation",
+] as const;
+const SPORTS_QUERY_TERMS = [
+  "sports news",
+  "NFL news",
+  "NBA news",
+  "MLB news",
+  "NHL news",
+  "college football news",
+  "college basketball news",
+  "soccer news",
+] as const;
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY ?? process.env.NEXT_PUBLIC_NEWS_API_KEY ?? "";
 const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
@@ -1908,6 +1928,39 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
     .filter(Boolean) as NormalizedArticle[];
 }
 
+async function fetchRssFeedSet(
+  feeds: RssFeedConfig[],
+  limit: number
+): Promise<NormalizedArticle[]> {
+  const responses = await Promise.allSettled(
+    feeds.slice(0, limit).map(async (feed) => {
+      const response = await fetch(feed.url, {
+        headers: {
+          Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+          "User-Agent": "GraffitiNews/1.0 (+https://graffiti.news)",
+        },
+        next: { revalidate: 600 },
+      });
+
+      if (!response.ok) {
+        throw new Error(`RSS request failed for ${feed.source} with status ${response.status}`);
+      }
+
+      const xml = await response.text();
+      return parseRssItems(xml, feed);
+    })
+  );
+
+  return responses.flatMap((result) => {
+    if (result.status === "fulfilled") {
+      return result.value;
+    }
+
+    console.error("RSS provider error:", result.reason);
+    return [];
+  });
+}
+
 async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
   const candidateFeeds =
     (params.mode === "search" ||
@@ -1939,48 +1992,20 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
       ? candidateFeeds
       : RSS_FEEDS;
 
-  const responses = await Promise.allSettled(
-    feedsToFetch
-      .slice(
-        0,
-        params.mode === "compare"
-          ? 10
-          : params.mode === "trending"
-          ? 12
-          : params.mode === "local"
-          ? 10
-          : params.mode === "latest"
-          ? 10
-          : params.mode === "sports"
-          ? 12
-          : 8
-      )
-      .map(async (feed) => {
-      const response = await fetch(feed.url, {
-        headers: {
-          Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-          "User-Agent": "GraffitiNews/1.0 (+https://graffiti.news)",
-        },
-        next: { revalidate: 600 },
-      });
-
-      if (!response.ok) {
-        throw new Error(`RSS request failed for ${feed.source} with status ${response.status}`);
-      }
-
-      const xml = await response.text();
-      return parseRssItems(xml, feed);
-    })
+  let articles = await fetchRssFeedSet(
+    feedsToFetch,
+    params.mode === "compare"
+      ? 10
+      : params.mode === "trending"
+      ? 12
+      : params.mode === "local"
+      ? 10
+      : params.mode === "latest"
+      ? 10
+      : params.mode === "sports"
+      ? 12
+      : 8
   );
-
-  let articles = responses.flatMap((result) => {
-    if (result.status === "fulfilled") {
-      return result.value;
-    }
-
-    console.error("RSS provider error:", result.reason);
-    return [];
-  });
 
   if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
     articles = articles.filter((article) => getMatchScore(article, params.query) > 0);
@@ -2008,6 +2033,135 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
   };
 }
 
+async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const localCity = getLocalCityConfigByKey(params.cityKey);
+
+  if (!localCity) {
+    return {
+      articles: [],
+      nextPage: null,
+      hasMore: false,
+      page: params.page,
+      pageSize: params.pageSize,
+    };
+  }
+
+  console.log("LOCAL CITY CONFIG USED", localCity.cityKey, localCity);
+
+  const cityFeeds = RSS_FEEDS.filter((feed) =>
+    localCity.rssFeeds.some((source) => feed.source.toLowerCase() === source.toLowerCase())
+  );
+  const rssArticles = await fetchRssFeedSet(cityFeeds, Math.max(cityFeeds.length, 1));
+
+  const sourceQueryResponses = await Promise.allSettled(
+    localCity.queries.slice(0, 8).map((query) =>
+      Promise.all([
+        fetchNewsApiArticles({
+          ...params,
+          mode: "search",
+          query,
+        }),
+        fetchGNewsArticles({
+          ...params,
+          mode: "search",
+          query,
+        }),
+        fetchNewsDataArticles({
+          ...params,
+          mode: "search",
+          query,
+        }),
+      ])
+    )
+  );
+
+  const sourceQueryArticles = sourceQueryResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
+  );
+
+  const cityQueryArticles = (
+    await Promise.all([
+      fetchNewsApiArticles({
+        ...params,
+        mode: "search",
+        query: `${localCity.city} local news`,
+      }),
+      fetchGNewsArticles({
+        ...params,
+        mode: "search",
+        query: `${localCity.city} local news`,
+      }),
+      fetchNewsDataArticles({
+        ...params,
+        mode: "search",
+        query: `${localCity.city} local news`,
+      }),
+    ])
+  ).flatMap((response) => response.articles);
+
+  console.log("LOCAL RSS/API COUNTS", {
+    cityKey: localCity.cityKey,
+    rss: rssArticles.length,
+    sourceQueries: sourceQueryArticles.length,
+    cityQuery: cityQueryArticles.length,
+  });
+
+  const merged = dedupeArticles([...rssArticles, ...sourceQueryArticles, ...cityQueryArticles]);
+  const filtered = sortArticlesForMode(merged, params).filter((article) =>
+    isQualifiedLocalArticle(article, params.location || params.query, params.cityKey)
+  );
+  const sliced = filtered.slice(0, params.pageSize);
+
+  console.log("LOCAL FINAL COUNT", sliced.length);
+
+  return {
+    articles: sliced,
+    nextPage: filtered.length > params.pageSize ? params.page + 1 : null,
+    hasMore: filtered.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
+async function fetchSportsArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const sportsFeeds = RSS_FEEDS.filter((feed) =>
+    SPORTS_RSS_SOURCES.some((source) => feed.source.toLowerCase() === source.toLowerCase())
+  );
+  const rssArticles = await fetchRssFeedSet(sportsFeeds, sportsFeeds.length);
+  const queryResponses = await Promise.allSettled(
+    SPORTS_QUERY_TERMS.map((query) =>
+      Promise.all([
+        fetchNewsApiArticles({ ...params, mode: "search", query }),
+        fetchGNewsArticles({ ...params, mode: "search", query }),
+        fetchNewsDataArticles({ ...params, mode: "search", query }),
+      ])
+    )
+  );
+  const queryArticles = queryResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
+  );
+  const combined = dedupeArticles([...rssArticles, ...queryArticles]);
+  const sportsArticles = sortArticlesForMode(combined, params).filter((article) => {
+    const source = article.source.toLowerCase();
+    const text = `${article.title} ${article.description ?? ""} ${article.category}`.toLowerCase();
+    return (
+      article.category.toLowerCase() === "sports" ||
+      SPORTS_RSS_SOURCES.some((name) => source.includes(name.toLowerCase())) ||
+      /(nfl|nba|mlb|nhl|soccer|golf|nascar|playoff|season|league|coach|draft)/.test(text)
+    );
+  });
+
+  console.log("SPORTS FINAL COUNT", sportsArticles.length);
+
+  return {
+    articles: sportsArticles.slice(0, params.pageSize),
+    nextPage: sportsArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: sportsArticles.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
 async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
   if (params.mode === "local" && !getLocalCityConfig(params.cityKey, params.location || params.query)) {
     return {
@@ -2017,6 +2171,14 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
       page: params.page,
       pageSize: params.pageSize,
     };
+  }
+
+  if (params.mode === "local") {
+    return fetchLocalArticles(params);
+  }
+
+  if (params.mode === "sports") {
+    return fetchSportsArticles(params);
   }
 
   const cacheKey = JSON.stringify({
@@ -2100,13 +2262,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   const deduped = dedupeArticles(combined);
   const sorted = sortArticlesForMode(deduped, params);
-  const locallyFiltered =
-    params.mode === "local"
-      ? sorted.filter((article) =>
-          isQualifiedLocalArticle(article, params.location || params.query, params.cityKey)
-        )
-      : sorted;
-  const realArticles = locallyFiltered.filter((article) => !isFallbackArticle(article));
+  const realArticles = sorted.filter((article) => !isFallbackArticle(article));
   const enrichedRealArticles =
     params.mode === "trending" && params.page === 1
       ? await enrichTrendingArticleImages(realArticles)
@@ -2147,14 +2303,6 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           articles: realSliced,
           nextPage: hasMore ? params.page + 1 : null,
           hasMore,
-          page: params.page,
-          pageSize: params.pageSize,
-        }
-      : params.mode === "local"
-      ? {
-          articles: [],
-          nextPage: null,
-          hasMore: false,
           page: params.page,
           pageSize: params.pageSize,
         }
