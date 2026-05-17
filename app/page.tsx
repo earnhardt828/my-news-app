@@ -344,14 +344,17 @@ const LOCAL_CITY_CONFIGS = {
   },
   "Miami, FL": {
     query:
-      "Miami local news Miami Herald WSVN NBC 6 South Florida CBS Miami Local 10 WLRN Miami New Times",
+      "Miami local news Miami Herald WSVN Miami NBC 6 South Florida CBS Miami Local 10 Miami WLRN Miami Miami New Times",
     sources: [
       "Miami Herald",
       "WSVN",
+      "WSVN Miami",
       "NBC 6 South Florida",
       "CBS Miami",
       "Local 10",
+      "Local 10 Miami",
       "WLRN",
+      "WLRN Miami",
       "Miami New Times",
     ],
     signals: [
@@ -3933,6 +3936,32 @@ export default function Home() {
     );
   };
 
+  const goToMyNewsSection = useCallback(() => {
+    const scrollToSection = () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      const section = document.getElementById("my-news-section");
+      if (!section) {
+        return;
+      }
+
+      section.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    };
+
+    if (sortMode !== "trending") {
+      setSortMode("trending");
+      window.setTimeout(scrollToSection, 80);
+      return;
+    }
+
+    scrollToSection();
+  }, [sortMode]);
+
   const renderHomeTopNavigation = (activeMode: "trending" | "local") => (
     <div className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
@@ -3942,6 +3971,15 @@ export default function Home() {
           onClick={() => setSortMode("trending")}
         >
           Trending
+        </button>
+        <button
+          className={`toolbar-pill ${
+            activeMode === "trending" ? "toolbar-pill-secondary-active" : ""
+          }`}
+          type="button"
+          onClick={goToMyNewsSection}
+        >
+          My News
         </button>
         <button
           className={`toolbar-pill ${activeMode === "local" ? "toolbar-pill-active" : ""}`}
@@ -3990,10 +4028,10 @@ export default function Home() {
 
         {renderQuickWatchRow()}
 
-        <section className="home-section-block home-section-plain">
+        <section id="my-news-section" className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">My Feed</strong>
+              <strong className="profile-section-title home-section-title">My News</strong>
             </div>
             <button
               type="button"
@@ -4010,7 +4048,7 @@ export default function Home() {
 
           {categories.length === 0 ? (
             <div className="stack" style={{ gap: "12px" }}>
-              <span className="muted">Pick a few topics to build this section.</span>
+              <span className="muted">Pick a few topics to build your news section.</span>
               <div className="category-grid">
                 {CATEGORY_OPTIONS.slice(0, 8).map((category) => (
                   <button

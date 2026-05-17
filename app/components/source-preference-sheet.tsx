@@ -48,7 +48,7 @@ export default function SourcePreferenceSheet({
               <h3 id="source-sheet-title" className="bottom-sheet-title">
                 {sourceName}
               </h3>
-              <span className="muted">Adjust how this source shows up in My Feed.</span>
+              <span className="muted">Adjust how this source shows up in My News.</span>
             </div>
           </div>
         </div>

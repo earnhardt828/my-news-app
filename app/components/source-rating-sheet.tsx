@@ -46,7 +46,7 @@ export default function SourceRatingSheet({
               <h3 id="source-rating-sheet-title" className="bottom-sheet-title">
                 {sourceName}
               </h3>
-              <span className="muted">This affects My Feed only.</span>
+              <span className="muted">This affects My News only.</span>
             </div>
           </div>
         </div>

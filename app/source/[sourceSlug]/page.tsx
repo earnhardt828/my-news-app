@@ -426,7 +426,7 @@ export default function SourcePage({
 
   const handleToggleShowLess = async () => {
     if (!currentUser?.id) {
-      alert("Log in to customize My Feed sources.");
+      alert("Log in to customize My News sources.");
       return;
     }
 
@@ -500,7 +500,7 @@ export default function SourcePage({
           </div>
         </div>
         <p className="source-page-subtitle">
-          Heart this source to see more of it in Polls and personalized areas, or show less in My Feed.
+          Heart this source to see more of it in Polls and personalized areas, or show less in My News.
         </p>
       </section>
 

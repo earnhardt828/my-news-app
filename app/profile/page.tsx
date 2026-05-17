@@ -1380,8 +1380,8 @@ export default function Profile() {
 
               <Link href="/profile/categories/" className="settings-list-row">
                 <div className="settings-list-copy">
-                  <strong>My Feed Categories</strong>
-                  <span>Add or edit the topics used for your personalized feed.</span>
+                  <strong>My News Categories</strong>
+                  <span>Add or edit the topics used for your personalized news section.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›

@@ -89,7 +89,7 @@ export default function PrivacyPage() {
           <h2 className="legal-section-title">Bookmarks and follows</h2>
           <p className="legal-section-body">
             Graffiti stores saved articles, source hearts, follows, and show-less
-            preferences so the app can personalize My Feed and help you return to
+            preferences so the app can personalize My News and help you return to
             content and publishers that matter to you.
           </p>
         </section>

@@ -701,10 +701,13 @@ const LOCAL_CITY_CONFIGS = {
     sources: [
       "miami herald",
       "wsvn",
+      "wsvn miami",
       "nbc 6 south florida",
       "cbs miami",
       "local 10",
+      "local 10 miami",
       "wlrn",
+      "wlrn miami",
       "miami new times",
     ],
     signals: [
