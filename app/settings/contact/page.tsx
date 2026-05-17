@@ -86,22 +86,14 @@ export default function SettingsContactPage() {
         return;
       }
 
-      const [matchingContactEmailResult, matchingAccountEmailResult] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id")
-          .ilike("contact_email", trimmedContactEmail)
-          .limit(1),
-        supabase
-          .from("profiles")
-          .select("id")
-          .ilike("email", trimmedContactEmail)
-          .limit(1),
-      ]);
-
-      const duplicateProfileId =
-        matchingContactEmailResult.data?.[0]?.id ?? matchingAccountEmailResult.data?.[0]?.id ?? null;
-      const duplicateError = matchingContactEmailResult.error ?? matchingAccountEmailResult.error;
+      const { data: duplicateProfiles, error: duplicateError } = await supabase
+        .from("profiles")
+        .select("id, email, contact_email")
+        .neq("id", currentUser.id)
+        .or(
+          `contact_email.ilike.${trimmedContactEmail},email.ilike.${trimmedContactEmail}`
+        )
+        .limit(1);
 
       if (duplicateError) {
         setIsSaving(false);
@@ -112,7 +104,7 @@ export default function SettingsContactPage() {
         return;
       }
 
-      if (duplicateProfileId && duplicateProfileId !== currentUser.id) {
+      if ((duplicateProfiles ?? []).length > 0) {
         setIsSaving(false);
         setMessage({
           type: "error",
@@ -167,7 +159,7 @@ export default function SettingsContactPage() {
                 <p className="settings-detail-note">
                   Current account email: {currentUser.email ?? "No email on file"}
                 </p>
-                <div className="input-row settings-compact-input-row">
+                <div className="stack settings-contact-fields">
                   <input
                     className="input settings-compact-input"
                     type="email"
@@ -182,8 +174,6 @@ export default function SettingsContactPage() {
                     }}
                     disabled={isSaving}
                   />
-                </div>
-                <div className="toolbar settings-compact-actions">
                   <button
                     className="button button-accent settings-compact-button"
                     onClick={handleSave}

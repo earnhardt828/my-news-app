@@ -1,4 +1,8 @@
 import { looksLikeLowQualityImageUrl } from "../../../lib/article-images";
+import {
+  getLocalCityConfigByText,
+  LOCAL_CITY_CONFIGS as SHARED_LOCAL_CITY_CONFIGS,
+} from "../../../lib/local-news";
 
 type ProviderArticle = {
   title?: string | null;
@@ -584,175 +588,15 @@ const RSS_FEEDS: RssFeedConfig[] = [
   },
 ];
 
-const CHARLOTTE_LOCAL_SOURCES = [
-  "charlotte observer",
-  "wsoc-tv",
-  "wsoc charlotte",
-  "wbtv",
-  "wcnc",
-  "queen city news",
-  "wfae",
-  "axios charlotte",
-  "wccb charlotte",
-] as const;
-
-const CHICAGO_LOCAL_SOURCES = [
-  "chicago tribune",
-  "wgn chicago",
-  "wgn-tv",
-  "abc7 chicago",
-  "nbc chicago",
-  "cbs chicago",
-  "fox 32 chicago",
-  "block club chicago",
-  "wbez chicago",
-] as const;
-
-const LOCAL_CITY_CONFIGS = {
-  "Charlotte, NC": {
-    sources: CHARLOTTE_LOCAL_SOURCES,
-    signals: ["charlotte", "mecklenburg", "queen city", "north carolina", "gastonia", "concord"],
-  },
-  "Chicago, IL": {
-    sources: CHICAGO_LOCAL_SOURCES,
-    signals: ["chicago", "illinois", "cook county", "evanston", "oak park", "naperville"],
-  },
-  "Los Angeles, CA": {
-    sources: [
-      "la times",
-      "los angeles times",
-      "ktla",
-      "abc7 los angeles",
-      "nbc los angeles",
-      "cbs los angeles",
-      "laist",
-      "fox 11 los angeles",
-      "spectrum news 1 socal",
-    ],
-    signals: [
-      "los angeles",
-      "la county",
-      "hollywood",
-      "pasadena",
-      "santa monica",
-      "burbank",
-      "socal",
-      "southern california",
-    ],
-  },
-  "New York, NY": {
-    sources: [
-      "ny1",
-      "gothamist",
-      "new york daily news",
-      "cbs new york",
-      "nbc new york",
-      "abc7ny",
-      "pix11",
-      "the city nyc",
-      "amny",
-    ],
-    signals: [
-      "new york",
-      "nyc",
-      "manhattan",
-      "brooklyn",
-      "queens",
-      "bronx",
-      "staten island",
-      "harlem",
-      "long island city",
-    ],
-  },
-  "Atlanta, GA": {
-    sources: [
-      "atlanta journal-constitution",
-      "ajc",
-      "wsb-tv",
-      "fox 5 atlanta",
-      "11alive",
-      "atlanta news first",
-    ],
-    signals: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
-  },
-  "Dallas, TX": {
-    sources: [
-      "dallas morning news",
-      "wfaa",
-      "nbc 5 dallas-fort worth",
-      "cbs news texas",
-      "fox 4 dallas",
-    ],
-    signals: ["dallas", "fort worth", "dfw", "north texas", "plano", "arlington", "frisco"],
-  },
-  "Houston, TX": {
-    sources: [
-      "houston chronicle",
-      "khou",
-      "abc13 houston",
-      "fox 26 houston",
-      "kprc",
-      "kprc 2",
-      "houston public media",
-    ],
-    signals: ["houston", "texas", "harris county", "sugar land", "the heights", "katy"],
-  },
-  "Miami, FL": {
-    sources: [
-      "miami herald",
-      "wsvn",
-      "wsvn miami",
-      "nbc 6 south florida",
-      "cbs miami",
-      "local 10",
-      "local 10 miami",
-      "wlrn",
-      "wlrn miami",
-      "miami new times",
-    ],
-    signals: [
-      "miami",
-      "florida",
-      "miami-dade",
-      "south florida",
-      "fort lauderdale",
-      "wynwood",
-      "brickell",
-    ],
-  },
-  "Cincinnati, OH": {
-    sources: ["cincinnati enquirer", "wcpo", "wlwt", "fox19"],
-    signals: ["cincinnati", "ohio", "hamilton county", "northern kentucky"],
-  },
-  "Detroit, MI": {
-    sources: ["detroit free press", "detroit news", "wxyz", "clickondetroit", "fox 2 detroit"],
-    signals: ["detroit", "michigan", "wayne county", "dearborn"],
-  },
-  "Minneapolis, MN": {
-    sources: ["star tribune", "kare 11", "wcco", "fox 9", "mpr news"],
-    signals: ["minneapolis", "minnesota", "saint paul", "st paul", "twin cities"],
-  },
-  "Phoenix, AZ": {
-    sources: ["arizona republic", "azfamily", "abc15 arizona", "fox 10 phoenix", "12news"],
-    signals: ["phoenix", "arizona", "mesa", "tempe", "scottsdale"],
-  },
-  "San Francisco, CA": {
-    sources: [
-      "sf chronicle",
-      "san francisco chronicle",
-      "kqed",
-      "abc7 bay area",
-      "nbc bay area",
-      "cbs news bay area",
-      "kron4",
-    ],
-    signals: ["san francisco", "bay area", "oakland", "berkeley", "marin"],
-  },
-  "Philadelphia, PA": {
-    sources: ["philadelphia inquirer", "6abc", "nbc10 philadelphia", "cbs philadelphia", "whyy"],
-    signals: ["philadelphia", "philly", "pennsylvania", "camden", "delco"],
-  },
-} as const;
+const LOCAL_CITY_CONFIGS = Object.fromEntries(
+  Object.values(SHARED_LOCAL_CITY_CONFIGS).map((config) => [
+    config.displayName,
+    {
+      sources: config.sourceBoosts.map((source) => source.toLowerCase()),
+      signals: [...config.aliases, config.city.toLowerCase(), config.state.toLowerCase()],
+    },
+  ])
+);
 
 function isQualifiedLocalArticle(article: NormalizedArticle, location: string) {
   const normalizedLocation = location.trim().toLowerCase();
