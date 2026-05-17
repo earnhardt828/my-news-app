@@ -57,9 +57,11 @@ const SPORTS_UNIFIED_QUERY =
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TRUMP_FEED_QUERY =
-  "Donald Trump news | Trump administration | Trump latest | Trump policy | Trump legal";
+  "Donald Trump news | Trump administration news | Trump policy news | Trump White House | Trump legal news | Trump economy | Trump immigration | Trump tariffs | Trump latest";
 const WEATHER_FEED_QUERY =
-  "weather news | severe weather | hurricane news | tornado news | climate weather | winter storm | flooding news | The Weather Channel | AccuWeather | NOAA | National Weather Service | CNN Weather | Fox Weather";
+  "weather news | severe weather news | hurricane news | tornado news | flooding news | winter storm news | wildfire weather news | NOAA weather alerts | National Weather Service news | climate weather news | The Weather Channel | AccuWeather | AP Weather | NOAA | National Weather Service | CNN Weather | Fox Weather";
+const TECHNOLOGY_FEED_QUERY =
+  "technology news | AI news | tech startups | Apple news | Google news | Microsoft news | cybersecurity news | social media news | The Verge | TechCrunch | Wired | Ars Technica | Engadget | CNET | CNBC Tech | Bloomberg Technology";
 
 type Comment = {
   id: number;
@@ -261,16 +263,7 @@ const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: numb
   "Los Angeles, CA": { latitude: 34.0522, longitude: -118.2437 },
   "New York, NY": { latitude: 40.7128, longitude: -74.006 },
   "Atlanta, GA": { latitude: 33.749, longitude: -84.388 },
-  "Houston, TX": { latitude: 29.7604, longitude: -95.3698 },
-  "Miami, FL": { latitude: 25.7617, longitude: -80.1918 },
   "Charlotte, NC": { latitude: 35.2271, longitude: -80.8431 },
-  "Cincinnati, OH": { latitude: 39.1031, longitude: -84.512 },
-  "Dallas, TX": { latitude: 32.7767, longitude: -96.797 },
-  "Detroit, MI": { latitude: 42.3314, longitude: -83.0458 },
-  "Minneapolis, MN": { latitude: 44.9778, longitude: -93.265 },
-  "Phoenix, AZ": { latitude: 33.4484, longitude: -112.074 },
-  "San Francisco, CA": { latitude: 37.7749, longitude: -122.4194 },
-  "Philadelphia, PA": { latitude: 39.9526, longitude: -75.1652 },
 };
 
 type SupportedLocalCity = keyof typeof LOCAL_CITY_CONFIGS;
@@ -290,21 +283,21 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
   { city: "Charlotte, NC", states: ["north carolina", "south carolina"], tokens: ["charlotte", "mecklenburg", "queen city", "gastonia", "concord", "rock hill"] },
   { city: "Chicago, IL", states: ["illinois"], tokens: ["chicago", "cook county", "evanston", "oak park", "naperville"] },
   { city: "Los Angeles, CA", states: ["california"], tokens: ["los angeles", "hollywood", "pasadena", "santa monica", "burbank", "long beach"] },
-  { city: "San Francisco, CA", states: ["california"], tokens: ["san francisco", "oakland", "berkeley", "marin", "bay area"] },
   { city: "New York, NY", states: ["new york", "new jersey", "connecticut"], tokens: ["new york", "nyc", "brooklyn", "queens", "bronx", "manhattan", "jersey city"] },
   { city: "Atlanta, GA", states: ["georgia"], tokens: ["atlanta", "fulton county", "buckhead", "decatur"] },
-  { city: "Dallas, TX", states: ["texas"], tokens: ["dallas", "fort worth", "dfw", "north texas", "plano", "arlington", "frisco"] },
-  { city: "Houston, TX", states: ["texas"], tokens: ["houston", "harris county", "sugar land"] },
-  { city: "Miami, FL", states: ["florida"], tokens: ["miami", "broward", "south florida", "fort lauderdale"] },
-  { city: "Cincinnati, OH", states: ["ohio", "kentucky"], tokens: ["cincinnati", "hamilton county", "northern kentucky"] },
-  { city: "Detroit, MI", states: ["michigan"], tokens: ["detroit", "wayne county", "dearborn"] },
-  { city: "Minneapolis, MN", states: ["minnesota"], tokens: ["minneapolis", "saint paul", "st paul", "twin cities"] },
-  { city: "Phoenix, AZ", states: ["arizona"], tokens: ["phoenix", "mesa", "tempe", "scottsdale"] },
-  { city: "Philadelphia, PA", states: ["pennsylvania", "delaware", "new jersey"], tokens: ["philadelphia", "philly", "camden", "delco"] },
 ];
 
 function getFeedCacheKey(
-  mode: "trending" | "latest" | "polls" | "local" | "sports" | "celebrity" | "trump" | "weather",
+  mode:
+    | "trending"
+    | "latest"
+    | "polls"
+    | "local"
+    | "sports"
+    | "celebrity"
+    | "trump"
+    | "weather"
+    | "technology",
   localLabel: string,
   localCityKey?: string | null
 ) {
@@ -891,7 +884,15 @@ export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
-    "trending" | "polls" | "latest" | "local" | "sports" | "celebrity" | "trump" | "weather"
+    | "trending"
+    | "polls"
+    | "latest"
+    | "local"
+    | "sports"
+    | "celebrity"
+    | "trump"
+    | "weather"
+    | "technology"
   >(
     "trending"
   );
@@ -1010,7 +1011,8 @@ export default function Home() {
     | "sports"
     | "celebrity"
     | "trump"
-    | "weather" = useMemo(() => {
+    | "weather"
+    | "technology" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
@@ -1037,6 +1039,10 @@ export default function Home() {
 
     if (sortMode === "weather") {
       return "weather";
+    }
+
+    if (sortMode === "technology") {
+      return "technology";
     }
 
     return "trending";
@@ -1283,6 +1289,8 @@ export default function Home() {
         } else if (feedMode === "weather") {
           params.set("query", WEATHER_FEED_QUERY);
           params.set("location", selectedLocalCity ?? savedLocalCity ?? localLocationLabel ?? "");
+        } else if (feedMode === "technology") {
+          params.set("query", TECHNOLOGY_FEED_QUERY);
         }
 
         newsPath = `/api/news?${params.toString()}`;
@@ -3312,6 +3320,14 @@ export default function Home() {
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [sortMode, visibleArticles]);
 
+  const technologyTabArticles = useMemo(() => {
+    if (sortMode !== "technology") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
+  }, [sortMode, visibleArticles]);
+
   useEffect(() => {
     if (sortMode === "sports") {
       console.log("SPORTS ARTICLE COUNT", sportsTabArticles.length);
@@ -3962,7 +3978,14 @@ export default function Home() {
   };
 
   const renderHomeTopNavigation = (
-    activeMode: "trending" | "local" | "sports" | "celebrity" | "trump" | "weather"
+    activeMode:
+      | "trending"
+      | "local"
+      | "sports"
+      | "celebrity"
+      | "trump"
+      | "weather"
+      | "technology"
   ) => (
     <div className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
@@ -4008,6 +4031,13 @@ export default function Home() {
         >
           Weather
         </button>
+        <button
+          className={`toolbar-pill ${activeMode === "technology" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("technology")}
+        >
+          Technology
+        </button>
       </div>
     </div>
   );
@@ -4017,7 +4047,8 @@ export default function Home() {
       sortMode === "sports" ||
       sortMode === "celebrity" ||
       sortMode === "trump" ||
-      sortMode === "weather") &&
+      sortMode === "weather" ||
+      sortMode === "technology") &&
     isInitialFeedLoading &&
     visibleArticles.length === 0 &&
     !feedLoadError
@@ -4683,6 +4714,38 @@ export default function Home() {
           ) : (
             <div className="stack home-section-list">
               {weatherTabArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  if (sortMode === "technology") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("technology")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Technology</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {technologyTabArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No technology stories yet</strong>
+              <span>Check back shortly for fresh tech coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {technologyTabArticles.map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>

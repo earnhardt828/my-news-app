@@ -2,6 +2,7 @@ import { looksLikeLowQualityImageUrl } from "../../../lib/article-images";
 import {
   getLocalCityConfigByKey,
   LOCAL_CITY_CONFIGS as SHARED_LOCAL_CITY_CONFIGS,
+  SUPPORTED_LOCAL_CITIES,
 } from "../../../lib/local-news";
 
 type ProviderArticle = {
@@ -65,7 +66,8 @@ type NewsMode =
   | "sports"
   | "celebrity"
   | "trump"
-  | "weather";
+  | "weather"
+  | "technology";
 
 type ProviderFetchParams = {
   mode: NewsMode;
@@ -246,6 +248,7 @@ const TRUMP_SOURCE_NAMES = [
 const WEATHER_SOURCE_NAMES = [
   "The Weather Channel",
   "AccuWeather",
+  "AP Weather",
   "NOAA",
   "National Weather Service",
   "CNN Weather",
@@ -269,6 +272,34 @@ const WEATHER_QUERY_TERMS = [
   "CNN Weather",
   "Fox Weather",
   "Weather Underground",
+] as const;
+const TECHNOLOGY_SOURCE_NAMES = [
+  "The Verge",
+  "TechCrunch",
+  "Wired",
+  "Ars Technica",
+  "Engadget",
+  "CNET",
+  "CNBC Tech",
+  "Bloomberg Technology",
+] as const;
+const TECHNOLOGY_QUERY_TERMS = [
+  "technology news",
+  "AI news",
+  "tech startups",
+  "Apple news",
+  "Google news",
+  "Microsoft news",
+  "cybersecurity news",
+  "social media news",
+  "The Verge",
+  "TechCrunch",
+  "Wired",
+  "Ars Technica",
+  "Engadget",
+  "CNET",
+  "CNBC Tech",
+  "Bloomberg Technology",
 ] as const;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
 const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
@@ -397,6 +428,54 @@ const RSS_FEEDS: RssFeedConfig[] = [
     source: "CNBC",
     category: "Finance",
     tags: ["finance", "markets", "business"],
+  },
+  {
+    url: "https://www.theverge.com/rss/index.xml",
+    source: "The Verge",
+    category: "Tech",
+    tags: ["technology", "ai", "gadgets"],
+  },
+  {
+    url: "https://techcrunch.com/feed/",
+    source: "TechCrunch",
+    category: "Tech",
+    tags: ["technology", "ai", "startup"],
+  },
+  {
+    url: "https://www.wired.com/feed/rss",
+    source: "Wired",
+    category: "Tech",
+    tags: ["technology", "ai", "cybersecurity"],
+  },
+  {
+    url: "https://feeds.arstechnica.com/arstechnica/index",
+    source: "Ars Technica",
+    category: "Tech",
+    tags: ["technology", "ai", "cybersecurity"],
+  },
+  {
+    url: "https://www.engadget.com/rss.xml",
+    source: "Engadget",
+    category: "Tech",
+    tags: ["technology", "gadgets", "ai"],
+  },
+  {
+    url: "https://www.cnet.com/rss/news/",
+    source: "CNET",
+    category: "Tech",
+    tags: ["technology", "consumer tech", "ai"],
+  },
+  {
+    url: "https://www.cnbc.com/id/19854910/device/rss/rss.html",
+    source: "CNBC Tech",
+    category: "Tech",
+    tags: ["technology", "ai", "business"],
+  },
+  {
+    url: "https://feeds.bloomberg.com/technology/news.rss",
+    source: "Bloomberg Technology",
+    category: "Tech",
+    tags: ["technology", "ai", "business"],
   },
   {
     url: "https://feeds.bloomberg.com/markets/news.rss",
@@ -773,7 +852,7 @@ const RSS_FEEDS: RssFeedConfig[] = [
 ];
 
 const LOCAL_CITY_CONFIGS = Object.fromEntries(
-  Object.values(SHARED_LOCAL_CITY_CONFIGS).map((config) => [
+  SUPPORTED_LOCAL_CITIES.map((config) => [
     config.displayName,
     {
       sources: config.allowedSources.map((source) => source.toLowerCase()),
@@ -1090,6 +1169,10 @@ function getModeCategories(mode: NewsMode, categories: string[]) {
     return ["Weather"];
   }
 
+  if (mode === "technology") {
+    return ["Tech"];
+  }
+
   if (mode === "myfeed" && categories.length > 0) {
     return categories.slice(0, 5);
   }
@@ -1136,6 +1219,13 @@ function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | 
     return (
       params.query.trim() ||
       `weather news OR severe weather OR hurricane news OR tornado news OR climate weather OR winter storm OR flooding news OR The Weather Channel OR AccuWeather OR NOAA OR National Weather Service OR CNN Weather OR Fox Weather${localWeather}`
+    );
+  }
+
+  if (params.mode === "technology") {
+    return (
+      params.query.trim() ||
+      "technology news OR AI news OR tech startups OR Apple news OR Google news OR Microsoft news OR cybersecurity news OR social media news OR The Verge OR TechCrunch OR Wired OR Ars Technica OR Engadget OR CNET OR CNBC Tech OR Bloomberg Technology"
     );
   }
 
@@ -1710,7 +1800,8 @@ function sortArticlesForMode(
     params.mode === "sports" ||
     params.mode === "celebrity" ||
     params.mode === "trump" ||
-    params.mode === "weather"
+    params.mode === "weather" ||
+    params.mode === "technology"
   ) {
     return [...articles].sort((left, right) => {
       const scoreDiff = getMatchScore(right, getEffectiveQuery(params)) - getMatchScore(left, getEffectiveQuery(params));
@@ -1785,7 +1876,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
       params.mode === "sports" ||
       params.mode === "celebrity" ||
       params.mode === "trump" ||
-      params.mode === "weather") &&
+      params.mode === "weather" ||
+      params.mode === "technology") &&
     effectiveQuery
   ) {
     const encodedQuery = encodeURIComponent(effectiveQuery);
@@ -1800,7 +1892,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
                 : params.mode === "sports" ||
                     params.mode === "celebrity" ||
                     params.mode === "trump" ||
-                    params.mode === "weather"
+                    params.mode === "weather" ||
+                    params.mode === "technology"
                   ? 18
                 : 8,
           Math.ceil(params.pageSize / 2)
@@ -1816,7 +1909,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
               : params.mode === "sports" ||
                   params.mode === "celebrity" ||
                   params.mode === "trump" ||
-                  params.mode === "weather"
+                  params.mode === "weather" ||
+                  params.mode === "technology"
                 ? 28
               : 10,
           params.pageSize
@@ -1939,7 +2033,8 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
       params.mode === "sports" ||
       params.mode === "celebrity" ||
       params.mode === "trump" ||
-      params.mode === "weather") &&
+      params.mode === "weather" ||
+      params.mode === "technology") &&
     effectiveQuery
   ) {
     requests.push({
@@ -2061,7 +2156,8 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
       params.mode === "sports" ||
       params.mode === "celebrity" ||
       params.mode === "trump" ||
-      params.mode === "weather") &&
+      params.mode === "weather" ||
+      params.mode === "technology") &&
     effectiveQuery
   ) {
     baseUrl.searchParams.set("q", effectiveQuery);
@@ -2236,7 +2332,8 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
       params.mode === "sports" ||
       params.mode === "celebrity" ||
       params.mode === "trump" ||
-      params.mode === "weather") &&
+      params.mode === "weather" ||
+      params.mode === "technology") &&
     getEffectiveQuery(params)
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
@@ -2611,6 +2708,45 @@ async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRo
   };
 }
 
+async function fetchTechnologyArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const technologyFeeds = RSS_FEEDS.filter((feed) =>
+    TECHNOLOGY_SOURCE_NAMES.some((source) => feed.source.toLowerCase() === source.toLowerCase())
+  );
+  const rssArticles = await fetchRssFeedSet(technologyFeeds, technologyFeeds.length);
+  const effectiveQueries = Array.from(new Set([...TECHNOLOGY_QUERY_TERMS]));
+  const queryResponses = await Promise.allSettled(
+    effectiveQueries.map((query) =>
+      Promise.all([
+        fetchNewsApiArticles({ ...params, mode: "search", query }),
+        fetchGNewsArticles({ ...params, mode: "search", query }),
+        fetchNewsDataArticles({ ...params, mode: "search", query }),
+      ])
+    )
+  );
+  const queryArticles = queryResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
+  );
+  const combined = dedupeArticles([...rssArticles, ...queryArticles]);
+  const technologyPattern =
+    /(technology|ai|artificial intelligence|startup|apple|google|microsoft|cybersecurity|social media|the verge|techcrunch|wired|ars technica|engadget|cnet|cnbc tech|bloomberg technology)/i;
+  const technologyArticles = sortArticlesForMode(combined, params).filter((article) => {
+    const source = article.source.toLowerCase();
+    const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`;
+    return (
+      technologyPattern.test(haystack) ||
+      TECHNOLOGY_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase()))
+    );
+  });
+
+  return {
+    articles: technologyArticles.slice(0, params.pageSize),
+    nextPage: technologyArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: technologyArticles.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
 async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
   if (params.mode === "local" && !getLocalCityConfig(params.cityKey, params.location || params.query)) {
     return {
@@ -2640,6 +2776,10 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   if (params.mode === "weather") {
     return fetchWeatherArticles(params);
+  }
+
+  if (params.mode === "technology") {
+    return fetchTechnologyArticles(params);
   }
 
   const cacheKey = JSON.stringify({
@@ -2795,6 +2935,7 @@ function parseMode(value: string | null): NewsMode {
     value === "celebrity" ||
     value === "trump" ||
     value === "weather" ||
+    value === "technology" ||
     value === "search" ||
     value === "compare"
   ) {

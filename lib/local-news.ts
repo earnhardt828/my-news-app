@@ -520,9 +520,19 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
 
 export const DEFAULT_LOCAL_CITY = "New York, NY" as const;
 
-export const SUPPORTED_LOCAL_CITIES = Object.values(LOCAL_CITY_CONFIGS);
+const ACTIVE_LOCAL_CITY_DISPLAY_NAMES = [
+  "Charlotte, NC",
+  "Chicago, IL",
+  "Atlanta, GA",
+  "New York, NY",
+  "Los Angeles, CA",
+] as const;
 
-export const SUPPORTED_LOCAL_CITY_NAMES = Object.keys(LOCAL_CITY_CONFIGS) as Array<
+export const SUPPORTED_LOCAL_CITIES = ACTIVE_LOCAL_CITY_DISPLAY_NAMES.map(
+  (displayName) => LOCAL_CITY_CONFIGS[displayName]
+);
+
+export const SUPPORTED_LOCAL_CITY_NAMES = Array.from(ACTIVE_LOCAL_CITY_DISPLAY_NAMES) as Array<
   keyof typeof LOCAL_CITY_CONFIGS
 >;
 
@@ -537,7 +547,7 @@ export function getLocalCityConfigByName(cityName: string | null | undefined) {
 
   const normalized = normalizeLocalText(cityName);
   return (
-    Object.values(LOCAL_CITY_CONFIGS).find(
+    SUPPORTED_LOCAL_CITIES.find(
       (config) => normalizeLocalText(config.displayName) === normalized
     ) ?? null
   );
@@ -551,7 +561,7 @@ export function getLocalCityConfigByKey(cityKey: string | null | undefined) {
   }
 
   return (
-    Object.values(LOCAL_CITY_CONFIGS).find(
+    SUPPORTED_LOCAL_CITIES.find(
       (config) => normalizeLocalText(config.cityKey) === normalized
     ) ?? null
   );
@@ -565,7 +575,7 @@ export function getLocalCityConfigByText(value: string | null | undefined) {
   }
 
   return (
-    Object.values(LOCAL_CITY_CONFIGS).find((config) => {
+    SUPPORTED_LOCAL_CITIES.find((config) => {
       const haystacks = [
         config.cityKey,
         config.displayName,

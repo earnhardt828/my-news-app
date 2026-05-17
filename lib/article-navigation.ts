@@ -13,7 +13,8 @@ export type ArticleReturnState = {
     | "sports"
     | "celebrity"
     | "trump"
-    | "weather";
+    | "weather"
+    | "technology";
   selectedLocalCity?: string | null;
   localLocationLabel?: string | null;
   searchQuery?: string;
