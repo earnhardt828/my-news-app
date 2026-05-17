@@ -51,8 +51,6 @@ type BlockedUserRow = {
   blocked_id: string | null;
 };
 
-type SearchDateFilter = "recent" | "week" | "month" | "all";
-
 type SearchNewsResponse = {
   articles: NewsArticle[];
   nextPage?: number | null;
@@ -461,7 +459,6 @@ export default function Search() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [isLoadingMoreSearchResults, setIsLoadingMoreSearchResults] = useState(false);
-  const [searchDateFilter, setSearchDateFilter] = useState<SearchDateFilter>("recent");
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const [failedSearchImages, setFailedSearchImages] = useState<Record<string, boolean>>({});
@@ -1019,29 +1016,13 @@ export default function Search() {
         score,
       }));
 
-    if (searchDateFilter === "week") {
-      return rankedArticles
-        .filter(({ article }) => isArticleWithinDays(article, 7))
-        .map(({ article }) => article);
-    }
-
-    if (searchDateFilter === "month") {
-      return rankedArticles
-        .filter(({ article }) => isArticleWithinDays(article, 30))
-        .map(({ article }) => article);
-    }
-
-    if (searchDateFilter === "all") {
-      return rankedArticles.map(({ article }) => article);
-    }
-
     const recentArticles = rankedArticles.filter(({ article }) => isArticleWithinDays(article, 30));
     const olderArticles = rankedArticles.filter(({ article }) => !isArticleWithinDays(article, 30));
 
     return (recentArticles.length >= 5 ? recentArticles : [...recentArticles, ...olderArticles]).map(
       ({ article }) => article
     );
-  }, [articles, matchedSourceName, normalizedQuery, searchArticles, searchDateFilter]);
+  }, [articles, matchedSourceName, normalizedQuery, searchArticles]);
 
   return (
     <section className="page-shell search-shell">
@@ -1099,59 +1080,8 @@ export default function Search() {
         </section>
       ) : (
         <section className="stack search-results-shell">
-          {userResults.length > 0 ? (
-            <div className="search-results-section search-results-section-sources">
-              <p className="search-results-section-heading">Users</p>
-              <div className="search-results-list">
-                {userResults.map((user) => (
-                  <Link
-                    key={user.id}
-                    href={`/user/${encodeURIComponent(user.username ?? user.id)}/`}
-                    className="section-card search-user-card"
-                    onClick={() => {
-                      console.log("CLICKED USER", user);
-                      console.log("NAVIGATING TO USERNAME", user.username);
-                    }}
-                  >
-                    <div className="search-user-card-row">
-                      <div className="search-user-brand">
-                        <span className="avatar-shell search-user-avatar">
-                          {user.avatar_url ? (
-                            <Image
-                              src={user.avatar_url}
-                              alt={user.username ?? "User avatar"}
-                              width={48}
-                              height={48}
-                              unoptimized
-                              className="source-avatar-image"
-                            />
-                          ) : (
-                            <span className="avatar-fallback">
-                              {(user.username ?? "G").charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                        </span>
-                        <div className="stack" style={{ gap: "4px" }}>
-                          <strong className="search-source-name">@{user.username}</strong>
-                          {user.bio ? (
-                            <span className="search-user-bio">{user.bio}</span>
-                          ) : (
-                            <span className="search-source-kind">Graffiti user</span>
-                          )}
-                        </div>
-                      </div>
-                      <span className="search-trending-icon" aria-hidden="true">
-                        ↗
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           {matchedSourceName ? (
-            <div className="search-results-section">
+            <div className="search-results-section search-results-section-sources">
               <p className="search-results-section-heading">Sources</p>
               <Link
                 href={`/source/${slugifySourceName(matchedSourceName)}/`}
@@ -1211,28 +1141,56 @@ export default function Search() {
             </div>
           ) : null}
 
-          <div className="search-results-section search-results-section-filters">
-            <p className="search-results-section-heading">Date filters</p>
-            <div className="search-results-filter-row" role="tablist" aria-label="Search date filter">
-              {[
-                { value: "recent", label: "Recent" },
-                { value: "week", label: "Past Week" },
-                { value: "month", label: "Past Month" },
-                { value: "all", label: "All Time" },
-              ].map((filterOption) => (
-                <button
-                  key={filterOption.value}
-                  type="button"
-                  className={`chip search-filter-chip ${
-                    searchDateFilter === filterOption.value ? "search-filter-chip-active" : ""
-                  }`}
-                  onClick={() => setSearchDateFilter(filterOption.value as SearchDateFilter)}
-                >
-                  {filterOption.label}
-                </button>
-              ))}
+          {userResults.length > 0 ? (
+            <div className="search-results-section search-results-section-users">
+              <p className="search-results-section-heading">Users</p>
+              <div className="search-results-list">
+                {userResults.map((user) => (
+                  <Link
+                    key={user.id}
+                    href={`/user/${encodeURIComponent(user.username ?? user.id)}/`}
+                    className="section-card search-user-card"
+                    onClick={() => {
+                      console.log("CLICKED USER", user);
+                      console.log("NAVIGATING TO USERNAME", user.username);
+                    }}
+                  >
+                    <div className="search-user-card-row">
+                      <div className="search-user-brand">
+                        <span className="avatar-shell search-user-avatar">
+                          {user.avatar_url ? (
+                            <Image
+                              src={user.avatar_url}
+                              alt={user.username ?? "User avatar"}
+                              width={48}
+                              height={48}
+                              unoptimized
+                              className="source-avatar-image"
+                            />
+                          ) : (
+                            <span className="avatar-fallback">
+                              {(user.username ?? "G").charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </span>
+                        <div className="stack" style={{ gap: "4px" }}>
+                          <strong className="search-source-name">@{user.username}</strong>
+                          {user.bio ? (
+                            <span className="search-user-bio">{user.bio}</span>
+                          ) : (
+                            <span className="search-source-kind">Graffiti user</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="search-trending-icon" aria-hidden="true">
+                        ↗
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {isSearchLoading ? (
             <div className="search-inline-loading" role="status" aria-live="polite">

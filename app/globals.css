@@ -1928,8 +1928,8 @@ input {
   margin-top: 0;
 }
 
-.search-results-section-filters {
-  margin-top: 8px;
+.search-results-section-users {
+  margin-top: 0;
 }
 
 .search-results-section-heading {
@@ -1997,6 +1997,35 @@ input {
 
 .search-results-shell {
   gap: 12px;
+}
+
+.following-compact-list {
+  margin-top: 0;
+}
+
+.following-compact-row {
+  gap: 12px;
+}
+
+.following-compact-rank {
+  min-width: 20px;
+}
+
+.following-compact-link {
+  min-width: 0;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+}
+
+.following-compact-copy {
+  min-width: 0;
+}
+
+.following-compact-action {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
 }
 
 .search-inline-loading {

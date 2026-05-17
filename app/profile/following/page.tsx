@@ -150,12 +150,13 @@ export default function ProfileFollowingPage() {
           <span>Follow people from public profiles to build this list.</span>
         </div>
       ) : (
-        <div className="settings-sublist">
+        <div className="source-rankings-list following-compact-list">
           {followingUsers.map((followedUser) => (
-            <div key={followedUser.followingId} className="settings-subrow">
+            <div key={followedUser.followingId} className="source-rankings-row following-compact-row">
+              <span className="source-rankings-rank following-compact-rank">@</span>
               <Link
                 href={`/user/${encodeURIComponent(followedUser.username ?? followedUser.followingId)}/`}
-                className="settings-blocked-user"
+                className="source-rankings-brand following-compact-link"
               >
                 <span className="avatar-shell settings-blocked-user-avatar">
                   {followedUser.avatarUrl ? (
@@ -173,15 +174,15 @@ export default function ProfileFollowingPage() {
                     </span>
                   )}
                 </span>
-                <div className="settings-list-copy">
-                  <strong>
+                <div className="settings-list-copy following-compact-copy">
+                  <strong className="source-rankings-name">
                     {followedUser.username ? `@${followedUser.username}` : "Graffiti user"}
                   </strong>
                   <span>Public profile</span>
                 </div>
               </Link>
               <button
-                className="comment-action"
+                className="comment-action following-compact-action"
                 onClick={() => handleUnfollow(followedUser.followingId)}
                 disabled={activeUnfollowId === followedUser.followingId}
               >

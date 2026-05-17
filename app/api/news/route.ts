@@ -516,6 +516,18 @@ const RSS_FEEDS: RssFeedConfig[] = [
     category: "Local News",
     tags: ["new york", "nyc", "local"],
   },
+  {
+    url: "https://roughdraftatlanta.com/feed/",
+    source: "Rough Draft Atlanta",
+    category: "Local News",
+    tags: ["atlanta", "georgia", "local"],
+  },
+  {
+    url: "https://saportareport.com/feed/",
+    source: "SaportaReport",
+    category: "Local News",
+    tags: ["atlanta", "georgia", "local"],
+  },
 ];
 
 const CHARLOTTE_LOCAL_SOURCES = [
