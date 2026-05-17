@@ -38,6 +38,7 @@ import {
   getLocalCityConfigByName,
   getLocalCityConfigByText,
   LOCAL_CITY_CONFIGS,
+  SUPPORTED_LOCAL_CITIES,
   SUPPORTED_LOCAL_CITY_NAMES,
 } from "../lib/local-news";
 import { isCommentAllowed } from "../lib/moderation";
@@ -297,7 +298,7 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
 ];
 
 function getFeedCacheKey(
-  mode: "trending" | "latest" | "polls" | "local",
+  mode: "trending" | "latest" | "polls" | "local" | "sports",
   localLabel: string
 ) {
   return mode === "local"
@@ -914,6 +915,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    console.log(
+      "SUPPORTED LOCAL CITIES",
+      SUPPORTED_LOCAL_CITIES.map((city) => city.displayName)
+    );
+  }, []);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
       console.log("FOUND LOADING ARTICLES COMPONENT");
       console.log("CURRENT ROUTE", window.location.pathname);
@@ -924,7 +932,7 @@ export default function Home() {
   }, [articles.length, isLoading]);
 
 
-  const feedMode: "trending" | "latest" | "local" | "polls" = useMemo(() => {
+  const feedMode: "trending" | "latest" | "local" | "polls" | "sports" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
@@ -935,6 +943,10 @@ export default function Home() {
 
     if (sortMode === "local") {
       return "local";
+    }
+
+    if (sortMode === "sports") {
+      return "sports";
     }
 
     return "trending";
@@ -3131,6 +3143,14 @@ export default function Home() {
 
   const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
 
+  const sportsTabArticles = useMemo(() => {
+    if (sortMode !== "sports") {
+      return [] as Article[];
+    }
+
+    return visibleArticles.slice(0, 25);
+  }, [sortMode, visibleArticles]);
+
   useEffect(() => {
     if (sortMode === "local") {
       console.log("LOCAL SELECTED CITY", selectedLocalCity ?? localLocationLabel);
@@ -3146,7 +3166,7 @@ export default function Home() {
     const normalizedDraft = cleanDisplayText(localQueryDraft).trim().toLowerCase();
 
     if (normalizedDraft.length === 0) {
-      return [];
+      return LOCAL_CITY_SUGGESTIONS;
     }
 
     const startsWithMatches = LOCAL_CITY_SUGGESTIONS.filter((city) =>
@@ -4076,14 +4096,14 @@ export default function Home() {
             </div>
           </div>
 
-          {sportsSectionArticles.length === 0 ? (
+          {sportsTabArticles.length === 0 ? (
             <div className="empty-state compact-empty-state">
               <strong>No sports stories yet</strong>
               <span>Check back shortly for fresh sports coverage.</span>
             </div>
           ) : (
             <div className="stack home-section-list">
-              {sportsSectionArticles.map((article) => (
+              {sportsTabArticles.map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>

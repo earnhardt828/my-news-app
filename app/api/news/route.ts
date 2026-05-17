@@ -54,7 +54,7 @@ type NormalizedArticle = {
   comments: null[];
 };
 
-type NewsMode = "trending" | "latest" | "myfeed" | "search" | "compare" | "local";
+type NewsMode = "trending" | "latest" | "myfeed" | "search" | "compare" | "local" | "sports";
 
 type ProviderFetchParams = {
   mode: NewsMode;
@@ -170,7 +170,8 @@ const CATEGORY_QUERY_MAP: Record<string, string> = {
   World: "world news OR international OR global conflict",
   Business: "business OR economy OR corporate",
   Tech: "technology OR AI OR software OR startup",
-  Sports: "sports OR game OR season OR league",
+  Sports:
+    "sports news OR NFL news OR NBA news OR MLB news OR NHL news OR college football news OR college basketball news OR soccer news OR golf news OR NASCAR news",
   Health: "health OR medicine OR hospital OR disease",
   Science: "science OR research OR climate OR nasa",
   Entertainment: "entertainment OR celebrity OR streaming OR movies",
@@ -324,6 +325,18 @@ const RSS_FEEDS: RssFeedConfig[] = [
   {
     url: "https://bleacherreport.com/articles/feed",
     source: "Bleacher Report",
+    category: "Sports",
+    tags: ["sports", "nfl", "nba", "mlb"],
+  },
+  {
+    url: "https://sports.yahoo.com/rss/",
+    source: "Yahoo Sports",
+    category: "Sports",
+    tags: ["sports", "nfl", "nba", "mlb"],
+  },
+  {
+    url: "https://www.sbnation.com/rss/index.xml",
+    source: "SB Nation",
     category: "Sports",
     tags: ["sports", "nfl", "nba", "mlb"],
   },
@@ -834,6 +847,10 @@ function buildNormalizedArticle(
 }
 
 function getModeCategories(mode: NewsMode, categories: string[]) {
+  if (mode === "sports") {
+    return ["Sports"];
+  }
+
   if (mode === "myfeed" && categories.length > 0) {
     return categories.slice(0, 5);
   }
@@ -852,6 +869,13 @@ function getCategoryQuery(category: string) {
 function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | "location">) {
   if (params.mode === "local") {
     return params.location.trim() || params.query.trim();
+  }
+
+  if (params.mode === "sports") {
+    return (
+      params.query.trim() ||
+      "sports news OR NFL news OR NBA news OR MLB news OR NHL news OR college football news OR college basketball news OR soccer news OR golf news OR NASCAR news"
+    );
   }
 
   return params.query.trim();
@@ -1436,6 +1460,20 @@ function sortArticlesForMode(
     });
   }
 
+  if (params.mode === "sports") {
+    return [...articles].sort((left, right) => {
+      const scoreDiff = getMatchScore(right, getEffectiveQuery(params)) - getMatchScore(left, getEffectiveQuery(params));
+
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+
+      const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+      const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+  }
+
   if (params.mode === "latest") {
     return [...articles].sort((left, right) => {
       const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
@@ -1489,20 +1527,26 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
 
   const effectiveQuery = getEffectiveQuery(params);
 
-  if ((params.mode === "search" || params.mode === "compare" || params.mode === "local") && effectiveQuery) {
+  if (
+    (params.mode === "search" ||
+      params.mode === "compare" ||
+      params.mode === "local" ||
+      params.mode === "sports") &&
+    effectiveQuery
+  ) {
     const encodedQuery = encodeURIComponent(effectiveQuery);
     const exactQuery = encodeURIComponent(`"${effectiveQuery}"`);
     requests.push(
       {
         url: `https://newsapi.org/v2/everything?q=${exactQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
-          params.mode === "compare" ? 20 : params.mode === "local" ? 14 : 8,
+          params.mode === "compare" ? 20 : params.mode === "local" ? 14 : params.mode === "sports" ? 18 : 8,
           Math.ceil(params.pageSize / 2)
         )}`,
         category: "Search",
       },
       {
         url: `https://newsapi.org/v2/everything?q=${encodedQuery}&language=en&sortBy=publishedAt&page=${params.page}&pageSize=${Math.max(
-          params.mode === "compare" ? 30 : params.mode === "local" ? 20 : 10,
+          params.mode === "compare" ? 30 : params.mode === "local" ? 20 : params.mode === "sports" ? 28 : 10,
           params.pageSize
         )}`,
         category: "Search",
@@ -1616,7 +1660,13 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
 
   const effectiveQuery = getEffectiveQuery(params);
 
-  if ((params.mode === "search" || params.mode === "compare" || params.mode === "local") && effectiveQuery) {
+  if (
+    (params.mode === "search" ||
+      params.mode === "compare" ||
+      params.mode === "local" ||
+      params.mode === "sports") &&
+    effectiveQuery
+  ) {
     requests.push({
       url: `https://gnews.io/api/v4/search?q=${encodeURIComponent(
         effectiveQuery
@@ -1729,7 +1779,13 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
 
   const effectiveQuery = getEffectiveQuery(params);
 
-  if ((params.mode === "search" || params.mode === "compare" || params.mode === "local") && effectiveQuery) {
+  if (
+    (params.mode === "search" ||
+      params.mode === "compare" ||
+      params.mode === "local" ||
+      params.mode === "sports") &&
+    effectiveQuery
+  ) {
     baseUrl.searchParams.set("q", effectiveQuery);
   } else if (categories.length > 0) {
     baseUrl.searchParams.set("q", getCategoryQuery(categories[0]));
@@ -1863,7 +1919,10 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
 
 async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
   const candidateFeeds =
-    (params.mode === "search" || params.mode === "compare" || params.mode === "local") &&
+    (params.mode === "search" ||
+      params.mode === "compare" ||
+      params.mode === "local" ||
+      params.mode === "sports") &&
     getEffectiveQuery(params)
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
@@ -1901,6 +1960,8 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
           ? 10
           : params.mode === "latest"
           ? 10
+          : params.mode === "sports"
+          ? 12
           : 8
       )
       .map(async (feed) => {
@@ -2111,6 +2172,7 @@ function parseMode(value: string | null): NewsMode {
     value === "latest" ||
     value === "myfeed" ||
     value === "local" ||
+    value === "sports" ||
     value === "search" ||
     value === "compare"
   ) {

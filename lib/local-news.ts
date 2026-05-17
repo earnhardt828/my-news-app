@@ -309,6 +309,8 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
 
 export const DEFAULT_LOCAL_CITY = "New York, NY" as const;
 
+export const SUPPORTED_LOCAL_CITIES = Object.values(LOCAL_CITY_CONFIGS);
+
 export const SUPPORTED_LOCAL_CITY_NAMES = Object.keys(LOCAL_CITY_CONFIGS) as Array<
   keyof typeof LOCAL_CITY_CONFIGS
 >;

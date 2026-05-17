@@ -133,9 +133,9 @@ const COMMON_SINGLE_TERM_BLOCKLIST = new Set([
 const SOURCE_ALIASES: Record<string, string[]> = {
   CNN: ["cnn"],
   "BBC News": ["bbc", "bbc news"],
-  "CBS News": ["cbs", "cbs news"],
-  "ABC News": ["abc", "abc news"],
-  "NBC News": ["nbc", "nbc news"],
+  "CBS News": ["cbs", "cbs news", "cbs news texas", "cbs new york", "cbs chicago", "cbs miami", "cbs los angeles"],
+  "ABC News": ["abc", "abc news", "abc7ny", "abc7 chicago", "abc7 los angeles", "abc13 houston"],
+  "NBC News": ["nbc", "nbc news", "nbc new york", "nbc chicago", "nbc los angeles", "nbc 6 south florida"],
   CNBC: ["cnbc"],
   Reuters: ["reuters"],
   NPR: ["npr"],
@@ -144,10 +144,29 @@ const SOURCE_ALIASES: Record<string, string[]> = {
   Axios: ["axios"],
   "AP News": ["ap", "ap news", "associated press"],
   "Associated Press": ["ap", "ap news", "associated press"],
-  "Fox News": ["fox", "fox news"],
+  "Fox News": ["fox", "fox news", "fox 32 chicago", "fox 11 los angeles", "fox 5 atlanta", "fox 26 houston", "fox 4 dallas"],
   "The Guardian": ["guardian", "the guardian"],
   "The Hill": ["the hill", "hill"],
 };
+
+function getSourceAliasTerms(sourceName: string | null | undefined) {
+  const normalizedSource = cleanDisplayText(sourceName ?? "").trim();
+
+  if (!normalizedSource) {
+    return [];
+  }
+
+  const aliases = SOURCE_ALIASES[normalizedSource] ?? [];
+  const baseAlias = normalizedSource.replace(/\s+news$/i, "").trim();
+
+  return Array.from(
+    new Set(
+      [normalizedSource, baseAlias, ...aliases]
+        .map((term) => term.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+}
 
 function formatSearchDate(publishedAt?: string | null, fallback?: string) {
   if (!publishedAt) {
@@ -510,6 +529,7 @@ export default function Search() {
   const [query, setQuery] = useState("");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [searchArticles, setSearchArticles] = useState<NewsArticle[]>([]);
+  const [sourceFallbackArticles, setSourceFallbackArticles] = useState<NewsArticle[]>([]);
   const [userResults, setUserResults] = useState<UserProfileSearchResult[]>([]);
   const [trendingTerms, setTrendingTerms] = useState<string[]>(fallbackTrendingTerms);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -897,6 +917,56 @@ export default function Search() {
     );
   }, [articles, normalizedQuery, searchArticles]);
 
+  useEffect(() => {
+    if (!matchedSourceName) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    void (async () => {
+      try {
+        const queryTerms = getSourceAliasTerms(matchedSourceName).slice(0, 4);
+        const results = await Promise.allSettled(
+          queryTerms.map(async (term) => {
+            const response = await apiFetch(
+              `/api/news?mode=search&query=${encodeURIComponent(term)}&page=1&pageSize=12`
+            );
+
+            if (!response.ok) {
+              throw new Error(`Source fallback request failed with status ${response.status}`);
+            }
+
+            const payload = normalizeSearchPayload(
+              (await response.json()) as NewsArticle[] | SearchNewsResponse
+            );
+
+            return payload.articles;
+          })
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        setSourceFallbackArticles(
+          dedupeSearchArticles(
+            results.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+          )
+        );
+      } catch (error) {
+        console.error("Error loading source fallback articles:", error);
+        if (!isCancelled) {
+          setSourceFallbackArticles([]);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [matchedSourceName]);
+
   const matchedSourceHeartCount = useMemo(
     () =>
       matchedSourceName
@@ -1022,7 +1092,12 @@ export default function Search() {
 
     const normalizedMatchedSource = matchedSourceName?.trim().toLowerCase() ?? null;
     const isExactSourceQuery = normalizedMatchedSource === normalizedQuery;
-    const candidateArticles = searchArticles.length > 0 ? searchArticles : articles;
+    const sourceAliasTerms = matchedSourceName ? getSourceAliasTerms(matchedSourceName) : [];
+    const candidateArticles = dedupeSearchArticles([
+      ...searchArticles,
+      ...sourceFallbackArticles,
+      ...articles,
+    ]);
     const rankedArticles = [...candidateArticles]
       .map((article) => ({
         article,
@@ -1044,10 +1119,17 @@ export default function Search() {
             article.content ?? ""
           }`.toLowerCase();
           const exactSourceMatch = sourceName.toLowerCase() === normalizedMatchedSource;
+          const aliasSourceMatch = sourceAliasTerms.some((term) =>
+            sourceName.toLowerCase().includes(term)
+          );
           const directlyAboutSource = articleText.includes(normalizedQuery);
 
           if (exactSourceMatch) {
             return baseScore + 25;
+          }
+
+          if (aliasSourceMatch) {
+            return baseScore + 18;
           }
 
           if (directlyAboutSource) {
@@ -1083,7 +1165,7 @@ export default function Search() {
     return (recentArticles.length >= 5 ? recentArticles : [...recentArticles, ...olderArticles]).map(
       ({ article }) => article
     );
-  }, [articles, matchedSourceName, normalizedQuery, searchArticles]);
+  }, [articles, matchedSourceName, normalizedQuery, searchArticles, sourceFallbackArticles]);
 
   return (
     <section className="page-shell search-shell">

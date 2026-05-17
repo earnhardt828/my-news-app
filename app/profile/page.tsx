@@ -21,6 +21,7 @@ import {
 } from "../../lib/profile-store";
 import { hydratePolls, type PollRecord, type PollWithResults } from "../../lib/polls";
 import { cleanDisplayText } from "../../lib/display-text";
+import { SUPPORTED_LOCAL_CITIES } from "../../lib/local-news";
 import { isUsernameAllowed } from "../../lib/moderation";
 import { supabase } from "../../lib/supabase";
 
@@ -66,23 +67,6 @@ type ProfileUserRef = {
   id: string;
   email?: string | null;
 };
-
-const SUPPORTED_LOCAL_CITIES = [
-  "Charlotte, NC",
-  "Chicago, IL",
-  "New York, NY",
-  "Los Angeles, CA",
-  "Atlanta, GA",
-  "Houston, TX",
-  "Miami, FL",
-  "Dallas, TX",
-  "San Francisco, CA",
-  "Philadelphia, PA",
-  "Detroit, MI",
-  "Minneapolis, MN",
-  "Phoenix, AZ",
-  "Cincinnati, OH",
-] as const;
 
 function splitSupportedCity(cityLabel: string) {
   const [city = "", state = ""] = cityLabel.split(",").map((value) => value.trim());
@@ -1137,8 +1121,8 @@ export default function Profile() {
               >
                 <option value="">Choose your city</option>
                 {SUPPORTED_LOCAL_CITIES.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
+                  <option key={city.displayName} value={city.displayName}>
+                    {city.displayName}
                   </option>
                 ))}
               </select>
@@ -1361,8 +1345,8 @@ export default function Profile() {
                 >
                   <option value="">Choose your city</option>
                   {SUPPORTED_LOCAL_CITIES.map((city) => (
-                    <option key={city} value={city}>
-                      {city}
+                    <option key={city.displayName} value={city.displayName}>
+                      {city.displayName}
                     </option>
                   ))}
                 </select>
