@@ -2354,6 +2354,35 @@ input {
   border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
 }
 
+.filter-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 0 2px;
+  scrollbar-width: none;
+}
+
+.filter-chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  flex-shrink: 0;
+  min-height: 34px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.filter-chip-active {
+  background: var(--accent-faint);
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+
 .search-source-card {
   text-decoration: none;
   color: inherit;

@@ -169,6 +169,21 @@ const SPORTS_QUERY_TERMS = [
   "college basketball news",
   "soccer news",
 ] as const;
+const SPORTS_SOURCE_SEARCHES = [
+  "ESPN",
+  "Sports Illustrated",
+  "CBS Sports",
+  "NBC Sports",
+  "Fox Sports",
+  "Bleacher Report",
+  "Yahoo Sports",
+  "SB Nation",
+  "The Athletic",
+  "SportsCenter",
+] as const;
+const SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
+const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
+const SPORTSDATA_API_KEY = process.env.SPORTSDATA_API_KEY ?? "";
 
 const NATIONAL_SOURCE_PATTERN =
   /(bbc news|reuters|associated press|ap news|npr|bloomberg|the guardian|al jazeera|newsmax)/i;
@@ -631,11 +646,30 @@ const LOCAL_CITY_CONFIGS = Object.fromEntries(
   Object.values(SHARED_LOCAL_CITY_CONFIGS).map((config) => [
     config.displayName,
     {
-      sources: config.sourceBoosts.map((source) => source.toLowerCase()),
-      signals: [...config.aliases, config.city.toLowerCase(), config.state.toLowerCase()],
+      sources: config.allowedSources.map((source) => source.toLowerCase()),
+      aliases: config.sourceAliases.map((alias) => alias.toLowerCase()),
+      strictTerms: [config.city.toLowerCase(), config.state.toLowerCase(), ...config.strictTerms.map((term) => term.toLowerCase())],
     },
   ])
 );
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchesLocalSignal(text: string, signal: string) {
+  const normalizedSignal = signal.trim().toLowerCase();
+
+  if (!normalizedSignal) {
+    return false;
+  }
+
+  if (normalizedSignal.length <= 3) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegex(normalizedSignal)}([^a-z0-9]|$)`, "i").test(text);
+  }
+
+  return text.includes(normalizedSignal);
+}
 
 function isQualifiedLocalArticle(
   article: NormalizedArticle,
@@ -655,7 +689,9 @@ function isQualifiedLocalArticle(
     article.source
   } ${article.category}`.toLowerCase();
   const hasLocalSourceMatch = config.sources.some((source) => sourceName.includes(source));
-  const hasLocalSignalMatch = config.signals.some((signal) => articleText.includes(signal));
+  const hasLocalSignalMatch = [...config.strictTerms, ...config.aliases].some((signal) =>
+    matchesLocalSignal(articleText, signal)
+  );
   const localScore = getLocalMatchScore(article, location, cityKey);
 
   if (hasLocalSourceMatch) {
@@ -677,13 +713,16 @@ function isRelaxedLocalArticle(
   const articleText = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
     article.source
   } ${article.category}`.toLowerCase();
-  const cityName = cityConfig.city.toLowerCase();
-  const stateName = cityConfig.state.toLowerCase();
-  const localSignals = [cityName, stateName, ...cityConfig.aliases.map((alias) => alias.toLowerCase())];
-  const hasLocalSourceMatch = cityConfig.sourceBoosts.some((source) =>
+  const localSignals = [
+    cityConfig.city.toLowerCase(),
+    cityConfig.state.toLowerCase(),
+    ...cityConfig.strictTerms.map((term) => term.toLowerCase()),
+    ...cityConfig.sourceAliases.map((alias) => alias.toLowerCase()),
+  ];
+  const hasLocalSourceMatch = cityConfig.allowedSources.some((source) =>
     sourceName.includes(source.toLowerCase())
   );
-  const hasLocalSignalMatch = localSignals.some((signal) => articleText.includes(signal));
+  const hasLocalSignalMatch = localSignals.some((signal) => matchesLocalSignal(articleText, signal));
 
   if (hasLocalSourceMatch) {
     return true;
@@ -988,7 +1027,7 @@ function getLocalCityConfig(cityKey: string | undefined, query: string) {
 
   return (
     Object.entries(LOCAL_CITY_CONFIGS).find(([, config]) =>
-      config.signals.some((signal) => normalized.includes(signal))
+      [...config.strictTerms, ...config.aliases].some((signal) => matchesLocalSignal(normalized, signal))
     ) ?? null
   );
 }
@@ -1019,7 +1058,7 @@ function getLocalMatchScore(article: NormalizedArticle, location: string, cityKe
       score += 120;
     }
 
-    if (config.signals.some((signal) => articleText.includes(signal))) {
+    if ([...config.strictTerms, ...config.aliases].some((signal) => matchesLocalSignal(articleText, signal))) {
       score += 70;
     }
 
@@ -1027,7 +1066,9 @@ function getLocalMatchScore(article: NormalizedArticle, location: string, cityKe
       /(fox news|cnn|reuters|associated press|ap news|nbc news|cbs news|abc news|newsmax|bbc news)/.test(
         sourceName
       ) &&
-      !config.signals.some((signal) => articleText.includes(signal))
+      ![...config.strictTerms, ...config.aliases].some((signal) =>
+        matchesLocalSignal(articleText, signal)
+      )
     ) {
       score -= 55;
     }
@@ -2012,10 +2053,13 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
             (getLocalCityConfig(params.cityKey, params.location || params.query)?.[1].sources ?? []).some(
               (source) => feed.source.toLowerCase().includes(source)
             ) ||
-            (getLocalCityConfig(params.cityKey, params.location || params.query)?.[1].signals ?? []).some(
+            [
+              ...(getLocalCityConfig(params.cityKey, params.location || params.query)?.[1].strictTerms ?? []),
+              ...(getLocalCityConfig(params.cityKey, params.location || params.query)?.[1].aliases ?? []),
+            ].some(
               (signal) =>
-                feed.source.toLowerCase().includes(signal) ||
-                feed.tags.some((tag) => tag.toLowerCase().includes(signal))
+                matchesLocalSignal(feed.source.toLowerCase(), signal) ||
+                feed.tags.some((tag) => matchesLocalSignal(tag.toLowerCase(), signal))
             )
         )
       : candidateFeeds.length > 0
@@ -2084,7 +2128,7 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
   const rssArticles = await fetchRssFeedSet(cityFeeds, Math.max(cityFeeds.length, 1));
 
   const sourceQueryResponses = await Promise.allSettled(
-    localCity.queries.slice(0, 8).map((query) =>
+    localCity.searchQueries.slice(0, 10).map((query) =>
       Promise.all([
         fetchNewsApiArticles({
           ...params,
@@ -2139,7 +2183,7 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
   const rawArticles = dedupeArticles([...rssArticles, ...sourceQueryArticles, ...cityQueryArticles]);
   console.log("LOCAL RAW COUNT", rawArticles.length);
   console.log("LOCAL CITY", localCity.cityKey, localCity.city, localCity.state);
-  console.log("LOCAL SOURCES USED", localCity.sourceBoosts);
+  console.log("LOCAL SOURCES USED", localCity.allowedSources);
 
   const strictFiltered = sortArticlesForMode(rawArticles, params).filter((article) =>
     isQualifiedLocalArticle(article, params.location || params.query, params.cityKey)
@@ -2153,6 +2197,10 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
   console.log("LOCAL FILTERED COUNT", filteredArticles.length);
   const sliced = filteredArticles.slice(0, params.pageSize);
 
+  console.log(
+    "LOCAL FINAL SOURCES",
+    Array.from(new Set(sliced.map((article) => article.sourceName || article.source))).sort()
+  );
   console.log("LOCAL FINAL COUNT", sliced.length);
 
   return {
@@ -2165,12 +2213,22 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
 }
 
 async function fetchSportsArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const sportsCategory = params.query.trim() || "All Sports";
   const sportsFeeds = RSS_FEEDS.filter((feed) =>
     SPORTS_RSS_SOURCES.some((source) => feed.source.toLowerCase() === source.toLowerCase())
   );
   const rssArticles = await fetchRssFeedSet(sportsFeeds, sportsFeeds.length);
+  const categoryQueries = sportsCategory
+    ? sportsCategory
+        .split("|")
+        .map((query) => query.trim())
+        .filter(Boolean)
+    : [];
+  const effectiveQueries = Array.from(
+    new Set([...categoryQueries, ...SPORTS_QUERY_TERMS, ...SPORTS_SOURCE_SEARCHES])
+  );
   const queryResponses = await Promise.allSettled(
-    SPORTS_QUERY_TERMS.map((query) =>
+    effectiveQueries.map((query) =>
       Promise.all([
         fetchNewsApiArticles({ ...params, mode: "search", query }),
         fetchGNewsArticles({ ...params, mode: "search", query }),
@@ -2182,16 +2240,30 @@ async function fetchSportsArticles(params: ProviderFetchParams): Promise<NewsRou
     result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
   );
   const combined = dedupeArticles([...rssArticles, ...queryArticles]);
+  const categoryPattern = new RegExp(
+    categoryQueries.length > 0
+      ? categoryQueries
+          .flatMap((query) => query.toLowerCase().split(/[^a-z0-9]+/i))
+          .filter((term) => term.length > 2)
+          .join("|")
+      : "sports|nfl|nba|mlb|nhl|soccer|golf|nascar|formula|wnba|college",
+    "i"
+  );
   const sportsArticles = sortArticlesForMode(combined, params).filter((article) => {
     const source = article.source.toLowerCase();
     const text = `${article.title} ${article.description ?? ""} ${article.category}`.toLowerCase();
     return (
       article.category.toLowerCase() === "sports" ||
       SPORTS_RSS_SOURCES.some((name) => source.includes(name.toLowerCase())) ||
-      /(nfl|nba|mlb|nhl|soccer|golf|nascar|playoff|season|league|coach|draft)/.test(text)
+      /the athletic|sports illustrated|sportscenter/.test(source) ||
+      /(nfl|nba|mlb|nhl|soccer|golf|nascar|formula|playoff|season|league|coach|draft|wnba|college)/.test(
+        text
+      )
     );
-  });
+  }).filter((article) => categoryPattern.test(`${article.title} ${article.description ?? ""} ${article.source}`));
 
+  console.log("SPORTS CATEGORY", sportsCategory);
+  console.log("SPORTS ARTICLE COUNT", sportsArticles.length);
   console.log("SPORTS FINAL COUNT", sportsArticles.length);
 
   return {
@@ -2292,6 +2364,9 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
       gnews: Boolean(GNEWS_API_KEY),
       newsData: Boolean(NEWSDATA_API_KEY),
       rss: true,
+      sportsApi: Boolean(SPORTS_API_KEY),
+      apiSports: Boolean(API_SPORTS_KEY),
+      sportsData: Boolean(SPORTSDATA_API_KEY),
     },
     providers: providerDiagnostics,
   });

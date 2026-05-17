@@ -52,6 +52,24 @@ const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
 const INITIAL_FEED_TIMEOUT_MS = 5000;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
+const SPORTS_CATEGORY_QUERIES = {
+  "All Sports": [
+    "sports news",
+    "NFL news",
+    "NBA news",
+    "MLB news",
+    "NHL news",
+    "soccer news",
+  ],
+  Football: ["NFL news", "college football news"],
+  Basketball: ["NBA news", "WNBA news", "college basketball news"],
+  Baseball: ["MLB news"],
+  Hockey: ["NHL news"],
+  Soccer: ["soccer news", "MLS news", "Premier League news"],
+  "Auto Racing": ["NASCAR news", "Formula 1 news"],
+  Golf: ["PGA Tour news", "golf news"],
+} as const;
+type SportsCategory = keyof typeof SPORTS_CATEGORY_QUERIES;
 
 type Comment = {
   id: number;
@@ -298,11 +316,14 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
 function getFeedCacheKey(
   mode: "trending" | "latest" | "polls" | "local" | "sports",
   localLabel: string,
-  localCityKey?: string | null
+  localCityKey?: string | null,
+  sportsCategory?: SportsCategory
 ) {
   return mode === "local"
     ? `graffiti:last-feed:${mode}:${normalizeLookupValue(localCityKey || localLabel) || "regional"}`
-    : `graffiti:last-feed:${mode}`;
+    : mode === "sports"
+      ? `graffiti:last-feed:${mode}:${normalizeLookupValue(sportsCategory || "all-sports")}`
+      : `graffiti:last-feed:${mode}`;
 }
 
 function readCachedFeedPayload(cacheKey: string): CachedFeedPayload | null {
@@ -372,6 +393,21 @@ function normalizeLookupValue(value: string | null | undefined) {
   return cleanDisplayText(value ?? "")
     .trim()
     .toLowerCase();
+}
+
+function matchesLookupSignal(text: string, signal: string) {
+  const normalizedSignal = normalizeLookupValue(signal);
+
+  if (!normalizedSignal) {
+    return false;
+  }
+
+  if (normalizedSignal.length <= 3) {
+    const escaped = normalizedSignal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(text);
+  }
+
+  return text.includes(normalizedSignal);
 }
 
 function getSupportedLocalCityConfig(
@@ -487,12 +523,15 @@ function scoreLocalArticle(article: Article, localQuery: string, localLocationLa
 
   if (matchedLocalCity) {
     const localConfig = matchedLocalCity[1];
-    const hasLocalSource = localConfig.sourceBoosts.some((source) =>
+    const hasLocalSource = localConfig.allowedSources.some((source) =>
       sourceName.includes(normalizeLookupValue(source))
     );
-    const hasLocalStorySignal = [...localConfig.aliases, localConfig.city, localConfig.state].some((signal) =>
-      articleText.includes(normalizeLookupValue(signal))
-    );
+    const hasLocalStorySignal = [
+      ...localConfig.strictTerms,
+      ...localConfig.sourceAliases,
+      localConfig.city,
+      localConfig.state,
+    ].some((signal) => matchesLookupSignal(articleText, signal));
 
     if (hasLocalSource) {
       score += 220;
@@ -833,6 +872,7 @@ export default function Home() {
   const [sortMode, setSortMode] = useState<"trending" | "polls" | "latest" | "local" | "sports">(
     "trending"
   );
+  const [sportsCategory, setSportsCategory] = useState<SportsCategory>("All Sports");
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -990,7 +1030,12 @@ export default function Home() {
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
     const requestId = activeFeedRequestIdRef.current + 1;
-    const feedCacheKey = getFeedCacheKey(feedMode, localLocationLabel, selectedLocalCityKey);
+    const feedCacheKey = getFeedCacheKey(
+      feedMode,
+      localLocationLabel,
+      selectedLocalCityKey,
+      sportsCategory
+    );
     const cachedFeed = replace ? readCachedFeedPayload(feedCacheKey) : null;
     activeFeedRequestIdRef.current = requestId;
 
@@ -1182,6 +1227,10 @@ export default function Home() {
           page: String(pageToLoad),
           pageSize: String(FEED_PAGE_SIZE),
         });
+
+        if (feedMode === "sports") {
+          params.set("query", SPORTS_CATEGORY_QUERIES[sportsCategory].join(" | "));
+        }
 
         newsPath = `/api/news?${params.toString()}`;
       }
@@ -1499,7 +1548,16 @@ export default function Home() {
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
-  }, [feedMode, localEmptyStateHeadline, localLocationLabel, localQuery, selectedLocalCity, selectedLocalCityKey, sortMode]);
+  }, [
+    feedMode,
+    localEmptyStateHeadline,
+    localLocationLabel,
+    localQuery,
+    selectedLocalCity,
+    selectedLocalCityKey,
+    sortMode,
+    sportsCategory,
+  ]);
 
   useEffect(() => {
     if (isMyFeedWithoutCategories) {
@@ -3169,6 +3227,17 @@ export default function Home() {
 
   const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
 
+  const selectedSportsTerms = useMemo(
+    () =>
+      SPORTS_CATEGORY_QUERIES[sportsCategory].flatMap((query) =>
+        cleanDisplayText(query)
+          .toLowerCase()
+          .split(/[^a-z0-9]+/i)
+          .filter((term) => term.length > 2)
+      ),
+    [sportsCategory]
+  );
+
   const sportsTabArticles = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as Article[];
@@ -3176,6 +3245,13 @@ export default function Home() {
 
     return visibleArticles.slice(0, 25);
   }, [sortMode, visibleArticles]);
+
+  useEffect(() => {
+    if (sortMode === "sports") {
+      console.log("SPORTS CATEGORY", sportsCategory);
+      console.log("SPORTS ARTICLE COUNT", sportsTabArticles.length);
+    }
+  }, [sortMode, sportsCategory, sportsTabArticles.length]);
 
   useEffect(() => {
     if (sortMode === "local") {
@@ -3351,18 +3427,27 @@ export default function Home() {
             /(espn|sportscenter|nba|nfl|mlb|nhl|soccer|golf|nascar|cbs sports|nbc sports|fox sports|highlight)/.test(
               haystack
             );
+          const matchesCategory =
+            sportsCategory === "All Sports" ||
+            selectedSportsTerms.some((term) => haystack.includes(term));
 
-          return matchesSports && video.orientation === "vertical";
+          return matchesSports && matchesCategory && video.orientation === "vertical";
         }),
         8
       ),
-    [videos]
+    [selectedSportsTerms, sportsCategory, videos]
   );
 
   const sportsInlineVideos = useMemo(
     () => sportsQuickWatchVideos.slice(3, 6),
     [sportsQuickWatchVideos]
   );
+
+  useEffect(() => {
+    if (sortMode === "sports") {
+      console.log("SPORTS VIDEO COUNT", sportsQuickWatchVideos.length);
+    }
+  }, [sortMode, sportsQuickWatchVideos.length]);
 
   const topTenTrendingArticles = useMemo(
     () => balancedTrendingArticles.slice(0, 10),
@@ -3383,37 +3468,6 @@ export default function Home() {
         })
         .slice(0, 3),
     [myFeedPolls]
-  );
-
-  const sportsSectionArticles = useMemo(
-    () =>
-      articles
-        .filter((article) => {
-          const category = getCategoryLabel(getSafeCategoryLabel(article.category, article));
-          const source = cleanDisplayText(article.source).toLowerCase();
-          const titleAndDescription = cleanDisplayText(
-            `${article.title} ${article.description ?? ""}`
-          ).toLowerCase();
-
-          return (
-            category === "Sports" ||
-            [
-              "espn",
-              "sports illustrated",
-              "si.com",
-              "cbs sports",
-              "nbc sports",
-              "fox sports",
-              "bleacher report",
-              "the athletic",
-            ].some((name) => source.includes(name)) ||
-            ["game", "playoff", "season", "league", "team", "final", "coach", "draft"].some(
-              (term) => titleAndDescription.includes(term)
-            )
-          );
-        })
-        .slice(0, 8),
-    [articles]
   );
 
   const todayLabel = useMemo(
@@ -4340,14 +4394,98 @@ export default function Home() {
             </div>
           </div>
 
-          {sportsSectionArticles.length === 0 ? (
+          <div className="filter-chip-row" role="tablist" aria-label="Sports categories">
+            {Object.keys(SPORTS_CATEGORY_QUERIES).map((category) => (
+              <button
+                key={category}
+                type="button"
+                role="tab"
+                aria-selected={sportsCategory === category}
+                className={`filter-chip ${sportsCategory === category ? "filter-chip-active" : ""}`}
+                onClick={() => setSportsCategory(category as SportsCategory)}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          {sportsTabArticles.length === 0 ? (
             <div className="empty-state compact-empty-state">
               <strong>No sports stories yet</strong>
               <span>Check back shortly for fresh sports coverage.</span>
             </div>
           ) : (
             <div className="stack home-section-list">
-              {sportsSectionArticles.map((article) => (
+              {sportsTabArticles.slice(0, 4).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+
+              {sportsQuickWatchVideos.length > 0 ? (
+                <section className="home-section-block home-section-plain quick-watch-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Quick Watch</strong>
+                    </div>
+                  </div>
+                  <div className="quick-watch-scroll" role="list" aria-label="Sports quick watch videos">
+                    {sportsQuickWatchVideos.map((video) => (
+                      <div key={video.id} className="quick-watch-item" role="listitem">
+                        <VideoFeedCard
+                          video={video}
+                          isAutoplaying={
+                            autoplayTrendingVideoKeys.includes(`sports-quickwatch:${video.id}`) &&
+                            !video.fallback
+                          }
+                          onToggleLike={handleToggleVideoLike}
+                          onToggleSave={handleToggleVideoSave}
+                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                          onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                          frameRef={(node) => {
+                            trendingVideoFrameRefs.current[`sports-quickwatch:${video.id}`] = node;
+                          }}
+                          autoplayKey={`sports-quickwatch:${video.id}`}
+                          previewDurationMs={4000}
+                          label="Quick Watch"
+                          className="video-card-inline quick-watch-video-card"
+                          variant="article"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {sportsInlineVideos.length > 0 ? (
+                <section className="stack home-section-list">
+                  {sportsInlineVideos.map((video) => (
+                    <div key={`sports-inline-${video.id}`} className="section-card">
+                      <VideoFeedCard
+                        video={video}
+                        isAutoplaying={
+                          autoplayTrendingVideoKeys.includes(`sports-inline:${video.id}`) &&
+                          !video.fallback
+                        }
+                        onToggleLike={handleToggleVideoLike}
+                        onToggleSave={handleToggleVideoSave}
+                        onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                        frameRef={(node) => {
+                          trendingVideoFrameRefs.current[`sports-inline:${video.id}`] = node;
+                        }}
+                        autoplayKey={`sports-inline:${video.id}`}
+                        previewDurationMs={4000}
+                        label="Sports Video"
+                        className="video-card-inline"
+                        variant="article"
+                      />
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+
+              {sportsTabArticles.slice(4).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>

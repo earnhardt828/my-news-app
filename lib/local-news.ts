@@ -3,9 +3,10 @@ export type LocalCityConfig = {
   city: string;
   state: string;
   displayName: string;
-  aliases: string[];
-  sourceBoosts: string[];
-  queries: string[];
+  searchQueries: string[];
+  allowedSources: string[];
+  sourceAliases: string[];
+  strictTerms: string[];
   rssFeeds: string[];
 };
 
@@ -15,8 +16,18 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Chicago",
     state: "IL",
     displayName: "Chicago, IL",
-    aliases: ["chicago", "illinois", "cook county", "evanston", "oak park", "naperville"],
-    sourceBoosts: [
+    searchQueries: [
+      "Chicago local news",
+      "Chicago Tribune",
+      "WGN Chicago",
+      "ABC7 Chicago",
+      "NBC Chicago",
+      "CBS Chicago",
+      "Fox 32 Chicago",
+      "Block Club Chicago",
+      "WBEZ Chicago",
+    ],
+    allowedSources: [
       "chicago tribune",
       "wgn chicago",
       "wgn-tv",
@@ -27,16 +38,17 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "block club chicago",
       "wbez chicago",
     ],
-    queries: [
-      "Chicago Tribune",
-      "WGN Chicago",
-      "ABC7 Chicago",
-      "NBC Chicago",
-      "CBS Chicago",
-      "Fox 32 Chicago",
-      "Block Club Chicago",
-      "WBEZ Chicago",
+    sourceAliases: [
+      "chicago tribune",
+      "wgn",
+      "abc7 chicago",
+      "nbc chicago",
+      "cbs chicago",
+      "fox 32",
+      "block club chicago",
+      "wbez",
     ],
+    strictTerms: ["chicago", "illinois", "il", "cook county", "evanston", "oak park", "naperville"],
     rssFeeds: [
       "Chicago Tribune",
       "WGN Chicago",
@@ -53,17 +65,18 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Los Angeles",
     state: "CA",
     displayName: "Los Angeles, CA",
-    aliases: [
-      "los angeles",
-      "la county",
-      "hollywood",
-      "pasadena",
-      "santa monica",
-      "burbank",
-      "socal",
-      "southern california",
+    searchQueries: [
+      "Los Angeles local news",
+      "LA Times",
+      "KTLA",
+      "ABC7 Los Angeles",
+      "NBC Los Angeles",
+      "CBS Los Angeles",
+      "LAist",
+      "FOX 11 Los Angeles",
+      "Spectrum News 1 SoCal",
     ],
-    sourceBoosts: [
+    allowedSources: [
       "la times",
       "los angeles times",
       "ktla",
@@ -74,15 +87,27 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "fox 11 los angeles",
       "spectrum news 1 socal",
     ],
-    queries: [
-      "LA Times",
-      "KTLA",
-      "ABC7 Los Angeles",
-      "NBC Los Angeles",
-      "CBS Los Angeles",
-      "LAist",
-      "FOX 11 Los Angeles",
-      "Spectrum News 1 SoCal",
+    sourceAliases: [
+      "la times",
+      "los angeles times",
+      "ktla",
+      "abc7 los angeles",
+      "nbc los angeles",
+      "cbs los angeles",
+      "laist",
+      "fox 11",
+      "socal",
+      "spectrum news 1",
+    ],
+    strictTerms: [
+      "los angeles",
+      "la county",
+      "hollywood",
+      "pasadena",
+      "santa monica",
+      "burbank",
+      "socal",
+      "southern california",
     ],
     rssFeeds: [
       "Los Angeles Times",
@@ -99,18 +124,19 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "New York",
     state: "NY",
     displayName: "New York, NY",
-    aliases: [
-      "new york",
-      "nyc",
-      "manhattan",
-      "brooklyn",
-      "queens",
-      "bronx",
-      "staten island",
-      "harlem",
-      "long island city",
+    searchQueries: [
+      "New York local news",
+      "NY1",
+      "Gothamist",
+      "New York Daily News",
+      "NBC New York",
+      "CBS New York",
+      "ABC7NY",
+      "PIX11",
+      "The City NYC",
+      "AMNY",
     ],
-    sourceBoosts: [
+    allowedSources: [
       "ny1",
       "gothamist",
       "new york daily news",
@@ -121,16 +147,27 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "the city nyc",
       "amny",
     ],
-    queries: [
-      "NY1",
-      "Gothamist",
-      "New York Daily News",
-      "NBC New York",
-      "CBS New York",
-      "ABC7NY",
-      "PIX11",
-      "The City NYC",
-      "AMNY",
+    sourceAliases: [
+      "ny1",
+      "gothamist",
+      "daily news",
+      "nbc new york",
+      "cbs new york",
+      "abc7ny",
+      "pix11",
+      "the city",
+      "amny",
+    ],
+    strictTerms: [
+      "new york",
+      "nyc",
+      "manhattan",
+      "brooklyn",
+      "queens",
+      "bronx",
+      "staten island",
+      "harlem",
+      "long island city",
     ],
     rssFeeds: [
       "Gothamist",
@@ -148,18 +185,8 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Atlanta",
     state: "GA",
     displayName: "Atlanta, GA",
-    aliases: ["atlanta", "georgia", "fulton county", "buckhead", "decatur"],
-    sourceBoosts: [
-      "atlanta journal-constitution",
-      "ajc",
-      "wsb-tv",
-      "fox 5 atlanta",
-      "11alive",
-      "atlanta news first",
-      "rough draft atlanta",
-      "saportareport",
-    ],
-    queries: [
+    searchQueries: [
+      "Atlanta local news",
       "Atlanta Journal-Constitution",
       "AJC",
       "WSB-TV",
@@ -169,6 +196,27 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "Rough Draft Atlanta",
       "SaportaReport",
     ],
+    allowedSources: [
+      "atlanta journal-constitution",
+      "ajc",
+      "wsb-tv",
+      "fox 5 atlanta",
+      "11alive",
+      "atlanta news first",
+      "rough draft atlanta",
+      "saportareport",
+    ],
+    sourceAliases: [
+      "atlanta journal-constitution",
+      "ajc",
+      "wsb-tv",
+      "fox 5 atlanta",
+      "11alive",
+      "atlanta news first",
+      "rough draft atlanta",
+      "saportareport",
+    ],
+    strictTerms: ["atlanta", "georgia", "ga", "fulton county", "buckhead", "decatur"],
     rssFeeds: ["Rough Draft Atlanta", "SaportaReport"],
   },
   "Houston, TX": {
@@ -176,8 +224,16 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Houston",
     state: "TX",
     displayName: "Houston, TX",
-    aliases: ["houston", "texas", "harris county", "sugar land", "the heights", "katy"],
-    sourceBoosts: [
+    searchQueries: [
+      "Houston local news",
+      "Houston Chronicle",
+      "KHOU",
+      "ABC13 Houston",
+      "FOX 26 Houston",
+      "KPRC 2",
+      "Houston Public Media",
+    ],
+    allowedSources: [
       "houston chronicle",
       "khou",
       "abc13 houston",
@@ -186,14 +242,15 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "kprc 2",
       "houston public media",
     ],
-    queries: [
-      "Houston Chronicle",
-      "KHOU",
-      "ABC13 Houston",
-      "FOX 26 Houston",
-      "KPRC 2",
-      "Houston Public Media",
+    sourceAliases: [
+      "houston chronicle",
+      "khou",
+      "abc13 houston",
+      "fox 26 houston",
+      "kprc",
+      "houston public media",
     ],
+    strictTerms: ["houston", "texas", "tx", "harris county", "sugar land", "the heights", "katy"],
     rssFeeds: ["Houston Public Media"],
   },
   "Miami, FL": {
@@ -201,16 +258,18 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Miami",
     state: "FL",
     displayName: "Miami, FL",
-    aliases: [
-      "miami",
-      "florida",
-      "miami-dade",
-      "south florida",
-      "fort lauderdale",
-      "wynwood",
-      "brickell",
+    searchQueries: [
+      "Miami local news",
+      "Miami Herald",
+      "WSVN Miami",
+      "NBC 6 South Florida",
+      "CBS Miami",
+      "Local 10 Miami",
+      "WLRN Miami",
+      "Miami New Times",
+      "Axios Miami",
     ],
-    sourceBoosts: [
+    allowedSources: [
       "miami herald",
       "wsvn",
       "wsvn miami",
@@ -223,15 +282,26 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "miami new times",
       "axios miami",
     ],
-    queries: [
-      "Miami Herald",
-      "WSVN Miami",
-      "NBC 6 South Florida",
-      "CBS Miami",
-      "Local 10 Miami",
-      "WLRN Miami",
-      "Miami New Times",
-      "Axios Miami",
+    sourceAliases: [
+      "miami herald",
+      "wsvn",
+      "nbc 6",
+      "cbs miami",
+      "local 10",
+      "wlrn",
+      "miami new times",
+      "axios miami",
+      "south florida",
+    ],
+    strictTerms: [
+      "miami",
+      "florida",
+      "fl",
+      "miami-dade",
+      "south florida",
+      "fort lauderdale",
+      "wynwood",
+      "brickell",
     ],
     rssFeeds: [
       "Miami Herald",
@@ -248,8 +318,18 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Charlotte",
     state: "NC",
     displayName: "Charlotte, NC",
-    aliases: ["charlotte", "mecklenburg", "queen city", "gastonia", "rock hill", "fort mill"],
-    sourceBoosts: [
+    searchQueries: [
+      "Charlotte local news",
+      "WSOC Charlotte",
+      "WBTV Charlotte",
+      "WCNC Charlotte",
+      "Queen City News",
+      "WFAE Charlotte",
+      "Axios Charlotte",
+      "Charlotte Observer",
+      "WCCB Charlotte",
+    ],
+    allowedSources: [
       "charlotte observer",
       "wsoc-tv",
       "wsoc charlotte",
@@ -260,16 +340,18 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "axios charlotte",
       "wccb charlotte",
     ],
-    queries: [
-      "WSOC Charlotte",
-      "WBTV Charlotte",
-      "WCNC Charlotte",
-      "Queen City News",
-      "WFAE Charlotte",
-      "Axios Charlotte",
-      "Charlotte Observer",
-      "WCCB Charlotte",
+    sourceAliases: [
+      "charlotte observer",
+      "wsoc",
+      "wbtv",
+      "wcnc",
+      "queen city news",
+      "wfae",
+      "axios charlotte",
+      "wccb",
+      "queen city",
     ],
+    strictTerms: ["charlotte", "north carolina", "nc", "mecklenburg", "queen city", "gastonia", "rock hill", "fort mill"],
     rssFeeds: [
       "WSOC-TV",
       "WBTV",
@@ -286,9 +368,16 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Cincinnati",
     state: "OH",
     displayName: "Cincinnati, OH",
-    aliases: ["cincinnati", "ohio", "hamilton county", "northern kentucky"],
-    sourceBoosts: ["cincinnati enquirer", "wcpo", "wlwt", "fox19"],
-    queries: ["Cincinnati Enquirer", "WCPO", "WLWT", "FOX19"],
+    searchQueries: [
+      "Cincinnati local news",
+      "Cincinnati Enquirer",
+      "WCPO",
+      "WLWT",
+      "FOX19",
+    ],
+    allowedSources: ["cincinnati enquirer", "wcpo", "wlwt", "fox19"],
+    sourceAliases: ["cincinnati enquirer", "wcpo", "wlwt", "fox19"],
+    strictTerms: ["cincinnati", "ohio", "oh", "hamilton county", "northern kentucky"],
     rssFeeds: [],
   },
   "Dallas, TX": {
@@ -296,21 +385,31 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Dallas",
     state: "TX",
     displayName: "Dallas, TX",
-    aliases: ["dallas", "fort worth", "dfw", "north texas", "plano", "arlington", "frisco"],
-    sourceBoosts: [
-      "dallas morning news",
-      "wfaa",
-      "nbc 5 dallas-fort worth",
-      "cbs news texas",
-      "fox 4 dallas",
-    ],
-    queries: [
+    searchQueries: [
+      "Dallas local news",
       "Dallas Morning News",
       "WFAA",
       "NBC 5 Dallas-Fort Worth",
       "CBS News Texas",
       "FOX 4 Dallas",
     ],
+    allowedSources: [
+      "dallas morning news",
+      "wfaa",
+      "nbc 5 dallas-fort worth",
+      "cbs news texas",
+      "fox 4 dallas",
+    ],
+    sourceAliases: [
+      "dallas morning news",
+      "wfaa",
+      "nbc 5 dallas-fort worth",
+      "cbs news texas",
+      "fox 4 dallas",
+      "dfw",
+      "north texas",
+    ],
+    strictTerms: ["dallas", "texas", "tx", "fort worth", "dfw", "north texas", "plano", "arlington", "frisco"],
     rssFeeds: [],
   },
   "Detroit, MI": {
@@ -318,9 +417,17 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Detroit",
     state: "MI",
     displayName: "Detroit, MI",
-    aliases: ["detroit", "michigan", "wayne county", "dearborn"],
-    sourceBoosts: ["detroit free press", "detroit news", "wxyz", "clickondetroit", "fox 2 detroit"],
-    queries: ["Detroit Free Press", "Detroit News", "WXYZ", "ClickOnDetroit", "FOX 2 Detroit"],
+    searchQueries: [
+      "Detroit local news",
+      "Detroit Free Press",
+      "Detroit News",
+      "WXYZ",
+      "ClickOnDetroit",
+      "FOX 2 Detroit",
+    ],
+    allowedSources: ["detroit free press", "detroit news", "wxyz", "clickondetroit", "fox 2 detroit"],
+    sourceAliases: ["detroit free press", "detroit news", "wxyz", "clickondetroit", "fox 2 detroit"],
+    strictTerms: ["detroit", "michigan", "mi", "wayne county", "dearborn"],
     rssFeeds: [],
   },
   "Minneapolis, MN": {
@@ -328,9 +435,17 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Minneapolis",
     state: "MN",
     displayName: "Minneapolis, MN",
-    aliases: ["minneapolis", "minnesota", "saint paul", "st paul", "twin cities"],
-    sourceBoosts: ["star tribune", "kare 11", "wcco", "fox 9", "mpr news"],
-    queries: ["Star Tribune", "KARE 11", "WCCO", "FOX 9", "MPR News"],
+    searchQueries: [
+      "Minneapolis local news",
+      "Star Tribune",
+      "KARE 11",
+      "WCCO",
+      "FOX 9",
+      "MPR News",
+    ],
+    allowedSources: ["star tribune", "kare 11", "wcco", "fox 9", "mpr news"],
+    sourceAliases: ["star tribune", "kare 11", "wcco", "fox 9", "mpr"],
+    strictTerms: ["minneapolis", "minnesota", "mn", "saint paul", "st paul", "twin cities"],
     rssFeeds: [],
   },
   "Phoenix, AZ": {
@@ -338,9 +453,17 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Phoenix",
     state: "AZ",
     displayName: "Phoenix, AZ",
-    aliases: ["phoenix", "arizona", "mesa", "tempe", "scottsdale"],
-    sourceBoosts: ["arizona republic", "azfamily", "abc15 arizona", "fox 10 phoenix", "12news"],
-    queries: ["Arizona Republic", "AZFamily", "ABC15 Arizona", "FOX 10 Phoenix", "12News"],
+    searchQueries: [
+      "Phoenix local news",
+      "Arizona Republic",
+      "AZFamily",
+      "ABC15 Arizona",
+      "FOX 10 Phoenix",
+      "12News",
+    ],
+    allowedSources: ["arizona republic", "azfamily", "abc15 arizona", "fox 10 phoenix", "12news"],
+    sourceAliases: ["arizona republic", "azfamily", "abc15", "fox 10 phoenix", "12news"],
+    strictTerms: ["phoenix", "arizona", "az", "mesa", "tempe", "scottsdale"],
     rssFeeds: [],
   },
   "San Francisco, CA": {
@@ -348,8 +471,16 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "San Francisco",
     state: "CA",
     displayName: "San Francisco, CA",
-    aliases: ["san francisco", "bay area", "oakland", "berkeley", "marin"],
-    sourceBoosts: [
+    searchQueries: [
+      "San Francisco local news",
+      "San Francisco Chronicle",
+      "KQED",
+      "ABC7 Bay Area",
+      "NBC Bay Area",
+      "CBS News Bay Area",
+      "KRON4",
+    ],
+    allowedSources: [
       "sf chronicle",
       "san francisco chronicle",
       "kqed",
@@ -358,14 +489,17 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
       "cbs news bay area",
       "kron4",
     ],
-    queries: [
-      "San Francisco Chronicle",
-      "KQED",
-      "ABC7 Bay Area",
-      "NBC Bay Area",
-      "CBS News Bay Area",
-      "KRON4",
+    sourceAliases: [
+      "sf chronicle",
+      "san francisco chronicle",
+      "kqed",
+      "abc7 bay area",
+      "nbc bay area",
+      "cbs news bay area",
+      "kron4",
+      "bay area",
     ],
+    strictTerms: ["san francisco", "california", "ca", "bay area", "oakland", "berkeley", "marin"],
     rssFeeds: [],
   },
   "Philadelphia, PA": {
@@ -373,9 +507,17 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     city: "Philadelphia",
     state: "PA",
     displayName: "Philadelphia, PA",
-    aliases: ["philadelphia", "philly", "pennsylvania", "camden", "delco"],
-    sourceBoosts: ["philadelphia inquirer", "6abc", "nbc10 philadelphia", "cbs philadelphia", "whyy"],
-    queries: ["Philadelphia Inquirer", "6ABC", "NBC10 Philadelphia", "CBS Philadelphia", "WHYY"],
+    searchQueries: [
+      "Philadelphia local news",
+      "Philadelphia Inquirer",
+      "6ABC",
+      "NBC10 Philadelphia",
+      "CBS Philadelphia",
+      "WHYY",
+    ],
+    allowedSources: ["philadelphia inquirer", "6abc", "nbc10 philadelphia", "cbs philadelphia", "whyy"],
+    sourceAliases: ["philadelphia inquirer", "6abc", "nbc10 philadelphia", "cbs philadelphia", "whyy", "philly"],
+    strictTerms: ["philadelphia", "philly", "pennsylvania", "pa", "camden", "delco"],
     rssFeeds: [],
   },
 } as const;
@@ -428,9 +570,14 @@ export function getLocalCityConfigByText(value: string | null | undefined) {
 
   return (
     Object.values(LOCAL_CITY_CONFIGS).find((config) => {
-      const haystacks = [config.cityKey, config.displayName, config.city, config.state, ...config.aliases].map(
-        normalizeLocalText
-      );
+      const haystacks = [
+        config.cityKey,
+        config.displayName,
+        config.city,
+        config.state,
+        ...config.strictTerms,
+        ...config.sourceAliases,
+      ].map(normalizeLocalText);
 
       return haystacks.some((haystack) => normalized.includes(haystack) || haystack.includes(normalized));
     }) ?? null
@@ -445,7 +592,7 @@ export function buildLocalNewsQueries(config: LocalCityConfig) {
     `${config.city} sports`,
   ];
 
-  return [...baseQueries, ...config.queries];
+  return [...baseQueries, ...config.searchQueries];
 }
 
 export function buildLocalNewsQueryText(config: LocalCityConfig) {
