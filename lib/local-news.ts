@@ -1,4 +1,5 @@
 export type LocalCityConfig = {
+  cityKey: string;
   city: string;
   state: string;
   displayName: string;
@@ -9,6 +10,7 @@ export type LocalCityConfig = {
 
 export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
   "Chicago, IL": {
+    cityKey: "chicago-il",
     city: "Chicago",
     state: "IL",
     displayName: "Chicago, IL",
@@ -36,6 +38,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "Los Angeles, CA": {
+    cityKey: "los-angeles-ca",
     city: "Los Angeles",
     state: "CA",
     displayName: "Los Angeles, CA",
@@ -72,6 +75,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "New York, NY": {
+    cityKey: "new-york-ny",
     city: "New York",
     state: "NY",
     displayName: "New York, NY",
@@ -110,6 +114,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "Atlanta, GA": {
+    cityKey: "atlanta-ga",
     city: "Atlanta",
     state: "GA",
     displayName: "Atlanta, GA",
@@ -136,6 +141,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "Houston, TX": {
+    cityKey: "houston-tx",
     city: "Houston",
     state: "TX",
     displayName: "Houston, TX",
@@ -159,6 +165,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "Miami, FL": {
+    cityKey: "miami-fl",
     city: "Miami",
     state: "FL",
     displayName: "Miami, FL",
@@ -196,6 +203,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "Charlotte, NC": {
+    cityKey: "charlotte-nc",
     city: "Charlotte",
     state: "NC",
     displayName: "Charlotte, NC",
@@ -223,6 +231,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "Cincinnati, OH": {
+    cityKey: "cincinnati-oh",
     city: "Cincinnati",
     state: "OH",
     displayName: "Cincinnati, OH",
@@ -231,6 +240,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     extraQueries: ["Cincinnati Enquirer", "WCPO", "WLWT", "FOX19"],
   },
   "Dallas, TX": {
+    cityKey: "dallas-tx",
     city: "Dallas",
     state: "TX",
     displayName: "Dallas, TX",
@@ -251,6 +261,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "Detroit, MI": {
+    cityKey: "detroit-mi",
     city: "Detroit",
     state: "MI",
     displayName: "Detroit, MI",
@@ -259,6 +270,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     extraQueries: ["Detroit Free Press", "Detroit News", "WXYZ", "ClickOnDetroit", "FOX 2 Detroit"],
   },
   "Minneapolis, MN": {
+    cityKey: "minneapolis-mn",
     city: "Minneapolis",
     state: "MN",
     displayName: "Minneapolis, MN",
@@ -267,6 +279,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     extraQueries: ["Star Tribune", "KARE 11", "WCCO", "FOX 9", "MPR News"],
   },
   "Phoenix, AZ": {
+    cityKey: "phoenix-az",
     city: "Phoenix",
     state: "AZ",
     displayName: "Phoenix, AZ",
@@ -275,6 +288,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     extraQueries: ["Arizona Republic", "AZFamily", "ABC15 Arizona", "FOX 10 Phoenix", "12News"],
   },
   "San Francisco, CA": {
+    cityKey: "san-francisco-ca",
     city: "San Francisco",
     state: "CA",
     displayName: "San Francisco, CA",
@@ -298,6 +312,7 @@ export const LOCAL_CITY_CONFIGS: Record<string, LocalCityConfig> = {
     ],
   },
   "Philadelphia, PA": {
+    cityKey: "philadelphia-pa",
     city: "Philadelphia",
     state: "PA",
     displayName: "Philadelphia, PA",
@@ -332,6 +347,20 @@ export function getLocalCityConfigByName(cityName: string | null | undefined) {
   );
 }
 
+export function getLocalCityConfigByKey(cityKey: string | null | undefined) {
+  const normalized = normalizeLocalText(cityKey);
+
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    Object.values(LOCAL_CITY_CONFIGS).find(
+      (config) => normalizeLocalText(config.cityKey) === normalized
+    ) ?? null
+  );
+}
+
 export function getLocalCityConfigByText(value: string | null | undefined) {
   const normalized = normalizeLocalText(value);
 
@@ -341,7 +370,7 @@ export function getLocalCityConfigByText(value: string | null | undefined) {
 
   return (
     Object.values(LOCAL_CITY_CONFIGS).find((config) => {
-      const haystacks = [config.displayName, config.city, config.state, ...config.aliases].map(
+      const haystacks = [config.cityKey, config.displayName, config.city, config.state, ...config.aliases].map(
         normalizeLocalText
       );
 

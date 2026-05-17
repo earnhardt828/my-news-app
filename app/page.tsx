@@ -35,6 +35,7 @@ import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
 import {
   buildLocalNewsQueryText,
   DEFAULT_LOCAL_CITY,
+  getLocalCityConfigByKey,
   getLocalCityConfigByName,
   getLocalCityConfigByText,
   LOCAL_CITY_CONFIGS,
@@ -296,10 +297,11 @@ const LOCAL_METRO_STATE_FALLBACKS: Array<{
 
 function getFeedCacheKey(
   mode: "trending" | "latest" | "polls" | "local" | "sports",
-  localLabel: string
+  localLabel: string,
+  localCityKey?: string | null
 ) {
   return mode === "local"
-    ? `graffiti:last-feed:${mode}:${normalizeLookupValue(localLabel) || "regional"}`
+    ? `graffiti:last-feed:${mode}:${normalizeLookupValue(localCityKey || localLabel) || "regional"}`
     : `graffiti:last-feed:${mode}`;
 }
 
@@ -837,6 +839,7 @@ export default function Home() {
   const [categories, setCategories] = useState<string[]>([]);
   const [savedLocalCity, setSavedLocalCity] = useState<string | null>(null);
   const [savedLocalState, setSavedLocalState] = useState<string | null>(null);
+  const [selectedLocalCityKey, setSelectedLocalCityKey] = useState<string | null>(null);
   const [preferredSources, setPreferredSources] = useState<string[]>([]);
   const [showLessSources, setShowLessSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -959,14 +962,19 @@ export default function Home() {
 
   const categoryReloadKey = "__ignore-categories__";
   const isMyFeedWithoutCategories = false;
-  const selectedLocalCity = useMemo(
-    () =>
-      resolveSupportedMetroCity({
-        label: localLocationLabel,
-        city: localQueryDraft,
-      }),
-    [localLocationLabel, localQueryDraft]
-  );
+  const selectedLocalConfig = useMemo(() => {
+    if (selectedLocalCityKey) {
+      return getLocalCityConfigByKey(selectedLocalCityKey);
+    }
+
+    const resolvedCity = resolveSupportedMetroCity({
+      label: localLocationLabel,
+      city: localQueryDraft,
+    });
+
+    return resolvedCity ? getLocalCityConfigByName(resolvedCity) : null;
+  }, [localLocationLabel, localQueryDraft, selectedLocalCityKey]);
+  const selectedLocalCity = selectedLocalConfig?.displayName ?? null;
   const hasSelectedLocalCity = Boolean(selectedLocalCity);
   const localEmptyStateHeadline = useMemo(() => {
     if (!selectedLocalCity) {
@@ -982,7 +990,7 @@ export default function Home() {
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
     const requestId = activeFeedRequestIdRef.current + 1;
-    const feedCacheKey = getFeedCacheKey(feedMode, localLocationLabel);
+    const feedCacheKey = getFeedCacheKey(feedMode, localLocationLabel, selectedLocalCityKey);
     const cachedFeed = replace ? readCachedFeedPayload(feedCacheKey) : null;
     activeFeedRequestIdRef.current = requestId;
 
@@ -1142,19 +1150,31 @@ export default function Home() {
           return;
         }
 
-        const activeLocalCity = selectedLocalCity ?? resolveSupportedMetroCity({
-          label: localLocationLabel,
-        });
-        const cityConfig = activeLocalCity ? getLocalCityConfigByName(activeLocalCity) : null;
-        const localSearchQuery =
-          (cityConfig ? buildLocalNewsQueryText(cityConfig) : null) ??
-          buildLocalNewsQuery({ label: activeLocalCity ?? localLocationLabel });
+        const cityConfig =
+          (selectedLocalCityKey ? getLocalCityConfigByKey(selectedLocalCityKey) : null) ??
+          (selectedLocalCity ? getLocalCityConfigByName(selectedLocalCity) : null);
+
+        if (!cityConfig) {
+          setArticles([]);
+          setFeedPage(1);
+          setHasMoreArticles(false);
+          setIsLocalAreaLoading(false);
+          setLocalSearchStatus("No local stories found for this city yet.");
+          return;
+        }
+
+        const localSearchQuery = buildLocalNewsQueryText(cityConfig);
         const params = new URLSearchParams({
           mode: "local",
+          cityKey: cityConfig.cityKey,
+          city: cityConfig.city,
+          state: cityConfig.state,
           location: localSearchQuery,
           page: String(pageToLoad),
           pageSize: String(FEED_PAGE_SIZE),
         });
+        console.log("LOCAL FETCH CITY KEY", cityConfig.cityKey);
+        console.log("LOCAL API PARAMS", Object.fromEntries(params.entries()));
         newsPath = `/api/news?${params.toString()}`;
       } else {
         const params = new URLSearchParams({
@@ -1479,7 +1499,7 @@ export default function Home() {
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
     }
-  }, [feedMode, localEmptyStateHeadline, localLocationLabel, localQuery, selectedLocalCity, sortMode]);
+  }, [feedMode, localEmptyStateHeadline, localLocationLabel, localQuery, selectedLocalCity, selectedLocalCityKey, sortMode]);
 
   useEffect(() => {
     if (isMyFeedWithoutCategories) {
@@ -1962,6 +1982,7 @@ export default function Home() {
 
     setLocalQueryDraft(city);
     setLocalLocationLabel(nextDisplayName);
+    setSelectedLocalCityKey(nextConfig?.cityKey ?? null);
     setLocalQuery(
       nextConfig ? buildLocalNewsQueryText(nextConfig) : buildLocalNewsQuery({ label: city })
     );
@@ -3159,9 +3180,17 @@ export default function Home() {
   useEffect(() => {
     if (sortMode === "local") {
       console.log("LOCAL SELECTED CITY", selectedLocalCity ?? localLocationLabel);
+      console.log(
+        "LOCAL RESULTS CITY",
+        selectedLocalCityKey,
+        visibleArticles.map((article) => ({
+          title: article.title,
+          source: article.source,
+        }))
+      );
       console.log("LOCAL ARTICLES COUNT", visibleArticles.length);
     }
-  }, [localLocationLabel, selectedLocalCity, sortMode, visibleArticles.length]);
+  }, [localLocationLabel, selectedLocalCity, selectedLocalCityKey, sortMode, visibleArticles]);
 
   const localCitySuggestions = useMemo(() => {
     if (sortMode !== "local") {

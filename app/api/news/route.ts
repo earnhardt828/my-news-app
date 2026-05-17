@@ -1,5 +1,6 @@
 import { looksLikeLowQualityImageUrl } from "../../../lib/article-images";
 import {
+  getLocalCityConfigByKey,
   LOCAL_CITY_CONFIGS as SHARED_LOCAL_CITY_CONFIGS,
 } from "../../../lib/local-news";
 
@@ -60,6 +61,9 @@ type ProviderFetchParams = {
   mode: NewsMode;
   query: string;
   location: string;
+  cityKey?: string;
+  city?: string;
+  state?: string;
   categories: string[];
   page: number;
   pageSize: number;
@@ -610,9 +614,13 @@ const LOCAL_CITY_CONFIGS = Object.fromEntries(
   ])
 );
 
-function isQualifiedLocalArticle(article: NormalizedArticle, location: string) {
+function isQualifiedLocalArticle(
+  article: NormalizedArticle,
+  location: string,
+  cityKey?: string
+) {
   const normalizedLocation = location.trim().toLowerCase();
-  const localCityConfig = getLocalCityConfig(normalizedLocation);
+  const localCityConfig = getLocalCityConfig(cityKey, normalizedLocation);
 
   if (!localCityConfig) {
     return false;
@@ -625,7 +633,7 @@ function isQualifiedLocalArticle(article: NormalizedArticle, location: string) {
   } ${article.category}`.toLowerCase();
   const hasLocalSourceMatch = config.sources.some((source) => sourceName.includes(source));
   const hasLocalSignalMatch = config.signals.some((signal) => articleText.includes(signal));
-  const localScore = getLocalMatchScore(article, location);
+  const localScore = getLocalMatchScore(article, location, cityKey);
 
   if (hasLocalSourceMatch) {
     return true;
@@ -916,21 +924,16 @@ function getMatchScore(article: NormalizedArticle, query: string) {
   return score;
 }
 
-function isCharlotteQuery(query: string) {
-  const normalized = query.trim().toLowerCase();
-  return /(charlotte|mecklenburg|queen city|matthews|huntersville|gastonia|concord|rock hill|fort mill)/.test(
-    normalized
-  );
-}
+function getLocalCityConfig(cityKey: string | undefined, query: string) {
+  const fromKey = getLocalCityConfigByKey(cityKey);
 
-function isChicagoQuery(query: string) {
-  const normalized = query.trim().toLowerCase();
-  return /(chicago|cook county|evanston|oak park|naperville|aurora|joliet|schaumburg)/.test(
-    normalized
-  );
-}
+  if (fromKey) {
+    return (
+      Object.entries(LOCAL_CITY_CONFIGS).find(([displayName]) => displayName === fromKey.displayName) ??
+      null
+    );
+  }
 
-function getLocalCityConfig(query: string) {
   const normalized = query.trim().toLowerCase();
 
   return (
@@ -940,7 +943,7 @@ function getLocalCityConfig(query: string) {
   );
 }
 
-function getLocalMatchScore(article: NormalizedArticle, location: string) {
+function getLocalMatchScore(article: NormalizedArticle, location: string, cityKey?: string) {
   const normalizedLocation = location.trim().toLowerCase();
   const articleText = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
     article.source
@@ -957,7 +960,7 @@ function getLocalMatchScore(article: NormalizedArticle, location: string) {
     );
 
   let score = 0;
-  const localCityConfig = getLocalCityConfig(normalizedLocation);
+  const localCityConfig = getLocalCityConfig(cityKey, normalizedLocation);
 
   if (localCityConfig) {
     const [, config] = localCityConfig;
@@ -977,18 +980,6 @@ function getLocalMatchScore(article: NormalizedArticle, location: string) {
       !config.signals.some((signal) => articleText.includes(signal))
     ) {
       score -= 55;
-    }
-  }
-
-  if (isCharlotteQuery(normalizedLocation)) {
-    if (/charlotte|mecklenburg|queen city|matthews|huntersville|gastonia|concord|rock hill|fort mill/.test(articleText)) {
-      score += 20;
-    }
-  }
-
-  if (isChicagoQuery(normalizedLocation)) {
-    if (/chicago|illinois|cook county|evanston|oak park|naperville|aurora|joliet|schaumburg/.test(articleText)) {
-      score += 20;
     }
   }
 
@@ -1428,7 +1419,7 @@ async function enrichTrendingArticleImages(articles: NormalizedArticle[]) {
 
 function sortArticlesForMode(
   articles: NormalizedArticle[],
-  params: Pick<ProviderFetchParams, "mode" | "query" | "location">
+  params: Pick<ProviderFetchParams, "mode" | "query" | "location" | "cityKey">
 ) {
   if (params.mode === "search" || params.mode === "compare") {
     return [...articles].sort((left, right) => {
@@ -1447,8 +1438,8 @@ function sortArticlesForMode(
   if (params.mode === "local") {
     return [...articles].sort((left, right) => {
       const scoreDiff =
-        getLocalMatchScore(right, params.location || params.query) -
-        getLocalMatchScore(left, params.location || params.query);
+        getLocalMatchScore(right, params.location || params.query, params.cityKey) -
+        getLocalMatchScore(left, params.location || params.query, params.cityKey);
 
       if (scoreDiff !== 0) {
         return scoreDiff;
@@ -1932,13 +1923,13 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
 
   const feedsToFetch =
     params.mode === "local" &&
-    getLocalCityConfig(params.location || params.query)
+    getLocalCityConfig(params.cityKey, params.location || params.query)
       ? RSS_FEEDS.filter(
           (feed) =>
-            (getLocalCityConfig(params.location || params.query)?.[1].sources ?? []).some(
+            (getLocalCityConfig(params.cityKey, params.location || params.query)?.[1].sources ?? []).some(
               (source) => feed.source.toLowerCase().includes(source)
             ) ||
-            (getLocalCityConfig(params.location || params.query)?.[1].signals ?? []).some(
+            (getLocalCityConfig(params.cityKey, params.location || params.query)?.[1].signals ?? []).some(
               (signal) =>
                 feed.source.toLowerCase().includes(signal) ||
                 feed.tags.some((tag) => tag.toLowerCase().includes(signal))
@@ -1997,7 +1988,9 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
 
   if (params.mode === "local") {
     const locationQuery = params.location || params.query;
-    articles = articles.filter((article) => isQualifiedLocalArticle(article, locationQuery));
+    articles = articles.filter((article) =>
+      isQualifiedLocalArticle(article, locationQuery, params.cityKey)
+    );
   }
 
   articles.sort((left, right) => {
@@ -2016,8 +2009,21 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
 }
 
 async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  if (params.mode === "local" && !getLocalCityConfig(params.cityKey, params.location || params.query)) {
+    return {
+      articles: [],
+      nextPage: null,
+      hasMore: false,
+      page: params.page,
+      pageSize: params.pageSize,
+    };
+  }
+
   const cacheKey = JSON.stringify({
     mode: params.mode,
+    cityKey: params.cityKey,
+    city: params.city,
+    state: params.state,
     query: params.query,
     location: params.location,
     categories: params.categories,
@@ -2097,7 +2103,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const locallyFiltered =
     params.mode === "local"
       ? sorted.filter((article) =>
-          isQualifiedLocalArticle(article, params.location || params.query)
+          isQualifiedLocalArticle(article, params.location || params.query, params.cityKey)
         )
       : sorted;
   const realArticles = locallyFiltered.filter((article) => !isFallbackArticle(article));
@@ -2214,6 +2220,9 @@ export async function GET(request: Request) {
   const mode = parseMode(searchParams.get("mode"));
   const query = searchParams.get("query")?.trim() ?? searchParams.get("q")?.trim() ?? "";
   const location = searchParams.get("location")?.trim() ?? "";
+  const cityKey = searchParams.get("cityKey")?.trim() ?? "";
+  const city = searchParams.get("city")?.trim() ?? "";
+  const state = searchParams.get("state")?.trim() ?? "";
   const categories = parseCategories(searchParams.get("category"));
   const page = Math.max(1, Number(searchParams.get("page") ?? DEFAULT_PAGE) || DEFAULT_PAGE);
   const maxAllowedPageSize = mode === "compare" ? MAX_COMPARE_PAGE_SIZE : MAX_PAGE_SIZE;
@@ -2239,6 +2248,9 @@ export async function GET(request: Request) {
     mode,
     query,
     location,
+    cityKey,
+    city,
+    state,
     categories,
     page,
     pageSize,
