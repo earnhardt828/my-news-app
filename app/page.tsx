@@ -51,6 +51,7 @@ import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../l
 const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
 const INITIAL_FEED_TIMEOUT_MS = 5000;
+const DIRECT_ROUTE_TIMEOUT_MS = 10000;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 const SPORTS_UNIFIED_QUERY =
   "sports news | ESPN top headlines | NFL NBA MLB NHL sports news | Sports Illustrated latest | CBS Sports latest";
@@ -1099,7 +1100,11 @@ export default function Home() {
     const replace = options?.replace ?? false;
     const requestId = activeFeedRequestIdRef.current + 1;
     const feedCacheKey = getFeedCacheKey(feedMode);
-    const cachedFeed = replace ? readCachedFeedPayload(feedCacheKey) : null;
+    const bypassDirectFeedCache = feedMode === "local" || feedMode === "weather";
+    const activeFeedTimeoutMs = bypassDirectFeedCache
+      ? DIRECT_ROUTE_TIMEOUT_MS
+      : INITIAL_FEED_TIMEOUT_MS;
+    const cachedFeed = replace && !bypassDirectFeedCache ? readCachedFeedPayload(feedCacheKey) : null;
     activeFeedRequestIdRef.current = requestId;
 
     const isCurrentRequest = () => activeFeedRequestIdRef.current === requestId;
@@ -1129,6 +1134,7 @@ export default function Home() {
         if (feedMode === "local") {
           setIsLocalAreaLoading(true);
           setFeedLoadError(null);
+          setArticles([]);
         } else {
           setIsLoading(true);
           setFeedLoadError(null);
@@ -1151,7 +1157,7 @@ export default function Home() {
             reason: "timeout",
             feedMode,
             pageToLoad,
-            timeoutMs: INITIAL_FEED_TIMEOUT_MS,
+            timeoutMs: activeFeedTimeoutMs,
           });
           if (cachedFeed) {
             setFeedLoadError("Showing the last loaded stories while we retry.");
@@ -1166,9 +1172,10 @@ export default function Home() {
           }
           setIsInitialFeedLoading(false);
           isFetchingNextPageRef.current = false;
+          setIsLocalAreaLoading(false);
           setIsLoading(false);
           setIsLoadingMoreArticles(false);
-        }, INITIAL_FEED_TIMEOUT_MS);
+        }, activeFeedTimeoutMs);
       }
     } else {
       isFetchingNextPageRef.current = true;
@@ -1288,10 +1295,11 @@ export default function Home() {
         if (replace && typeof window !== "undefined" && articleFetchController) {
           articleFetchTimeoutId = window.setTimeout(() => {
             articleFetchController.abort();
-          }, INITIAL_FEED_TIMEOUT_MS);
+          }, activeFeedTimeoutMs);
         }
 
         const newsRes = await apiFetch(newsPath, {
+          cache: bypassDirectFeedCache ? "no-store" : undefined,
           signal: articleFetchController?.signal,
         });
 
@@ -1523,7 +1531,7 @@ export default function Home() {
               : mergeArticlesByIdentity(prev, mergedArticles);
         console.log("ARTICLES USED", nextArticles);
         console.log("TRENDING FINAL COUNT", nextArticles.length);
-        if (nextArticles.length > 0) {
+        if (nextArticles.length > 0 && !bypassDirectFeedCache) {
           writeCachedFeedPayload(feedCacheKey, {
             articles: nextArticles,
             page: pageToLoad,
@@ -1957,12 +1965,23 @@ export default function Home() {
 
   useEffect(() => {
     let isCancelled = false;
+    const weatherFetchController =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutId =
+      typeof window !== "undefined" && weatherFetchController
+        ? window.setTimeout(() => {
+            weatherFetchController.abort();
+          }, DIRECT_ROUTE_TIMEOUT_MS)
+        : null;
 
     async function loadWeatherNews() {
       setIsWeatherNewsLoading(true);
 
       try {
-        const response = await apiFetch("/api/weather-news");
+        const response = await apiFetch("/api/weather-news", {
+          cache: "no-store",
+          signal: weatherFetchController?.signal,
+        });
 
         if (!response.ok) {
           throw new Error(`Weather news request failed (${response.status})`);
@@ -1992,6 +2011,10 @@ export default function Home() {
 
     return () => {
       isCancelled = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      weatherFetchController?.abort();
     };
   }, [selectedLocalCity]);
 
@@ -4882,7 +4905,7 @@ export default function Home() {
             <div className="muted local-inline-placeholder">Updating stories...</div>
           ) : navigableTopLocalStories.length === 0 ? (
             <div className="empty-state compact-empty-state">
-              <strong>No local stories found for Charlotte yet.</strong>
+              <strong>No Charlotte stories found yet.</strong>
             </div>
           ) : (
             <div className="stack home-section-list">

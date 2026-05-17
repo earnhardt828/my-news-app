@@ -2,19 +2,21 @@ import { NextResponse } from "next/server";
 import {
   fetchDirectArticlePool,
   type DirectFeedArticle,
+  type RssFeedConfig,
 } from "../../../lib/direct-news-routes";
 
 const WEATHER_QUERIES = [
-  "weather news",
   "severe weather",
   "hurricane news",
   "tornado news",
   "flooding news",
   "winter storm news",
-  "wildfire weather",
+  "wildfire weather news",
   "Fox Weather latest",
   "AccuWeather latest",
   "The Weather Channel latest",
+  "NOAA weather alerts",
+  "National Weather Service news",
 ];
 
 const WEATHER_SIGNALS = [
@@ -40,12 +42,30 @@ function normalize(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
+function createGoogleNewsSearchFeed(query: string): RssFeedConfig {
+  return {
+    url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`,
+    source: query,
+    category: "Weather",
+  };
+}
+
 export async function GET() {
   try {
-    const rawArticles = await fetchDirectArticlePool({
+    console.log("WEATHER ROUTE HIT");
+
+    const primaryArticles = await fetchDirectArticlePool({
       queries: WEATHER_QUERIES,
-      pageSize: 8,
+      pageSize: 12,
     });
+    const rawArticles =
+      primaryArticles.length > 0
+        ? primaryArticles
+        : await fetchDirectArticlePool({
+            queries: WEATHER_QUERIES,
+            rssFeeds: WEATHER_QUERIES.map((query) => createGoogleNewsSearchFeed(query)),
+            pageSize: 20,
+          });
 
     console.log("WEATHER RAW COUNT", rawArticles.length);
 

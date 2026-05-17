@@ -76,17 +76,37 @@ const CHARLOTTE_RSS_FEEDS: RssFeedConfig[] = [
   },
 ];
 
+function createGoogleNewsSearchFeed(query: string): RssFeedConfig {
+  return {
+    url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`,
+    source: query,
+    category: "Local News",
+  };
+}
+
 function normalize(value: string | null | undefined) {
   return ` ${String(value ?? "").trim().toLowerCase()} `;
 }
 
 export async function GET() {
   try {
-    const rawArticles = await fetchDirectArticlePool({
+    console.log("CHARLOTTE ROUTE HIT");
+
+    const primaryArticles = await fetchDirectArticlePool({
       queries: CHARLOTTE_QUERIES,
-      rssFeeds: CHARLOTTE_RSS_FEEDS,
-      pageSize: 8,
+      pageSize: 12,
     });
+    const rawArticles =
+      primaryArticles.length > 0
+        ? primaryArticles
+        : await fetchDirectArticlePool({
+            queries: CHARLOTTE_QUERIES,
+            rssFeeds: [
+              ...CHARLOTTE_RSS_FEEDS,
+              ...CHARLOTTE_QUERIES.map((query) => createGoogleNewsSearchFeed(query)),
+            ],
+            pageSize: 20,
+          });
 
     console.log("CHARLOTTE RAW COUNT", rawArticles.length);
 
