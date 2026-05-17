@@ -170,6 +170,9 @@ const SPORTS_QUERY_TERMS = [
   "soccer news",
 ] as const;
 
+const NATIONAL_SOURCE_PATTERN =
+  /(bbc news|reuters|associated press|ap news|npr|bloomberg|the guardian|al jazeera|newsmax)/i;
+
 const NEWS_API_KEY = process.env.NEWS_API_KEY ?? process.env.NEXT_PUBLIC_NEWS_API_KEY ?? "";
 const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
@@ -660,6 +663,33 @@ function isQualifiedLocalArticle(
   }
 
   if (hasLocalSignalMatch && localScore >= 45) {
+    return true;
+  }
+
+  return false;
+}
+
+function isRelaxedLocalArticle(
+  article: NormalizedArticle,
+  cityConfig: (typeof SHARED_LOCAL_CITY_CONFIGS)[keyof typeof SHARED_LOCAL_CITY_CONFIGS]
+) {
+  const sourceName = article.source.trim().toLowerCase();
+  const articleText = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
+    article.source
+  } ${article.category}`.toLowerCase();
+  const cityName = cityConfig.city.toLowerCase();
+  const stateName = cityConfig.state.toLowerCase();
+  const localSignals = [cityName, stateName, ...cityConfig.aliases.map((alias) => alias.toLowerCase())];
+  const hasLocalSourceMatch = cityConfig.sourceBoosts.some((source) =>
+    sourceName.includes(source.toLowerCase())
+  );
+  const hasLocalSignalMatch = localSignals.some((signal) => articleText.includes(signal));
+
+  if (hasLocalSourceMatch) {
+    return true;
+  }
+
+  if (hasLocalSignalMatch && !NATIONAL_SOURCE_PATTERN.test(sourceName)) {
     return true;
   }
 
@@ -2106,18 +2136,29 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
     cityQuery: cityQueryArticles.length,
   });
 
-  const merged = dedupeArticles([...rssArticles, ...sourceQueryArticles, ...cityQueryArticles]);
-  const filtered = sortArticlesForMode(merged, params).filter((article) =>
+  const rawArticles = dedupeArticles([...rssArticles, ...sourceQueryArticles, ...cityQueryArticles]);
+  console.log("LOCAL RAW COUNT", rawArticles.length);
+  console.log("LOCAL CITY", localCity.cityKey, localCity.city, localCity.state);
+  console.log("LOCAL SOURCES USED", localCity.sourceBoosts);
+
+  const strictFiltered = sortArticlesForMode(rawArticles, params).filter((article) =>
     isQualifiedLocalArticle(article, params.location || params.query, params.cityKey)
   );
-  const sliced = filtered.slice(0, params.pageSize);
+  const filteredArticles =
+    strictFiltered.length >= 5
+      ? strictFiltered
+      : sortArticlesForMode(rawArticles, params).filter((article) =>
+          isRelaxedLocalArticle(article, localCity)
+        );
+  console.log("LOCAL FILTERED COUNT", filteredArticles.length);
+  const sliced = filteredArticles.slice(0, params.pageSize);
 
   console.log("LOCAL FINAL COUNT", sliced.length);
 
   return {
     articles: sliced,
-    nextPage: filtered.length > params.pageSize ? params.page + 1 : null,
-    hasMore: filtered.length > params.pageSize,
+    nextPage: filteredArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: filteredArticles.length > params.pageSize,
     page: params.page,
     pageSize: params.pageSize,
   };

@@ -3337,6 +3337,33 @@ export default function Home() {
     [videos]
   );
 
+  const sportsQuickWatchVideos = useMemo(
+    () =>
+      selectSourceBalancedVideos(
+        videos.filter((video) => {
+          if (video.fallback) {
+            return false;
+          }
+
+          const haystack = `${video.title} ${video.creator} ${video.category}`.toLowerCase();
+          const matchesSports =
+            video.category === "Sports" ||
+            /(espn|sportscenter|nba|nfl|mlb|nhl|soccer|golf|nascar|cbs sports|nbc sports|fox sports|highlight)/.test(
+              haystack
+            );
+
+          return matchesSports && video.orientation === "vertical";
+        }),
+        8
+      ),
+    [videos]
+  );
+
+  const sportsInlineVideos = useMemo(
+    () => sportsQuickWatchVideos.slice(3, 6),
+    [sportsQuickWatchVideos]
+  );
+
   const topTenTrendingArticles = useMemo(
     () => balancedTrendingArticles.slice(0, 10),
     [balancedTrendingArticles]
@@ -4137,7 +4164,76 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {sportsTabArticles.map((article) => (
+              {sportsTabArticles.slice(0, 4).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+
+              {sportsQuickWatchVideos.length > 0 ? (
+                <section className="home-section-block home-section-plain quick-watch-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Quick Watch</strong>
+                    </div>
+                  </div>
+                  <div className="quick-watch-scroll" role="list" aria-label="Sports quick watch videos">
+                    {sportsQuickWatchVideos.map((video) => (
+                      <div key={video.id} className="quick-watch-item" role="listitem">
+                        <VideoFeedCard
+                          video={video}
+                          isAutoplaying={
+                            autoplayTrendingVideoKeys.includes(`sports-quickwatch:${video.id}`) &&
+                            !video.fallback
+                          }
+                          onToggleLike={handleToggleVideoLike}
+                          onToggleSave={handleToggleVideoSave}
+                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                          onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                          frameRef={(node) => {
+                            trendingVideoFrameRefs.current[`sports-quickwatch:${video.id}`] = node;
+                          }}
+                          autoplayKey={`sports-quickwatch:${video.id}`}
+                          previewDurationMs={4000}
+                          label="Quick Watch"
+                          className="video-card-inline quick-watch-video-card"
+                          variant="article"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {sportsInlineVideos.length > 0 ? (
+                <section className="stack home-section-list">
+                  {sportsInlineVideos.map((video) => (
+                    <div key={`sports-inline-${video.id}`} className="section-card">
+                      <VideoFeedCard
+                        video={video}
+                        isAutoplaying={
+                          autoplayTrendingVideoKeys.includes(`sports-inline:${video.id}`) &&
+                          !video.fallback
+                        }
+                        onToggleLike={handleToggleVideoLike}
+                        onToggleSave={handleToggleVideoSave}
+                        onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                        frameRef={(node) => {
+                          trendingVideoFrameRefs.current[`sports-inline:${video.id}`] = node;
+                        }}
+                        autoplayKey={`sports-inline:${video.id}`}
+                        previewDurationMs={4000}
+                        label="Sports Video"
+                        className="video-card-inline"
+                        variant="article"
+                      />
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+
+              {sportsTabArticles.slice(4).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
