@@ -343,9 +343,26 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["houston", "texas", "harris county", "katy", "sugar land", "the heights"],
   },
   "Miami, FL": {
-    query: "Miami local news Miami Herald WSVN NBC 6 South Florida CBS Miami Local 10",
-    sources: ["Miami Herald", "WSVN", "NBC 6 South Florida", "CBS Miami", "Local 10"],
-    signals: ["miami", "south florida", "dade", "miami-dade", "fort lauderdale"],
+    query:
+      "Miami local news Miami Herald WSVN NBC 6 South Florida CBS Miami Local 10 WLRN Miami New Times",
+    sources: [
+      "Miami Herald",
+      "WSVN",
+      "NBC 6 South Florida",
+      "CBS Miami",
+      "Local 10",
+      "WLRN",
+      "Miami New Times",
+    ],
+    signals: [
+      "miami",
+      "south florida",
+      "dade",
+      "miami-dade",
+      "fort lauderdale",
+      "wynwood",
+      "brickell",
+    ],
   },
   "Charlotte, NC": {
     query:
@@ -607,58 +624,6 @@ function resolveSupportedMetroCity(options?: {
   }
 
   return null;
-}
-
-function getDistanceBetweenCoords(
-  left: { latitude: number; longitude: number },
-  right: { latitude: number; longitude: number }
-) {
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const earthRadiusMiles = 3958.8;
-  const latitudeDelta = toRadians(right.latitude - left.latitude);
-  const longitudeDelta = toRadians(right.longitude - left.longitude);
-  const startLatitude = toRadians(left.latitude);
-  const endLatitude = toRadians(right.latitude);
-
-  const haversine =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(startLatitude) *
-      Math.cos(endLatitude) *
-      Math.sin(longitudeDelta / 2) ** 2;
-
-  return 2 * earthRadiusMiles * Math.asin(Math.sqrt(haversine));
-}
-
-function getNearestSupportedMetroByCoords(
-  latitude: number,
-  longitude: number
-): SupportedLocalCity {
-  return (Object.entries(LOCAL_CITY_COORDINATES) as Array<
-    [SupportedLocalCity, { latitude: number; longitude: number }]
-  >).reduce<{
-    city: SupportedLocalCity;
-    distance: number;
-  }>(
-    (closest, [city, coords]) => {
-      const distance = getDistanceBetweenCoords(
-        { latitude, longitude },
-        coords
-      );
-
-      if (distance < closest.distance) {
-        return {
-          city,
-          distance,
-        };
-      }
-
-      return closest;
-    },
-    {
-      city: "Charlotte, NC",
-      distance: Number.POSITIVE_INFINITY,
-    }
-  ).city;
 }
 
 function getWeatherLabel(weatherCode: number | null | undefined) {
@@ -1055,8 +1020,11 @@ export default function Home() {
     "trending"
   );
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [savedLocalCity, setSavedLocalCity] = useState<string | null>(null);
+  const [savedLocalState, setSavedLocalState] = useState<string | null>(null);
   const [preferredSources, setPreferredSources] = useState<string[]>([]);
   const [showLessSources, setShowLessSources] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -1105,7 +1073,7 @@ export default function Home() {
   const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
   const [localQuery, setLocalQuery] = useState("");
   const [localQueryDraft, setLocalQueryDraft] = useState("");
-  const [localLocationLabel, setLocalLocationLabel] = useState("Regional news");
+  const [localLocationLabel, setLocalLocationLabel] = useState("");
   const [isLocalAutocompleteOpen, setIsLocalAutocompleteOpen] = useState(false);
   const [localSearchStatus, setLocalSearchStatus] = useState<string | null>(null);
   const [isLocalAreaLoading, setIsLocalAreaLoading] = useState(false);
@@ -1169,7 +1137,11 @@ export default function Home() {
       }),
     [localLocationLabel, localQueryDraft]
   );
+  const hasSelectedLocalCity = Boolean(selectedLocalCity);
   const localEmptyStateHeadline = useMemo(() => {
+    if (!selectedLocalCity) {
+      return "Choose your city to see local stories.";
+    }
     const cityLabel = selectedLocalCity ?? localLocationLabel;
     const cityName = cleanDisplayText(cityLabel).split(",")[0]?.trim();
     return cityName
@@ -1277,6 +1249,7 @@ export default function Home() {
       }
 
       setUserId(userData.user?.id ?? null);
+      setUserEmail(userData.user?.email ?? null);
 
       if (userData.user?.id) {
         let profile:
@@ -1312,11 +1285,16 @@ export default function Home() {
         setCategories((prev) =>
           arraysShallowEqual(prev, nextCategories) ? prev : nextCategories
         );
+        setSavedLocalCity(profile?.local_city ?? null);
+        setSavedLocalState(profile?.local_state ?? null);
         setPreferredSources(profile?.preferred_sources ?? []);
         setShowLessSources(profile?.show_less_sources ?? []);
       } else {
+        setUserEmail(null);
         setUsername(null);
         setCategories([]);
+        setSavedLocalCity(null);
+        setSavedLocalState(null);
         setPreferredSources([]);
         setShowLessSources([]);
       }
@@ -1326,6 +1304,9 @@ export default function Home() {
 
       if (feedMode === "local") {
         if (!selectedLocalCity && !localQuery.trim()) {
+          setArticles([]);
+          setFeedPage(1);
+          setHasMoreArticles(false);
           setIsLocalAreaLoading(false);
           return;
         }
@@ -2150,6 +2131,7 @@ export default function Home() {
     setLocalQuery(buildLocalNewsQuery({ label: city }));
     setLocalSearchStatus(null);
     setFeedLoadError(null);
+    setWeatherNewsArticles([]);
     if (sortMode === "local") {
       setArticles([]);
       setFeedPage(1);
@@ -2259,35 +2241,70 @@ export default function Home() {
       return;
     }
 
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      const fallbackTimeoutId = window.setTimeout(() => {
-        setLocalSearchStatus("Location unavailable. Choose a nearby city.");
+    const savedCityLabel =
+      savedLocalCity && savedLocalState ? `${savedLocalCity}, ${savedLocalState}` : null;
+
+    if (savedCityLabel) {
+      const timeoutId = window.setTimeout(() => {
+        applyLocalCitySelection(savedCityLabel);
       }, 0);
 
       return () => {
-        window.clearTimeout(fallbackTimeoutId);
+        window.clearTimeout(timeoutId);
       };
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const nearestMetro = getNearestSupportedMetroByCoords(
-          position.coords.latitude,
-          position.coords.longitude
-        );
-        applyLocalCitySelection(nearestMetro);
-        setLocalSearchStatus(`Showing news for ${nearestMetro}.`);
-      },
-      () => {
-        setLocalSearchStatus("Location denied. Choose a nearby city.");
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 5000,
-        maximumAge: 600000,
+    const timeoutId = window.setTimeout(() => {
+      setIsLocalAreaLoading(false);
+      setLocalSearchStatus("Choose your city to see local stories.");
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    applyLocalCitySelection,
+    localQuery,
+    savedLocalCity,
+    savedLocalState,
+    selectedLocalCity,
+    sortMode,
+  ]);
+
+  useEffect(() => {
+    if (!userId || !userEmail || !selectedLocalCity) {
+      return;
+    }
+
+    const [nextCity, nextState] = selectedLocalCity.split(",").map((value) => value.trim());
+    const currentCity = savedLocalCity?.trim() ?? "";
+    const currentState = savedLocalState?.trim() ?? "";
+
+    if (!nextCity || !nextState || (nextCity === currentCity && nextState === currentState)) {
+      return;
+    }
+
+    void (async () => {
+      const result = await saveProfilePatch(
+        {
+          id: userId,
+          email: userEmail,
+        },
+        {
+          local_city: nextCity,
+          local_state: nextState,
+        }
+      );
+
+      if (result.error) {
+        console.error("LOCAL CITY SAVE ERROR", result.error);
+        return;
       }
-    );
-  }, [applyLocalCitySelection, localQuery, selectedLocalCity, sortMode]);
+
+      setSavedLocalCity(nextCity);
+      setSavedLocalState(nextState);
+    })();
+  }, [savedLocalCity, savedLocalState, selectedLocalCity, userEmail, userId]);
 
   useEffect(() => {
     const pendingReturnState = consumePendingArticleReturnState();
@@ -2329,8 +2346,11 @@ export default function Home() {
     };
 
     if (!trimmedDraft) {
-      applyLocalCitySelection("Charlotte, NC");
-      setLocalSearchStatus("Choose a nearby city.");
+      setArticles([]);
+      setLocalLocationLabel("");
+      setLocalQuery("");
+      setLocalSearchStatus("Choose your city to see local stories.");
+      setIsLocalAreaLoading(false);
       return;
     }
 
@@ -2385,7 +2405,7 @@ export default function Home() {
     const supportedCity = resolveSupportedCity(trimmedDraft);
 
     if (!supportedCity) {
-      setLocalSearchStatus("Choose a nearby city.");
+      setLocalSearchStatus("Choose a supported nearby city.");
       return;
     }
 
@@ -3277,11 +3297,11 @@ export default function Home() {
       return displayedArticles;
     }
 
-    const locallyRelevantArticles = [...displayedArticles].filter((article) => {
-      if (!localQuery.trim()) {
-        return true;
-      }
+    if (!selectedLocalCity) {
+      return [] as Article[];
+    }
 
+    const locallyRelevantArticles = [...displayedArticles].filter((article) => {
       return scoreLocalArticle(article, localQuery, localLocationLabel) >= 110;
     });
 
@@ -3303,7 +3323,7 @@ export default function Home() {
 
       return rightPublishedAt - leftPublishedAt;
     });
-  }, [displayedArticles, localLocationLabel, localQuery, sortMode]);
+  }, [displayedArticles, localLocationLabel, localQuery, selectedLocalCity, sortMode]);
 
   const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
 
@@ -3520,139 +3540,18 @@ export default function Home() {
     []
   );
 
-  const localCategorySections = useMemo(() => {
-    if (sortMode !== "local") {
-      return [];
-    }
-
-    const categoryDefinitions = [
-      {
-        key: "crime",
-        label: "Crime",
-        matcher: (article: Article) => {
-          const haystack = normalizeLookupValue(
-            `${article.title} ${article.description ?? ""} ${article.category ?? ""}`
-          );
-          return ["crime", "police", "shooting", "arrest", "suspect", "officer", "court"].some(
-            (term) => haystack.includes(term)
-          );
-        },
-      },
-      {
-        key: "development",
-        label: "Development",
-        matcher: (article: Article) => {
-          const haystack = normalizeLookupValue(
-            `${article.title} ${article.description ?? ""} ${article.category ?? ""}`
-          );
-          return [
-            "development",
-            "housing",
-            "construction",
-            "transit",
-            "rezoning",
-            "project",
-            "downtown",
-            "council",
-          ].some((term) => haystack.includes(term));
-        },
-      },
-      {
-        key: "sports",
-        label: "Sports",
-        matcher: (article: Article) => {
-          const category = getCategoryLabel(getSafeCategoryLabel(article.category, article));
-          const haystack = normalizeLookupValue(`${article.title} ${article.description ?? ""}`);
-          return (
-            category === "Sports" ||
-            ["game", "playoff", "season", "team", "match", "coach"].some((term) =>
-              haystack.includes(term)
-            )
-          );
-        },
-      },
-      {
-        key: "weather",
-        label: "Weather",
-        matcher: (article: Article) => {
-          const haystack = normalizeLookupValue(`${article.title} ${article.description ?? ""}`);
-          return ["weather", "forecast", "storm", "rain", "snow", "heat", "wind"].some((term) =>
-            haystack.includes(term)
-          );
-        },
-      },
-      {
-        key: "events",
-        label: "Events",
-        matcher: (article: Article) => {
-          const haystack = normalizeLookupValue(`${article.title} ${article.description ?? ""}`);
-          return ["event", "festival", "concert", "parade", "fair", "weekend", "celebration"].some(
-            (term) => haystack.includes(term)
-          );
-        },
-      },
-    ] as const;
-
-    return categoryDefinitions
-      .map((definition) => ({
-        key: definition.key,
-        label: definition.label,
-        articles: balancedLocalArticles.filter(definition.matcher).slice(0, 3),
-      }))
-      .filter((section) => section.articles.length > 0);
-  }, [balancedLocalArticles, sortMode]);
-
   const topLocalStories = useMemo(() => {
-    if (sortMode !== "local") {
+    if (sortMode !== "local" || !selectedLocalCity) {
       return [];
     }
 
-    if (balancedLocalArticles.length > 0) {
-      return balancedLocalArticles.slice(0, 6);
-    }
-
-    const fallbackStories = localCategorySections.flatMap((section) => section.articles);
-    const seenArticleKeys = new Set<string>();
-
-    return fallbackStories.filter((article) => {
-      const articleKey = String(
-        article.id || article.url || getArticleDeduplicationKey(article)
-      );
-
-      if (seenArticleKeys.has(articleKey)) {
-        return false;
-      }
-
-      seenArticleKeys.add(articleKey);
-      return true;
-    });
-  }, [balancedLocalArticles, localCategorySections, sortMode]);
+    return balancedLocalArticles.slice(0, 6);
+  }, [balancedLocalArticles, selectedLocalCity, sortMode]);
 
   const navigableTopLocalStories = useMemo(
     () => topLocalStories.filter((article) => getArticleRouteId(article) !== null),
     [topLocalStories]
   );
-
-  const localSourceSummaries = useMemo(() => {
-    if (sortMode !== "local") {
-      return [];
-    }
-
-    const sourceCounts = new Map<string, number>();
-
-    balancedLocalArticles.forEach((article) => {
-      const sourceName = getSafeSourceLabel(article.source);
-      sourceCounts.set(sourceName, (sourceCounts.get(sourceName) ?? 0) + 1);
-    });
-
-    return [...sourceCounts.entries()]
-      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-      .slice(0, 6)
-      .map(([sourceName, count]) => ({
-        sourceName,
-        count,
-      }));
-  }, [balancedLocalArticles, sortMode]);
 
   const myFeedRenderItems = useMemo(() => {
     if (sortMode !== "polls") {
@@ -4474,20 +4373,17 @@ export default function Home() {
       <section className="page-shell home-sections-shell local-page-shell">
         {renderHomeTopNavigation("local")}
 
-        <section className="section-card home-section-block local-page-hero">
+        <section className="home-section-block home-section-plain local-page-hero">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Local</strong>
-              <span className="muted">
-                City-specific news only. No generic national fallback stories.
-              </span>
             </div>
           </div>
 
-          <div className="stack local-feed-shell">
+          <div className="section-card stack local-feed-shell local-search-card">
             <div className="local-feed-top-row">
               <span className="local-feed-selected-label">
-                Selected city: {selectedLocalCity ?? localLocationLabel}
+                {selectedLocalCity ? `Selected city: ${selectedLocalCity}` : "Choose your city"}
               </span>
             </div>
             <div className="local-feed-controls">
@@ -4550,6 +4446,7 @@ export default function Home() {
                 Update
               </button>
             </div>
+
             <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
               {LOCAL_CITY_SUGGESTIONS.map((city) => (
                 <button
@@ -4564,30 +4461,55 @@ export default function Home() {
                 >
                   {city}
                 </button>
-              ))}
-            </div>
+                ))}
+              </div>
             {localSearchStatus ? (
               <p className="settings-detail-note">{localSearchStatus}</p>
             ) : null}
           </div>
         </section>
 
+        {hasSelectedLocalCity ? (
+          <section className="section-card home-section-block">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Weather</strong>
+              </div>
+            </div>
+
+            <div className="home-weather-card">
+              <div className="stack" style={{ gap: "4px" }}>
+                <span className="home-weather-city">{selectedLocalCity}</span>
+                <strong className="home-weather-temp">
+                  {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
+                </strong>
+                <span className="muted">
+                  {weatherCard
+                    ? weatherCard.weatherLabel
+                    : isWeatherLoading
+                    ? "Loading forecast..."
+                    : "Forecast unavailable"}
+                </span>
+              </div>
+              <div className="stack home-weather-meta" style={{ gap: "6px" }}>
+                <span className="muted">
+                  {weatherCard?.windMph ? `Wind ${Math.round(weatherCard.windMph)} mph` : "Local outlook"}
+                </span>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Top Local Stories</strong>
-              <span className="muted">
-                The strongest local matches for {selectedLocalCity ?? localLocationLabel}.
-              </span>
             </div>
           </div>
 
-          {isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
-            <div className="muted">Loading local stories...</div>
-          ) : navigableTopLocalStories.length === 0 ? (
+          {!hasSelectedLocalCity ? (
             <div className="empty-state compact-empty-state">
-              <strong>{localEmptyStateHeadline}</strong>
-              <span>Choose a supported nearby city to explore local coverage.</span>
+              <strong>Choose your city to see local stories.</strong>
               <div className="local-feed-chip-row" role="list" aria-label="Suggested cities">
                 {LOCAL_CITY_SUGGESTIONS.slice(0, 6).map((city) => (
                   <button
@@ -4603,6 +4525,13 @@ export default function Home() {
                 ))}
               </div>
             </div>
+          ) : isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
+            <div className="muted">Loading local stories...</div>
+          ) : navigableTopLocalStories.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>{localEmptyStateHeadline}</strong>
+              <span>Try another supported city to explore local coverage.</span>
+            </div>
           ) : (
             <div className="stack home-section-list">
               {navigableTopLocalStories.map((article) => {
@@ -4614,108 +4543,6 @@ export default function Home() {
                   </div>
                 );
               })}
-            </div>
-          )}
-        </section>
-
-        <section className="section-card home-section-block">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Weather</strong>
-              <span className="muted">Current conditions for your selected local city.</span>
-            </div>
-          </div>
-
-          <div className="home-weather-card">
-            <div className="stack" style={{ gap: "4px" }}>
-              <span className="home-weather-city">{selectedLocalCity ?? localLocationLabel}</span>
-              <strong className="home-weather-temp">
-                {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
-              </strong>
-              <span className="muted">
-                {weatherCard
-                  ? weatherCard.weatherLabel
-                  : isWeatherLoading
-                  ? "Loading forecast..."
-                  : "Forecast unavailable"}
-              </span>
-            </div>
-            <div className="stack home-weather-meta" style={{ gap: "6px" }}>
-              <span className="muted">
-                {weatherCard?.windMph ? `Wind ${Math.round(weatherCard.windMph)} mph` : "Local outlook"}
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Local Categories</strong>
-              <span className="muted">
-                Crime, development, sports, weather, and event coverage for this city.
-              </span>
-            </div>
-          </div>
-
-          {localCategorySections.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No local category clusters yet</strong>
-              <span>Try another city or check back for more local reporting.</span>
-            </div>
-          ) : (
-            <div className="local-category-grid">
-              {localCategorySections.map((section) => (
-                <section key={section.key} className="home-section-block home-section-plain local-category-module">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">{section.label}</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list">
-                    {section.articles.map((article) => (
-                      <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                        {renderArticleFeedCard(article)}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="section-card home-section-block">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Local Sources</strong>
-              <span className="muted">Publishers showing up in this city right now.</span>
-            </div>
-          </div>
-
-          {localSourceSummaries.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No local sources yet</strong>
-              <span>Pick another supported city to view local publisher coverage.</span>
-            </div>
-          ) : (
-            <div className="source-rankings-list">
-              {localSourceSummaries.map((source, index) => (
-                <Link
-                  key={source.sourceName}
-                  href={`/source/${slugifySourceName(source.sourceName)}/`}
-                  className="source-rankings-row"
-                >
-                  <span className="source-rankings-rank">#{index + 1}</span>
-                  <div className="source-rankings-brand">
-                    <SourceBadge sourceName={source.sourceName} />
-                    <span className="source-rankings-name">{source.sourceName}</span>
-                  </div>
-                  <div className="source-rankings-metrics">
-                    <strong>{source.count}</strong>
-                  </div>
-                </Link>
-              ))}
             </div>
           )}
         </section>

@@ -538,15 +538,6 @@ input {
 }
 
 .local-page-hero {
-  gap: 12px;
-}
-
-.local-category-grid {
-  display: grid;
-  gap: 12px;
-}
-
-.local-category-module {
   gap: 10px;
 }
 
@@ -2080,6 +2071,11 @@ input {
   gap: 10px;
   padding: 14px 16px;
   border-radius: 20px;
+}
+
+.local-search-card {
+  padding: 14px 14px 12px;
+  gap: 10px;
 }
 
 .local-feed-top-row {

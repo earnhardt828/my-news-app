@@ -67,6 +67,31 @@ type ProfileUserRef = {
   email?: string | null;
 };
 
+const SUPPORTED_LOCAL_CITIES = [
+  "Charlotte, NC",
+  "Chicago, IL",
+  "New York, NY",
+  "Los Angeles, CA",
+  "Atlanta, GA",
+  "Houston, TX",
+  "Miami, FL",
+  "Dallas, TX",
+  "San Francisco, CA",
+  "Philadelphia, PA",
+  "Detroit, MI",
+  "Minneapolis, MN",
+  "Phoenix, AZ",
+  "Cincinnati, OH",
+] as const;
+
+function splitSupportedCity(cityLabel: string) {
+  const [city = "", state = ""] = cityLabel.split(",").map((value) => value.trim());
+  return {
+    city: city || null,
+    state: state || null,
+  };
+}
+
 function isMissingCommentMetadataColumnError(message: string | null | undefined) {
   if (!message) {
     return false;
@@ -113,6 +138,10 @@ export default function Profile() {
     text: string;
   } | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [localCityLabel, setLocalCityLabel] = useState("");
+  const [selectedSignUpCity, setSelectedSignUpCity] = useState("");
+  const [draftLocalCityLabel, setDraftLocalCityLabel] = useState("");
+  const [isSavingLocalCity, setIsSavingLocalCity] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [bio, setBio] = useState("");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -129,6 +158,8 @@ export default function Profile() {
   const profileRef = useRef<ProfileRow>({
     username: null,
     contact_email: null,
+    local_city: null,
+    local_state: null,
     bio: null,
     categories: [],
     avatar_url: null,
@@ -154,11 +185,15 @@ export default function Profile() {
     setDraftBio("");
     setIsEditingBio(false);
     setCategories([]);
+    setLocalCityLabel("");
+    setDraftLocalCityLabel("");
     setMyComments([]);
     setMyPolls([]);
     profileRef.current = {
       username: null,
       contact_email: null,
+      local_city: null,
+      local_state: null,
       bio: null,
       categories: [],
       avatar_url: null,
@@ -173,6 +208,8 @@ export default function Profile() {
       username: string | null;
       bio: string | null;
       categories: string[];
+      local_city: string | null;
+      local_state: string | null;
       avatar_url: string | null;
       username_last_changed_at: string | null;
       preferred_sources: string[];
@@ -194,6 +231,8 @@ export default function Profile() {
         username: updates?.username ?? (username.trim() || null),
         bio: updates?.bio ?? (bio.trim() || null),
         categories: updates?.categories ?? categories,
+        local_city: updates?.local_city ?? profileRef.current.local_city,
+        local_state: updates?.local_state ?? profileRef.current.local_state,
         avatar_url: updates?.avatar_url ?? (avatarUrl || null),
         username_last_changed_at:
           updates?.username_last_changed_at ?? profileRef.current.username_last_changed_at,
@@ -212,9 +251,21 @@ export default function Profile() {
       setDraftBio(payload.bio ?? "");
       setAvatarUrl(payload.avatar_url ?? "");
       setCategories(payload.categories ?? []);
+      setLocalCityLabel(
+        payload.local_city && payload.local_state
+          ? `${payload.local_city}, ${payload.local_state}`
+          : ""
+      );
+      setDraftLocalCityLabel(
+        payload.local_city && payload.local_state
+          ? `${payload.local_city}, ${payload.local_state}`
+          : ""
+      );
       profileRef.current = {
         username: payload.username,
         contact_email: payload.contact_email,
+        local_city: payload.local_city,
+        local_state: payload.local_state,
         bio: payload.bio,
         categories: payload.categories ?? [],
         avatar_url: payload.avatar_url,
@@ -241,9 +292,21 @@ export default function Profile() {
     setDraftBio(profile.bio ?? "");
     setAvatarUrl(profile.avatar_url ?? "");
     setCategories(profile.categories ?? []);
+    setLocalCityLabel(
+      profile.local_city && profile.local_state
+        ? `${profile.local_city}, ${profile.local_state}`
+        : ""
+    );
+    setDraftLocalCityLabel(
+      profile.local_city && profile.local_state
+        ? `${profile.local_city}, ${profile.local_state}`
+        : ""
+    );
     profileRef.current = {
       username: profile.username,
       contact_email: profile.contact_email,
+      local_city: profile.local_city,
+      local_state: profile.local_state,
       bio: profile.bio,
       categories: profile.categories ?? [],
       avatar_url: profile.avatar_url,
@@ -428,6 +491,51 @@ export default function Profile() {
       id: user.id,
       email: user.email ?? null,
     });
+
+    const metadataCity =
+      typeof user.user_metadata?.local_city === "string"
+        ? user.user_metadata.local_city.trim()
+        : "";
+    const metadataState =
+      typeof user.user_metadata?.local_state === "string"
+        ? user.user_metadata.local_state.trim()
+        : "";
+
+    if (
+      metadataCity &&
+      metadataState &&
+      (!profileRef.current.local_city || !profileRef.current.local_state)
+    ) {
+      const persistedProfile = await saveProfilePatch(
+        {
+          id: user.id,
+          email: user.email ?? null,
+        },
+        {
+          local_city: metadataCity,
+          local_state: metadataState,
+        }
+      );
+
+      if (!persistedProfile.error && persistedProfile.data) {
+        const profile = persistedProfile.data;
+        setLocalCityLabel(`${profile.local_city}, ${profile.local_state}`);
+        setDraftLocalCityLabel(`${profile.local_city}, ${profile.local_state}`);
+        profileRef.current = {
+          username: profile.username,
+          contact_email: profile.contact_email,
+          local_city: profile.local_city,
+          local_state: profile.local_state,
+          bio: profile.bio,
+          categories: profile.categories ?? [],
+          avatar_url: profile.avatar_url,
+          username_last_changed_at: profile.username_last_changed_at,
+          preferred_sources: profile.preferred_sources ?? [],
+          show_less_sources: profile.show_less_sources ?? [],
+        };
+      }
+    }
+
     return true;
   }, [clearProfileState, loadProfileForUser]);
 
@@ -530,9 +638,22 @@ export default function Profile() {
       return;
     }
 
+    if (!selectedSignUpCity) {
+      setMessage("Choose your city to finish signing up.");
+      return;
+    }
+
+    const { city: localCity, state: localState } = splitSupportedCity(selectedSignUpCity);
+
     const { data, error } = await supabase.auth.signUp({
       email: trimmedIdentifier,
       password,
+      options: {
+        data: {
+          local_city: localCity,
+          local_state: localState,
+        },
+      },
     });
 
     if (error) {
@@ -547,6 +668,7 @@ export default function Profile() {
     clearProfileState();
     setCurrentUser(null);
     setPassword("");
+    setSelectedSignUpCity("");
     setPendingConfirmationEmail(trimmedIdentifier);
     setResendCooldown(45);
     setSignUpNotice("Check your email to confirm your account.");
@@ -695,6 +817,8 @@ export default function Profile() {
     profileRef.current = {
       username: ensuredProfile.data.username,
       contact_email: ensuredProfile.data.contact_email,
+      local_city: ensuredProfile.data.local_city,
+      local_state: ensuredProfile.data.local_state,
       bio: ensuredProfile.data.bio,
       categories: ensuredProfile.data.categories ?? [],
       avatar_url: ensuredProfile.data.avatar_url,
@@ -907,6 +1031,48 @@ export default function Profile() {
     avatarInputRef.current?.click();
   };
 
+  const handleLocalCitySave = async () => {
+    if (!currentUser?.id) {
+      setMessage("Log in first.");
+      return;
+    }
+
+    if (!draftLocalCityLabel) {
+      setMessage("Choose your city first.");
+      return;
+    }
+
+    const { city, state } = splitSupportedCity(draftLocalCityLabel);
+
+    if (!city || !state) {
+      setMessage("Choose a supported city.");
+      return;
+    }
+
+    setIsSavingLocalCity(true);
+
+    const { error } = await saveProfile({
+      username: profileRef.current.username,
+      bio: profileRef.current.bio,
+      categories: profileRef.current.categories ?? categories,
+      avatar_url: profileRef.current.avatar_url,
+      local_city: city,
+      local_state: state,
+      username_last_changed_at: profileRef.current.username_last_changed_at,
+      preferred_sources: profileRef.current.preferred_sources ?? [],
+      show_less_sources: profileRef.current.show_less_sources ?? [],
+    });
+
+    setIsSavingLocalCity(false);
+
+    if (error) {
+      setMessage(error.message ?? "Could not save your local city.");
+      return;
+    }
+
+    setMessage("Local city updated.");
+  };
+
   const initials = username.trim().charAt(0).toUpperCase() || "N";
   const isSignedIn = Boolean(currentUser?.id);
   const currentUserId = currentUser?.id ?? "";
@@ -961,6 +1127,21 @@ export default function Profile() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+            </div>
+
+            <div className="input-row">
+              <select
+                className="input"
+                value={selectedSignUpCity}
+                onChange={(event) => setSelectedSignUpCity(event.target.value)}
+              >
+                <option value="">Choose your city</option>
+                {SUPPORTED_LOCAL_CITIES.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="toolbar profile-auth-actions">
@@ -1161,6 +1342,39 @@ export default function Profile() {
                   ›
                 </span>
               </Link>
+
+              <div className="profile-divider" />
+
+              <div className="settings-list-row settings-list-row-static">
+                <div className="settings-list-copy">
+                  <strong>Local City</strong>
+                  <span>{localCityLabel || "Choose your city for Local news and weather."}</span>
+                </div>
+              </div>
+
+              <div className="settings-inline-fields">
+                <select
+                  className="input"
+                  value={draftLocalCityLabel}
+                  onChange={(event) => setDraftLocalCityLabel(event.target.value)}
+                  disabled={isSavingLocalCity}
+                >
+                  <option value="">Choose your city</option>
+                  {SUPPORTED_LOCAL_CITIES.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={handleLocalCitySave}
+                  disabled={isSavingLocalCity || !draftLocalCityLabel}
+                >
+                  {isSavingLocalCity ? "Saving..." : "Save city"}
+                </button>
+              </div>
 
               <div className="profile-divider" />
 

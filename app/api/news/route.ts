@@ -540,6 +540,48 @@ const RSS_FEEDS: RssFeedConfig[] = [
     category: "Local News",
     tags: ["houston", "texas", "local"],
   },
+  {
+    url: "https://www.miamiherald.com/latest-news/?outputType=xml",
+    source: "Miami Herald",
+    category: "Local News",
+    tags: ["miami", "florida", "local", "south florida"],
+  },
+  {
+    url: "https://wsvn.com/feed/",
+    source: "WSVN",
+    category: "Local News",
+    tags: ["miami", "florida", "local", "south florida"],
+  },
+  {
+    url: "https://www.nbcmiami.com/feed/",
+    source: "NBC 6 South Florida",
+    category: "Local News",
+    tags: ["miami", "florida", "local", "south florida"],
+  },
+  {
+    url: "https://www.cbsnews.com/miami/latest/rss/main",
+    source: "CBS Miami",
+    category: "Local News",
+    tags: ["miami", "florida", "local", "south florida"],
+  },
+  {
+    url: "https://www.local10.com/arc/outboundfeeds/rss/",
+    source: "Local 10",
+    category: "Local News",
+    tags: ["miami", "florida", "local", "south florida"],
+  },
+  {
+    url: "https://www.wlrn.org/rss.xml",
+    source: "WLRN",
+    category: "Local News",
+    tags: ["miami", "florida", "local", "south florida"],
+  },
+  {
+    url: "https://www.miaminewtimes.com/rss.xml",
+    source: "Miami New Times",
+    category: "Local News",
+    tags: ["miami", "florida", "local", "south florida"],
+  },
 ];
 
 const CHARLOTTE_LOCAL_SOURCES = [
@@ -656,8 +698,24 @@ const LOCAL_CITY_CONFIGS = {
     signals: ["houston", "texas", "harris county", "sugar land", "the heights", "katy"],
   },
   "Miami, FL": {
-    sources: ["miami herald", "wsvn", "nbc 6 south florida", "cbs miami", "local 10"],
-    signals: ["miami", "florida", "miami-dade", "south florida", "fort lauderdale"],
+    sources: [
+      "miami herald",
+      "wsvn",
+      "nbc 6 south florida",
+      "cbs miami",
+      "local 10",
+      "wlrn",
+      "miami new times",
+    ],
+    signals: [
+      "miami",
+      "florida",
+      "miami-dade",
+      "south florida",
+      "fort lauderdale",
+      "wynwood",
+      "brickell",
+    ],
   },
   "Cincinnati, OH": {
     sources: ["cincinnati enquirer", "wcpo", "wlwt", "fox19"],

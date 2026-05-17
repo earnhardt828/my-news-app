@@ -10,6 +10,8 @@ export const PROFILE_SELECT_FIELDS = [
   "email",
   "username",
   "contact_email",
+  "local_city",
+  "local_state",
   "bio",
   "avatar_url",
   "categories",
@@ -35,6 +37,8 @@ export type AppProfileRecord = {
   email: string | null;
   username: string | null;
   contact_email: string | null;
+  local_city: string | null;
+  local_state: string | null;
   bio: string | null;
   avatar_url: string | null;
   categories: string[] | null;
@@ -49,6 +53,8 @@ export function getDefaultProfileRecord(user: ProfileUserRef): AppProfileRecord 
     email: user.email ?? null,
     username: null,
     contact_email: null,
+    local_city: null,
+    local_state: null,
     bio: null,
     avatar_url: null,
     categories: [],
@@ -58,8 +64,11 @@ export function getDefaultProfileRecord(user: ProfileUserRef): AppProfileRecord 
   };
 }
 
-function isMissingContactEmailColumnError(error: { message?: string } | null) {
-  return Boolean(error?.message?.toLowerCase().includes("contact_email"));
+function hasMissingProfileColumnsError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? "";
+  return ["contact_email", "local_city", "local_state"].some((column) =>
+    message.includes(column)
+  );
 }
 
 async function upsertProfileRow(payload: Record<string, unknown>) {
@@ -67,9 +76,11 @@ async function upsertProfileRow(payload: Record<string, unknown>) {
     .from("profiles")
     .upsert(payload, { onConflict: "id" });
 
-  if (isMissingContactEmailColumnError(response.error)) {
+  if (hasMissingProfileColumnsError(response.error)) {
     const fallbackPayload = { ...payload };
     delete fallbackPayload.contact_email;
+    delete fallbackPayload.local_city;
+    delete fallbackPayload.local_state;
 
     response = await supabase
       .from("profiles")
@@ -86,7 +97,7 @@ async function selectProfileRow(user: ProfileUserRef) {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!isMissingContactEmailColumnError(primaryResult.error)) {
+  if (!hasMissingProfileColumnsError(primaryResult.error)) {
     return primaryResult;
   }
 
@@ -98,7 +109,7 @@ async function selectProfileRow(user: ProfileUserRef) {
 
   const fallbackData =
     fallbackResult.data && typeof fallbackResult.data === "object"
-      ? (fallbackResult.data as Omit<AppProfileRecord, "contact_email">)
+      ? (fallbackResult.data as Omit<AppProfileRecord, "contact_email" | "local_city" | "local_state">)
       : null;
 
   return {
@@ -106,6 +117,8 @@ async function selectProfileRow(user: ProfileUserRef) {
       ? {
           ...fallbackData,
           contact_email: null,
+          local_city: null,
+          local_state: null,
         }
       : null,
     error: fallbackResult.error,
