@@ -67,7 +67,8 @@ type NewsMode =
   | "celebrity"
   | "trump"
   | "weather"
-  | "technology";
+  | "technology"
+  | "travel";
 
 type ProviderFetchParams = {
   mode: NewsMode;
@@ -248,7 +249,7 @@ const TRUMP_SOURCE_NAMES = [
 const WEATHER_SOURCE_NAMES = [
   "The Weather Channel",
   "AccuWeather",
-  "AP Weather",
+  "AP News",
   "NOAA",
   "National Weather Service",
   "CNN Weather",
@@ -265,13 +266,9 @@ const WEATHER_QUERY_TERMS = [
   "NOAA weather alerts",
   "National Weather Service news",
   "climate weather news",
-  "The Weather Channel",
-  "AccuWeather",
-  "NOAA",
-  "National Weather Service",
-  "CNN Weather",
-  "Fox Weather",
-  "Weather Underground",
+  "Fox Weather latest",
+  "AccuWeather latest",
+  "The Weather Channel latest",
 ] as const;
 const TECHNOLOGY_SOURCE_NAMES = [
   "The Verge",
@@ -300,6 +297,37 @@ const TECHNOLOGY_QUERY_TERMS = [
   "CNET",
   "CNBC Tech",
   "Bloomberg Technology",
+] as const;
+const TRAVEL_SOURCE_NAMES = [
+  "Travel + Leisure",
+  "Condé Nast Traveler",
+  "AFAR",
+  "Skift",
+  "The Points Guy",
+  "CNN Travel",
+  "National Geographic Travel",
+  "Lonely Planet",
+  "USA Today Travel",
+] as const;
+const TRAVEL_QUERY_TERMS = [
+  "travel news",
+  "airline news",
+  "airport news",
+  "cruise news",
+  "tourism news",
+  "travel warning",
+  "travel advisory",
+  "hotel news",
+  "vacation travel news",
+  "Travel + Leisure",
+  "Condé Nast Traveler",
+  "AFAR",
+  "Skift",
+  "The Points Guy",
+  "CNN Travel",
+  "National Geographic Travel",
+  "Lonely Planet",
+  "USA Today Travel",
 ] as const;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
 const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
@@ -476,6 +504,60 @@ const RSS_FEEDS: RssFeedConfig[] = [
     source: "Bloomberg Technology",
     category: "Tech",
     tags: ["technology", "ai", "business"],
+  },
+  {
+    url: "https://www.travelandleisure.com/rss",
+    source: "Travel + Leisure",
+    category: "Travel",
+    tags: ["travel", "tourism", "vacation"],
+  },
+  {
+    url: "https://www.cntraveler.com/feed/rss",
+    source: "Condé Nast Traveler",
+    category: "Travel",
+    tags: ["travel", "tourism", "destination"],
+  },
+  {
+    url: "https://www.afar.com/magazine/rss.xml",
+    source: "AFAR",
+    category: "Travel",
+    tags: ["travel", "destinations", "tourism"],
+  },
+  {
+    url: "https://skift.com/feed/",
+    source: "Skift",
+    category: "Travel",
+    tags: ["travel", "airline", "tourism"],
+  },
+  {
+    url: "https://thepointsguy.com/news/feed/",
+    source: "The Points Guy",
+    category: "Travel",
+    tags: ["travel", "airline", "hotel"],
+  },
+  {
+    url: "https://www.cnn.com/travel/rss",
+    source: "CNN Travel",
+    category: "Travel",
+    tags: ["travel", "tourism", "airline"],
+  },
+  {
+    url: "https://www.nationalgeographic.com/travel/rss",
+    source: "National Geographic Travel",
+    category: "Travel",
+    tags: ["travel", "destination", "tourism"],
+  },
+  {
+    url: "https://www.lonelyplanet.com/rss.xml",
+    source: "Lonely Planet",
+    category: "Travel",
+    tags: ["travel", "destination", "tourism"],
+  },
+  {
+    url: "https://rssfeeds.usatoday.com/UsatodaycomTravel-TopStories",
+    source: "USA Today Travel",
+    category: "Travel",
+    tags: ["travel", "airline", "tourism"],
   },
   {
     url: "https://feeds.bloomberg.com/markets/news.rss",
@@ -1173,6 +1255,10 @@ function getModeCategories(mode: NewsMode, categories: string[]) {
     return ["Tech"];
   }
 
+  if (mode === "travel") {
+    return ["Travel"];
+  }
+
   if (mode === "myfeed" && categories.length > 0) {
     return categories.slice(0, 5);
   }
@@ -1226,6 +1312,13 @@ function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | 
     return (
       params.query.trim() ||
       "technology news OR AI news OR tech startups OR Apple news OR Google news OR Microsoft news OR cybersecurity news OR social media news OR The Verge OR TechCrunch OR Wired OR Ars Technica OR Engadget OR CNET OR CNBC Tech OR Bloomberg Technology"
+    );
+  }
+
+  if (params.mode === "travel") {
+    return (
+      params.query.trim() ||
+      "travel news OR airline news OR airport news OR cruise news OR tourism news OR travel warning OR travel advisory OR hotel news OR vacation travel news OR Travel + Leisure OR Condé Nast Traveler OR AFAR OR Skift OR The Points Guy OR CNN Travel OR National Geographic Travel OR Lonely Planet OR USA Today Travel"
     );
   }
 
@@ -1801,7 +1894,8 @@ function sortArticlesForMode(
     params.mode === "celebrity" ||
     params.mode === "trump" ||
     params.mode === "weather" ||
-    params.mode === "technology"
+    params.mode === "technology" ||
+    params.mode === "travel"
   ) {
     return [...articles].sort((left, right) => {
       const scoreDiff = getMatchScore(right, getEffectiveQuery(params)) - getMatchScore(left, getEffectiveQuery(params));
@@ -1877,7 +1971,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
       params.mode === "celebrity" ||
       params.mode === "trump" ||
       params.mode === "weather" ||
-      params.mode === "technology") &&
+      params.mode === "technology" ||
+      params.mode === "travel") &&
     effectiveQuery
   ) {
     const encodedQuery = encodeURIComponent(effectiveQuery);
@@ -1893,7 +1988,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
                     params.mode === "celebrity" ||
                     params.mode === "trump" ||
                     params.mode === "weather" ||
-                    params.mode === "technology"
+                    params.mode === "technology" ||
+                    params.mode === "travel"
                   ? 18
                 : 8,
           Math.ceil(params.pageSize / 2)
@@ -1910,7 +2006,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
                   params.mode === "celebrity" ||
                   params.mode === "trump" ||
                   params.mode === "weather" ||
-                  params.mode === "technology"
+                  params.mode === "technology" ||
+                  params.mode === "travel"
                 ? 28
               : 10,
           params.pageSize
@@ -2034,7 +2131,8 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
       params.mode === "celebrity" ||
       params.mode === "trump" ||
       params.mode === "weather" ||
-      params.mode === "technology") &&
+      params.mode === "technology" ||
+      params.mode === "travel") &&
     effectiveQuery
   ) {
     requests.push({
@@ -2157,7 +2255,8 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
       params.mode === "celebrity" ||
       params.mode === "trump" ||
       params.mode === "weather" ||
-      params.mode === "technology") &&
+      params.mode === "technology" ||
+      params.mode === "travel") &&
     effectiveQuery
   ) {
     baseUrl.searchParams.set("q", effectiveQuery);
@@ -2333,7 +2432,8 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
       params.mode === "celebrity" ||
       params.mode === "trump" ||
       params.mode === "weather" ||
-      params.mode === "technology") &&
+      params.mode === "technology" ||
+      params.mode === "travel") &&
     getEffectiveQuery(params)
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
@@ -2668,6 +2768,7 @@ async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRo
   const effectiveQueries = Array.from(
     new Set([
       ...WEATHER_QUERY_TERMS,
+      ...WEATHER_SOURCE_NAMES,
       ...(params.location.trim()
         ? [`${params.location.trim()} weather news`, `${params.location.trim()} severe weather`]
         : []),
@@ -2687,11 +2788,11 @@ async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRo
   );
   const combined = dedupeArticles([...rssArticles, ...queryArticles]);
   const weatherPattern =
-    /(weather|severe weather|hurricane|tornado|climate weather|winter storm|flooding|wildfire weather|forecast|accuweather|noaa|national weather service|cnn weather|fox weather|weather underground)/i;
+    /(weather|severe weather|hurricane|tornado|climate weather|winter storm|flooding|wildfire weather|forecast|accuweather|noaa|national weather service|cnn weather|fox weather|the weather channel|ap news|weather underground|storm|alert)/i;
   const localPattern = params.location.trim() ? new RegExp(params.location.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : null;
   const weatherArticles = sortArticlesForMode(combined, params).filter((article) => {
     const source = article.source.toLowerCase();
-    const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`;
+    const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
     return (
       weatherPattern.test(haystack) ||
       WEATHER_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase())) ||
@@ -2703,6 +2804,45 @@ async function fetchWeatherArticles(params: ProviderFetchParams): Promise<NewsRo
     articles: weatherArticles.slice(0, params.pageSize),
     nextPage: weatherArticles.length > params.pageSize ? params.page + 1 : null,
     hasMore: weatherArticles.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
+async function fetchTravelArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
+  const travelFeeds = RSS_FEEDS.filter((feed) =>
+    TRAVEL_SOURCE_NAMES.some((source) => feed.source.toLowerCase() === source.toLowerCase())
+  );
+  const rssArticles = await fetchRssFeedSet(travelFeeds, travelFeeds.length);
+  const effectiveQueries = Array.from(new Set([...TRAVEL_QUERY_TERMS, ...TRAVEL_SOURCE_NAMES]));
+  const queryResponses = await Promise.allSettled(
+    effectiveQueries.map((query) =>
+      Promise.all([
+        fetchNewsApiArticles({ ...params, mode: "search", query }),
+        fetchGNewsArticles({ ...params, mode: "search", query }),
+        fetchNewsDataArticles({ ...params, mode: "search", query }),
+      ])
+    )
+  );
+  const queryArticles = queryResponses.flatMap((result) =>
+    result.status === "fulfilled" ? result.value.flatMap((response) => response.articles) : []
+  );
+  const combined = dedupeArticles([...rssArticles, ...queryArticles]);
+  const travelPattern =
+    /(travel|airline|airport|cruise|tourism|travel warning|travel advisory|hotel|vacation|destination|flight|trip|passport|tsa|lonely planet|skift|points guy)/i;
+  const travelArticles = sortArticlesForMode(combined, params).filter((article) => {
+    const source = article.source.toLowerCase();
+    const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`;
+    return (
+      travelPattern.test(haystack) ||
+      TRAVEL_SOURCE_NAMES.some((name) => source.includes(name.toLowerCase()))
+    );
+  });
+
+  return {
+    articles: travelArticles.slice(0, params.pageSize),
+    nextPage: travelArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: travelArticles.length > params.pageSize,
     page: params.page,
     pageSize: params.pageSize,
   };
@@ -2780,6 +2920,10 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   if (params.mode === "technology") {
     return fetchTechnologyArticles(params);
+  }
+
+  if (params.mode === "travel") {
+    return fetchTravelArticles(params);
   }
 
   const cacheKey = JSON.stringify({
@@ -2936,6 +3080,7 @@ function parseMode(value: string | null): NewsMode {
     value === "trump" ||
     value === "weather" ||
     value === "technology" ||
+    value === "travel" ||
     value === "search" ||
     value === "compare"
   ) {

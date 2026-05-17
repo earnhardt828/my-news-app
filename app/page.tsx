@@ -59,9 +59,11 @@ const CELEBRITY_FEED_QUERY =
 const TRUMP_FEED_QUERY =
   "Donald Trump news | Trump administration news | Trump policy news | Trump White House | Trump legal news | Trump economy | Trump immigration | Trump tariffs | Trump latest";
 const WEATHER_FEED_QUERY =
-  "weather news | severe weather news | hurricane news | tornado news | flooding news | winter storm news | wildfire weather news | NOAA weather alerts | National Weather Service news | climate weather news | The Weather Channel | AccuWeather | AP Weather | NOAA | National Weather Service | CNN Weather | Fox Weather";
+  "weather news | severe weather news | hurricane news | tornado news | flooding news | winter storm news | wildfire weather news | NOAA weather alerts | National Weather Service news | Fox Weather latest | AccuWeather latest | The Weather Channel latest | AP News | NOAA | National Weather Service | CNN Weather | Fox Weather";
 const TECHNOLOGY_FEED_QUERY =
   "technology news | AI news | tech startups | Apple news | Google news | Microsoft news | cybersecurity news | social media news | The Verge | TechCrunch | Wired | Ars Technica | Engadget | CNET | CNBC Tech | Bloomberg Technology";
+const TRAVEL_FEED_QUERY =
+  "travel news | airline news | airport news | cruise news | tourism news | travel warning | travel advisory | hotel news | vacation travel news | Travel + Leisure | Condé Nast Traveler | AFAR | Skift | The Points Guy | CNN Travel | National Geographic Travel | Lonely Planet | USA Today Travel";
 
 type Comment = {
   id: number;
@@ -297,7 +299,8 @@ function getFeedCacheKey(
     | "celebrity"
     | "trump"
     | "weather"
-    | "technology",
+    | "technology"
+    | "travel",
   localLabel: string,
   localCityKey?: string | null
 ) {
@@ -893,6 +896,7 @@ export default function Home() {
     | "trump"
     | "weather"
     | "technology"
+    | "travel"
   >(
     "trending"
   );
@@ -1012,7 +1016,8 @@ export default function Home() {
     | "celebrity"
     | "trump"
     | "weather"
-    | "technology" = useMemo(() => {
+    | "technology"
+    | "travel" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
@@ -1043,6 +1048,10 @@ export default function Home() {
 
     if (sortMode === "technology") {
       return "technology";
+    }
+
+    if (sortMode === "travel") {
+      return "travel";
     }
 
     return "trending";
@@ -1291,6 +1300,8 @@ export default function Home() {
           params.set("location", selectedLocalCity ?? savedLocalCity ?? localLocationLabel ?? "");
         } else if (feedMode === "technology") {
           params.set("query", TECHNOLOGY_FEED_QUERY);
+        } else if (feedMode === "travel") {
+          params.set("query", TRAVEL_FEED_QUERY);
         }
 
         newsPath = `/api/news?${params.toString()}`;
@@ -3328,6 +3339,14 @@ export default function Home() {
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [sortMode, visibleArticles]);
 
+  const travelTabArticles = useMemo(() => {
+    if (sortMode !== "travel") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
+  }, [sortMode, visibleArticles]);
+
   useEffect(() => {
     if (sortMode === "sports") {
       console.log("SPORTS ARTICLE COUNT", sportsTabArticles.length);
@@ -3986,6 +4005,7 @@ export default function Home() {
       | "trump"
       | "weather"
       | "technology"
+      | "travel"
   ) => (
     <div className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
@@ -3995,13 +4015,6 @@ export default function Home() {
           onClick={() => setSortMode("trending")}
         >
           Trending
-        </button>
-        <button
-          className={`toolbar-pill ${activeMode === "local" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("local")}
-        >
-          Local
         </button>
         <button
           className={`toolbar-pill ${activeMode === "sports" ? "toolbar-pill-active" : ""}`}
@@ -4038,6 +4051,13 @@ export default function Home() {
         >
           Technology
         </button>
+        <button
+          className={`toolbar-pill ${activeMode === "travel" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("travel")}
+        >
+          Travel
+        </button>
       </div>
     </div>
   );
@@ -4048,7 +4068,8 @@ export default function Home() {
       sortMode === "celebrity" ||
       sortMode === "trump" ||
       sortMode === "weather" ||
-      sortMode === "technology") &&
+      sortMode === "technology" ||
+      sortMode === "travel") &&
     isInitialFeedLoading &&
     visibleArticles.length === 0 &&
     !feedLoadError
@@ -4746,6 +4767,38 @@ export default function Home() {
           ) : (
             <div className="stack home-section-list">
               {technologyTabArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  if (sortMode === "travel") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("travel")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Travel</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {travelTabArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No travel stories yet</strong>
+              <span>Check back shortly for fresh travel coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {travelTabArticles.map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
