@@ -58,8 +58,6 @@ const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TRUMP_FEED_QUERY =
   "Donald Trump news | Trump administration news | Trump policy news | Trump White House | Trump legal news | Trump economy | Trump immigration | Trump tariffs | Trump latest";
-const WEATHER_FEED_QUERY =
-  "weather news | severe weather news | hurricane news | tornado news | flooding news | winter storm news | wildfire weather news | NOAA weather alerts | National Weather Service news | Fox Weather latest | AccuWeather latest | The Weather Channel latest | AP News | NOAA | National Weather Service | CNN Weather | Fox Weather";
 const TECHNOLOGY_FEED_QUERY =
   "technology news | AI news | tech startups | Apple news | Google news | Microsoft news | cybersecurity news | social media news | The Verge | TechCrunch | Wired | Ars Technica | Engadget | CNET | CNBC Tech | Bloomberg Technology";
 const TRAVEL_FEED_QUERY =
@@ -303,12 +301,10 @@ function getFeedCacheKey(
     | "weather"
     | "technology"
     | "travel"
-    | "food",
-  localLabel: string,
-  localCityKey?: string | null
+    | "food"
 ) {
   return mode === "local"
-    ? `graffiti:last-feed:${mode}:${normalizeLookupValue(localCityKey || localLabel) || "regional"}`
+    ? `graffiti:last-feed:${mode}:charlotte-nc`
     : mode === "sports"
       ? `graffiti:last-feed:${mode}`
       : mode === "celebrity" || mode === "trump" || mode === "weather"
@@ -825,7 +821,13 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
     };
   }
 
-  return payload;
+  return {
+    articles: payload.articles ?? [],
+    hasMore: payload.hasMore ?? false,
+    page: payload.page ?? 1,
+    pageSize: payload.pageSize ?? payload.articles?.length ?? 0,
+    nextPage: payload.nextPage ?? null,
+  };
 }
 
 function hydrateFeedArticles(feedArticles: FeedArticlePayload[]) {
@@ -962,7 +964,7 @@ export default function Home() {
   const [localQueryDraft, setLocalQueryDraft] = useState("");
   const [localLocationLabel, setLocalLocationLabel] = useState("");
   const [isLocalAutocompleteOpen, setIsLocalAutocompleteOpen] = useState(false);
-  const [localSearchStatus, setLocalSearchStatus] = useState<string | null>(null);
+  const [, setLocalSearchStatus] = useState<string | null>(null);
   const [isLocalAreaLoading, setIsLocalAreaLoading] = useState(false);
   const [categorySectionArticles, setCategorySectionArticles] = useState<Article[]>([]);
   const [isCategorySectionLoading, setIsCategorySectionLoading] = useState(false);
@@ -1082,7 +1084,6 @@ export default function Home() {
     return resolvedCity ? getLocalCityConfigByName(resolvedCity) : null;
   }, [localLocationLabel, localQueryDraft, selectedLocalCityKey]);
   const selectedLocalCity = selectedLocalConfig?.displayName ?? null;
-  const hasSelectedLocalCity = Boolean(selectedLocalCity);
   const localEmptyStateHeadline = useMemo(() => {
     if (!selectedLocalCity) {
       return "Choose your city to see local stories.";
@@ -1097,7 +1098,7 @@ export default function Home() {
   const loadFeedPage = useCallback(async (pageToLoad: number, options?: { replace?: boolean }) => {
     const replace = options?.replace ?? false;
     const requestId = activeFeedRequestIdRef.current + 1;
-    const feedCacheKey = getFeedCacheKey(feedMode, localLocationLabel, selectedLocalCityKey);
+    const feedCacheKey = getFeedCacheKey(feedMode);
     const cachedFeed = replace ? readCachedFeedPayload(feedCacheKey) : null;
     activeFeedRequestIdRef.current = requestId;
 
@@ -1249,49 +1250,7 @@ export default function Home() {
       let newsPayload: PaginatedNewsResponse | null = null;
 
       if (feedMode === "local") {
-        if (!selectedLocalCity && !localQuery.trim()) {
-          setArticles([]);
-          setFeedPage(1);
-          setHasMoreArticles(false);
-          setIsLocalAreaLoading(false);
-          return;
-        }
-
-        const cityConfig =
-          (selectedLocalCityKey ? getLocalCityConfigByKey(selectedLocalCityKey) : null) ??
-          (selectedLocalCity ? getLocalCityConfigByName(selectedLocalCity) : null);
-
-        console.log("LOCAL CITY KEY", selectedLocalCityKey ?? cityConfig?.cityKey ?? null);
-        console.log("LOCAL CONFIG FOUND", Boolean(cityConfig), cityConfig?.displayName ?? null);
-        console.log("LOCAL QUERIES USED", cityConfig?.searchQueries ?? []);
-
-        if (!cityConfig) {
-          console.error("LOCAL CONFIG MISSING", {
-            cityKey: selectedLocalCityKey ?? null,
-            selectedLocalCity: selectedLocalCity ?? null,
-            localLocationLabel,
-          });
-          setArticles([]);
-          setFeedPage(1);
-          setHasMoreArticles(false);
-          setIsLocalAreaLoading(false);
-          setLocalSearchStatus("No local stories found for this city yet.");
-          return;
-        }
-
-        const localSearchQuery = buildLocalNewsQueryText(cityConfig);
-        const params = new URLSearchParams({
-          mode: "local",
-          cityKey: cityConfig.cityKey,
-          city: cityConfig.city,
-          state: cityConfig.state,
-          location: localSearchQuery,
-          page: String(pageToLoad),
-          pageSize: String(FEED_PAGE_SIZE),
-        });
-        console.log("LOCAL FETCH CITY KEY", cityConfig.cityKey);
-        console.log("LOCAL API PARAMS", Object.fromEntries(params.entries()));
-        newsPath = `/api/news?${params.toString()}`;
+        newsPath = "/api/local/charlotte";
       } else {
         const params = new URLSearchParams({
           mode: feedMode,
@@ -1306,8 +1265,7 @@ export default function Home() {
         } else if (feedMode === "trump") {
           params.set("query", TRUMP_FEED_QUERY);
         } else if (feedMode === "weather") {
-          params.set("query", WEATHER_FEED_QUERY);
-          params.set("location", selectedLocalCity ?? savedLocalCity ?? localLocationLabel ?? "");
+          newsPath = "/api/weather-news";
         } else if (feedMode === "technology") {
           params.set("query", TECHNOLOGY_FEED_QUERY);
         } else if (feedMode === "travel") {
@@ -1315,8 +1273,9 @@ export default function Home() {
         } else if (feedMode === "food") {
           params.set("query", FOOD_FEED_QUERY);
         }
-
-        newsPath = `/api/news?${params.toString()}`;
+        if (!newsPath) {
+          newsPath = `/api/news?${params.toString()}`;
+        }
       }
 
       {
@@ -1636,10 +1595,7 @@ export default function Home() {
     feedMode,
     localEmptyStateHeadline,
     localLocationLabel,
-    localQuery,
-    savedLocalCity,
     selectedLocalCity,
-    selectedLocalCityKey,
     sortMode,
   ]);
 
@@ -1929,11 +1885,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!selectedLocalCity) {
-      return;
-    }
-
-    const city = selectedLocalCity;
+    const city = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
     let isCancelled = false;
 
     async function loadWeatherCard() {
@@ -2004,21 +1956,13 @@ export default function Home() {
   }, [selectedLocalCity]);
 
   useEffect(() => {
-    if (!selectedLocalCity) {
-      return;
-    }
-
-    const city = selectedLocalCity;
     let isCancelled = false;
 
     async function loadWeatherNews() {
       setIsWeatherNewsLoading(true);
 
       try {
-        const weatherQuery = `${city} weather forecast storm heat rain climate`;
-        const response = await apiFetch(
-          `/api/news?mode=search&query=${encodeURIComponent(weatherQuery)}&page=1&pageSize=6`
-        );
+        const response = await apiFetch("/api/weather-news");
 
         if (!response.ok) {
           throw new Error(`Weather news request failed (${response.status})`);
@@ -2027,21 +1971,7 @@ export default function Home() {
         const payload = normalizeNewsPayload(
           (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
         );
-        const cityTerms = normalizeLookupValue(city)
-          .split(/[\s,]+/)
-          .filter((term) => term.length > 1);
-        const weatherTerms = ["weather", "forecast", "storm", "rain", "snow", "heat", "wind"];
-
-        const matchingArticles = hydrateFeedArticles(payload.articles).filter((article) => {
-          const haystack = normalizeLookupValue(
-            `${article.title} ${article.description ?? ""} ${article.source ?? ""}`
-          );
-
-          return (
-            cityTerms.some((term) => haystack.includes(term)) &&
-            weatherTerms.some((term) => haystack.includes(term))
-          );
-        });
+        const matchingArticles = hydrateFeedArticles(payload.articles);
 
         if (!isCancelled) {
           setWeatherNewsArticles(matchingArticles.slice(0, 3));
@@ -4887,6 +4817,8 @@ export default function Home() {
   }
 
   if (sortMode === "local") {
+    const localCityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
+
     return (
       <section className="page-shell home-sections-shell local-page-shell">
         {renderHomeTopNavigation("local")}
@@ -4900,90 +4832,8 @@ export default function Home() {
 
           <div className="section-card stack local-feed-shell local-search-card">
             <div className="local-feed-top-row">
-              <span className="local-feed-selected-label">
-                {selectedLocalCity ? `Selected city: ${selectedLocalCity}` : "Choose your city"}
-              </span>
+              <span className="local-feed-selected-label">{localCityLabel}</span>
             </div>
-            <div className="local-feed-controls">
-              <div className="local-feed-input-shell">
-                <input
-                  className="search-input local-feed-input"
-                  type="text"
-                  placeholder="Enter a major city"
-                  value={localQueryDraft}
-                  onFocus={() => setIsLocalAutocompleteOpen(true)}
-                  onBlur={() => {
-                    window.setTimeout(() => {
-                      setIsLocalAutocompleteOpen(false);
-                    }, 120);
-                  }}
-                  onChange={(event) => {
-                    setLocalQueryDraft(event.target.value);
-                    setLocalSearchStatus(null);
-                    setIsLocalAutocompleteOpen(true);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      setIsLocalAutocompleteOpen(false);
-                      void handleUpdateLocalQuery();
-                    }
-                  }}
-                />
-                {isLocalAutocompleteOpen && localCitySuggestions.length > 0 ? (
-                  <div
-                    className="local-city-dropdown"
-                    role="listbox"
-                    aria-label="Suggested cities"
-                  >
-                    {localCitySuggestions.map((city) => (
-                      <button
-                        key={city}
-                        type="button"
-                        className="local-city-dropdown-item"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          applyLocalCitySelection(city);
-                          setIsLocalAutocompleteOpen(false);
-                        }}
-                      >
-                        {city}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="button button-secondary local-feed-button"
-                onClick={() => {
-                  setIsLocalAutocompleteOpen(false);
-                  void handleUpdateLocalQuery();
-                }}
-              >
-                Update
-              </button>
-            </div>
-
-            <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
-              {cityOptions.map((city) => (
-                <button
-                  key={city.displayName}
-                  type="button"
-                  className={`chip local-feed-city-chip ${
-                    localLocationLabel === city.displayName ? "local-feed-city-chip-active" : ""
-                  }`}
-                  onClick={() => {
-                    applyLocalCitySelection(city.displayName);
-                  }}
-                >
-                  {city.displayName}
-                </button>
-                ))}
-              </div>
-            {localSearchStatus ? (
-              <p className="settings-detail-note">{localSearchStatus}</p>
-            ) : null}
             {isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
               <div className="search-inline-loading local-inline-loading" role="status" aria-live="polite">
                 Loading local stories...
@@ -4992,36 +4842,34 @@ export default function Home() {
           </div>
         </section>
 
-        {hasSelectedLocalCity ? (
-          <section className="section-card home-section-block">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Weather</strong>
-              </div>
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Weather</strong>
             </div>
+          </div>
 
-            <div className="home-weather-card">
-              <div className="stack" style={{ gap: "4px" }}>
-                <span className="home-weather-city">{selectedLocalCity}</span>
-                <strong className="home-weather-temp">
-                  {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
-                </strong>
-                <span className="muted">
-                  {weatherCard
-                    ? weatherCard.weatherLabel
-                    : isWeatherLoading
-                    ? "Loading forecast..."
-                    : "Forecast unavailable"}
-                </span>
-              </div>
-              <div className="stack home-weather-meta" style={{ gap: "6px" }}>
-                <span className="muted">
-                  {weatherCard?.windMph ? `Wind ${Math.round(weatherCard.windMph)} mph` : "Local outlook"}
-                </span>
-              </div>
+          <div className="home-weather-card">
+            <div className="stack" style={{ gap: "4px" }}>
+              <span className="home-weather-city">{localCityLabel}</span>
+              <strong className="home-weather-temp">
+                {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
+              </strong>
+              <span className="muted">
+                {weatherCard
+                  ? weatherCard.weatherLabel
+                  : isWeatherLoading
+                  ? "Loading forecast..."
+                  : "Forecast unavailable"}
+              </span>
             </div>
-          </section>
-        ) : null}
+            <div className="stack home-weather-meta" style={{ gap: "6px" }}>
+              <span className="muted">
+                {weatherCard?.windMph ? `Wind ${Math.round(weatherCard.windMph)} mph` : "Local outlook"}
+              </span>
+            </div>
+          </div>
+        </section>
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
@@ -5030,30 +4878,11 @@ export default function Home() {
             </div>
           </div>
 
-          {!hasSelectedLocalCity ? (
-            <div className="empty-state compact-empty-state">
-              <strong>Choose your city to see local stories.</strong>
-              <div className="local-feed-chip-row" role="list" aria-label="Suggested cities">
-                {cityOptions.map((city) => (
-                  <button
-                    key={`suggested-${city.displayName}`}
-                    type="button"
-                    className="chip local-feed-city-chip"
-                    onClick={() => {
-                      applyLocalCitySelection(city.displayName);
-                    }}
-                  >
-                    {city.displayName}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
+          {isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
             <div className="muted local-inline-placeholder">Updating stories...</div>
           ) : navigableTopLocalStories.length === 0 ? (
             <div className="empty-state compact-empty-state">
-              <strong>{localEmptyStateHeadline}</strong>
-              <span>Try another supported city to explore local coverage.</span>
+              <strong>No local stories found for Charlotte yet.</strong>
             </div>
           ) : (
             <div className="stack home-section-list">
