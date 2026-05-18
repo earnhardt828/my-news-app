@@ -9,7 +9,10 @@ import {
   consumePendingArticleReturnState,
   saveArticleReturnState,
 } from "../../lib/article-navigation";
-import { getBestArticleImage } from "../../lib/article-images";
+import {
+  getBestArticleImage,
+  isLikelyHighQualityArticleImage,
+} from "../../lib/article-images";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
@@ -1358,12 +1361,15 @@ export default function Search() {
               <div className="search-results-list">
                 {filteredResults.map((article) => (
                   (() => {
-                    const imageSrc = getSearchResultImage(article);
+                    const selectedImage = getBestArticleImage(article);
+                    const imageSrc = selectedImage.src ?? getSearchResultImage(article);
                     const imageFailureKey = imageSrc
                       ? `${article.id}:${imageSrc}`
                       : `${article.id}:none`;
                     const shouldShowImage =
-                      Boolean(imageSrc) && !failedSearchImages[imageFailureKey];
+                      Boolean(imageSrc) &&
+                      !failedSearchImages[imageFailureKey] &&
+                      isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
                     const safeSourceName = sanitizeSourceName(article.source);
                     const safeCategoryName = getDisplayCategory(article.category, {
                       source: article.source,

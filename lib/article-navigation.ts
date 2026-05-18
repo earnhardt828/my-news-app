@@ -12,7 +12,6 @@ export type ArticleReturnState = {
     | "local"
     | "sports"
     | "celebrity"
-    | "trump"
     | "weather"
     | "technology"
     | "travel"

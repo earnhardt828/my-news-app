@@ -57,8 +57,6 @@ const SPORTS_UNIFIED_QUERY =
   "sports news | ESPN top headlines | NFL NBA MLB NHL sports news | Sports Illustrated latest | CBS Sports latest";
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
-const TRUMP_FEED_QUERY =
-  "Donald Trump news | Trump administration news | Trump policy news | Trump White House | Trump legal news | Trump economy | Trump immigration | Trump tariffs | Trump latest";
 const TECHNOLOGY_FEED_QUERY =
   "technology news | AI news | tech startups | Apple news | Google news | Microsoft news | cybersecurity news | social media news | The Verge | TechCrunch | Wired | Ars Technica | Engadget | CNET | CNBC Tech | Bloomberg Technology";
 const TRAVEL_FEED_QUERY =
@@ -301,7 +299,6 @@ function getFeedCacheKey(
     | "local"
     | "sports"
     | "celebrity"
-    | "trump"
     | "weather"
     | "technology"
     | "travel"
@@ -311,7 +308,7 @@ function getFeedCacheKey(
     ? `graffiti:last-feed:${mode}:charlotte-nc`
     : mode === "sports"
       ? `graffiti:last-feed:${mode}`
-      : mode === "celebrity" || mode === "trump" || mode === "weather"
+      : mode === "celebrity" || mode === "weather"
         ? `graffiti:last-feed:${mode}`
       : `graffiti:last-feed:${mode}`;
 }
@@ -903,7 +900,6 @@ export default function Home() {
     | "local"
     | "sports"
     | "celebrity"
-    | "trump"
     | "weather"
     | "technology"
     | "travel"
@@ -1025,7 +1021,6 @@ export default function Home() {
     | "polls"
     | "sports"
     | "celebrity"
-    | "trump"
     | "weather"
     | "technology"
     | "travel"
@@ -1048,10 +1043,6 @@ export default function Home() {
 
     if (sortMode === "celebrity") {
       return "celebrity";
-    }
-
-    if (sortMode === "trump") {
-      return "trump";
     }
 
     if (sortMode === "weather") {
@@ -1285,8 +1276,6 @@ export default function Home() {
           params.set("query", SPORTS_UNIFIED_QUERY);
         } else if (feedMode === "celebrity") {
           params.set("query", CELEBRITY_FEED_QUERY);
-        } else if (feedMode === "trump") {
-          params.set("query", TRUMP_FEED_QUERY);
         } else if (feedMode === "weather") {
           newsPath = "/api/weather-news";
         } else if (feedMode === "technology") {
@@ -3300,14 +3289,6 @@ export default function Home() {
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [sortMode, visibleArticles]);
 
-  const trumpTabArticles = useMemo(() => {
-    if (sortMode !== "trump") {
-      return [] as Article[];
-    }
-
-    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
-  }, [sortMode, visibleArticles]);
-
   const weatherTabArticles = useMemo(() => {
     if (sortMode !== "weather") {
       return [] as Article[];
@@ -3360,6 +3341,10 @@ export default function Home() {
       console.log("LOCAL ARTICLES COUNT", visibleArticles.length);
     }
   }, [localLocationLabel, selectedLocalCity, selectedLocalCityKey, sortMode, visibleArticles]);
+
+  useEffect(() => {
+    topTabsRef.current?.scrollTo({ left: 0, behavior: "auto" });
+  }, []);
 
   useEffect(() => {
     if (sortMode === "trending") {
@@ -3694,9 +3679,9 @@ export default function Home() {
       const selectedImage = getBestArticleImage(article);
       const imageSrc = selectedImage.src;
       const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
-      const shouldShowImage = Boolean(imageSrc) && !failedArticleImages[imageFailureKey];
       const shouldUseLargeImage =
-        shouldShowImage &&
+        Boolean(imageSrc) &&
+        !failedArticleImages[imageFailureKey] &&
         isLikelyHighQualityArticleImage(selectedImage.source, imageSrc) &&
         (selectedImage.source === "urlToImage" ||
           selectedImage.source === "imageUrl" ||
@@ -3818,29 +3803,6 @@ export default function Home() {
                   ) : null}
                 </div>
 
-                {shouldShowImage ? (
-                  <div className="article-thumb-shell article-thumb-shell-inline">
-                    <img
-                      src={imageSrc as string}
-                      alt={cleanDisplayText(article.title)}
-                      className="article-thumb-image"
-                      loading="lazy"
-                      decoding="async"
-                      onError={() => {
-                        setFailedArticleImages((prev) => {
-                          if (prev[imageFailureKey]) {
-                            return prev;
-                          }
-
-                          return {
-                            ...prev,
-                            [imageFailureKey]: true,
-                          };
-                        });
-                      }}
-                    />
-                  </div>
-                ) : null}
               </div>
             )}
           </Link>
@@ -4001,7 +3963,6 @@ export default function Home() {
       | "local"
       | "sports"
       | "celebrity"
-      | "trump"
       | "weather"
       | "technology"
       | "travel"
@@ -4036,13 +3997,6 @@ export default function Home() {
           onClick={() => setSortMode("celebrity")}
         >
           Celebrity
-        </button>
-        <button
-          className={`toolbar-pill ${activeMode === "trump" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("trump")}
-        >
-          Donald Trump
         </button>
         <button
           className={`toolbar-pill ${activeMode === "weather" ? "toolbar-pill-active" : ""}`}
@@ -4081,7 +4035,6 @@ export default function Home() {
       sortMode === "local" ||
       sortMode === "sports" ||
       sortMode === "celebrity" ||
-      sortMode === "trump" ||
       sortMode === "weather" ||
       sortMode === "technology" ||
       sortMode === "travel" ||
@@ -4687,38 +4640,6 @@ export default function Home() {
           ) : (
             <div className="stack home-section-list">
               {celebrityTabArticles.map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </section>
-    );
-  }
-
-  if (sortMode === "trump") {
-    return (
-      <section className="page-shell home-sections-shell">
-        {renderHomeTopNavigation("trump")}
-
-        <section className="home-section-block home-section-plain home-top-trending-block">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Donald Trump</strong>
-              <span className="home-section-date">{todayLabel}</span>
-            </div>
-          </div>
-
-          {trumpTabArticles.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No Donald Trump stories yet</strong>
-              <span>Check back shortly for fresh coverage.</span>
-            </div>
-          ) : (
-            <div className="stack home-section-list">
-              {trumpTabArticles.map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
