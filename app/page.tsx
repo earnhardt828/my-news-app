@@ -1266,6 +1266,8 @@ export default function Home() {
                 ? "/api/local/chicago"
                 : selectedLocalCityKey === "houston-tx"
                   ? "/api/local/houston"
+                  : selectedLocalCityKey === "phoenix-az"
+                    ? "/api/local/phoenix"
             : "/api/local/charlotte";
       } else {
         const params = new URLSearchParams({

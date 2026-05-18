@@ -100,6 +100,17 @@ function getUrlInferredWeatherSource(url: string | null | undefined, title: stri
 function getTitleInferredWeatherSource(title: string | null | undefined) {
   const rawTitle = String(title ?? "").trim();
   const normalizedTitle = normalize(rawTitle);
+  const genericPrefixMatch = rawTitle.match(/^([^:–—-]{2,40})\s*[:–—-]\s+/);
+  if (genericPrefixMatch) {
+    const candidatePrefix = genericPrefixMatch[1]?.trim() ?? "";
+    const normalizedPrefix = normalize(candidatePrefix);
+    const preferredPrefixSource = PREFERRED_WEATHER_SOURCES.find(
+      (candidate) => normalize(candidate) === normalizedPrefix
+    );
+    if (preferredPrefixSource) {
+      return preferredPrefixSource;
+    }
+  }
 
   const titlePatterns: Array<{ pattern: RegExp; source: string }> = [
     { pattern: /^Fox Weather:\s*/i, source: "Fox Weather" },
@@ -170,7 +181,8 @@ function stripWeatherSourcePrefix(title: string, source: string) {
     "KPRC 2 Houston": /^KPRC(?: 2 Houston)?:\s*/i,
   };
 
-  const strippedTitle = title.replace(titlePatterns[source] ?? /^$/, "").trim();
+  const sourcePattern = titlePatterns[source] ?? /^([^:–—-]{2,40})\s*[:–—-]\s+/i;
+  const strippedTitle = title.replace(sourcePattern, "").trim();
   return strippedTitle || title;
 }
 
