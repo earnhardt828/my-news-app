@@ -527,6 +527,7 @@ const ACTIVE_LOCAL_CITY_DISPLAY_NAMES = [
   "Chicago, IL",
   "Houston, TX",
   "Phoenix, AZ",
+  "Philadelphia, PA",
 ] as const;
 
 export const SUPPORTED_LOCAL_CITIES = ACTIVE_LOCAL_CITY_DISPLAY_NAMES.map(

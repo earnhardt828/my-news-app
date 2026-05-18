@@ -267,6 +267,9 @@ const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: numb
   "New York, NY": { latitude: 40.7128, longitude: -74.006 },
   "Atlanta, GA": { latitude: 33.749, longitude: -84.388 },
   "Charlotte, NC": { latitude: 35.2271, longitude: -80.8431 },
+  "Houston, TX": { latitude: 29.7604, longitude: -95.3698 },
+  "Phoenix, AZ": { latitude: 33.4484, longitude: -112.074 },
+  "Philadelphia, PA": { latitude: 39.9526, longitude: -75.1652 },
 };
 
 type SupportedLocalCity = keyof typeof LOCAL_CITY_CONFIGS;
@@ -1268,6 +1271,8 @@ export default function Home() {
                   ? "/api/local/houston"
                   : selectedLocalCityKey === "phoenix-az"
                     ? "/api/local/phoenix"
+                    : selectedLocalCityKey === "philadelphia-pa"
+                      ? "/api/local/philadelphia"
             : "/api/local/charlotte";
       } else {
         const params = new URLSearchParams({
@@ -1909,6 +1914,8 @@ export default function Home() {
     let isCancelled = false;
 
     async function loadWeatherCard() {
+      const weatherLocation = city;
+      console.log("LOCAL WEATHER LOCATION", weatherLocation);
       const coords = LOCAL_CITY_COORDINATES[city];
 
       if (!coords) {
@@ -1957,7 +1964,7 @@ export default function Home() {
           cityLabel: city,
         });
       } catch (error) {
-        console.error("Error loading weather card:", error);
+        console.error("LOCAL WEATHER ERROR", error);
         if (!isCancelled) {
           setWeatherCard(null);
         }
