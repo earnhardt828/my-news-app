@@ -1724,6 +1724,10 @@ input {
   font-weight: 800;
 }
 
+.trending-source-brand-static {
+  cursor: default;
+}
+
 .article-original-button {
   width: fit-content;
   margin-top: 8px;

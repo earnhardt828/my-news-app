@@ -35,40 +35,59 @@ export const sourceLogoMap: Record<string, string> = {
   "Wall Street Journal": "/source-logos/the-wallstreet-journal.png",
   "The Seattle Times": "/source-logos/the-seattle-times.png",
   "Seattle Times": "/source-logos/the-seattle-times.png",
+  "ABC15 Arizona": "/source-logos/abc15-arizona.png",
+  "ABC7 Chicago": "/source-logos/abc7-chicago.png",
+  "ABC7 Los Angeles": "/source-logos/abc7-los-angeles.png",
+  "ABC 10News": "/source-logos/abc-10news-san-diego.png",
+  "ABC 10News San Diego": "/source-logos/abc-10news-san-diego.png",
+  "Arizona Republic": "/source-logos/the-arizona-republic.png",
+  AZFamily: "/source-logos/azfamily-phoenix.png",
+  "AZFamily Phoenix": "/source-logos/azfamily-phoenix.png",
+  "Block Club Chicago": "/source-logos/block-club-chicago.png",
+  "Bloomberg Technology": "/source-logos/bloomberg-technology.png",
+  "Bon Appétit": "/source-logos/bon-appetit.png",
+  "Bon Appetit": "/source-logos/bon-appetit.png",
+  "CBS Chicago": "/source-logos/cbs-chicago.png",
+  "CBS New York": "/source-logos/cbs-new-york.png",
+  "CBS Philadelphia": "/source-logos/cbs-philadelphia.png",
+  "CBS Sports": "/source-logos/cbs-sports.png",
+  "Charlotte Observer": "/source-logos/charlotte-observer.png",
+  Click2Houston: "/source-logos/click2houston.png",
+  CNET: "/source-logos/cnet.png",
+  "Condé Nast Traveler": "/source-logos/conde-nast-traveler.png",
+  "Conde Nast Traveler": "/source-logos/conde-nast-traveler.png",
+  Engadget: "/source-logos/engadget.png",
+  "Fox 10 Phoenix": "/source-logos/fox-10-phoenix.png",
+  "FOX 26 Houston": "/source-logos/fox-26-houston.png",
+  "Fox Weather": "/source-logos/fox-weather.png",
+  "FOX 11 Los Angeles": "/source-logos/fox11-los-angeles.png",
+  Gothamist: "/source-logos/gothamist.png",
+  "Houston Chronicle": "/source-logos/houston-chronicle.png",
+  "Houston Public Media": "/source-logos/houston-public-media.png",
+  KHOU: "/source-logos/khou-houston.png",
+  "KHOU Houston": "/source-logos/khou-houston.png",
+  "KTAR News": "/source-logos/ktar-news.png",
+  "NBC Chicago": "/source-logos/nbc-chicago.png",
+  "NBC10 Philadelphia": "/source-logos/nbc10-philadelphia.png",
+  "Page Six": "/source-logos/page-six.png",
+  "Queen City News": "/source-logos/queen-city-news.png",
+  Skift: "/source-logos/skift.png",
+  TechCrunch: "/source-logos/techcrunch.png",
+  "The Arizona Republic": "/source-logos/the-arizona-republic.png",
+  "The City NYC": "/source-logos/the-city-nyc.png",
+  "The Weather Channel": "/source-logos/the-weather-channel.png",
+  WCNC: "/source-logos/wcnc-charlotte.png",
+  "WCNC Charlotte": "/source-logos/wcnc-charlotte.png",
+  "Yahoo Sports": "/source-logos/yahoo-sports.png",
+  "NBC 7 San Diego": "/source-logos/nbc-7-san-diego.png",
+  "CBS 8": "/source-logos/cbs-8-san-diego.png",
+  "CBS 8 San Diego": "/source-logos/cbs-8-san-diego.png",
+  "FOX 5 San Diego": "/source-logos/fox-5-san-diego.png",
+  KPBS: "/source-logos/kpbs-san-diego.png",
+  "KPBS San Diego": "/source-logos/kpbs-san-diego.png",
+  "San Diego Union-Tribune": "/source-logos/san-diego-union-tribune.png",
+  "Times of San Diego": "/source-logos/times-of-san-diego.png",
 };
-
-const confirmedLocalLogoPaths = new Set([
-  "/source-logos/abc.png",
-  "/source-logos/al-jazeera.png",
-  "/source-logos/ap-news.png",
-  "/source-logos/axios.png",
-  "/source-logos/bbc.png",
-  "/source-logos/bloomberg.png",
-  "/source-logos/business-insider.png",
-  "/source-logos/cbs.png",
-  "/source-logos/cnn.png",
-  "/source-logos/espn.png",
-  "/source-logos/fox-news.png",
-  "/source-logos/huffpost.png",
-  "/source-logos/ign.png",
-  "/source-logos/msnbc.png",
-  "/source-logos/nbc-news.png",
-  "/source-logos/new-york-post.png",
-  "/source-logos/newsmax.png",
-  "/source-logos/nine-to-five-mac.png",
-  "/source-logos/npr.png",
-  "/source-logos/politico.png",
-  "/source-logos/reuters.png",
-  "/source-logos/the-guardian.png",
-  "/source-logos/the-hill.png",
-  "/source-logos/the-new-york-times.png",
-  "/source-logos/the-seattle-times.png",
-  "/source-logos/the-wallstreet-journal.png",
-  "/source-logos/tmz.png",
-  "/source-logos/variety.png",
-  "/source-logos/washinton-post.png",
-  "/source-logos/wired.png",
-]);
 
 export function normalizeSourceLogoName(sourceName: string) {
   return sourceName
@@ -107,7 +126,7 @@ export function getSourceLogoUrl(sourceName: string) {
   const trimmedSourceName = sourceName.trim();
   const mappedLogo = sourceLogoMap[trimmedSourceName];
 
-  if (mappedLogo && confirmedLocalLogoPaths.has(mappedLogo)) {
+  if (mappedLogo) {
     return mappedLogo;
   }
 
@@ -121,9 +140,7 @@ export function getSourceLogoUrl(sourceName: string) {
   // We prefer SOURCE_LOGO_MAP for known publisher naming mismatches, then
   // fall back to a normalized filename guess. If the file is missing, the UI
   // falls back to the in-app letter badge so Reflekt never renders a broken image box.
-  const normalizedPath = `/source-logos/${normalized}.png`;
-
-  return confirmedLocalLogoPaths.has(normalizedPath) ? normalizedPath : null;
+  return `/source-logos/${normalized}.png`;
 }
 
 export function getSourceInitial(sourceName: string) {

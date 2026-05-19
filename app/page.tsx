@@ -1258,15 +1258,17 @@ export default function Home() {
               ? "/api/local/los-angeles"
               : selectedLocalCityKey === "chicago-il"
                 ? "/api/local/chicago"
-                          : selectedLocalCityKey === "houston-tx"
-                            ? "/api/local/houston"
-                            : selectedLocalCityKey === "phoenix-az"
-                              ? "/api/local/phoenix"
-                              : selectedLocalCityKey === "san-antonio-tx"
-                                ? "/api/local/san-antonio"
-                              : selectedLocalCityKey === "philadelphia-pa"
-                                ? "/api/local/philadelphia"
-                                : "/api/local/charlotte";
+                : selectedLocalCityKey === "houston-tx"
+                  ? "/api/local/houston"
+                  : selectedLocalCityKey === "phoenix-az"
+                    ? "/api/local/phoenix"
+                    : selectedLocalCityKey === "san-diego-ca"
+                      ? "/api/local/san-diego"
+                      : selectedLocalCityKey === "san-antonio-tx"
+                        ? "/api/local/san-antonio"
+                        : selectedLocalCityKey === "philadelphia-pa"
+                          ? "/api/local/philadelphia"
+                          : "/api/local/charlotte";
       } else {
         const params = new URLSearchParams({
           mode: feedMode,
@@ -3701,14 +3703,8 @@ export default function Home() {
         >
           <div className="news-card-top-row news-card-top-row-brand">
             <div className="trending-source-stack trending-source-stack-primary">
-              <Link
-                href={`/source/${slugifySourceName(safeSourceName)}/`}
-                className="source-trigger source-trigger-tight trending-source-button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                }}
-              >
-                <div className="trending-source-brand">
+              {sortMode === "local" ? (
+                <div className="trending-source-brand trending-source-brand-static">
                   <SourceBadge sourceName={safeSourceName} />
                   <span className="trending-source-name">{safeSourceName}</span>
                   <span className="trending-source-category-separator" aria-hidden="true">
@@ -3718,7 +3714,26 @@ export default function Home() {
                     {getCategoryLabel(safeCategoryName)}
                   </span>
                 </div>
-              </Link>
+              ) : (
+                <Link
+                  href={`/source/${slugifySourceName(safeSourceName)}/`}
+                  className="source-trigger source-trigger-tight trending-source-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                >
+                  <div className="trending-source-brand">
+                    <SourceBadge sourceName={safeSourceName} />
+                    <span className="trending-source-name">{safeSourceName}</span>
+                    <span className="trending-source-category-separator" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="trending-source-category-inline">
+                      {getCategoryLabel(safeCategoryName)}
+                    </span>
+                  </div>
+                </Link>
+              )}
               <span className="trending-published-date trending-published-date-inline">
                 {publishedLabel}
               </span>
