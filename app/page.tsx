@@ -266,6 +266,7 @@ const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: numb
   "Atlanta, GA": { latitude: 33.749, longitude: -84.388 },
   "Charlotte, NC": { latitude: 35.2271, longitude: -80.8431 },
   "Houston, TX": { latitude: 29.7604, longitude: -95.3698 },
+  "Jacksonville, FL": { latitude: 30.3322, longitude: -81.6557 },
   "San Diego, CA": { latitude: 32.7157, longitude: -117.1611 },
   "Dallas, TX": { latitude: 32.7767, longitude: -96.797 },
   "Phoenix, AZ": { latitude: 33.4484, longitude: -112.074 },
@@ -1262,6 +1263,8 @@ export default function Home() {
                 ? "/api/local/chicago"
                 : selectedLocalCityKey === "houston-tx"
                   ? "/api/local/houston"
+                  : selectedLocalCityKey === "jacksonville-fl"
+                    ? "/api/local/jacksonville"
                   : selectedLocalCityKey === "dallas-tx"
                     ? "/api/local/dallas"
                   : selectedLocalCityKey === "phoenix-az"
