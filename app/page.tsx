@@ -266,6 +266,8 @@ const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: numb
   "Atlanta, GA": { latitude: 33.749, longitude: -84.388 },
   "Charlotte, NC": { latitude: 35.2271, longitude: -80.8431 },
   "Houston, TX": { latitude: 29.7604, longitude: -95.3698 },
+  "San Diego, CA": { latitude: 32.7157, longitude: -117.1611 },
+  "Dallas, TX": { latitude: 32.7767, longitude: -96.797 },
   "Phoenix, AZ": { latitude: 33.4484, longitude: -112.074 },
   "Philadelphia, PA": { latitude: 39.9526, longitude: -75.1652 },
 };
@@ -1260,6 +1262,8 @@ export default function Home() {
                 ? "/api/local/chicago"
                 : selectedLocalCityKey === "houston-tx"
                   ? "/api/local/houston"
+                  : selectedLocalCityKey === "dallas-tx"
+                    ? "/api/local/dallas"
                   : selectedLocalCityKey === "phoenix-az"
                     ? "/api/local/phoenix"
                     : selectedLocalCityKey === "san-diego-ca"
@@ -3371,7 +3375,14 @@ export default function Home() {
       .map((city) => city.displayName)
       .filter((city) => city.toLowerCase().startsWith(normalizedDraft));
 
-    return startsWithMatches;
+    const includesMatches = cityOptions
+      .map((city) => city.displayName)
+      .filter(
+        (city) =>
+          !startsWithMatches.includes(city) && city.toLowerCase().includes(normalizedDraft)
+      );
+
+    return [...startsWithMatches, ...includesMatches];
   }, [cityOptions, localQueryDraft, sortMode]);
 
   const balancedTrendingArticles = useMemo(() => {
@@ -4880,21 +4891,57 @@ export default function Home() {
             <div className="local-feed-top-row">
               <span className="local-feed-selected-label">{localCityLabel}</span>
             </div>
-            <div className="local-feed-chip-row" role="list" aria-label="Local city options">
-              {cityOptions.map((city) => (
-                <button
-                  key={city.cityKey}
-                  type="button"
-                  className={`chip local-feed-city-chip ${
-                    localCityLabel === city.displayName ? "local-feed-city-chip-active" : ""
-                  }`}
-                  onClick={() => {
-                    applyLocalCitySelection(city.displayName);
+            <div className="local-feed-controls">
+              <div className="local-feed-input-shell">
+                <input
+                  className="search-input local-feed-input"
+                  type="text"
+                  placeholder="Search supported cities"
+                  value={localQueryDraft}
+                  onFocus={() => setIsLocalAutocompleteOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => {
+                      setIsLocalAutocompleteOpen(false);
+                    }, 120);
                   }}
-                >
-                  {city.displayName}
-                </button>
-              ))}
+                  onChange={(event) => {
+                    setLocalQueryDraft(event.target.value);
+                    setLocalSearchStatus(null);
+                    setIsLocalAutocompleteOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      setIsLocalAutocompleteOpen(false);
+                      void handleUpdateLocalQuery();
+                    }
+                  }}
+                />
+                {isLocalAutocompleteOpen && localCitySuggestions.length > 0 ? (
+                  <div
+                    className="local-city-dropdown"
+                    role="listbox"
+                    aria-label="Suggested local cities"
+                  >
+                    {localCitySuggestions.map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        className={`local-city-dropdown-item ${
+                          localCityLabel === city ? "local-city-dropdown-item-active" : ""
+                        }`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          applyLocalCitySelection(city);
+                          setIsLocalAutocompleteOpen(false);
+                        }}
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
             {isLocalAreaLoading && navigableTopLocalStories.length === 0 ? (
               <div className="search-inline-loading local-inline-loading" role="status" aria-live="polite">

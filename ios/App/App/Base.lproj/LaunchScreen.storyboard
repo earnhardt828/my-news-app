@@ -20,7 +20,7 @@
                                 <rect key="frame" x="82.5" y="228.5" width="210" height="210"/>
                             </imageView>
                         </subviews>
-                        <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
                             <constraint firstItem="snD-IY-ifK" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="6Nl-qE-rJY"/>
                             <constraint firstItem="snD-IY-ifK" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" id="IDj-BP-P38"/>
