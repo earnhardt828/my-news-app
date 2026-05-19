@@ -1258,13 +1258,15 @@ export default function Home() {
               ? "/api/local/los-angeles"
               : selectedLocalCityKey === "chicago-il"
                 ? "/api/local/chicago"
-                : selectedLocalCityKey === "houston-tx"
-                  ? "/api/local/houston"
-                  : selectedLocalCityKey === "phoenix-az"
-                    ? "/api/local/phoenix"
-                    : selectedLocalCityKey === "philadelphia-pa"
-                      ? "/api/local/philadelphia"
-            : "/api/local/charlotte";
+                          : selectedLocalCityKey === "houston-tx"
+                            ? "/api/local/houston"
+                            : selectedLocalCityKey === "phoenix-az"
+                              ? "/api/local/phoenix"
+                              : selectedLocalCityKey === "san-antonio-tx"
+                                ? "/api/local/san-antonio"
+                              : selectedLocalCityKey === "philadelphia-pa"
+                                ? "/api/local/philadelphia"
+                                : "/api/local/charlotte";
       } else {
         const params = new URLSearchParams({
           mode: feedMode,
@@ -4043,7 +4045,72 @@ export default function Home() {
     visibleArticles.length === 0 &&
     !feedLoadError
   ) {
-    return <LoadingScreen label="Loading Graffiti" message="Loading live stories..." />;
+    console.log(
+      "REMOVED IN-APP LOADING SCREEN FROM:",
+      "/Users/erniewilson/my-news-app/app/page.tsx"
+    );
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation(
+          sortMode === "local"
+            ? "local"
+            : sortMode === "sports"
+              ? "sports"
+              : sortMode === "celebrity"
+                ? "celebrity"
+                : sortMode === "weather"
+                  ? "weather"
+                  : sortMode === "technology"
+                    ? "technology"
+                    : sortMode === "travel"
+                      ? "travel"
+                      : sortMode === "food"
+                        ? "food"
+                        : "trending"
+        )}
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">
+                {sortMode === "local"
+                  ? "Local"
+                  : sortMode === "sports"
+                    ? "Sports"
+                    : sortMode === "celebrity"
+                      ? "Celebrity"
+                      : sortMode === "weather"
+                        ? "Weather"
+                        : sortMode === "technology"
+                          ? "Technology"
+                          : sortMode === "travel"
+                            ? "Travel"
+                            : sortMode === "food"
+                              ? "Food"
+                              : "Top 10 Trending"}
+              </strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+          <div className="loading-state" role="status" aria-live="polite">
+            <div className="loading-screen-inline">
+              <span className="loading-screen-spinner" aria-hidden="true" />
+              <span className="loading-screen-text">Loading stories...</span>
+            </div>
+            <div className="skeleton-card">
+              <div className="skeleton-line" style={{ height: "190px", borderRadius: "24px" }} />
+              <div className="skeleton-line" style={{ height: "18px", width: "72%" }} />
+              <div className="skeleton-line" style={{ height: "14px", width: "92%" }} />
+              <div className="skeleton-line" style={{ height: "14px", width: "84%" }} />
+            </div>
+            <div className="skeleton-card">
+              <div className="skeleton-line" style={{ height: "18px", width: "68%" }} />
+              <div className="skeleton-line" style={{ height: "14px", width: "90%" }} />
+              <div className="skeleton-line" style={{ height: "14px", width: "80%" }} />
+            </div>
+          </div>
+        </section>
+      </section>
+    );
   }
 
   if (sortMode === "trending") {

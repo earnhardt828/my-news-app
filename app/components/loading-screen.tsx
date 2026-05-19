@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 type LoadingScreenProps = {
   label?: string;
   message?: string;
@@ -9,32 +7,16 @@ export default function LoadingScreen({
   label = "Loading Graffiti",
   message,
 }: LoadingScreenProps) {
+  console.log(
+    "REMOVED IN-APP LOADING SCREEN FROM:",
+    "/Users/erniewilson/my-news-app/app/components/loading-screen.tsx"
+  );
+
   return (
     <div className="loading-screen" role="status" aria-live="polite" aria-label={label}>
-      <div className="loading-screen-spray loading-screen-spray-primary" aria-hidden="true" />
-      <div className="loading-screen-spray loading-screen-spray-secondary" aria-hidden="true" />
-      <div className="loading-screen-speckles" aria-hidden="true" />
-      <div className="loading-screen-pulse" aria-hidden="true" />
-      <div className="loading-screen-center-stack">
-        <div className="loading-screen-logo-wrap">
-        <Image
-          src="/branding/Logo%20Graffiti.png"
-          alt="Graffiti"
-          width={86}
-          height={86}
-          priority
-          className="loading-screen-logo branding-image-light"
-        />
-        <Image
-          src="/branding/graffiti-loading-center-dark-transparent.png"
-          alt="Graffiti"
-          width={86}
-          height={86}
-          priority
-          className="loading-screen-logo branding-image-dark"
-        />
-        </div>
-        <p className="loading-screen-status-text">{message ?? label}</p>
+      <div className="loading-screen-inline">
+        <span className="loading-screen-spinner" aria-hidden="true" />
+        <span className="loading-screen-text">{message ?? label}</span>
       </div>
     </div>
   );
