@@ -63,6 +63,22 @@ const TRAVEL_FEED_QUERY =
   "travel news | airline news | airport news | cruise news | tourism news | travel warning | travel advisory | hotel news | vacation travel news | Travel + Leisure | Condé Nast Traveler | AFAR | Skift | The Points Guy | CNN Travel | National Geographic Travel | Lonely Planet | USA Today Travel";
 const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
+const BREAKING_NEWS_FEED_QUERY =
+  "breaking news | live updates | just in | developing story | urgent | latest news";
+const BREAKING_NEWS_TRUSTED_SOURCES = [
+  "AP News",
+  "Reuters",
+  "CNN",
+  "BBC News",
+  "NBC News",
+  "CBS News",
+  "ABC News",
+  "The New York Times",
+  "The Washington Post",
+  "Politico",
+  "Bloomberg",
+  "NPR",
+] as const;
 
 type Comment = {
   id: number;
@@ -978,6 +994,8 @@ export default function Home() {
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const [weatherNewsArticles, setWeatherNewsArticles] = useState<Article[]>([]);
   const [isWeatherNewsLoading, setIsWeatherNewsLoading] = useState(false);
+  const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
+  const [isBreakingPreviewLoading, setIsBreakingPreviewLoading] = useState(false);
   const [sportsPreviewArticles, setSportsPreviewArticles] = useState<Article[]>([]);
   const [isSportsPreviewLoading, setIsSportsPreviewLoading] = useState(false);
   const [celebrityPreviewArticles, setCelebrityPreviewArticles] = useState<Article[]>([]);
@@ -2065,14 +2083,30 @@ export default function Home() {
 
     async function loadTrendingPreviewSections() {
       if (sortMode !== "trending") {
+        setBreakingPreviewArticles([]);
+        setSportsPreviewArticles([]);
+        setCelebrityPreviewArticles([]);
+        setIsBreakingPreviewLoading(false);
+        setIsSportsPreviewLoading(false);
+        setIsCelebrityPreviewLoading(false);
         return;
       }
 
+      setIsBreakingPreviewLoading(true);
       setIsSportsPreviewLoading(true);
       setIsCelebrityPreviewLoading(true);
 
       try {
-        const [sportsResponse, celebrityResponse] = await Promise.all([
+        const [breakingResponse, sportsResponse, celebrityResponse] = await Promise.all([
+          fetch(
+            `/api/news?mode=search&query=${encodeURIComponent(
+              BREAKING_NEWS_FEED_QUERY
+            )}&pageSize=20`,
+            {
+              cache: "no-store",
+              headers: { Accept: "application/json" },
+            }
+          ),
           fetch("/api/news?mode=sports&pageSize=25", {
             cache: "no-store",
             headers: { Accept: "application/json" },
@@ -2083,7 +2117,8 @@ export default function Home() {
           }),
         ]);
 
-        const [sportsPayload, celebrityPayload] = await Promise.all([
+        const [breakingPayload, sportsPayload, celebrityPayload] = await Promise.all([
+          breakingResponse.ok ? breakingResponse.json().catch(() => null) : Promise.resolve(null),
           sportsResponse.ok ? sportsResponse.json().catch(() => null) : Promise.resolve(null),
           celebrityResponse.ok
             ? celebrityResponse.json().catch(() => null)
@@ -2094,6 +2129,13 @@ export default function Home() {
           return;
         }
 
+        const nextBreakingArticles = breakingPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                breakingPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            )
+          : [];
         const nextSportsArticles = sportsPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
@@ -2109,16 +2151,19 @@ export default function Home() {
             )
           : [];
 
+        setBreakingPreviewArticles(nextBreakingArticles);
         setSportsPreviewArticles(nextSportsArticles);
         setCelebrityPreviewArticles(nextCelebrityArticles);
       } catch (error) {
         console.error("TRENDING SECTION PREVIEW LOAD FAILED", error);
         if (!isCancelled) {
+          setBreakingPreviewArticles([]);
           setSportsPreviewArticles([]);
           setCelebrityPreviewArticles([]);
         }
       } finally {
         if (!isCancelled) {
+          setIsBreakingPreviewLoading(false);
           setIsSportsPreviewLoading(false);
           setIsCelebrityPreviewLoading(false);
         }
@@ -3730,6 +3775,38 @@ export default function Home() {
     [balancedTrendingArticles]
   );
 
+  const breakingNewsPreviewArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [];
+    }
+
+    const topTrendingKeys = new Set(
+      topTenTrendingArticles.map((article) => getArticleDeduplicationKey(article))
+    );
+
+    const trustedBreakingArticles = breakingPreviewArticles.filter((article) =>
+      BREAKING_NEWS_TRUSTED_SOURCES.some((source) =>
+        getSafeSourceLabel(article.source).toLowerCase().includes(source.toLowerCase())
+      )
+    );
+
+    const candidateArticles =
+      trustedBreakingArticles.length > 0 ? trustedBreakingArticles : breakingPreviewArticles;
+
+    return candidateArticles
+      .filter((article) => !topTrendingKeys.has(getArticleDeduplicationKey(article)))
+      .sort((leftArticle, rightArticle) => {
+        const leftTime = leftArticle.publishedAt
+          ? new Date(leftArticle.publishedAt).getTime()
+          : 0;
+        const rightTime = rightArticle.publishedAt
+          ? new Date(rightArticle.publishedAt).getTime()
+          : 0;
+        return rightTime - leftTime;
+      })
+      .slice(0, 5);
+  }, [breakingPreviewArticles, sortMode, topTenTrendingArticles]);
+
   const topPollsSection = useMemo(
     () =>
       [...myFeedPolls]
@@ -4156,7 +4233,7 @@ export default function Home() {
           type="button"
           onClick={() => setSortMode("trending")}
         >
-          Trending
+          My News
         </button>
         <button
           className={`toolbar-pill ${activeMode === "local" ? "toolbar-pill-active" : ""}`}
@@ -4296,6 +4373,26 @@ export default function Home() {
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
+
+        {breakingNewsPreviewArticles.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">
+                  Breaking News
+                </strong>
+                <span className="home-section-date">{todayLabel}</span>
+              </div>
+            </div>
+            <div className="stack home-section-list">
+              {breakingNewsPreviewArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">

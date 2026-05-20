@@ -32,7 +32,7 @@ const iconProps = {
 const navItems: NavItem[] = [
   {
     href: "/",
-    label: "Trending",
+    label: "News",
     icon: (
       <svg {...iconProps}>
         <path d="M4 16.5 10 10l4 4 6-8" />
