@@ -3874,16 +3874,22 @@ export default function Home() {
     return items;
   }, [balancedTrendingArticles, sortMode, videos]);
 
-  const quickWatchVideos = useMemo(
-    () =>
-      selectSourceBalancedVideos(
-        videos.filter((video) => !video.fallback && video.orientation === "vertical"),
-        8
-      ),
-    [videos]
-  );
+  const quickWatchVideos = useMemo(() => {
+    const playableVideos = videos.filter((video) => !video.fallback);
+    const preferredVertical = playableVideos.filter(
+      (video) =>
+        video.orientation === "vertical" ||
+        /shorts?|reels?|vertical|portrait/i.test(
+          `${video.title} ${video.watchUrl} ${video.thumbnailUrl ?? ""}`
+        )
+    );
 
-  const extraNewsClipVideos = useMemo(() => quickWatchVideos.slice(3, 7), [quickWatchVideos]);
+    const preferredPool = preferredVertical.length > 0 ? preferredVertical : playableVideos;
+    return selectSourceBalancedVideos(preferredPool, 8);
+  }, [videos]);
+
+  const primaryNewsClipVideos = useMemo(() => quickWatchVideos.slice(0, 6), [quickWatchVideos]);
+  const secondaryNewsClipVideos = useMemo(() => quickWatchVideos.slice(6, 10), [quickWatchVideos]);
 
   const sportsQuickWatchVideos = useMemo(
     () =>
@@ -4426,6 +4432,8 @@ export default function Home() {
       return null;
     }
 
+    const usedImageSources = new Set<string>();
+
     return (
       <section className="home-section-block home-section-plain featured-stories-row">
         <div className="home-section-header">
@@ -4437,7 +4445,16 @@ export default function Home() {
           {featuredStories.map((article) => {
             const routeId = getArticleRouteId(article);
             const selectedImage = getBestArticleImage(article);
-            if (!routeId || !selectedImage.src) {
+            const imageSrc =
+              selectedImage.src && !usedImageSources.has(selectedImage.src)
+                ? selectedImage.src
+                : null;
+
+            if (imageSrc) {
+              usedImageSources.add(imageSrc);
+            }
+
+            if (!routeId) {
               return null;
             }
 
@@ -4459,14 +4476,20 @@ export default function Home() {
                   });
                 }}
               >
-                <img
-                  src={selectedImage.src}
-                  alt={cleanDisplayText(article.title)}
-                  className="featured-story-image"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div className="featured-story-overlay" />
+                {imageSrc ? (
+                  <img
+                    src={imageSrc}
+                    alt={cleanDisplayText(article.title)}
+                    className="featured-story-image"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className="featured-story-fallback-brand" aria-hidden="true">
+                    <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+                  </div>
+                )}
+                <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
                 <div className="featured-story-copy">
                   <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
                   <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
@@ -4480,7 +4503,7 @@ export default function Home() {
   };
 
   const renderNewsClipsRow = () => {
-    if (extraNewsClipVideos.length === 0) {
+    if (primaryNewsClipVideos.length === 0) {
       return null;
     }
 
@@ -4492,7 +4515,7 @@ export default function Home() {
           </div>
         </div>
         <div className="quick-watch-scroll" role="list" aria-label="News clips">
-          {extraNewsClipVideos.map((video) => (
+          {primaryNewsClipVideos.map((video) => (
             <div key={`news-clips-${video.id}`} className="quick-watch-item" role="listitem">
               <VideoFeedCard
                 video={video}
@@ -4510,6 +4533,47 @@ export default function Home() {
                 autoplayKey={`news-clips:${video.id}`}
                 previewDurationMs={4000}
                 label="News Clip"
+                className="video-card-inline quick-watch-video-card"
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  const renderFeaturedVideosBreak = () => {
+    if (secondaryNewsClipVideos.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Featured Videos</strong>
+          </div>
+        </div>
+        <div className="quick-watch-scroll" role="list" aria-label="Featured videos">
+          {secondaryNewsClipVideos.map((video) => (
+            <div key={`featured-videos-${video.id}`} className="quick-watch-item" role="listitem">
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`featured-videos:${video.id}`) &&
+                  !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[`featured-videos:${video.id}`] = node;
+                }}
+                autoplayKey={`featured-videos:${video.id}`}
+                previewDurationMs={4000}
+                label="Featured Video"
                 className="video-card-inline quick-watch-video-card"
                 variant="article"
               />
@@ -4713,11 +4777,12 @@ export default function Home() {
         ) : null}
 
         {renderFeaturedStoriesRow()}
+        {renderNewsClipsRow()}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Top 10 Trending</strong>
+              <strong className="profile-section-title home-section-title">Trending Top 10</strong>
               <span className="home-section-date">{todayLabel}</span>
             </div>
           </div>
@@ -4739,19 +4804,6 @@ export default function Home() {
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">My News</strong>
             </div>
-            {userId ? (
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => {
-                  setCategoryDraft(categories);
-                  setCategorySheetStatus(null);
-                  setIsCategorySheetOpen(true);
-                }}
-              >
-                {categories.length > 0 ? "Edit categories" : "Add categories"}
-              </button>
-            ) : null}
           </div>
 
           {!userId ? (
@@ -4965,6 +5017,8 @@ export default function Home() {
             )}
           </div>
         </section>
+
+        {renderFeaturedVideosBreak()}
 
         <section className="section-card home-section-block">
           <div className="home-section-header">
