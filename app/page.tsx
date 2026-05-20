@@ -3888,9 +3888,19 @@ export default function Home() {
     return selectSourceBalancedVideos(preferredPool, 15);
   }, [videos]);
 
-  const primaryNewsClipVideos = useMemo(() => quickWatchVideos.slice(0, 5), [quickWatchVideos]);
-  const quickWatchRowVideos = useMemo(() => quickWatchVideos.slice(5, 10), [quickWatchVideos]);
-  const secondaryNewsClipVideos = useMemo(() => quickWatchVideos.slice(10, 15), [quickWatchVideos]);
+  const quickWatchRowVideos = useMemo(() => quickWatchVideos.slice(0, 5), [quickWatchVideos]);
+  const secondaryNewsClipVideos = useMemo(
+    () => quickWatchVideos.slice(quickWatchRowVideos.length, quickWatchRowVideos.length + 5),
+    [quickWatchRowVideos.length, quickWatchVideos]
+  );
+  const primaryNewsClipVideos = useMemo(
+    () =>
+      quickWatchVideos.slice(
+        quickWatchRowVideos.length + secondaryNewsClipVideos.length,
+        quickWatchRowVideos.length + secondaryNewsClipVideos.length + 5
+      ),
+    [quickWatchRowVideos.length, secondaryNewsClipVideos.length, quickWatchVideos]
+  );
 
   const sportsQuickWatchVideos = useMemo(
     () =>
