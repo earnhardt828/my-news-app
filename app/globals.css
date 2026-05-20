@@ -528,10 +528,10 @@ input {
 }
 
 .home-section-title {
-  font-size: clamp(1.46rem, 4.2vw, 1.82rem);
+  font-size: clamp(1.56rem, 4.6vw, 1.96rem);
   font-weight: 900;
   letter-spacing: -0.03em;
-  line-height: 1.12;
+  line-height: 1.08;
 }
 
 .home-section-title-row {
@@ -543,7 +543,7 @@ input {
 
 .home-section-date {
   color: var(--text-soft);
-  font-size: 0.96rem;
+  font-size: 1rem;
   font-weight: 800;
   letter-spacing: 0.01em;
 }

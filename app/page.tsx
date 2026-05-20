@@ -4259,20 +4259,27 @@ export default function Home() {
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">My News</strong>
             </div>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => {
-                setCategoryDraft(categories);
-                setCategorySheetStatus(null);
-                setIsCategorySheetOpen(true);
-              }}
-            >
-              {categories.length > 0 ? "Edit categories" : "Add categories"}
-            </button>
+            {userId ? (
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => {
+                  setCategoryDraft(categories);
+                  setCategorySheetStatus(null);
+                  setIsCategorySheetOpen(true);
+                }}
+              >
+                {categories.length > 0 ? "Edit categories" : "Add categories"}
+              </button>
+            ) : null}
           </div>
 
-          {categories.length === 0 ? (
+          {!userId ? (
+            <div className="empty-state compact-empty-state">
+              <strong>Log in to personalize My News</strong>
+              <span>Follow categories and sources to build your own feed here.</span>
+            </div>
+          ) : categories.length === 0 ? (
             <div className="stack" style={{ gap: "12px" }}>
               <div className="category-grid">
                 {CATEGORY_OPTIONS.slice(0, 8).map((category) => (
@@ -4511,6 +4518,13 @@ export default function Home() {
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Sports</strong>
             </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setSortMode("sports")}
+            >
+              More
+            </button>
           </div>
 
           {sportsTabArticles.length === 0 ? (
@@ -4524,76 +4538,7 @@ export default function Home() {
             )
           ) : (
             <div className="stack home-section-list">
-              {sportsTabArticles.slice(0, 4).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-
-              {sportsQuickWatchVideos.length > 0 ? (
-                <section className="home-section-block home-section-plain quick-watch-row">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Quick Watch</strong>
-                    </div>
-                  </div>
-                  <div className="quick-watch-scroll" role="list" aria-label="Sports quick watch videos">
-                    {sportsQuickWatchVideos.map((video) => (
-                      <div key={video.id} className="quick-watch-item" role="listitem">
-                        <VideoFeedCard
-                          video={video}
-                          isAutoplaying={
-                            autoplayTrendingVideoKeys.includes(`sports-quickwatch:${video.id}`) &&
-                            !video.fallback
-                          }
-                          onToggleLike={handleToggleVideoLike}
-                          onToggleSave={handleToggleVideoSave}
-                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                          onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                          frameRef={(node) => {
-                            trendingVideoFrameRefs.current[`sports-quickwatch:${video.id}`] = node;
-                          }}
-                          autoplayKey={`sports-quickwatch:${video.id}`}
-                          previewDurationMs={4000}
-                          label="Quick Watch"
-                          className="video-card-inline quick-watch-video-card"
-                          variant="article"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {sportsInlineVideos.length > 0 ? (
-                <section className="stack home-section-list">
-                  {sportsInlineVideos.map((video) => (
-                    <div key={`sports-inline-${video.id}`} className="section-card">
-                      <VideoFeedCard
-                        video={video}
-                        isAutoplaying={
-                          autoplayTrendingVideoKeys.includes(`sports-inline:${video.id}`) &&
-                          !video.fallback
-                        }
-                        onToggleLike={handleToggleVideoLike}
-                        onToggleSave={handleToggleVideoSave}
-                        onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                        frameRef={(node) => {
-                          trendingVideoFrameRefs.current[`sports-inline:${video.id}`] = node;
-                        }}
-                        autoplayKey={`sports-inline:${video.id}`}
-                        previewDurationMs={4000}
-                        label="Sports Video"
-                        className="video-card-inline"
-                        variant="article"
-                      />
-                    </div>
-                  ))}
-                </section>
-              ) : null}
-
-              {sportsTabArticles.slice(4).map((article) => (
+              {sportsTabArticles.slice(0, 6).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
@@ -4607,6 +4552,13 @@ export default function Home() {
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Celebrity</strong>
             </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setSortMode("celebrity")}
+            >
+              More
+            </button>
           </div>
 
           {celebrityTabArticles.length === 0 ? (
