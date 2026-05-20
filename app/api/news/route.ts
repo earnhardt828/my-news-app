@@ -156,6 +156,11 @@ type RssFeedConfig = {
   tags: string[];
 };
 
+type SourceAliasRule = {
+  match: RegExp;
+  canonical: string;
+};
+
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 30;
@@ -361,6 +366,52 @@ const SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
 const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
 const SPORTSDATA_API_KEY = process.env.SPORTSDATA_API_KEY ?? "";
 const MEDIASTACK_API_KEY = process.env.MEDIASTACK_API_KEY ?? "";
+const GOOGLE_NEWS_RSS_BASE = "https://news.google.com/rss";
+const SOURCE_ALIAS_RULES: SourceAliasRule[] = [
+  { match: /(^|\b)associated press(\b|$)|(^|\b)ap news(\b|$)|(^|\b)ap(\b|$)/i, canonical: "AP News" },
+  { match: /(^|\b)reuters(\b|$)/i, canonical: "Reuters" },
+  { match: /(^|\b)cnn(\b|$)/i, canonical: "CNN" },
+  { match: /(^|\b)bbc(\b|$)/i, canonical: "BBC News" },
+  { match: /(^|\b)nbc news(\b|$)/i, canonical: "NBC News" },
+  { match: /(^|\b)cbs news(\b|$)/i, canonical: "CBS News" },
+  { match: /(^|\b)abc news(\b|$)/i, canonical: "ABC News" },
+  { match: /(^|\b)the new york times(\b|$)|(^|\b)new york times(\b|$)/i, canonical: "The New York Times" },
+  { match: /(^|\b)the washington post(\b|$)|(^|\b)washington post(\b|$)/i, canonical: "The Washington Post" },
+  { match: /(^|\b)fox news(\b|$)/i, canonical: "Fox News" },
+  { match: /(^|\b)espn(\b|$)/i, canonical: "ESPN" },
+  { match: /(^|\b)sports illustrated(\b|$)|(^|\b)si\.com(\b|$)/i, canonical: "Sports Illustrated" },
+  { match: /(^|\b)cbs sports(\b|$)/i, canonical: "CBS Sports" },
+  { match: /(^|\b)nbc sports(\b|$)/i, canonical: "NBC Sports" },
+  { match: /(^|\b)fox sports(\b|$)/i, canonical: "Fox Sports" },
+  { match: /(^|\b)bleacher report(\b|$)/i, canonical: "Bleacher Report" },
+  { match: /(^|\b)yahoo sports(\b|$)/i, canonical: "Yahoo Sports" },
+  { match: /(^|\b)sb nation(\b|$)/i, canonical: "SB Nation" },
+  { match: /(^|\b)khou(\b|$)/i, canonical: "KHOU Houston" },
+  { match: /(^|\b)click2houston(\b|$)|(^|\b)kprc(\b|$)/i, canonical: "KPRC 2 Houston" },
+  { match: /(^|\b)abc13(\b|$)/i, canonical: "ABC13 Houston" },
+  { match: /(^|\b)fox 26(\b|$)/i, canonical: "FOX 26 Houston" },
+  { match: /(^|\b)nbc 7(\b|$)|nbc7sandiego/i, canonical: "NBC 7 San Diego" },
+  { match: /(^|\b)abc 10news(\b|$)|10news\.com/i, canonical: "ABC 10News San Diego" },
+  { match: /(^|\b)cbs 8(\b|$)|cbs8\.com/i, canonical: "CBS 8 San Diego" },
+  { match: /(^|\b)fox 5 san diego(\b|$)|fox5sandiego/i, canonical: "FOX 5 San Diego" },
+  { match: /(^|\b)kpbs(\b|$)/i, canonical: "KPBS San Diego" },
+  { match: /(^|\b)wfaa(\b|$)/i, canonical: "WFAA Dallas" },
+  { match: /(^|\b)nbc 5(\b|$)/i, canonical: "NBC 5 Dallas-Fort Worth" },
+  { match: /(^|\b)fox 4 dallas(\b|$)|(^|\b)fox 4(\b|$)/i, canonical: "FOX 4 Dallas" },
+  { match: /(^|\b)kxan(\b|$)/i, canonical: "KXAN Austin" },
+  { match: /(^|\b)kvue(\b|$)/i, canonical: "KVUE Austin" },
+  { match: /(^|\b)kens5(\b|$)/i, canonical: "KENS5 San Antonio" },
+  { match: /(^|\b)texas public radio(\b|$)|(^|\b)kut(\b|$)/i, canonical: "Texas Public Radio" },
+];
+const SOURCE_QUALITY_RULES: Array<{ match: RegExp; score: number }> = [
+  { match: /(^|\b)(ap news|reuters)(\b|$)/i, score: 1 },
+  { match: /(^|\b)(bbc news|the new york times|the washington post|bloomberg)(\b|$)/i, score: 0.96 },
+  { match: /(^|\b)(cnn|npr|politico|the hill|nbc news|cbs news|abc news|fox news)(\b|$)/i, score: 0.91 },
+  { match: /(^|\b)(espn|sports illustrated|cbs sports|nbc sports|fox sports|bleacher report|yahoo sports|sb nation)(\b|$)/i, score: 0.88 },
+  { match: /(^|\b)(the verge|techcrunch|wired|ars technica|engadget|cnet|bloomberg technology)(\b|$)/i, score: 0.86 },
+  { match: /(^|\b)(weather channel|accuweather|fox weather|national weather service|noaa|cnn weather)(\b|$)/i, score: 0.84 },
+  { match: /(^|\b)(gothamist|block club chicago|houston chronicle|charlotte observer|los angeles times|san diego union tribune|times of san diego|dallas morning news|wfaa|khou|kxan|kvue|ksat|kens5|nbc 7 san diego|abc 10news san diego|cbs 8 san diego|kpbs)(\b|$)/i, score: 0.82 },
+];
 
 const NATIONAL_SOURCE_PATTERN =
   /(bbc news|reuters|associated press|ap news|npr|bloomberg|the guardian|al jazeera|newsmax)/i;
@@ -1189,6 +1240,53 @@ function normalizeTitle(title: string | null | undefined) {
     .trim();
 }
 
+function normalizeSourceKey(sourceName: string | null | undefined) {
+  return (sourceName ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inferSourceFromUrl(url: string | null | undefined) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    const hostHaystack = hostname.replace(/^www\./, "");
+
+    const matchedRule = SOURCE_ALIAS_RULES.find((rule) => rule.match.test(hostHaystack));
+    return matchedRule?.canonical ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSourceName(sourceName: string | null | undefined, url?: string | null) {
+  const inferredFromUrl = inferSourceFromUrl(url);
+
+  if (inferredFromUrl) {
+    return inferredFromUrl;
+  }
+
+  const candidate = sourceName?.trim() ?? "";
+
+  if (!candidate) {
+    return "News";
+  }
+
+  const matchedRule = SOURCE_ALIAS_RULES.find((rule) => rule.match.test(candidate));
+
+  if (matchedRule) {
+    return matchedRule.canonical;
+  }
+
+  return candidate;
+}
+
 function buildTitleFingerprint(title: string) {
   return normalizeTitle(title)
     .split(" ")
@@ -1268,11 +1366,12 @@ function buildNormalizedArticle(
     return null;
   }
 
-  const sourceName =
+  const rawSourceName =
     raw.source?.name?.trim() ||
     raw.source_name?.trim() ||
     raw.source_id?.trim() ||
     fallback.source;
+  const sourceName = normalizeSourceName(rawSourceName, normalizedUrl);
   const category =
     Array.isArray(raw.category) && raw.category[0]
       ? raw.category[0]
@@ -1606,6 +1705,19 @@ function getProviderOrderScore(index: number, total: number) {
   return 1 - index / Math.max(1, total - 1);
 }
 
+function getSourceQualityScore(sourceName: string, url?: string | null) {
+  const canonical = normalizeSourceName(sourceName, url);
+  const normalized = normalizeSourceKey(canonical);
+
+  for (const rule of SOURCE_QUALITY_RULES) {
+    if (rule.match.test(normalized)) {
+      return rule.score;
+    }
+  }
+
+  return 0.68;
+}
+
 function balanceTrendingArticles<T extends { source: string; category: string }>(
   articles: T[],
   windowSize = 25
@@ -1701,20 +1813,15 @@ function sortTrendingForLaunch(articles: NormalizedArticle[]) {
         1,
         (article.likes + article.comments.length * 2) / 18
       );
-      const sourceBoost =
-        sourceKey === "cnn"
-          ? 0.02
-          : sourceKey === "bbc news" || sourceKey === "npr"
-            ? -0.01
-            : 0;
+      const sourceQualityScore = getSourceQualityScore(article.source, article.url);
       const launchScore =
-        getLaunchRecencyScore(article) * 0.46 +
-        getProviderOrderScore(index, articles.length) * 0.31 +
-        (1 / sourceCount) * 0.15 +
+        getLaunchRecencyScore(article) * 0.42 +
+        sourceQualityScore * 0.24 +
+        getProviderOrderScore(index, articles.length) * 0.16 +
+        (1 / sourceCount) * 0.1 +
         (1 / categoryCount) * 0.06 +
         engagementScore * 0.02 -
-        Math.max(0, sourceCount - 2) * 0.015 +
-        sourceBoost;
+        Math.max(0, sourceCount - 2) * 0.015;
 
       return {
         article,
@@ -1948,7 +2055,15 @@ function sortArticlesForMode(
 ) {
   if (params.mode === "search" || params.mode === "compare") {
     return [...articles].sort((left, right) => {
-      const scoreDiff = getMatchScore(right, params.query) - getMatchScore(left, params.query);
+      const rightCompositeScore =
+        getMatchScore(right, params.query) * 3 +
+        getSourceQualityScore(right.source, right.url) * 8 +
+        getLaunchRecencyScore(right) * 6;
+      const leftCompositeScore =
+        getMatchScore(left, params.query) * 3 +
+        getSourceQualityScore(left.source, left.url) * 8 +
+        getLaunchRecencyScore(left) * 6;
+      const scoreDiff = rightCompositeScore - leftCompositeScore;
 
       if (scoreDiff !== 0) {
         return scoreDiff;
@@ -1962,9 +2077,15 @@ function sortArticlesForMode(
 
   if (params.mode === "local") {
     return [...articles].sort((left, right) => {
-      const scoreDiff =
-        getLocalMatchScore(right, params.location || params.query, params.cityKey) -
-        getLocalMatchScore(left, params.location || params.query, params.cityKey);
+      const rightCompositeScore =
+        getLocalMatchScore(right, params.location || params.query, params.cityKey) +
+        getSourceQualityScore(right.source, right.url) * 22 +
+        getLaunchRecencyScore(right) * 18;
+      const leftCompositeScore =
+        getLocalMatchScore(left, params.location || params.query, params.cityKey) +
+        getSourceQualityScore(left.source, left.url) * 22 +
+        getLaunchRecencyScore(left) * 18;
+      const scoreDiff = rightCompositeScore - leftCompositeScore;
 
       if (scoreDiff !== 0) {
         return scoreDiff;
@@ -1986,7 +2107,16 @@ function sortArticlesForMode(
     params.mode === "food"
   ) {
     return [...articles].sort((left, right) => {
-      const scoreDiff = getMatchScore(right, getEffectiveQuery(params)) - getMatchScore(left, getEffectiveQuery(params));
+      const effectiveQuery = getEffectiveQuery(params);
+      const rightCompositeScore =
+        getMatchScore(right, effectiveQuery) * 3 +
+        getSourceQualityScore(right.source, right.url) * 8 +
+        getLaunchRecencyScore(right) * 6;
+      const leftCompositeScore =
+        getMatchScore(left, effectiveQuery) * 3 +
+        getSourceQualityScore(left.source, left.url) * 8 +
+        getLaunchRecencyScore(left) * 6;
+      const scoreDiff = rightCompositeScore - leftCompositeScore;
 
       if (scoreDiff !== 0) {
         return scoreDiff;
@@ -2000,15 +2130,27 @@ function sortArticlesForMode(
 
   if (params.mode === "latest") {
     return [...articles].sort((left, right) => {
+      const qualityDiff =
+        getSourceQualityScore(right.source, right.url) -
+        getSourceQualityScore(left.source, left.url);
       const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
       const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
-      return rightTime - leftTime;
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+      return qualityDiff;
     });
   }
 
   if (params.mode === "myfeed") {
     return diversifyArticles(
-      [...articles].sort((left, right) => getPublishedTime(right) - getPublishedTime(left))
+      [...articles].sort((left, right) => {
+        const rightCompositeScore =
+          getPublishedTime(right) + getSourceQualityScore(right.source, right.url) * 1000;
+        const leftCompositeScore =
+          getPublishedTime(left) + getSourceQualityScore(left.source, left.url) * 1000;
+        return rightCompositeScore - leftCompositeScore;
+      })
     );
   }
 
@@ -2470,7 +2612,7 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
           ogImage,
           twitterImage,
           category: stripHtml(extractXmlTag(block, "category")) || fallbackFeed.category,
-          source_name: fallbackFeed.source,
+          source_name: stripHtml(extractXmlTag(block, "source")) || fallbackFeed.source,
         },
         {
           source: fallbackFeed.source,
@@ -2597,6 +2739,73 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
   };
 }
 
+function buildGoogleNewsRssUrl(query: string) {
+  const url = new URL(`${GOOGLE_NEWS_RSS_BASE}/search`);
+  url.searchParams.set("q", `${query} when:7d`);
+  url.searchParams.set("hl", "en-US");
+  url.searchParams.set("gl", "US");
+  url.searchParams.set("ceid", "US:en");
+  return url.toString();
+}
+
+function buildGoogleNewsRssFeeds(params: ProviderFetchParams): RssFeedConfig[] {
+  const effectiveQuery = getEffectiveQuery(params);
+  const queryTerms = effectiveQuery
+    ? effectiveQuery
+        .split("|")
+        .map((query) => query.trim())
+        .filter(Boolean)
+    : getModeCategories(params.mode, params.categories).map((category) => getCategoryQuery(category));
+
+  return Array.from(new Set(queryTerms))
+    .slice(
+      0,
+      params.mode === "compare"
+        ? 8
+        : params.mode === "local" || params.mode === "sports"
+          ? 6
+          : 4
+    )
+    .map((query) => ({
+      url: buildGoogleNewsRssUrl(query),
+      source: "Google News",
+      category:
+        params.mode === "search" || params.mode === "compare"
+          ? "Search"
+          : getModeCategories(params.mode, params.categories)[0] ?? "News",
+      tags: query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((token) => token.length > 2),
+    }));
+}
+
+async function fetchGoogleNewsRssArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  const feeds = buildGoogleNewsRssFeeds(params);
+  let articles = await fetchRssFeedSet(feeds, feeds.length);
+
+  if ((params.mode === "search" || params.mode === "compare") && params.query.trim()) {
+    articles = articles.filter((article) => getMatchScore(article, params.query) > 0);
+  }
+
+  if (params.mode === "local") {
+    const locationQuery = params.location || params.query;
+    articles = articles.filter((article) =>
+      isQualifiedLocalArticle(article, locationQuery, params.cityKey)
+    );
+  }
+
+  articles.sort((left, right) => getPublishedTime(right) - getPublishedTime(left));
+
+  const start = (params.page - 1) * params.pageSize;
+  const sliced = articles.slice(start, start + params.pageSize);
+
+  return {
+    articles: sliced,
+    hasMore: articles.length > start + params.pageSize,
+  };
+}
+
 async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRouteResponse> {
   const localCity = getLocalCityConfigByKey(params.cityKey);
 
@@ -2643,6 +2852,11 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
           mode: "search",
           query,
         }),
+        fetchGoogleNewsRssArticles({
+          ...params,
+          mode: "search",
+          query,
+        }),
         fetchNewsDataArticles({
           ...params,
           mode: "search",
@@ -2664,6 +2878,11 @@ async function fetchLocalArticles(params: ProviderFetchParams): Promise<NewsRout
         query: `${localCity.city} local news`,
       }),
       fetchGNewsArticles({
+        ...params,
+        mode: "search",
+        query: `${localCity.city} local news`,
+      }),
+      fetchGoogleNewsRssArticles({
         ...params,
         mode: "search",
         query: `${localCity.city} local news`,
@@ -2735,6 +2954,7 @@ async function fetchSportsArticles(params: ProviderFetchParams): Promise<NewsRou
       Promise.all([
         fetchNewsApiArticles({ ...params, mode: "search", query }),
         fetchGNewsArticles({ ...params, mode: "search", query }),
+        fetchGoogleNewsRssArticles({ ...params, mode: "search", query }),
         fetchNewsDataArticles({ ...params, mode: "search", query }),
       ])
     )
@@ -3097,6 +3317,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const providerFetchers = [
     { name: "NewsAPI", run: () => fetchNewsApiArticles(params) },
     { name: "GNews", run: () => fetchGNewsArticles(params) },
+    { name: "Google News RSS", run: () => fetchGoogleNewsRssArticles(params) },
     { name: "NewsData.io", run: () => fetchNewsDataArticles(params) },
     { name: "RSS", run: () => fetchRssArticles(params) },
   ] as const;
@@ -3145,6 +3366,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     configuredProviders: {
       newsApi: Boolean(NEWS_API_KEY),
       gnews: Boolean(GNEWS_API_KEY),
+      googleNewsRss: true,
       newsData: Boolean(NEWSDATA_API_KEY),
       rss: true,
       sportsApi: Boolean(SPORTS_API_KEY),
