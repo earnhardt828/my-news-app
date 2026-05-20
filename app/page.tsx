@@ -4850,7 +4850,7 @@ export default function Home() {
           )}
         </section>
 
-        <section className="section-card home-section-block">
+        <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Source Rankings</strong>
@@ -4915,7 +4915,7 @@ export default function Home() {
           )}
         </section>
 
-        <section className="section-card home-section-block">
+        <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Weather</strong>
@@ -5179,7 +5179,7 @@ export default function Home() {
           )}
         </section>
 
-        <section className="section-card home-section-block">
+        <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Polls</strong>

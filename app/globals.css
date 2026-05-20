@@ -535,6 +535,10 @@ input {
 
 .home-section-list {
   gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  min-width: 0;
 }
 
 .home-section-list > * {
@@ -551,6 +555,9 @@ input {
 .featured-stories-scroll {
   width: 100%;
   max-width: 100%;
+  margin-inline: auto;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .home-section-title {
