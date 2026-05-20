@@ -1,10 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import LoadingScreen from "../../components/loading-screen";
+import { type CSSProperties, useEffect, useState } from "react";
 import { CATEGORY_OPTIONS, getCategoryLabel } from "../../../lib/categories";
 import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
 import { supabase } from "../../../lib/supabase";
+
+const CATEGORY_GRADIENTS = [
+  "linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%)",
+  "linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)",
+  "linear-gradient(135deg, #f6d365 0%, #fda085 100%)",
+  "linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)",
+  "linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)",
+  "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+  "linear-gradient(135deg, #43cea2 0%, #185a9d 100%)",
+  "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+] as const;
+
+function getCategoryArtStyle(category: string, index: number) {
+  const slug = category.toLowerCase().replace(/\s+/g, "-");
+
+  return {
+    backgroundImage: CATEGORY_GRADIENTS[index % CATEGORY_GRADIENTS.length],
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    // Easy future swap: replace this gradient with `url(/category-images/${slug}.jpg)`.
+    "--category-image-slug": slug,
+  } as CSSProperties;
+}
 
 export default function ProfileCategoriesPage() {
   const [categories, setCategories] = useState<string[]>([]);
@@ -110,9 +132,11 @@ export default function ProfileCategoriesPage() {
   return (
     <section className="page-shell">
       {isLoading ? (
-        <LoadingScreen label="Loading categories" />
-      ) : (
         <section className="section-card stack">
+          <strong className="profile-section-title">Loading categories...</strong>
+        </section>
+      ) : (
+        <section className="section-card stack categories-visual-shell">
           <div className="stack" style={{ gap: "6px" }}>
             <strong className="profile-section-title">Choose your categories</strong>
             <span className="muted">
@@ -120,19 +144,32 @@ export default function ProfileCategoriesPage() {
             </span>
           </div>
 
-          <div className="category-grid">
-            {CATEGORY_OPTIONS.map((category) => (
-              <button
-                key={category}
-                className={`category-pill ${
-                  categories.includes(category) ? "category-pill-active" : ""
-                }`}
-                onClick={() => void handleCategoryToggle(category)}
-                disabled={isSaving || !userId}
-              >
-                {getCategoryLabel(category)}
-              </button>
-            ))}
+          <div className="categories-visual-grid">
+            {CATEGORY_OPTIONS.map((category, index) => {
+              const isSelected = categories.includes(category);
+
+              return (
+                <button
+                  key={category}
+                  className={`category-visual-card ${
+                    isSelected ? "category-visual-card-active" : ""
+                  }`}
+                  onClick={() => void handleCategoryToggle(category)}
+                  disabled={isSaving || !userId}
+                >
+                  <span className="category-visual-circle-wrap">
+                    <span
+                      className={`category-visual-circle ${
+                        isSelected ? "category-visual-circle-active" : ""
+                      }`}
+                      style={getCategoryArtStyle(category, index)}
+                      aria-hidden="true"
+                    />
+                  </span>
+                  <span className="category-visual-name">{getCategoryLabel(category)}</span>
+                </button>
+              );
+            })}
           </div>
 
           {message ? (

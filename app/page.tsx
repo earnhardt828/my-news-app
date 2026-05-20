@@ -7,7 +7,7 @@ import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShareButton from "./components/share-button";
 import {
   createBlockedUser,
@@ -1916,6 +1916,22 @@ export default function Home() {
     };
   }, []);
 
+  const handlePromptSourceHeart = useCallback(
+    (event: MouseEvent<HTMLButtonElement>, sourceName: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!userId) {
+        alert("Log in to heart sources.");
+        return;
+      }
+
+      const targetSlug = slugifySourceName(sourceName);
+      router.push(`/source/${targetSlug}/`);
+    },
+    [router, userId]
+  );
+
   useEffect(() => {
     const city = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
     let isCancelled = false;
@@ -3328,6 +3344,53 @@ export default function Home() {
     }, 900);
   };
 
+  const handleQuickToggleCategory = async (category: string) => {
+    if (!userId) {
+      alert("Log in to add categories.");
+      return;
+    }
+
+    if (isSavingCategories) {
+      return;
+    }
+
+    const nextCategories = categories.includes(category)
+      ? categories.filter((current) => current !== category)
+      : [...categories, category];
+    const previousCategories = categories;
+
+    setCategories(nextCategories);
+    setIsSavingCategories(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { error } = await saveProfilePatch(
+      {
+        id: userId,
+        email: user?.email ?? null,
+      },
+      {
+        id: userId,
+        email: user?.email ?? null,
+        username: username ?? null,
+        categories: nextCategories,
+        preferred_sources: preferredSources,
+        show_less_sources: showLessSources,
+      }
+    );
+
+    setIsSavingCategories(false);
+
+    if (error) {
+      console.error("Error quick-saving categories:", error);
+      setCategories(previousCategories);
+      alert(error.message ?? "Could not save categories right now.");
+      return;
+    }
+  };
+
   const balancedLocalArticles = useMemo(() => {
     if (sortMode !== "local") {
       return displayedArticles;
@@ -4347,10 +4410,15 @@ export default function Home() {
                     <span className="source-rankings-name">{source.sourceName}</span>
                   </div>
                   <div className="source-rankings-metrics">
-                    <span
+                    <button
+                      type="button"
                       className={`icon-action-pill icon-action-pill-icon-only ${
                         source.heartedByCurrentUser ? "icon-action-pill-active" : ""
                       }`}
+                      aria-label={
+                        userId ? `Open ${source.sourceName} source profile` : "Log in to heart sources"
+                      }
+                      onClick={(event) => handlePromptSourceHeart(event, source.sourceName)}
                     >
                       <span className="icon-action-glyph" aria-hidden="true">
                         <svg
@@ -4366,7 +4434,7 @@ export default function Home() {
                           <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
                         </svg>
                       </span>
-                    </span>
+                    </button>
                     <strong>{source.likes}</strong>
                   </div>
                 </Link>
@@ -4545,6 +4613,59 @@ export default function Home() {
               ))}
             </div>
           )}
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Add Categories</strong>
+              <span className="muted">Swipe through topics to shape your feed.</span>
+            </div>
+            {userId ? (
+              <Link href="/profile/categories/" className="button button-secondary">
+                Edit all
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => alert("Log in to customize categories.")}
+              >
+                Log in
+              </button>
+            )}
+          </div>
+
+          <div className="category-swipe-row" role="list" aria-label="Browse categories">
+            {CATEGORY_OPTIONS.slice(0, 16).map((category, index) => {
+              const isSelected = categories.includes(category);
+              const label = getCategoryLabel(category);
+
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  role="listitem"
+                  className={`category-swipe-card ${
+                    isSelected ? "category-swipe-card-active" : ""
+                  }`}
+                  onClick={() => void handleQuickToggleCategory(category)}
+                  disabled={isSavingCategories}
+                >
+                  <span
+                    className={`category-swipe-card-art category-art-${index % 8} ${
+                      isSelected ? "category-swipe-card-art-active" : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="category-swipe-card-label">{label}</span>
+                  <span className="category-swipe-card-meta">
+                    {isSelected ? "Added" : userId ? "Tap to add" : "Log in to add"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </section>
 
         <section className="home-section-block home-section-plain">

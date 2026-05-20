@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import LoadingScreen from "../components/loading-screen";
 import SourceBadge from "../components/source-badge";
 import { slugifySourceName } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
@@ -135,7 +134,10 @@ export default function SourceRankingsPage() {
   return (
     <section className="page-shell source-rankings-shell">
       {isLoading ? (
-        <LoadingScreen label="Loading source rankings" />
+        <section className="section-card stack">
+          <strong className="profile-section-title">Loading source rankings...</strong>
+          <span className="muted">Pulling the latest hearts from the community.</span>
+        </section>
       ) : rankedSources.length === 0 ? (
         <div className="empty-state">
           <strong>No source ratings yet</strong>
