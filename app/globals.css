@@ -445,10 +445,11 @@ input {
 }
 
 .app-main {
-  width: calc(100% - 20px);
+  width: 100%;
   max-width: 460px;
   margin: 0 auto;
   padding: 18px 10px 0;
+  box-sizing: border-box;
   overflow-x: clip;
   color: var(--foreground);
 }
