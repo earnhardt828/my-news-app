@@ -69,7 +69,8 @@ type NewsMode =
   | "weather"
   | "technology"
   | "travel"
-  | "food";
+  | "food"
+  | "business";
 
 type ProviderFetchParams = {
   mode: NewsMode;
@@ -1438,6 +1439,10 @@ function getModeCategories(mode: NewsMode, categories: string[]) {
     return ["Food"];
   }
 
+  if (mode === "business") {
+    return ["Business", "Finance"];
+  }
+
   if (mode === "myfeed" && categories.length > 0) {
     return categories.slice(0, 5);
   }
@@ -1505,6 +1510,13 @@ function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | 
     return (
       params.query.trim() ||
       "food news OR restaurant news OR fast food news OR food safety OR grocery news OR recipes news OR dining news OR Eater OR Food & Wine OR Bon Appétit OR Serious Eats OR Restaurant Business OR Food Network OR CNN Food OR USA Today Food"
+    );
+  }
+
+  if (params.mode === "business") {
+    return (
+      params.query.trim() ||
+      "business news OR finance news OR stock market news OR economy news OR Wall Street news OR CNBC OR Bloomberg OR Reuters Business OR MarketWatch OR Yahoo Finance"
     );
   }
 
@@ -2104,7 +2116,8 @@ function sortArticlesForMode(
     params.mode === "weather" ||
     params.mode === "technology" ||
     params.mode === "travel" ||
-    params.mode === "food"
+    params.mode === "food" ||
+    params.mode === "business"
   ) {
     return [...articles].sort((left, right) => {
       const effectiveQuery = getEffectiveQuery(params);
@@ -2203,7 +2216,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
       params.mode === "weather" ||
       params.mode === "technology" ||
       params.mode === "travel" ||
-      params.mode === "food") &&
+      params.mode === "food" ||
+      params.mode === "business") &&
     effectiveQuery
   ) {
     const encodedQuery = encodeURIComponent(effectiveQuery);
@@ -2221,7 +2235,8 @@ function buildNewsApiUrls(params: ProviderFetchParams) {
                     params.mode === "weather" ||
                     params.mode === "technology" ||
                     params.mode === "travel" ||
-                    params.mode === "food"
+                    params.mode === "food" ||
+                    params.mode === "business"
                   ? 18
                 : 8,
           Math.ceil(params.pageSize / 2)
@@ -2366,7 +2381,8 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
       params.mode === "weather" ||
       params.mode === "technology" ||
       params.mode === "travel" ||
-      params.mode === "food") &&
+      params.mode === "food" ||
+      params.mode === "business") &&
     effectiveQuery
   ) {
     requests.push({
@@ -2491,7 +2507,8 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
       params.mode === "weather" ||
       params.mode === "technology" ||
       params.mode === "travel" ||
-      params.mode === "food") &&
+      params.mode === "food" ||
+      params.mode === "business") &&
     effectiveQuery
   ) {
     baseUrl.searchParams.set("q", effectiveQuery);
@@ -2669,7 +2686,8 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
       params.mode === "weather" ||
       params.mode === "technology" ||
       params.mode === "travel" ||
-      params.mode === "food") &&
+      params.mode === "food" ||
+      params.mode === "business") &&
     getEffectiveQuery(params)
       ? RSS_FEEDS
       : RSS_FEEDS.filter((feed) => {
@@ -2710,6 +2728,8 @@ async function fetchRssArticles(params: ProviderFetchParams): Promise<ProviderRe
       ? 10
       : params.mode === "sports"
       ? 12
+      : params.mode === "business"
+      ? 10
       : 8
   );
 
@@ -3455,6 +3475,7 @@ function parseMode(value: string | null): NewsMode {
     value === "technology" ||
     value === "travel" ||
     value === "food" ||
+    value === "business" ||
     value === "search" ||
     value === "compare"
   ) {

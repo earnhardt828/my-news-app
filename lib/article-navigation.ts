@@ -15,7 +15,8 @@ export type ArticleReturnState = {
     | "weather"
     | "technology"
     | "travel"
-    | "food";
+    | "food"
+    | "business";
   selectedLocalCity?: string | null;
   localLocationLabel?: string | null;
   searchQuery?: string;

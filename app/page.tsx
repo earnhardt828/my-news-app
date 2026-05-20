@@ -63,6 +63,8 @@ const TRAVEL_FEED_QUERY =
   "travel news | airline news | airport news | cruise news | tourism news | travel warning | travel advisory | hotel news | vacation travel news | Travel + Leisure | Condé Nast Traveler | AFAR | Skift | The Points Guy | CNN Travel | National Geographic Travel | Lonely Planet | USA Today Travel";
 const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
+const BUSINESS_FEED_QUERY =
+  "business news | finance news | stock market news | economy news | Wall Street news | CNBC | Bloomberg | Reuters Business | MarketWatch | Yahoo Finance";
 const BREAKING_NEWS_FEED_QUERY =
   "breaking news | live updates | just in | developing story | urgent | latest news";
 const BREAKING_NEWS_TRUSTED_SOURCES = [
@@ -354,6 +356,7 @@ function getFeedCacheKey(
     | "technology"
     | "travel"
     | "food"
+    | "business"
 ) {
   return mode === "local"
     ? `graffiti:last-feed:${mode}:charlotte-nc`
@@ -960,6 +963,7 @@ export default function Home() {
     | "technology"
     | "travel"
     | "food"
+    | "business"
   >(
     "trending"
   );
@@ -1039,6 +1043,8 @@ export default function Home() {
   const [isCelebrityPreviewLoading, setIsCelebrityPreviewLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
+  const [businessPreviewArticles, setBusinessPreviewArticles] = useState<Article[]>([]);
+  const [isBusinessPreviewLoading, setIsBusinessPreviewLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1089,7 +1095,8 @@ export default function Home() {
     | "weather"
     | "technology"
     | "travel"
-    | "food" = useMemo(() => {
+    | "food"
+    | "business" = useMemo(() => {
     if (sortMode === "latest") {
       return "latest";
     }
@@ -1124,6 +1131,10 @@ export default function Home() {
 
     if (sortMode === "food") {
       return "food";
+    }
+
+    if (sortMode === "business") {
+      return "business";
     }
 
     return "trending";
@@ -1359,6 +1370,8 @@ export default function Home() {
           params.set("query", TRAVEL_FEED_QUERY);
         } else if (feedMode === "food") {
           params.set("query", FOOD_FEED_QUERY);
+        } else if (feedMode === "business") {
+          params.set("query", BUSINESS_FEED_QUERY);
         }
         if (!newsPath) {
           newsPath = `/api/news?${params.toString()}`;
@@ -2154,10 +2167,12 @@ export default function Home() {
         setSportsPreviewArticles([]);
         setCelebrityPreviewArticles([]);
         setTechnologyPreviewArticles([]);
+        setBusinessPreviewArticles([]);
         setIsBreakingPreviewLoading(false);
         setIsSportsPreviewLoading(false);
         setIsCelebrityPreviewLoading(false);
         setIsTechnologyPreviewLoading(false);
+        setIsBusinessPreviewLoading(false);
         return;
       }
 
@@ -2165,9 +2180,10 @@ export default function Home() {
       setIsSportsPreviewLoading(true);
       setIsCelebrityPreviewLoading(true);
       setIsTechnologyPreviewLoading(true);
+      setIsBusinessPreviewLoading(true);
 
       try {
-        const [breakingResponse, sportsResponse, celebrityResponse, technologyResponse] = await Promise.all([
+        const [breakingResponse, sportsResponse, celebrityResponse, technologyResponse, businessResponse] = await Promise.all([
           fetch(
             `/api/news?mode=search&query=${encodeURIComponent(
               BREAKING_NEWS_FEED_QUERY
@@ -2189,9 +2205,13 @@ export default function Home() {
             cache: "no-store",
             headers: { Accept: "application/json" },
           }),
+          fetch("/api/news?mode=business&pageSize=25", {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }),
         ]);
 
-        const [breakingPayload, sportsPayload, celebrityPayload, technologyPayload] = await Promise.all([
+        const [breakingPayload, sportsPayload, celebrityPayload, technologyPayload, businessPayload] = await Promise.all([
           breakingResponse.ok ? breakingResponse.json().catch(() => null) : Promise.resolve(null),
           sportsResponse.ok ? sportsResponse.json().catch(() => null) : Promise.resolve(null),
           celebrityResponse.ok
@@ -2199,6 +2219,9 @@ export default function Home() {
             : Promise.resolve(null),
           technologyResponse.ok
             ? technologyResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          businessResponse.ok
+            ? businessResponse.json().catch(() => null)
             : Promise.resolve(null),
         ]);
 
@@ -2234,11 +2257,19 @@ export default function Home() {
               ).articles
             )
           : [];
+        const nextBusinessArticles = businessPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                businessPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            )
+          : [];
 
         setBreakingPreviewArticles(nextBreakingArticles);
         setSportsPreviewArticles(nextSportsArticles);
         setCelebrityPreviewArticles(nextCelebrityArticles);
         setTechnologyPreviewArticles(nextTechnologyArticles);
+        setBusinessPreviewArticles(nextBusinessArticles);
       } catch (error) {
         console.error("TRENDING SECTION PREVIEW LOAD FAILED", error);
         if (!isCancelled) {
@@ -2246,6 +2277,7 @@ export default function Home() {
           setSportsPreviewArticles([]);
           setCelebrityPreviewArticles([]);
           setTechnologyPreviewArticles([]);
+          setBusinessPreviewArticles([]);
         }
       } finally {
         if (!isCancelled) {
@@ -2253,6 +2285,7 @@ export default function Home() {
           setIsSportsPreviewLoading(false);
           setIsCelebrityPreviewLoading(false);
           setIsTechnologyPreviewLoading(false);
+          setIsBusinessPreviewLoading(false);
         }
       }
     }
@@ -2647,6 +2680,7 @@ export default function Home() {
       setSportsPreviewArticles((prev) => updateArticles(prev));
       setCelebrityPreviewArticles((prev) => updateArticles(prev));
       setTechnologyPreviewArticles((prev) => updateArticles(prev));
+      setBusinessPreviewArticles((prev) => updateArticles(prev));
     },
     []
   );
@@ -3638,6 +3672,18 @@ export default function Home() {
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [sortMode, technologyPreviewArticles, visibleArticles]);
 
+  const businessTabArticles = useMemo(() => {
+    if (sortMode === "trending") {
+      return selectSourceBalancedArticles(businessPreviewArticles.slice(0, 40), 25);
+    }
+
+    if (sortMode !== "business") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
+  }, [businessPreviewArticles, sortMode, visibleArticles]);
+
   const travelTabArticles = useMemo(() => {
     if (sortMode !== "travel") {
       return [] as Article[];
@@ -3837,6 +3883,8 @@ export default function Home() {
     [videos]
   );
 
+  const extraNewsClipVideos = useMemo(() => quickWatchVideos.slice(3, 7), [quickWatchVideos]);
+
   const sportsQuickWatchVideos = useMemo(
     () =>
       selectSourceBalancedVideos(
@@ -3933,6 +3981,31 @@ export default function Home() {
       })
       .slice(0, 5);
   }, [breakingPreviewArticles, sortMode, topTenTrendingArticles]);
+
+  const featuredStories = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as Article[];
+    }
+
+    const usedKeys = new Set(
+      [
+        ...breakingNewsPreviewArticles,
+        ...topTenTrendingArticles,
+      ].map((article) => getArticleDeduplicationKey(article))
+    );
+
+    return balancedTrendingArticles
+      .filter((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+        if (usedKeys.has(dedupeKey)) {
+          return false;
+        }
+
+        const image = getBestArticleImage(article);
+        return Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src);
+      })
+      .slice(0, 8);
+  }, [balancedTrendingArticles, breakingNewsPreviewArticles, sortMode, topTenTrendingArticles]);
 
   const topPollsSection = useMemo(
     () =>
@@ -4348,6 +4421,105 @@ export default function Home() {
     );
   };
 
+  const renderFeaturedStoriesRow = () => {
+    if (featuredStories.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain featured-stories-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Featured Stories</strong>
+          </div>
+        </div>
+        <div className="featured-stories-scroll" role="list" aria-label="Featured stories">
+          {featuredStories.map((article) => {
+            const routeId = getArticleRouteId(article);
+            const selectedImage = getBestArticleImage(article);
+            if (!routeId || !selectedImage.src) {
+              return null;
+            }
+
+            return (
+              <Link
+                key={`featured-${routeId}`}
+                href={`/article/${routeId}/`}
+                className="featured-story-card"
+                role="listitem"
+                onClick={() => {
+                  persistArticleMetadata(article);
+                  saveArticleReturnState({
+                    path: "/",
+                    scrollY: window.scrollY,
+                    source: "home",
+                    sortMode,
+                    selectedLocalCity,
+                    localLocationLabel,
+                  });
+                }}
+              >
+                <img
+                  src={selectedImage.src}
+                  alt={cleanDisplayText(article.title)}
+                  className="featured-story-image"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="featured-story-overlay" />
+                <div className="featured-story-copy">
+                  <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
+                  <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  const renderNewsClipsRow = () => {
+    if (extraNewsClipVideos.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">News Clips</strong>
+          </div>
+        </div>
+        <div className="quick-watch-scroll" role="list" aria-label="News clips">
+          {extraNewsClipVideos.map((video) => (
+            <div key={`news-clips-${video.id}`} className="quick-watch-item" role="listitem">
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`news-clips:${video.id}`) &&
+                  !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[`news-clips:${video.id}`] = node;
+                }}
+                autoplayKey={`news-clips:${video.id}`}
+                previewDurationMs={4000}
+                label="News Clip"
+                className="video-card-inline quick-watch-video-card"
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   const renderHomeTopNavigation = (
     activeMode:
       | "trending"
@@ -4358,6 +4530,7 @@ export default function Home() {
       | "technology"
       | "travel"
       | "food"
+      | "business"
   ) => (
     <div ref={topTabsRef} className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
@@ -4417,6 +4590,13 @@ export default function Home() {
         >
           Food
         </button>
+        <button
+          className={`toolbar-pill ${activeMode === "business" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("business")}
+        >
+          Business
+        </button>
       </div>
     </div>
   );
@@ -4429,7 +4609,8 @@ export default function Home() {
       sortMode === "weather" ||
       sortMode === "technology" ||
       sortMode === "travel" ||
-      sortMode === "food") &&
+      sortMode === "food" ||
+      sortMode === "business") &&
     isInitialFeedLoading &&
     visibleArticles.length === 0 &&
     !feedLoadError
@@ -4455,6 +4636,8 @@ export default function Home() {
                       ? "travel"
                       : sortMode === "food"
                         ? "food"
+                        : sortMode === "business"
+                          ? "business"
                         : "trending"
         )}
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -4475,6 +4658,8 @@ export default function Home() {
                             ? "Travel"
                             : sortMode === "food"
                               ? "Food"
+                              : sortMode === "business"
+                                ? "Business"
                               : "Top 10 Trending"}
               </strong>
               <span className="home-section-date">{todayLabel}</span>
@@ -4526,6 +4711,8 @@ export default function Home() {
             </div>
           </section>
         ) : null}
+
+        {renderFeaturedStoriesRow()}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
@@ -4997,6 +5184,42 @@ export default function Home() {
           )}
         </section>
 
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Business</strong>
+            </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setSortMode("business")}
+            >
+              More
+            </button>
+          </div>
+
+          {businessTabArticles.length === 0 ? (
+            isBusinessPreviewLoading ? (
+              <div className="muted">Loading business stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No business stories yet</strong>
+                <span>Check back shortly for fresh business and finance coverage.</span>
+              </div>
+            )
+          ) : (
+            <div className="stack home-section-list">
+              {businessTabArticles.slice(0, 6).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {renderNewsClipsRow()}
+
         {isCategorySheetOpen ? (
           <div
             className="bottom-sheet-backdrop"
@@ -5102,7 +5325,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {sportsTabArticles.slice(0, 4).map((article) => (
+              {sportsTabArticles.slice(0, 2).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
@@ -5171,7 +5394,7 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {sportsTabArticles.slice(4).map((article) => (
+              {sportsTabArticles.slice(2).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
@@ -5332,6 +5555,38 @@ export default function Home() {
           ) : (
             <div className="stack home-section-list">
               {foodTabArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  if (sortMode === "business") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("business")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Business</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {businessTabArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No business stories yet</strong>
+              <span>Check back shortly for fresh business and finance coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {businessTabArticles.map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
