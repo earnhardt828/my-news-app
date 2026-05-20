@@ -36,10 +36,12 @@ export function looksLikeLowQualityImageUrl(url: string) {
   }
 
   if (
+    /(^|https?:\/\/)(www\.)?google\.com\//.test(normalizedUrl) ||
+    /encrypted-tbn\d*\.gstatic\.com/.test(normalizedUrl) ||
     /news\.google\.com\/.*(googlelogo|placeholder|gstatic|newsrs)/.test(normalizedUrl) ||
     /googleusercontent\.com\/.*(news|placeholder|thumbnail)/.test(normalizedUrl) ||
     /gstatic\.com\/.*(news|placeholder|logo)/.test(normalizedUrl) ||
-    /(^|[/?_.=-])(placeholder|default|fallback|blank)([/?_.=-]|$)/.test(normalizedUrl)
+    /(^|[/?_.=-])(placeholder|default|fallback|blank|logo)([/?_.=-]|$)/.test(normalizedUrl)
   ) {
     return true;
   }
@@ -75,6 +77,7 @@ export function looksLikeLowQualityImageUrl(url: string) {
     }
 
     if (
+      parsed.hostname.includes("google.com") ||
       parsed.hostname.includes("news.google.com") ||
       parsed.hostname.includes("gstatic.com") ||
       parsed.hostname.includes("googleusercontent.com")

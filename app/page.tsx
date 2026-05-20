@@ -233,6 +233,37 @@ function getArticleRouteId(article: { id?: number | null }) {
     : null;
 }
 
+function hasResolvableArticleUrl(article: { url?: string | null }) {
+  if (!article.url?.trim()) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(article.url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isRenderableArticleRecord(
+  article: Pick<Article, "id" | "title" | "url" | "source">
+) {
+  const routeId = getArticleRouteId(article);
+  const title = cleanDisplayText(article.title ?? "");
+  const source = cleanDisplayText(article.source ?? "").toLowerCase();
+
+  if (!routeId || !title || !hasResolvableArticleUrl(article)) {
+    return false;
+  }
+
+  if (source === "source unavailable" || source === "unavailable" || source === "unknown source") {
+    return false;
+  }
+
+  return true;
+}
+
 function persistArticleMetadata(article: Article) {
   if (typeof window === "undefined") {
     return;
@@ -834,19 +865,24 @@ function selectSourceBalancedArticles<T extends { source: string }>(articles: T[
 
 function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
   if (Array.isArray(payload)) {
+    const renderableArticles = payload.filter((article) => isRenderableArticleRecord(article));
     return {
-      articles: payload,
+      articles: renderableArticles,
       hasMore: false,
       page: 1,
-      pageSize: payload.length,
+      pageSize: renderableArticles.length,
     };
   }
 
+  const renderableArticles = (payload.articles ?? []).filter((article) =>
+    isRenderableArticleRecord(article)
+  );
+
   return {
-    articles: payload.articles ?? [],
+    articles: renderableArticles,
     hasMore: payload.hasMore ?? false,
     page: payload.page ?? 1,
-    pageSize: payload.pageSize ?? payload.articles?.length ?? 0,
+    pageSize: payload.pageSize ?? renderableArticles.length,
     nextPage: payload.nextPage ?? null,
   };
 }
@@ -967,6 +1003,7 @@ export default function Home() {
   const [pollFollowingIds, setPollFollowingIds] = useState<string[]>([]);
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [sportsVideos, setSportsVideos] = useState<VideoItem[]>([]);
   const [autoplayTrendingVideoKeys, setAutoplayTrendingVideoKeys] = useState<string[]>([]);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
@@ -1747,27 +1784,48 @@ export default function Home() {
   useEffect(() => {
     async function loadTrendingVideos() {
       try {
-        const response = await apiFetch("/api/videos");
-        if (!response.ok) {
-          const responseText = await response.text();
-          throw new Error(`Trending videos request failed (${response.status}): ${responseText}`);
+        const [newsResponse, sportsResponse] = await Promise.all([
+          apiFetch("/api/videos?tab=news"),
+          apiFetch("/api/videos?tab=sports"),
+        ]);
+
+        if (!newsResponse.ok) {
+          const responseText = await newsResponse.text();
+          throw new Error(`Trending news videos request failed (${newsResponse.status}): ${responseText}`);
         }
 
-        const data = (await response.json()) as {
-          videos?: VideoApiItem[];
-          fallback?: boolean;
-          message?: string;
-        };
+        if (!sportsResponse.ok) {
+          const responseText = await sportsResponse.text();
+          throw new Error(`Trending sports videos request failed (${sportsResponse.status}): ${responseText}`);
+        }
 
-        if (data.fallback) {
-          console.error("Trending videos fallback used", {
-            message: data.message ?? "Unknown reason",
+        const [newsData, sportsData] = await Promise.all([
+          newsResponse.json() as Promise<{
+            videos?: VideoApiItem[];
+            fallback?: boolean;
+            message?: string;
+          }>,
+          sportsResponse.json() as Promise<{
+            videos?: VideoApiItem[];
+            fallback?: boolean;
+            message?: string;
+          }>,
+        ]);
+
+        if (newsData.fallback) {
+          console.error("Trending news videos fallback used", {
+            message: newsData.message ?? "Unknown reason",
           });
         }
 
-        const normalizedVideos = normalizeVideoFeedItems(data.videos)
-          .filter((video) => !video.fallback)
-          .sort((left, right) => {
+        if (sportsData.fallback) {
+          console.error("Trending sports videos fallback used", {
+            message: sportsData.message ?? "Unknown reason",
+          });
+        }
+
+        const sortVerticalFirst = (items: VideoItem[]) =>
+          items.sort((left, right) => {
             const leftHint = `${left.title} ${left.watchUrl} ${left.thumbnailUrl ?? ""}`.toLowerCase();
             const rightHint = `${right.title} ${right.watchUrl} ${right.thumbnailUrl ?? ""}`.toLowerCase();
             const leftVerticalScore =
@@ -1781,10 +1839,17 @@ export default function Home() {
 
             return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
           });
-        setVideos(normalizedVideos);
+
+        setVideos(
+          sortVerticalFirst(normalizeVideoFeedItems(newsData.videos).filter((video) => !video.fallback))
+        );
+        setSportsVideos(
+          sortVerticalFirst(normalizeVideoFeedItems(sportsData.videos).filter((video) => !video.fallback))
+        );
       } catch (error) {
         console.error("Error loading trending videos:", error);
         setVideos([]);
+        setSportsVideos([]);
       }
     }
 
@@ -2231,8 +2296,8 @@ export default function Home() {
   };
 
   const handleToggleVideoLike = (videoId: string) => {
-    setVideos((prev) =>
-      prev.map((video) =>
+    const updateVideos = (items: VideoItem[]) =>
+      items.map((video) =>
         video.id === videoId
           ? {
               ...video,
@@ -2240,16 +2305,20 @@ export default function Home() {
               likes: video.liked ? Math.max(0, video.likes - 1) : video.likes + 1,
             }
           : video
-      )
-    );
+      );
+
+    setVideos((prev) => updateVideos(prev));
+    setSportsVideos((prev) => updateVideos(prev));
   };
 
   const handleToggleVideoSave = (videoId: string) => {
-    setVideos((prev) =>
-      prev.map((video) =>
+    const updateVideos = (items: VideoItem[]) =>
+      items.map((video) =>
         video.id === videoId ? { ...video, saved: !video.saved } : video
-      )
-    );
+      );
+
+    setVideos((prev) => updateVideos(prev));
+    setSportsVideos((prev) => updateVideos(prev));
   };
 
   const applyLocalCitySelection = useCallback((city: string) => {
@@ -2566,11 +2635,57 @@ export default function Home() {
     [userId]
   );
 
+  const applyArticleUpdateAcrossCollections = useCallback(
+    (articleId: number, updater: (article: Article) => Article) => {
+      const updateArticles = (items: Article[]) =>
+        items.map((article) => (article.id === articleId ? updater(article) : article));
+
+      setArticles((prev) => updateArticles(prev));
+      setCategorySectionArticles((prev) => updateArticles(prev));
+      setWeatherNewsArticles((prev) => updateArticles(prev));
+      setBreakingPreviewArticles((prev) => updateArticles(prev));
+      setSportsPreviewArticles((prev) => updateArticles(prev));
+      setCelebrityPreviewArticles((prev) => updateArticles(prev));
+      setTechnologyPreviewArticles((prev) => updateArticles(prev));
+    },
+    []
+  );
+
   const handleLike = async (articleId: number) => {
     if (!userId) {
       alert("Log in to like posts");
       return;
     }
+
+    const currentArticle = [
+      ...articles,
+      ...categorySectionArticles,
+      ...weatherNewsArticles,
+      ...breakingPreviewArticles,
+      ...sportsPreviewArticles,
+      ...celebrityPreviewArticles,
+      ...technologyPreviewArticles,
+    ].find((article) => article.id === articleId);
+
+    const currentlyLiked = currentArticle?.likedByCurrentUser ?? false;
+    const nextLiked = !currentlyLiked;
+
+    applyArticleUpdateAcrossCollections(articleId, (article) => ({
+      ...article,
+      likes: nextLiked ? article.likes + 1 : Math.max(0, article.likes - 1),
+      likeUsers: nextLiked
+        ? article.likeUsers.some((likeUser) => likeUser.user_id === userId)
+          ? article.likeUsers
+          : [
+              ...article.likeUsers,
+              {
+                user_id: userId,
+                username,
+              },
+            ]
+        : article.likeUsers.filter((likeUser) => likeUser.user_id !== userId),
+      likedByCurrentUser: nextLiked,
+    }));
 
     const { data: existing } = await supabase
       .from("likes")
@@ -2588,23 +2703,22 @@ export default function Home() {
 
       if (error) {
         console.error("Error removing like:", error);
+        applyArticleUpdateAcrossCollections(articleId, (article) => ({
+          ...article,
+          likes: article.likes + 1,
+          likeUsers: article.likeUsers.some((likeUser) => likeUser.user_id === userId)
+            ? article.likeUsers
+            : [
+                ...article.likeUsers,
+                {
+                  user_id: userId,
+                  username,
+                },
+              ],
+          likedByCurrentUser: true,
+        }));
         return;
       }
-
-      setArticles((prev) =>
-        prev.map((article) =>
-          article.id === articleId
-            ? {
-                ...article,
-                likes: Math.max(0, article.likes - 1),
-                likeUsers: article.likeUsers.filter(
-                  (likeUser) => likeUser.user_id !== userId
-                ),
-                likedByCurrentUser: false,
-              }
-            : article
-        )
-      );
       return;
     }
 
@@ -2615,27 +2729,14 @@ export default function Home() {
 
     if (error) {
       console.error("Error saving like:", error);
+      applyArticleUpdateAcrossCollections(articleId, (article) => ({
+        ...article,
+        likes: Math.max(0, article.likes - 1),
+        likeUsers: article.likeUsers.filter((likeUser) => likeUser.user_id !== userId),
+        likedByCurrentUser: false,
+      }));
       return;
     }
-
-    setArticles((prev) =>
-      prev.map((article) =>
-        article.id === articleId
-          ? {
-              ...article,
-              likes: article.likes + 1,
-              likeUsers: [
-                ...article.likeUsers,
-                {
-                  user_id: userId,
-                  username,
-                },
-              ],
-              likedByCurrentUser: true,
-            }
-          : article
-      )
-    );
   };
 
   const handleToggleSaveArticle = async (article: Article) => {
@@ -3739,7 +3840,7 @@ export default function Home() {
   const sportsQuickWatchVideos = useMemo(
     () =>
       selectSourceBalancedVideos(
-        [...videos]
+        [...sportsVideos]
           .filter((video) => {
           if (video.fallback) {
             return false;
@@ -3782,7 +3883,7 @@ export default function Home() {
           }),
         8
       ),
-    [videos]
+    [sportsVideos]
   );
 
   const sportsInlineVideos = useMemo(
@@ -3945,6 +4046,12 @@ export default function Home() {
     }
   ) => {
     try {
+      const articleRouteId = getArticleRouteId(article);
+
+      if (!articleRouteId || !isRenderableArticleRecord(article)) {
+        return null;
+      }
+
       const safeSourceName = getSafeSourceLabel(article.source);
       const safeCategoryName = getSafeCategoryLabel(article.category, article);
       const selectedImage = getBestArticleImage(article);
@@ -4014,7 +4121,7 @@ export default function Home() {
             </div>
           </div>
           <Link
-            href={`/article/${article.id}/`}
+            href={`/article/${articleRouteId}/`}
             className="article-link"
             onClick={() => {
               persistArticleMetadata(article);
@@ -4096,7 +4203,7 @@ export default function Home() {
                 className={`icon-action-pill icon-action-pill-ghost ${
                   article.likedByCurrentUser ? "icon-action-pill-active" : ""
                 }`}
-                onClick={() => handleLike(article.id)}
+                onClick={() => handleLike(articleRouteId)}
                 aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
               >
                 <span className="icon-action-glyph" aria-hidden="true">
@@ -4112,7 +4219,7 @@ export default function Home() {
               <button
                 className="icon-action-pill icon-action-pill-ghost"
                 onClick={() => {
-                  router.push(`/article/${article.id}/#comments`);
+                  router.push(`/article/${articleRouteId}/#comments`);
                 }}
                 aria-label="Open article comments"
               >
@@ -4124,7 +4231,7 @@ export default function Home() {
                 <span>{article.comments.length}</span>
               </button>
               <ShareButton
-                path={`/article/${article.id}`}
+                path={`/article/${articleRouteId}`}
                 title={cleanDisplayText(article.title)}
                 url={article.url}
                 iconOnly
@@ -4135,11 +4242,11 @@ export default function Home() {
                   article.saved ? "bookmark-button-active" : ""
                 }`}
                 onClick={() => handleToggleSaveArticle(article)}
-                disabled={activeSaveArticleId === article.id}
+                disabled={activeSaveArticleId === articleRouteId}
                 aria-label={article.saved ? "Remove bookmark" : "Save article"}
               >
                 <span className="icon-action-glyph" aria-hidden="true">
-                  {activeSaveArticleId === article.id ? (
+                  {activeSaveArticleId === articleRouteId ? (
                     <svg {...actionIconProps}>
                       <path d="M12 5v7" />
                       <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
@@ -4733,6 +4840,41 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        {sportsQuickWatchVideos.length > 0 ? (
+          <section className="home-section-block home-section-plain quick-watch-row">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Sports Videos</strong>
+              </div>
+            </div>
+            <div className="quick-watch-scroll" role="list" aria-label="Sports videos">
+              {sportsQuickWatchVideos.slice(0, 6).map((video) => (
+                <div key={`sports-home-video-${video.id}`} className="quick-watch-item" role="listitem">
+                  <VideoFeedCard
+                    video={video}
+                    isAutoplaying={
+                      autoplayTrendingVideoKeys.includes(`sports-home:${video.id}`) &&
+                      !video.fallback
+                    }
+                    onToggleLike={handleToggleVideoLike}
+                    onToggleSave={handleToggleVideoSave}
+                    onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                    onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                    frameRef={(node) => {
+                      trendingVideoFrameRefs.current[`sports-home:${video.id}`] = node;
+                    }}
+                    autoplayKey={`sports-home:${video.id}`}
+                    previewDurationMs={4000}
+                    label="Sports Video"
+                    className="video-card-inline quick-watch-video-card"
+                    variant="article"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">

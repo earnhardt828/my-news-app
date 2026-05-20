@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { apiFetch } from "../../lib/api-base";
 import ShareButton from "../components/share-button";
@@ -25,25 +25,14 @@ const actionIconProps = {
   "aria-hidden": true,
 };
 
-function rankVideos(videos: VideoItem[]) {
-  return [...videos].sort((a, b) => {
-    const popularityDifference =
-      (b.views ?? 0) - (a.views ?? 0) ||
-      b.likes - a.likes ||
-      b.comments - a.comments;
-
-    if (popularityDifference !== 0) {
-      return popularityDifference;
-    }
-
-    const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-    const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-    return timeB - timeA;
-  });
-}
+type VideoTab = "news" | "sports";
 
 export default function VideosPage() {
-  const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
+  const [activeTab, setActiveTab] = useState<VideoTab>("news");
+  const [videosByTab, setVideosByTab] = useState<Record<VideoTab, VideoItem[]>>({
+    news: initialVideos,
+    sports: [],
+  });
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
   );
@@ -51,44 +40,95 @@ export default function VideosPage() {
   const [autoplayVideoId, setAutoplayVideoId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
+  const [tabLoading, setTabLoading] = useState<Record<VideoTab, boolean>>({
+    news: true,
+    sports: false,
+  });
+  const [statusMessages, setStatusMessages] = useState<Record<VideoTab, string>>({
+    news: "",
+    sports: "",
+  });
   const videoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasLoadedOnceRef = useRef(false);
+  const loadedTabsRef = useRef<Record<VideoTab, boolean>>({
+    news: false,
+    sports: false,
+  });
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    async function loadVideos() {
-      const shouldBlockScreen = !hasLoadedOnceRef.current;
-      setIsLoading(true);
+  const displayedVideos = videosByTab[activeTab];
+  const statusMessage = statusMessages[activeTab];
+  const isCurrentTabLoading = tabLoading[activeTab];
 
-      try {
-        const response = await apiFetch("/api/videos");
-        const data = (await response.json()) as {
-          videos?: VideoApiItem[];
-          fallback?: boolean;
-          message?: string;
-        };
-
-        const normalizedVideos = rankVideos(normalizeVideoFeedItems(data.videos));
-        setVideos(normalizedVideos);
-        setStatusMessage(data.fallback ? data.message ?? "" : "");
-      } catch (error) {
-        console.error("Error loading video feed:", error);
-        setVideos(rankVideos(initialVideos));
-        setStatusMessage("Could not load live videos, so the current feed is shown instead.");
-      } finally {
-        setIsLoading(false);
-        if (shouldBlockScreen) {
-          hasLoadedOnceRef.current = true;
-          setHasLoadedOnce(true);
-        }
-      }
+  const loadVideosForTab = useCallback(async (tab: VideoTab, force = false) => {
+    if (loadedTabsRef.current[tab] && !force) {
+      return;
     }
 
-    void loadVideos();
+    const shouldBlockScreen = !hasLoadedOnceRef.current && tab === "news";
+    if (shouldBlockScreen) {
+      setIsLoading(true);
+    }
+
+    setTabLoading((prev) => ({ ...prev, [tab]: true }));
+
+    try {
+      const response = await apiFetch(`/api/videos?tab=${tab}`);
+      const data = (await response.json()) as {
+        videos?: VideoApiItem[];
+        fallback?: boolean;
+        message?: string;
+      };
+
+      const normalizedVideos = normalizeVideoFeedItems(data.videos).filter(
+        (video) => !video.fallback && Boolean(video.youtubeId)
+      );
+
+      setVideosByTab((prev) => ({
+        ...prev,
+        [tab]: normalizedVideos,
+      }));
+      setStatusMessages((prev) => ({
+        ...prev,
+        [tab]: data.fallback ? data.message ?? "" : "",
+      }));
+      loadedTabsRef.current[tab] = true;
+    } catch (error) {
+        console.error(`Error loading ${tab} video feed:`, error);
+      setVideosByTab((prev) => ({
+        ...prev,
+        [tab]: tab === "news" ? initialVideos : [],
+      }));
+      setStatusMessages((prev) => ({
+        ...prev,
+        [tab]:
+          tab === "sports"
+            ? "Could not load live sports videos right now."
+            : "Could not load live videos, so the current feed is shown instead.",
+      }));
+    } finally {
+      setTabLoading((prev) => ({ ...prev, [tab]: false }));
+      if (shouldBlockScreen) {
+        hasLoadedOnceRef.current = true;
+        setHasLoadedOnce(true);
+        setIsLoading(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
-    const playableVideos = videos.filter(
+    void loadVideosForTab(activeTab);
+  }, [activeTab, loadVideosForTab]);
+
+  useEffect(() => {
+    setActiveVideoId(null);
+    setActiveCommentsVideoId(null);
+    setAutoplayVideoId(null);
+  }, [activeTab]);
+
+  useEffect(() => {
+    const playableVideos = displayedVideos.filter(
       (video) => !video.fallback && Boolean(video.youtubeId)
     );
 
@@ -141,19 +181,19 @@ export default function VideosPage() {
     });
 
     return () => observer.disconnect();
-  }, [videos]);
+  }, [displayedVideos]);
 
   const activeVideo = useMemo(
-    () => videos.find((video) => video.id === activeVideoId) ?? null,
-    [activeVideoId, videos]
+    () => displayedVideos.find((video) => video.id === activeVideoId) ?? null,
+    [activeVideoId, displayedVideos]
   );
 
   const activeCommentsVideo = useMemo(
     () =>
       activeCommentsVideoId === null
         ? null
-        : videos.find((video) => video.id === activeCommentsVideoId) ?? null,
-    [activeCommentsVideoId, videos]
+        : displayedVideos.find((video) => video.id === activeCommentsVideoId) ?? null,
+    [activeCommentsVideoId, displayedVideos]
   );
 
   const handleToggleLike = (videoId: string) => {
@@ -168,9 +208,10 @@ export default function VideosPage() {
           : video
       );
 
-    setVideos((prev) =>
-      updateVideos(prev)
-    );
+    setVideosByTab((prev) => ({
+      news: updateVideos(prev.news),
+      sports: updateVideos(prev.sports),
+    }));
   };
 
   const handleToggleSave = (videoId: string) => {
@@ -179,15 +220,68 @@ export default function VideosPage() {
         video.id === videoId ? { ...video, saved: !video.saved } : video
       );
 
-    setVideos((prev) =>
-      updateVideos(prev)
-    );
+    setVideosByTab((prev) => ({
+      news: updateVideos(prev.news),
+      sports: updateVideos(prev.sports),
+    }));
+  };
+
+  const handleHorizontalSwipeStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    touchStartXRef.current = touch.clientX;
+    touchStartYRef.current = touch.clientY;
+  };
+
+  const handleHorizontalSwipeEnd = (event: TouchEvent<HTMLElement>) => {
+    const startX = touchStartXRef.current;
+    const startY = touchStartYRef.current;
+    const touch = event.changedTouches[0];
+
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+
+    if (startX === null || startY === null) {
+      return;
+    }
+
+    const diffX = touch.clientX - startX;
+    const diffY = touch.clientY - startY;
+
+    if (Math.abs(diffX) < 50 || Math.abs(diffX) <= Math.abs(diffY)) {
+      return;
+    }
+
+    setActiveTab(diffX < 0 ? "sports" : "news");
   };
 
   return (
-    <section className="reels-shell videos-page-shell">
+    <section
+      className="reels-shell videos-page-shell"
+      onTouchStart={handleHorizontalSwipeStart}
+      onTouchEnd={handleHorizontalSwipeEnd}
+    >
+      <div className="videos-page-tab-row" role="tablist" aria-label="Video categories">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "news"}
+          className={`videos-page-tab ${activeTab === "news" ? "videos-page-tab-active" : ""}`}
+          onClick={() => setActiveTab("news")}
+        >
+          News
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "sports"}
+          className={`videos-page-tab ${activeTab === "sports" ? "videos-page-tab-active" : ""}`}
+          onClick={() => setActiveTab("sports")}
+        >
+          Sports
+        </button>
+      </div>
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
-      {isLoading && hasLoadedOnce ? (
+      {isCurrentTabLoading && hasLoadedOnce ? (
         <div className="muted reels-inline-status">Refreshing videos...</div>
       ) : null}
 
@@ -198,8 +292,15 @@ export default function VideosPage() {
         </div>
       ) : null}
 
+      {displayedVideos.length === 0 && !isCurrentTabLoading ? (
+        <div className="empty-state compact-empty-state">
+          <strong>{activeTab === "sports" ? "No sports videos yet" : "No news videos yet"}</strong>
+          <span>Check back shortly for a fresh vertical video feed.</span>
+        </div>
+      ) : null}
+
       <div className="reels-feed">
-        {videos.map((video) => {
+        {displayedVideos.map((video) => {
             const isAutoplaying = autoplayVideoId === video.id && !video.fallback;
 
             return (

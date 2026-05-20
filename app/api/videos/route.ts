@@ -30,6 +30,8 @@ type VideoFeedItem = {
   fallback: boolean;
 };
 
+type VideoFeedTab = "all" | "news" | "sports";
+
 const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCiWLfSweyRNmLpgEHekhoAg", name: "ESPN" },
   { channelId: "UC16niRr50-MSBwiO3YDb3RA", name: "BBC News" },
@@ -258,6 +260,82 @@ function getVideoTimestamp(publishedAt: string | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
+function getVideoSearchHaystack(video: Pick<VideoFeedItem, "title" | "creator" | "category">) {
+  return `${video.title} ${video.creator} ${video.category}`.toLowerCase();
+}
+
+function getSportsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">) {
+  const haystack = getVideoSearchHaystack(video);
+  let score = 0;
+
+  if (
+    /(highlights?|top plays|touchdown|dunk|home run|goals?|save|replay|buzzer beater)/.test(
+      haystack
+    )
+  ) {
+    score += 180;
+  }
+
+  if (
+    /(sportscenter top plays|espn highlights|nba highlights|nfl highlights|mlb highlights|nhl highlights|soccer goals highlights|cbs sports highlights|bleacher report highlights|fox sports highlights|pga tour highlights|nascar highlights)/.test(
+      haystack
+    )
+  ) {
+    score += 150;
+  }
+
+  if (
+    /(espn|sportscenter|nba|nfl|mlb|nhl|soccer|goal|golf|nascar|formula 1|bleacher report|cbs sports|fox sports|nbc sports|sports illustrated)/.test(
+      haystack
+    )
+  ) {
+    score += 95;
+  }
+
+  if (video.category === "Sports") {
+    score += 80;
+  }
+
+  if (video.orientation === "vertical") {
+    score += 24;
+  }
+
+  if (/(debate|podcast|interview|rumors?|preview|reaction)/.test(haystack)) {
+    score -= 140;
+  }
+
+  return score;
+}
+
+function getNewsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">) {
+  const haystack = getVideoSearchHaystack(video);
+  let score = 0;
+
+  if (/(breaking news|live updates|developing story|just in|urgent|latest news)/.test(haystack)) {
+    score += 140;
+  }
+
+  if (/(news|report|coverage|alert|update|headline|explainer)/.test(haystack)) {
+    score += 48;
+  }
+
+  if (/(bbc news|cnn|fox news|reuters|associated press|ap news|abc news|sky news|al jazeera|bloomberg|cnbc)/.test(haystack)) {
+    score += 56;
+  }
+
+  if (video.category !== "Sports") {
+    score += 30;
+  }
+
+  if (video.orientation === "vertical") {
+    score += 24;
+  }
+
+  score -= Math.max(0, getSportsVideoScore(video));
+
+  return score;
+}
+
 function getPublishedAfterIso(daysAgo: number) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - daysAgo);
@@ -314,6 +392,7 @@ function filterAndSortVideos(
   options: {
     category: string;
     searchTerm: string;
+    tab: VideoFeedTab;
   }
 ) {
   const normalizedSearch = normalizeForSearch(options.searchTerm);
@@ -366,11 +445,35 @@ function filterAndSortVideos(
       ? searchFiltered.filter((video) => video.category === options.category)
       : searchFiltered;
 
+  const tabFiltered =
+    options.tab === "sports"
+      ? categoryFiltered.filter((video) => getSportsVideoScore(video) > 0)
+      : options.tab === "news"
+        ? categoryFiltered.filter(
+            (video) =>
+              getSportsVideoScore(video) < 120 &&
+              (getNewsVideoScore(video) > 0 || video.category !== "Sports")
+          )
+        : categoryFiltered;
+
   const deduped = Array.from(
-    new Map(categoryFiltered.map((video) => [video.youtubeId, video])).values()
+    new Map(tabFiltered.map((video) => [video.youtubeId, video])).values()
   );
 
-  deduped.sort((a, b) => getVideoTimestamp(b.publishedAt) - getVideoTimestamp(a.publishedAt));
+  deduped.sort((a, b) => {
+    const scoreDelta =
+      options.tab === "sports"
+        ? getSportsVideoScore(b) - getSportsVideoScore(a)
+        : options.tab === "news"
+          ? getNewsVideoScore(b) - getNewsVideoScore(a)
+          : 0;
+
+    if (scoreDelta !== 0) {
+      return scoreDelta;
+    }
+
+    return getVideoTimestamp(b.publishedAt) - getVideoTimestamp(a.publishedAt);
+  });
 
   if (isTrendingFeed) {
     return deduped;
@@ -397,6 +500,7 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const searchTerm = requestUrl.searchParams.get("q")?.trim() ?? "";
   const category = requestUrl.searchParams.get("category")?.trim() ?? "Trending";
+  const tab = (requestUrl.searchParams.get("tab")?.trim().toLowerCase() ?? "all") as VideoFeedTab;
 
   try {
     const results = await Promise.allSettled(
@@ -435,6 +539,7 @@ export async function GET(request: Request) {
     const videos = filterAndSortVideos(successfulEntries, {
       category,
       searchTerm,
+      tab: tab === "sports" || tab === "news" ? tab : "all",
     });
 
     if (videos.length === 0) {

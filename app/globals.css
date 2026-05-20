@@ -4774,6 +4774,42 @@ input {
   background: transparent;
 }
 
+.videos-page-tab-row {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 14px);
+  left: 50%;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(10, 13, 20, 0.68);
+  backdrop-filter: blur(16px);
+  transform: translateX(-50%);
+}
+
+.videos-page-tab {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.videos-page-tab-active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
 .reels-status {
   margin: 0 20px;
 }
