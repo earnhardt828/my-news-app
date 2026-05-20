@@ -265,6 +265,7 @@ const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: numb
   "New York, NY": { latitude: 40.7128, longitude: -74.006 },
   "Atlanta, GA": { latitude: 33.749, longitude: -84.388 },
   "Charlotte, NC": { latitude: 35.2271, longitude: -80.8431 },
+  "Austin, TX": { latitude: 30.2672, longitude: -97.7431 },
   "Houston, TX": { latitude: 29.7604, longitude: -95.3698 },
   "Jacksonville, FL": { latitude: 30.3322, longitude: -81.6557 },
   "San Diego, CA": { latitude: 32.7157, longitude: -117.1611 },
@@ -977,6 +978,10 @@ export default function Home() {
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const [weatherNewsArticles, setWeatherNewsArticles] = useState<Article[]>([]);
   const [isWeatherNewsLoading, setIsWeatherNewsLoading] = useState(false);
+  const [sportsPreviewArticles, setSportsPreviewArticles] = useState<Article[]>([]);
+  const [isSportsPreviewLoading, setIsSportsPreviewLoading] = useState(false);
+  const [celebrityPreviewArticles, setCelebrityPreviewArticles] = useState<Article[]>([]);
+  const [isCelebrityPreviewLoading, setIsCelebrityPreviewLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1259,10 +1264,12 @@ export default function Home() {
             ? "/api/local/new-york"
             : selectedLocalCityKey === "los-angeles-ca"
               ? "/api/local/los-angeles"
-              : selectedLocalCityKey === "chicago-il"
-                ? "/api/local/chicago"
+                : selectedLocalCityKey === "chicago-il"
+                  ? "/api/local/chicago"
                 : selectedLocalCityKey === "houston-tx"
                   ? "/api/local/houston"
+                  : selectedLocalCityKey === "austin-tx"
+                    ? "/api/local/austin"
                   : selectedLocalCityKey === "jacksonville-fl"
                     ? "/api/local/jacksonville"
                   : selectedLocalCityKey === "dallas-tx"
@@ -2036,6 +2043,78 @@ export default function Home() {
       weatherFetchController?.abort();
     };
   }, [selectedLocalCity]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadTrendingPreviewSections() {
+      if (sortMode !== "trending") {
+        return;
+      }
+
+      setIsSportsPreviewLoading(true);
+      setIsCelebrityPreviewLoading(true);
+
+      try {
+        const [sportsResponse, celebrityResponse] = await Promise.all([
+          fetch("/api/news?mode=sports&pageSize=25", {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }),
+          fetch("/api/news?mode=celebrity&pageSize=25", {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }),
+        ]);
+
+        const [sportsPayload, celebrityPayload] = await Promise.all([
+          sportsResponse.ok ? sportsResponse.json().catch(() => null) : Promise.resolve(null),
+          celebrityResponse.ok
+            ? celebrityResponse.json().catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        if (isCancelled) {
+          return;
+        }
+
+        const nextSportsArticles = sportsPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                sportsPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            )
+          : [];
+        const nextCelebrityArticles = celebrityPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                celebrityPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            )
+          : [];
+
+        setSportsPreviewArticles(nextSportsArticles);
+        setCelebrityPreviewArticles(nextCelebrityArticles);
+      } catch (error) {
+        console.error("TRENDING SECTION PREVIEW LOAD FAILED", error);
+        if (!isCancelled) {
+          setSportsPreviewArticles([]);
+          setCelebrityPreviewArticles([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsSportsPreviewLoading(false);
+          setIsCelebrityPreviewLoading(false);
+        }
+      }
+    }
+
+    void loadTrendingPreviewSections();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [sortMode]);
 
   const handleVoteOnPoll = async (pollId: string, optionId: string) => {
     if (!userId) {
@@ -3285,20 +3364,28 @@ export default function Home() {
   const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
 
   const sportsTabArticles = useMemo(() => {
-    if (sortMode !== "sports") {
-      return [] as Article[];
+    if (sortMode === "sports") {
+      return visibleArticles.slice(0, 25);
     }
 
-    return visibleArticles.slice(0, 25);
-  }, [sortMode, visibleArticles]);
+    if (sortMode === "trending") {
+      return selectSourceBalancedArticles(sportsPreviewArticles.slice(0, 40), 25);
+    }
+
+    return [] as Article[];
+  }, [sortMode, sportsPreviewArticles, visibleArticles]);
 
   const celebrityTabArticles = useMemo(() => {
-    if (sortMode !== "celebrity") {
-      return [] as Article[];
+    if (sortMode === "celebrity") {
+      return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
     }
 
-    return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
-  }, [sortMode, visibleArticles]);
+    if (sortMode === "trending") {
+      return selectSourceBalancedArticles(celebrityPreviewArticles.slice(0, 40), 25);
+    }
+
+    return [] as Article[];
+  }, [celebrityPreviewArticles, sortMode, visibleArticles]);
 
   const weatherTabArticles = useMemo(() => {
     if (sortMode !== "weather") {
@@ -4187,7 +4274,6 @@ export default function Home() {
 
           {categories.length === 0 ? (
             <div className="stack" style={{ gap: "12px" }}>
-              <span className="muted">Pick a few topics to build your news section.</span>
               <div className="category-grid">
                 {CATEGORY_OPTIONS.slice(0, 8).map((category) => (
                   <button
@@ -4369,23 +4455,6 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="local-feed-chip-row" role="list" aria-label="Supported local cities">
-              {cityOptions.map((city) => (
-                <button
-                  key={city.displayName}
-                  type="button"
-                  className={`chip local-feed-city-chip ${
-                    localLocationLabel === city.displayName ? "local-feed-city-chip-active" : ""
-                  }`}
-                  onClick={() => {
-                    applyLocalCitySelection(city.displayName);
-                  }}
-                >
-                  {city.displayName}
-                </button>
-              ))}
-            </div>
-
             {isWeatherNewsLoading ? <p className="settings-detail-note">Loading weather stories...</p> : null}
 
             {weatherNewsArticles.length === 0 && !isWeatherNewsLoading ? (
@@ -4445,10 +4514,14 @@ export default function Home() {
           </div>
 
           {sportsTabArticles.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No sports stories yet</strong>
-              <span>Check back shortly for fresh sports coverage.</span>
-            </div>
+            isSportsPreviewLoading ? (
+              <div className="muted">Loading sports stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No sports stories yet</strong>
+                <span>Check back shortly for fresh sports coverage.</span>
+              </div>
+            )
           ) : (
             <div className="stack home-section-list">
               {sportsTabArticles.slice(0, 4).map((article) => (
@@ -4521,6 +4594,33 @@ export default function Home() {
               ) : null}
 
               {sportsTabArticles.slice(4).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Celebrity</strong>
+            </div>
+          </div>
+
+          {celebrityTabArticles.length === 0 ? (
+            isCelebrityPreviewLoading ? (
+              <div className="muted">Loading celebrity stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No celebrity stories yet</strong>
+                <span>Check back shortly for fresh entertainment coverage.</span>
+              </div>
+            )
+          ) : (
+            <div className="stack home-section-list">
+              {celebrityTabArticles.slice(0, 6).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
