@@ -3885,11 +3885,12 @@ export default function Home() {
     );
 
     const preferredPool = preferredVertical.length > 0 ? preferredVertical : playableVideos;
-    return selectSourceBalancedVideos(preferredPool, 8);
+    return selectSourceBalancedVideos(preferredPool, 15);
   }, [videos]);
 
-  const primaryNewsClipVideos = useMemo(() => quickWatchVideos.slice(0, 6), [quickWatchVideos]);
-  const secondaryNewsClipVideos = useMemo(() => quickWatchVideos.slice(6, 10), [quickWatchVideos]);
+  const primaryNewsClipVideos = useMemo(() => quickWatchVideos.slice(0, 5), [quickWatchVideos]);
+  const quickWatchRowVideos = useMemo(() => quickWatchVideos.slice(5, 10), [quickWatchVideos]);
+  const secondaryNewsClipVideos = useMemo(() => quickWatchVideos.slice(10, 15), [quickWatchVideos]);
 
   const sportsQuickWatchVideos = useMemo(
     () =>
@@ -4272,7 +4273,10 @@ export default function Home() {
                     </p>
                   ) : null}
                 </div>
-
+                <div className="article-logo-fallback-shell" aria-hidden="true">
+                  <SourceBadge sourceName={safeSourceName} />
+                  <span className="article-logo-fallback-label">{safeSourceName}</span>
+                </div>
               </div>
             )}
           </Link>
@@ -4387,7 +4391,7 @@ export default function Home() {
   };
 
   const renderQuickWatchRow = () => {
-    if (quickWatchVideos.length === 0) {
+    if (quickWatchRowVideos.length === 0) {
       return null;
     }
 
@@ -4399,7 +4403,7 @@ export default function Home() {
           </div>
         </div>
         <div className="quick-watch-scroll" role="list" aria-label="Quick watch videos">
-          {quickWatchVideos.map((video) => (
+          {quickWatchRowVideos.map((video) => (
             <div key={video.id} className="quick-watch-item" role="listitem">
               <VideoFeedCard
                 video={video}
@@ -4783,7 +4787,6 @@ export default function Home() {
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Trending Top 10</strong>
-              <span className="home-section-date">{todayLabel}</span>
             </div>
           </div>
           <div className="stack home-section-list">
@@ -5020,34 +5023,6 @@ export default function Home() {
 
         {renderFeaturedVideosBreak()}
 
-        <section className="section-card home-section-block">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Polls</strong>
-              <span className="muted">Top questions people are reacting to right now.</span>
-            </div>
-          </div>
-
-          {topPollsSection.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No polls yet</strong>
-              <span>Create the first one from the plus button.</span>
-            </div>
-          ) : (
-            <div className="stack home-section-list">
-              {topPollsSection.map((poll, index) => (
-                <PollCard
-                  key={poll.id}
-                  poll={poll}
-                  onVote={handleVoteOnPoll}
-                  isVoting={activePollVoteId === poll.id}
-                  rankLabel={formatTopRankLabel(index + 1)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
@@ -5199,6 +5174,34 @@ export default function Home() {
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="section-card home-section-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Polls</strong>
+              <span className="muted">Top questions people are reacting to right now.</span>
+            </div>
+          </div>
+
+          {topPollsSection.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No polls yet</strong>
+              <span>Create the first one from the plus button.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {topPollsSection.map((poll, index) => (
+                <PollCard
+                  key={poll.id}
+                  poll={poll}
+                  onVote={handleVoteOnPoll}
+                  isVoting={activePollVoteId === poll.id}
+                  rankLabel={formatTopRankLabel(index + 1)}
+                />
               ))}
             </div>
           )}

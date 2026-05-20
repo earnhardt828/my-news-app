@@ -467,6 +467,7 @@ input {
   padding-bottom: calc(28px + env(safe-area-inset-bottom));
   width: 100%;
   max-width: 100%;
+  overflow-x: clip;
   color: var(--foreground);
 }
 
@@ -505,6 +506,7 @@ input {
 .home-section-block {
   display: grid;
   gap: 14px;
+  box-sizing: border-box;
 }
 
 .home-top-trending-block {
@@ -537,7 +539,8 @@ input {
 .home-section-list > * {
   width: 100%;
   max-width: 100%;
-  margin-inline: 0;
+  margin-inline: auto;
+  box-sizing: border-box;
 }
 
 .source-rankings-list,
@@ -658,6 +661,7 @@ input {
 }
 
 .section-card {
+  box-sizing: border-box;
   background: var(--surface);
   border: 1px solid var(--card-border-strong);
   border-radius: 24px;
@@ -765,6 +769,7 @@ input {
   width: 100%;
   max-width: 100%;
   margin-inline: auto;
+  box-sizing: border-box;
   padding: 18px;
   background: var(--surface-strong);
   border: 1px solid var(--border);
@@ -1337,6 +1342,30 @@ input {
 
 .article-hero-shell {
   width: 100%;
+}
+
+.article-logo-fallback-shell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 78px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  background: linear-gradient(160deg, rgba(20, 33, 61, 0.06), rgba(20, 33, 61, 0.02));
+}
+
+.article-logo-fallback-shell .source-avatar {
+  width: 46px;
+  height: 46px;
+  font-size: 0.95rem;
+}
+
+.article-logo-fallback-label {
+  color: var(--text-soft);
+  font-size: 0.96rem;
+  font-weight: 800;
+  line-height: 1.3;
 }
 
 .article-image-hero {
@@ -2288,6 +2317,7 @@ input {
 .quick-watch-item {
   flex: 0 0 min(78vw, 320px);
   scroll-snap-align: start;
+  box-sizing: border-box;
 }
 
 .featured-stories-scroll {
@@ -2308,6 +2338,7 @@ input {
   flex: 0 0 min(80vw, 336px);
   min-height: 228px;
   overflow: hidden;
+  box-sizing: border-box;
   border-radius: 24px;
   background: #101726;
   scroll-snap-align: start;
