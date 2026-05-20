@@ -1000,6 +1000,8 @@ export default function Home() {
   const [isSportsPreviewLoading, setIsSportsPreviewLoading] = useState(false);
   const [celebrityPreviewArticles, setCelebrityPreviewArticles] = useState<Article[]>([]);
   const [isCelebrityPreviewLoading, setIsCelebrityPreviewLoading] = useState(false);
+  const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
+  const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -2086,18 +2088,21 @@ export default function Home() {
         setBreakingPreviewArticles([]);
         setSportsPreviewArticles([]);
         setCelebrityPreviewArticles([]);
+        setTechnologyPreviewArticles([]);
         setIsBreakingPreviewLoading(false);
         setIsSportsPreviewLoading(false);
         setIsCelebrityPreviewLoading(false);
+        setIsTechnologyPreviewLoading(false);
         return;
       }
 
       setIsBreakingPreviewLoading(true);
       setIsSportsPreviewLoading(true);
       setIsCelebrityPreviewLoading(true);
+      setIsTechnologyPreviewLoading(true);
 
       try {
-        const [breakingResponse, sportsResponse, celebrityResponse] = await Promise.all([
+        const [breakingResponse, sportsResponse, celebrityResponse, technologyResponse] = await Promise.all([
           fetch(
             `/api/news?mode=search&query=${encodeURIComponent(
               BREAKING_NEWS_FEED_QUERY
@@ -2115,13 +2120,20 @@ export default function Home() {
             cache: "no-store",
             headers: { Accept: "application/json" },
           }),
+          fetch("/api/news?mode=technology&pageSize=25", {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }),
         ]);
 
-        const [breakingPayload, sportsPayload, celebrityPayload] = await Promise.all([
+        const [breakingPayload, sportsPayload, celebrityPayload, technologyPayload] = await Promise.all([
           breakingResponse.ok ? breakingResponse.json().catch(() => null) : Promise.resolve(null),
           sportsResponse.ok ? sportsResponse.json().catch(() => null) : Promise.resolve(null),
           celebrityResponse.ok
             ? celebrityResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          technologyResponse.ok
+            ? technologyResponse.json().catch(() => null)
             : Promise.resolve(null),
         ]);
 
@@ -2150,22 +2162,32 @@ export default function Home() {
               ).articles
             )
           : [];
+        const nextTechnologyArticles = technologyPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                technologyPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            )
+          : [];
 
         setBreakingPreviewArticles(nextBreakingArticles);
         setSportsPreviewArticles(nextSportsArticles);
         setCelebrityPreviewArticles(nextCelebrityArticles);
+        setTechnologyPreviewArticles(nextTechnologyArticles);
       } catch (error) {
         console.error("TRENDING SECTION PREVIEW LOAD FAILED", error);
         if (!isCancelled) {
           setBreakingPreviewArticles([]);
           setSportsPreviewArticles([]);
           setCelebrityPreviewArticles([]);
+          setTechnologyPreviewArticles([]);
         }
       } finally {
         if (!isCancelled) {
           setIsBreakingPreviewLoading(false);
           setIsSportsPreviewLoading(false);
           setIsCelebrityPreviewLoading(false);
+          setIsTechnologyPreviewLoading(false);
         }
       }
     }
@@ -3504,12 +3526,16 @@ export default function Home() {
   }, [sortMode, visibleArticles]);
 
   const technologyTabArticles = useMemo(() => {
+    if (sortMode === "trending") {
+      return selectSourceBalancedArticles(technologyPreviewArticles.slice(0, 40), 25);
+    }
+
     if (sortMode !== "technology") {
       return [] as Article[];
     }
 
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
-  }, [sortMode, visibleArticles]);
+  }, [sortMode, technologyPreviewArticles, visibleArticles]);
 
   const travelTabArticles = useMemo(() => {
     if (sortMode !== "travel") {
@@ -4635,16 +4661,11 @@ export default function Home() {
                 <span>Try another supported city or check back shortly.</span>
               </div>
             ) : (
-              <div className="compact-feed-module-list">
-                {weatherNewsArticles.map((article) => (
-                  <Link
-                    key={article.id || article.url || getArticleDeduplicationKey(article)}
-                    href={`/article/${article.id}/`}
-                    className="compact-feed-module-link compact-feed-module-link-rich"
-                  >
-                    <strong>{cleanDisplayText(article.title)}</strong>
-                    <span>{getSafeSourceLabel(article.source)}</span>
-                  </Link>
+              <div className="stack home-section-list">
+                {weatherNewsArticles.slice(0, 3).map((article) => (
+                  <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                    {renderArticleFeedCard(article)}
+                  </div>
                 ))}
               </div>
             )}
@@ -4666,12 +4687,13 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {topPollsSection.map((poll) => (
+              {topPollsSection.map((poll, index) => (
                 <PollCard
                   key={poll.id}
                   poll={poll}
                   onVote={handleVoteOnPoll}
                   isVoting={activePollVoteId === poll.id}
+                  rankLabel={formatTopRankLabel(index + 1)}
                 />
               ))}
             </div>
@@ -4791,6 +4813,40 @@ export default function Home() {
           ) : (
             <div className="stack home-section-list">
               {celebrityTabArticles.slice(0, 6).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Technology</strong>
+            </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setSortMode("technology")}
+            >
+              More
+            </button>
+          </div>
+
+          {technologyTabArticles.length === 0 ? (
+            isTechnologyPreviewLoading ? (
+              <div className="muted">Loading technology stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No technology stories yet</strong>
+                <span>Check back shortly for fresh technology coverage.</span>
+              </div>
+            )
+          ) : (
+            <div className="stack home-section-list">
+              {technologyTabArticles.slice(0, 6).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>

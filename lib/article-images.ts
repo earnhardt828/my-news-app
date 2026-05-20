@@ -35,6 +35,15 @@ export function looksLikeLowQualityImageUrl(url: string) {
     return true;
   }
 
+  if (
+    /news\.google\.com\/.*(googlelogo|placeholder|gstatic|newsrs)/.test(normalizedUrl) ||
+    /googleusercontent\.com\/.*(news|placeholder|thumbnail)/.test(normalizedUrl) ||
+    /gstatic\.com\/.*(news|placeholder|logo)/.test(normalizedUrl) ||
+    /(^|[/?_.=-])(placeholder|default|fallback|blank)([/?_.=-]|$)/.test(normalizedUrl)
+  ) {
+    return true;
+  }
+
   try {
     const parsed = new URL(url);
     const dimensionParams = [
@@ -63,6 +72,20 @@ export function looksLikeLowQualityImageUrl(url: string) {
 
     if (tinyDimensionRequested) {
       return true;
+    }
+
+    if (
+      parsed.hostname.includes("news.google.com") ||
+      parsed.hostname.includes("gstatic.com") ||
+      parsed.hostname.includes("googleusercontent.com")
+    ) {
+      const path = `${parsed.pathname}${parsed.search}`.toLowerCase();
+
+      if (
+        /placeholder|default|blank|logo|newsrs|thumbnail|favicon/.test(path)
+      ) {
+        return true;
+      }
     }
   } catch {
     return false;
