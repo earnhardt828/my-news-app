@@ -4799,7 +4799,7 @@ export default function Home() {
               <strong className="profile-section-title home-section-title">Trending Top 10</strong>
             </div>
           </div>
-          <div className="stack home-section-list">
+          <div className="stack home-section-list top-trending-card-rail">
             {topTenTrendingArticles.map((article, index) => (
               <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                 {renderArticleFeedCard(article, {
@@ -5031,8 +5031,6 @@ export default function Home() {
           </div>
         </section>
 
-        {renderFeaturedVideosBreak()}
-
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
@@ -5250,6 +5248,8 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        {renderFeaturedVideosBreak()}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
