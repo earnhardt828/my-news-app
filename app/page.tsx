@@ -3951,15 +3951,6 @@ export default function Home() {
     [sportsVideos]
   );
 
-  const sportsInlineVideos = useMemo(
-    () => sportsQuickWatchVideos.slice(6, 9),
-    [sportsQuickWatchVideos]
-  );
-  const sportsFeaturedVideo = useMemo(
-    () => sportsQuickWatchVideos[6] ?? null,
-    [sportsQuickWatchVideos]
-  );
-
   useEffect(() => {
     if (sortMode === "sports") {
       console.log("SPORTS VIDEO COUNT", sportsQuickWatchVideos.length);
@@ -4025,8 +4016,63 @@ export default function Home() {
         const image = getBestArticleImage(article);
         return Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src);
       })
-      .slice(0, 8);
+      .slice(0, 12);
   }, [balancedTrendingArticles, breakingNewsPreviewArticles, sortMode, topTenTrendingArticles]);
+
+  const breakingSportsArticles = useMemo(() => {
+    if (sortMode !== "sports") {
+      return [] as Article[];
+    }
+
+    const trustedSportsSources = /(espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report)/i;
+    const breakingSportsTerms = /(breaking|latest|urgent|live|developing|just in|trade|injury|suspension|fires coach|signs|playoff)/i;
+
+    const scored = sportsTabArticles
+      .map((article) => {
+        const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
+        let score = 0;
+
+        if (trustedSportsSources.test(article.source)) {
+          score += 80;
+        }
+
+        if (breakingSportsTerms.test(haystack)) {
+          score += 120;
+        }
+
+        if (/(nfl|nba|mlb|nhl|soccer|premier league|wnba|ncaa|college football|college basketball)/i.test(haystack)) {
+          score += 36;
+        }
+
+        score += Math.floor(getPublishedAtTimestamp(article.publishedAt) / 10000000);
+        return { article, score };
+      })
+      .sort((left, right) => right.score - left.score);
+
+    return scored.map((entry) => entry.article).slice(0, 5);
+  }, [sortMode, sportsTabArticles]);
+
+  const featuredSportsArticles = useMemo(() => {
+    if (sortMode !== "sports") {
+      return [] as Article[];
+    }
+
+    const usedKeys = new Set(
+      breakingSportsArticles.map((article) => getArticleDeduplicationKey(article))
+    );
+
+    return sportsTabArticles
+      .filter((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+        if (usedKeys.has(dedupeKey)) {
+          return false;
+        }
+
+        const image = getBestArticleImage(article);
+        return Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src);
+      })
+      .slice(0, 8);
+  }, [breakingSportsArticles, sortMode, sportsTabArticles]);
 
   const topPollsSection = useMemo(
     () =>
@@ -5432,8 +5478,116 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {sportsTabArticles.slice(0, 4).map((article) => (
+              {breakingSportsArticles.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Breaking Sports</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list">
+                    {breakingSportsArticles.map((article) => (
+                      <div key={`breaking-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderArticleFeedCard(article)}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {sportsTabArticles
+                .filter(
+                  (article) =>
+                    !breakingSportsArticles.some(
+                      (breakingArticle) =>
+                        getArticleDeduplicationKey(breakingArticle) ===
+                        getArticleDeduplicationKey(article)
+                    )
+                )
+                .slice(0, 4)
+                .map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+
+              {featuredSportsArticles.length > 0 ? (
+                <section className="home-section-block home-section-plain featured-stories-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Featured Sports</strong>
+                    </div>
+                  </div>
+                  <div className="featured-stories-scroll" role="list" aria-label="Featured sports">
+                    {featuredSportsArticles.map((article) => {
+                      const routeId = getArticleRouteId(article);
+                      const selectedImage = getBestArticleImage(article);
+                      const imageSrc = selectedImage.src;
+
+                      if (!routeId) {
+                        return null;
+                      }
+
+                      return (
+                        <Link
+                          key={`featured-sports-${routeId}`}
+                          href={`/article/${routeId}/`}
+                          className="featured-story-card"
+                          role="listitem"
+                          onClick={() => {
+                            persistArticleMetadata(article);
+                            saveArticleReturnState({
+                              path: "/",
+                              scrollY: window.scrollY,
+                              source: "home",
+                              sortMode,
+                              selectedLocalCity,
+                              localLocationLabel,
+                            });
+                          }}
+                        >
+                          {imageSrc ? (
+                            <img
+                              src={imageSrc}
+                              alt={cleanDisplayText(article.title)}
+                              className="featured-story-image"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <div className="featured-story-fallback-brand" aria-hidden="true">
+                              <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+                            </div>
+                          )}
+                          <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
+                          <div className="featured-story-copy">
+                            <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
+                            <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+
+              {sportsTabArticles
+                .filter(
+                  (article) =>
+                    !breakingSportsArticles.some(
+                      (breakingArticle) =>
+                        getArticleDeduplicationKey(breakingArticle) ===
+                        getArticleDeduplicationKey(article)
+                    ) &&
+                    !featuredSportsArticles.some(
+                      (featuredArticle) =>
+                        getArticleDeduplicationKey(featuredArticle) ===
+                        getArticleDeduplicationKey(article)
+                    )
+                )
+                .slice(4, 10)
+                .map((article) => (
+                <div key={`sports-mid-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                   {renderArticleFeedCard(article)}
                 </div>
               ))}
@@ -5473,47 +5627,23 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {sportsTabArticles.slice(4, 10).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-
-              {sportsFeaturedVideo ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Featured Video</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list">
-                    <div>
-                      <VideoFeedCard
-                        video={sportsFeaturedVideo}
-                        isAutoplaying={
-                          autoplayTrendingVideoKeys.includes(`sports-featured:${sportsFeaturedVideo.id}`) &&
-                          !sportsFeaturedVideo.fallback
-                        }
-                        onToggleLike={handleToggleVideoLike}
-                        onToggleSave={handleToggleVideoSave}
-                        onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                        frameRef={(node) => {
-                          trendingVideoFrameRefs.current[`sports-featured:${sportsFeaturedVideo.id}`] = node;
-                        }}
-                        autoplayKey={`sports-featured:${sportsFeaturedVideo.id}`}
-                        previewDurationMs={4000}
-                        label="Featured Video"
-                        className="video-card-inline featured-video-single-card"
-                        variant="article"
-                      />
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-
-              {sportsTabArticles.slice(10).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+              {sportsTabArticles
+                .filter(
+                  (article) =>
+                    !breakingSportsArticles.some(
+                      (breakingArticle) =>
+                        getArticleDeduplicationKey(breakingArticle) ===
+                        getArticleDeduplicationKey(article)
+                    ) &&
+                    !featuredSportsArticles.some(
+                      (featuredArticle) =>
+                        getArticleDeduplicationKey(featuredArticle) ===
+                        getArticleDeduplicationKey(article)
+                    )
+                )
+                .slice(10)
+                .map((article) => (
+                <div key={`sports-rest-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                   {renderArticleFeedCard(article)}
                 </div>
               ))}
