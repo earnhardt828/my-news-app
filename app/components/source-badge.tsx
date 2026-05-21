@@ -6,11 +6,13 @@ import { getSourceInitial, getSourceLogoUrl } from "../../lib/source-logos";
 type SourceBadgeProps = {
   sourceName: string;
   className?: string;
+  showInitialFallback?: boolean;
 };
 
 export default function SourceBadge({
   sourceName,
   className = "",
+  showInitialFallback = true,
 }: SourceBadgeProps) {
   const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
   const logoUrl = getSourceLogoUrl(sourceName);
@@ -27,9 +29,9 @@ export default function SourceBadge({
           loading="lazy"
           onError={() => setFailedLogoUrl(logoUrl)}
         />
-      ) : (
+      ) : showInitialFallback ? (
         <span className="source-avatar-fallback">{getSourceInitial(sourceName)}</span>
-      )}
+      ) : null}
     </span>
   );
 }

@@ -42,7 +42,7 @@ import {
   SUPPORTED_LOCAL_CITIES,
 } from "../lib/local-news";
 import { isCommentAllowed } from "../lib/moderation";
-import { slugifySourceName } from "../lib/source-logos";
+import { hasMappedSourceLogo, slugifySourceName } from "../lib/source-logos";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
 import { CATEGORY_OPTIONS, getCategoryLabel, getDisplayCategory } from "../lib/categories";
@@ -3885,12 +3885,12 @@ export default function Home() {
     );
 
     const preferredPool = preferredVertical.length > 0 ? preferredVertical : playableVideos;
-    return selectSourceBalancedVideos(preferredPool, 15);
+    return selectSourceBalancedVideos(preferredPool, 24);
   }, [videos]);
 
   const quickWatchRowVideos = useMemo(() => quickWatchVideos.slice(0, 5), [quickWatchVideos]);
   const secondaryNewsClipVideos = useMemo(
-    () => quickWatchVideos.slice(quickWatchRowVideos.length, quickWatchRowVideos.length + 5),
+    () => quickWatchVideos.slice(quickWatchRowVideos.length, quickWatchRowVideos.length + 8),
     [quickWatchRowVideos.length, quickWatchVideos]
   );
   const primaryNewsClipVideos = useMemo(
@@ -3952,7 +3952,7 @@ export default function Home() {
   );
 
   const sportsInlineVideos = useMemo(
-    () => sportsQuickWatchVideos.slice(3, 6),
+    () => sportsQuickWatchVideos.slice(6, 9),
     [sportsQuickWatchVideos]
   );
 
@@ -4146,6 +4146,7 @@ export default function Home() {
       const safeCategoryName = getSafeCategoryLabel(article.category, article);
       const selectedImage = getBestArticleImage(article);
       const imageSrc = selectedImage.src;
+      const hasSourceLogoFallback = hasMappedSourceLogo(safeSourceName);
       const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
       const shouldUseLargeImage =
         Boolean(imageSrc) &&
@@ -4160,6 +4161,9 @@ export default function Home() {
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
+
+      const shouldShowLikeAction = sortMode !== "trending";
+      const shouldShowLogoFallbackTile = !shouldUseLargeImage && hasSourceLogoFallback;
 
       return (
         <article
@@ -4266,7 +4270,13 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="news-card-body news-card-body-text-only">
+              <div
+                className={`news-card-body ${
+                  shouldShowLogoFallbackTile
+                    ? "news-card-body-with-thumb"
+                    : "news-card-body-text-only"
+                }`}
+              >
                 <div className="news-card-copy">
                   <div className="trending-title-row">
                     <h3 className="trending-article-title">
@@ -4283,32 +4293,42 @@ export default function Home() {
                     </p>
                   ) : null}
                 </div>
-                <div className="article-logo-fallback-shell" aria-hidden="true">
-                  <SourceBadge sourceName={safeSourceName} />
-                  <span className="article-logo-fallback-label">{safeSourceName}</span>
-                </div>
+                {shouldShowLogoFallbackTile ? (
+                  <div className="article-thumb-shell article-thumb-shell-inline article-image-placeholder" aria-hidden="true">
+                    <span className="article-image-placeholder-orb article-image-placeholder-orb-left" />
+                    <span className="article-image-placeholder-orb article-image-placeholder-orb-right" />
+                    <div className="article-image-placeholder-content">
+                      <span className="article-image-placeholder-brand">
+                        <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
+                      </span>
+                      <span className="article-image-placeholder-kicker">{safeSourceName}</span>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
           </Link>
           <div className="news-card-footer">
             <div className="engagement-row trending-stats-row news-card-actions">
-              <button
-                className={`icon-action-pill icon-action-pill-ghost ${
-                  article.likedByCurrentUser ? "icon-action-pill-active" : ""
-                }`}
-                onClick={() => handleLike(articleRouteId)}
-                aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
-              >
-                <span className="icon-action-glyph" aria-hidden="true">
-                  <svg {...actionIconProps}>
-                    <path
-                      d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                      fill={article.likedByCurrentUser ? "currentColor" : "none"}
-                    />
-                  </svg>
-                </span>
-                <span>{article.likes}</span>
-              </button>
+              {shouldShowLikeAction ? (
+                <button
+                  className={`icon-action-pill icon-action-pill-ghost ${
+                    article.likedByCurrentUser ? "icon-action-pill-active" : ""
+                  }`}
+                  onClick={() => handleLike(articleRouteId)}
+                  aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
+                >
+                  <span className="icon-action-glyph" aria-hidden="true">
+                    <svg {...actionIconProps}>
+                      <path
+                        d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                        fill={article.likedByCurrentUser ? "currentColor" : "none"}
+                      />
+                    </svg>
+                  </span>
+                  <span>{article.likes}</span>
+                </button>
+              ) : null}
               <button
                 className="icon-action-pill icon-action-pill-ghost"
                 onClick={() => {

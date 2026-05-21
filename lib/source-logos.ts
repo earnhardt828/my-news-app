@@ -169,6 +169,10 @@ export function getSourceLogoUrl(sourceName: string) {
   return `/source-logos/${normalized}.png`;
 }
 
+export function hasMappedSourceLogo(sourceName: string) {
+  return Boolean(sourceLogoMap[sourceName.trim()]);
+}
+
 export function getSourceInitial(sourceName: string) {
   return sourceName.trim().charAt(0).toUpperCase() || "N";
 }

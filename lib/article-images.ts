@@ -40,6 +40,7 @@ export function looksLikeLowQualityImageUrl(url: string) {
     /encrypted-tbn\d*\.gstatic\.com/.test(normalizedUrl) ||
     /news\.google\.com\/.*(googlelogo|placeholder|gstatic|newsrs)/.test(normalizedUrl) ||
     /googleusercontent\.com\/.*(news|placeholder|thumbnail)/.test(normalizedUrl) ||
+    /lh3\.googleusercontent\.com/.test(normalizedUrl) ||
     /gstatic\.com\/.*(news|placeholder|logo)/.test(normalizedUrl) ||
     /(^|[/?_.=-])(placeholder|default|fallback|blank|logo)([/?_.=-]|$)/.test(normalizedUrl)
   ) {
@@ -80,7 +81,8 @@ export function looksLikeLowQualityImageUrl(url: string) {
       parsed.hostname.includes("google.com") ||
       parsed.hostname.includes("news.google.com") ||
       parsed.hostname.includes("gstatic.com") ||
-      parsed.hostname.includes("googleusercontent.com")
+      parsed.hostname.includes("googleusercontent.com") ||
+      parsed.hostname.includes("lh3.googleusercontent.com")
     ) {
       const path = `${parsed.pathname}${parsed.search}`.toLowerCase();
 
@@ -112,7 +114,9 @@ export function getBestArticleImage(article: ArticleImageFields) {
   const usableCandidates = candidates.filter(([, value]) => Boolean(value)) as Array<
     [ArticleImageSource, string]
   >;
-  const selected = usableCandidates[0] ?? null;
+  const selected =
+    usableCandidates.find(([, value]) => !looksLikeLowQualityImageUrl(value)) ??
+    null;
 
   return {
     src: selected?.[1] ?? null,
