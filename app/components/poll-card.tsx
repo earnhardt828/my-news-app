@@ -15,6 +15,7 @@ type PollCardProps = {
   showHeartAction?: boolean;
   onToggleHeart?: (pollId: string) => void;
   isHeartLoading?: boolean;
+  onAuthRequired?: () => void;
 };
 
 export default function PollCard({
@@ -27,6 +28,7 @@ export default function PollCard({
   showHeartAction = false,
   onToggleHeart,
   isHeartLoading = false,
+  onAuthRequired,
 }: PollCardProps) {
   const router = useRouter();
   const hasVoted = Boolean(poll.userVoteOptionId);
@@ -34,6 +36,14 @@ export default function PollCard({
   const rootClassName = `news-card poll-card ${rankLabel ? "news-card-has-rank" : ""} ${className}`.trim();
   const handleOpenPoll = () => {
     router.push(`/poll/${poll.id}/`);
+  };
+  const handleVoteAttempt = (optionId: string) => {
+    if (!onVote) {
+      onAuthRequired?.();
+      return;
+    }
+
+    onVote(poll.id, optionId);
   };
 
   return (
@@ -50,16 +60,7 @@ export default function PollCard({
       }}
     >
       <div className="news-card-top-row">
-        <span className="chip chip-accent trending-category-pill trending-category-pill-inline">
-          {getCategoryLabel(poll.category)}
-        </span>
-        {rankLabel ? (
-          <span className="chip trending-rank-badge news-card-rank-badge">{rankLabel}</span>
-        ) : null}
-      </div>
-
-      <div className="trending-source-row">
-        <div className="trending-source-brand poll-card-brand">
+        <div className="trending-source-brand poll-card-brand poll-card-brand-top">
           {poll.creatorAvatarUrl ? (
             <span className="poll-card-avatar" aria-hidden="true">
               <Image
@@ -78,7 +79,16 @@ export default function PollCard({
           <span className="trending-source-name">
             {showAuthor && poll.username ? `@${poll.username}` : "Graffiti Poll"}
           </span>
+          <span className="trending-source-category-separator" aria-hidden="true">
+            ·
+          </span>
+          <span className="trending-source-category-inline">
+            {getCategoryLabel(poll.category)}
+          </span>
         </div>
+        {rankLabel ? (
+          <span className="chip trending-rank-badge news-card-rank-badge">{rankLabel}</span>
+        ) : null}
       </div>
 
       <div className="news-card-body news-card-body-text-only">

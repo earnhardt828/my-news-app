@@ -4451,10 +4451,10 @@ export default function Home() {
       <section className="home-section-block home-section-plain featured-stories-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">Featured Stories</strong>
+            <strong className="profile-section-title home-section-title">Featured News</strong>
           </div>
         </div>
-        <div className="featured-stories-scroll" role="list" aria-label="Featured stories">
+        <div className="featured-stories-scroll" role="list" aria-label="Featured news">
           {featuredStories.map((article) => {
             const routeId = getArticleRouteId(article);
             const selectedImage = getBestArticleImage(article);
@@ -5240,13 +5240,6 @@ export default function Home() {
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Celebrity</strong>
             </div>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => setSortMode("celebrity")}
-            >
-              More
-            </button>
           </div>
 
           {celebrityTabArticles.length === 0 ? (
@@ -5283,15 +5276,17 @@ export default function Home() {
               <span>Create the first one from the plus button.</span>
             </div>
           ) : (
-            <div className="stack home-section-list">
+            <div className="polls-carousel" role="list" aria-label="Top polls">
               {topPollsSection.map((poll, index) => (
-                <PollCard
-                  key={poll.id}
-                  poll={poll}
-                  onVote={handleVoteOnPoll}
-                  isVoting={activePollVoteId === poll.id}
-                  rankLabel={formatTopRankLabel(index + 1)}
-                />
+                <div key={poll.id} className="polls-carousel-item" role="listitem">
+                  <PollCard
+                    poll={poll}
+                    onVote={handleVoteOnPoll}
+                    isVoting={activePollVoteId === poll.id}
+                    rankLabel={formatTopRankLabel(index + 1)}
+                    className="poll-card-featured"
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -5302,13 +5297,6 @@ export default function Home() {
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Technology</strong>
             </div>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => setSortMode("technology")}
-            >
-              More
-            </button>
           </div>
 
           {technologyTabArticles.length === 0 ? (
