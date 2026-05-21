@@ -3955,6 +3955,10 @@ export default function Home() {
     () => sportsQuickWatchVideos.slice(6, 9),
     [sportsQuickWatchVideos]
   );
+  const sportsFeaturedVideo = useMemo(
+    () => sportsQuickWatchVideos[6] ?? null,
+    [sportsQuickWatchVideos]
+  );
 
   useEffect(() => {
     if (sortMode === "sports") {
@@ -4451,10 +4455,10 @@ export default function Home() {
       <section className="home-section-block home-section-plain featured-stories-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">Featured News</strong>
+            <strong className="profile-section-title home-section-title">Featured Articles</strong>
           </div>
         </div>
-        <div className="featured-stories-scroll" role="list" aria-label="Featured news">
+        <div className="featured-stories-scroll" role="list" aria-label="Featured articles">
           {featuredStories.map((article) => {
             const routeId = getArticleRouteId(article);
             const selectedImage = getBestArticleImage(article);
@@ -5078,6 +5082,36 @@ export default function Home() {
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Polls</strong>
+              <span className="muted">Top questions people are reacting to right now.</span>
+            </div>
+          </div>
+
+          {topPollsSection.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No polls yet</strong>
+              <span>Create the first one from the plus button.</span>
+            </div>
+          ) : (
+            <div className="polls-carousel" role="list" aria-label="Top polls">
+              {topPollsSection.map((poll, index) => (
+                <div key={poll.id} className="polls-carousel-item" role="listitem">
+                  <PollCard
+                    poll={poll}
+                    onVote={handleVoteOnPoll}
+                    isVoting={activePollVoteId === poll.id}
+                    rankLabel={formatTopRankLabel(index + 1)}
+                    className="poll-card-featured"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Featured Profiles</strong>
               <span className="muted">Popular source profiles to explore right now.</span>
             </div>
@@ -5238,63 +5272,6 @@ export default function Home() {
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Celebrity</strong>
-            </div>
-          </div>
-
-          {celebrityTabArticles.length === 0 ? (
-            isCelebrityPreviewLoading ? (
-              <div className="muted">Loading celebrity stories...</div>
-            ) : (
-              <div className="empty-state compact-empty-state">
-                <strong>No celebrity stories yet</strong>
-                <span>Check back shortly for fresh entertainment coverage.</span>
-              </div>
-            )
-          ) : (
-            <div className="stack home-section-list">
-              {celebrityTabArticles.slice(0, 6).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Polls</strong>
-              <span className="muted">Top questions people are reacting to right now.</span>
-            </div>
-          </div>
-
-          {topPollsSection.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No polls yet</strong>
-              <span>Create the first one from the plus button.</span>
-            </div>
-          ) : (
-            <div className="polls-carousel" role="list" aria-label="Top polls">
-              {topPollsSection.map((poll, index) => (
-                <div key={poll.id} className="polls-carousel-item" role="listitem">
-                  <PollCard
-                    poll={poll}
-                    onVote={handleVoteOnPoll}
-                    isVoting={activePollVoteId === poll.id}
-                    rankLabel={formatTopRankLabel(index + 1)}
-                    className="poll-card-featured"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Technology</strong>
             </div>
           </div>
@@ -5326,13 +5303,6 @@ export default function Home() {
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Business</strong>
             </div>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => setSortMode("business")}
-            >
-              More
-            </button>
           </div>
 
           {businessTabArticles.length === 0 ? (
@@ -5462,7 +5432,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {sportsTabArticles.slice(0, 2).map((article) => (
+              {sportsTabArticles.slice(0, 4).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
@@ -5476,7 +5446,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="quick-watch-scroll" role="list" aria-label="Sports quick watch videos">
-                    {sportsQuickWatchVideos.map((video) => (
+                    {sportsQuickWatchVideos.slice(0, 6).map((video) => (
                       <div key={video.id} className="quick-watch-item" role="listitem">
                         <VideoFeedCard
                           video={video}
@@ -5503,35 +5473,46 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {sportsInlineVideos.length > 0 ? (
-                <section className="stack home-section-list">
-                  {sportsInlineVideos.map((video) => (
-                    <div key={`sports-inline-${video.id}`} className="section-card">
+              {sportsTabArticles.slice(4, 10).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+
+              {sportsFeaturedVideo ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Featured Video</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list">
+                    <div>
                       <VideoFeedCard
-                        video={video}
+                        video={sportsFeaturedVideo}
                         isAutoplaying={
-                          autoplayTrendingVideoKeys.includes(`sports-inline:${video.id}`) &&
-                          !video.fallback
+                          autoplayTrendingVideoKeys.includes(`sports-featured:${sportsFeaturedVideo.id}`) &&
+                          !sportsFeaturedVideo.fallback
                         }
                         onToggleLike={handleToggleVideoLike}
                         onToggleSave={handleToggleVideoSave}
                         onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
                         onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
                         frameRef={(node) => {
-                          trendingVideoFrameRefs.current[`sports-inline:${video.id}`] = node;
+                          trendingVideoFrameRefs.current[`sports-featured:${sportsFeaturedVideo.id}`] = node;
                         }}
-                        autoplayKey={`sports-inline:${video.id}`}
+                        autoplayKey={`sports-featured:${sportsFeaturedVideo.id}`}
                         previewDurationMs={4000}
-                        label="Sports Video"
-                        className="video-card-inline"
+                        label="Featured Video"
+                        className="video-card-inline featured-video-single-card"
                         variant="article"
                       />
                     </div>
-                  ))}
+                  </div>
                 </section>
               ) : null}
 
-              {sportsTabArticles.slice(2).map((article) => (
+              {sportsTabArticles.slice(10).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>

@@ -107,18 +107,12 @@ export default function PollCard({
                     ? "poll-option-button-active"
                     : ""
                 }`}
-                disabled={hasVoted || isVoting || !onVote}
+                disabled={hasVoted || isVoting || (!onVote && !onAuthRequired)}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onVote?.(poll.id, option.id);
+                  handleVoteAttempt(option.id);
                 }}
               >
-                <span className="poll-option-copy">
-                  <span>{option.optionText}</span>
-                  {showResults ? (
-                    <span className="poll-option-percentage">{option.percentage}%</span>
-                  ) : null}
-                </span>
                 {showResults ? (
                   <span
                     className="poll-option-bar"
@@ -126,6 +120,12 @@ export default function PollCard({
                     style={{ width: `${option.percentage}%` }}
                   />
                 ) : null}
+                <span className="poll-option-copy">
+                  <span>{option.optionText}</span>
+                  {showResults ? (
+                    <span className="poll-option-percentage">{option.percentage}%</span>
+                  ) : null}
+                </span>
               </button>
             ))}
           </div>
