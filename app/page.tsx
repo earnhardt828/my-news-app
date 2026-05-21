@@ -3888,18 +3888,18 @@ export default function Home() {
     return selectSourceBalancedVideos(preferredPool, 24);
   }, [videos]);
 
-  const quickWatchRowVideos = useMemo(() => quickWatchVideos.slice(0, 5), [quickWatchVideos]);
-  const secondaryNewsClipVideos = useMemo(
-    () => quickWatchVideos.slice(quickWatchRowVideos.length, quickWatchRowVideos.length + 8),
-    [quickWatchRowVideos.length, quickWatchVideos]
+  const myNewsQuickWatchVideos = useMemo(() => quickWatchVideos.slice(0, 5), [quickWatchVideos]);
+  const myNewsFeaturedVideos = useMemo(
+    () => quickWatchVideos.slice(myNewsQuickWatchVideos.length, myNewsQuickWatchVideos.length + 8),
+    [myNewsQuickWatchVideos.length, quickWatchVideos]
   );
   const primaryNewsClipVideos = useMemo(
     () =>
       quickWatchVideos.slice(
-        quickWatchRowVideos.length + secondaryNewsClipVideos.length,
-        quickWatchRowVideos.length + secondaryNewsClipVideos.length + 5
+        myNewsQuickWatchVideos.length + myNewsFeaturedVideos.length,
+        myNewsQuickWatchVideos.length + myNewsFeaturedVideos.length + 5
       ),
-    [quickWatchRowVideos.length, secondaryNewsClipVideos.length, quickWatchVideos]
+    [myNewsQuickWatchVideos.length, myNewsFeaturedVideos.length, quickWatchVideos]
   );
 
   const sportsQuickWatchVideos = useMemo(
@@ -3994,7 +3994,7 @@ export default function Home() {
       .slice(0, 5);
   }, [breakingPreviewArticles, sortMode, topTenTrendingArticles]);
 
-  const featuredStories = useMemo(() => {
+  const myNewsFeaturedArticles = useMemo(() => {
     if (sortMode !== "trending") {
       return [] as Article[];
     }
@@ -4019,7 +4019,7 @@ export default function Home() {
       .slice(0, 12);
   }, [balancedTrendingArticles, breakingNewsPreviewArticles, sortMode, topTenTrendingArticles]);
 
-  const breakingSportsArticles = useMemo(() => {
+  const sportsBreakingArticles = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as Article[];
     }
@@ -4052,13 +4052,13 @@ export default function Home() {
     return scored.map((entry) => entry.article).slice(0, 5);
   }, [sortMode, sportsTabArticles]);
 
-  const featuredSportsArticles = useMemo(() => {
+  const sportsFeaturedArticles = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as Article[];
     }
 
     const usedKeys = new Set(
-      breakingSportsArticles.map((article) => getArticleDeduplicationKey(article))
+      sportsBreakingArticles.map((article) => getArticleDeduplicationKey(article))
     );
 
     return sportsTabArticles
@@ -4072,7 +4072,32 @@ export default function Home() {
         return Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src);
       })
       .slice(0, 8);
-  }, [breakingSportsArticles, sortMode, sportsTabArticles]);
+  }, [sortMode, sportsBreakingArticles, sportsTabArticles]);
+
+  const sportsFeaturedVideo = useMemo(
+    () => sportsQuickWatchVideos[6] ?? null,
+    [sportsQuickWatchVideos]
+  );
+
+  useEffect(() => {
+    if (sortMode === "trending") {
+      console.log("MY NEWS FEATURED ARTICLES COUNT", myNewsFeaturedArticles.length);
+      console.log("MY NEWS FEATURED VIDEOS COUNT", myNewsFeaturedVideos.length);
+    }
+
+    if (sortMode === "sports") {
+      console.log("SPORTS FEATURED ARTICLES COUNT", sportsFeaturedArticles.length);
+      console.log("SPORTS QUICK WATCH COUNT", sportsQuickWatchVideos.length);
+      console.log("SPORTS FEATURED VIDEO EXISTS", Boolean(sportsFeaturedVideo));
+    }
+  }, [
+    myNewsFeaturedArticles.length,
+    myNewsFeaturedVideos.length,
+    sortMode,
+    sportsFeaturedArticles.length,
+    sportsFeaturedVideo,
+    sportsQuickWatchVideos.length,
+  ]);
 
   const topPollsSection = useMemo(
     () =>
@@ -4450,7 +4475,7 @@ export default function Home() {
   };
 
   const renderQuickWatchRow = () => {
-    if (quickWatchRowVideos.length === 0) {
+    if (myNewsQuickWatchVideos.length === 0) {
       return null;
     }
 
@@ -4462,7 +4487,7 @@ export default function Home() {
           </div>
         </div>
         <div className="quick-watch-scroll" role="list" aria-label="Quick watch videos">
-          {quickWatchRowVideos.map((video) => (
+          {myNewsQuickWatchVideos.map((video) => (
             <div key={video.id} className="quick-watch-item" role="listitem">
               <VideoFeedCard
                 video={video}
@@ -4491,7 +4516,7 @@ export default function Home() {
   };
 
   const renderFeaturedStoriesRow = () => {
-    if (featuredStories.length === 0) {
+    if (myNewsFeaturedArticles.length === 0) {
       return null;
     }
 
@@ -4505,7 +4530,7 @@ export default function Home() {
           </div>
         </div>
         <div className="featured-stories-scroll" role="list" aria-label="Featured articles">
-          {featuredStories.map((article) => {
+          {myNewsFeaturedArticles.map((article) => {
             const routeId = getArticleRouteId(article);
             const selectedImage = getBestArticleImage(article);
             const imageSrc =
@@ -4607,12 +4632,12 @@ export default function Home() {
   };
 
   const renderFeaturedVideosBreak = () => {
-    if (secondaryNewsClipVideos.length === 0) {
+    if (myNewsFeaturedVideos.length === 0) {
       return null;
     }
 
-    if (secondaryNewsClipVideos.length < 3) {
-      const video = secondaryNewsClipVideos[0];
+    if (myNewsFeaturedVideos.length < 3) {
+      const video = myNewsFeaturedVideos[0];
 
       if (!video) {
         return null;
@@ -4660,7 +4685,7 @@ export default function Home() {
           </div>
         </div>
         <div className="quick-watch-scroll" role="list" aria-label="Featured videos">
-          {secondaryNewsClipVideos.map((video) => (
+          {myNewsFeaturedVideos.map((video) => (
             <div key={`featured-videos-${video.id}`} className="quick-watch-item" role="listitem">
               <VideoFeedCard
                 video={video}
@@ -5478,7 +5503,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {breakingSportsArticles.length > 0 ? (
+              {sportsBreakingArticles.length > 0 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
                     <div className="stack" style={{ gap: "4px" }}>
@@ -5486,7 +5511,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="stack home-section-list">
-                    {breakingSportsArticles.map((article) => (
+                    {sportsBreakingArticles.map((article) => (
                       <div key={`breaking-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                         {renderArticleFeedCard(article)}
                       </div>
@@ -5498,7 +5523,7 @@ export default function Home() {
               {sportsTabArticles
                 .filter(
                   (article) =>
-                    !breakingSportsArticles.some(
+                    !sportsBreakingArticles.some(
                       (breakingArticle) =>
                         getArticleDeduplicationKey(breakingArticle) ===
                         getArticleDeduplicationKey(article)
@@ -5511,7 +5536,7 @@ export default function Home() {
                 </div>
               ))}
 
-              {featuredSportsArticles.length > 0 ? (
+              {sportsFeaturedArticles.length > 0 ? (
                 <section className="home-section-block home-section-plain featured-stories-row">
                   <div className="home-section-header">
                     <div className="stack" style={{ gap: "4px" }}>
@@ -5519,7 +5544,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="featured-stories-scroll" role="list" aria-label="Featured sports">
-                    {featuredSportsArticles.map((article) => {
+                    {sportsFeaturedArticles.map((article) => {
                       const routeId = getArticleRouteId(article);
                       const selectedImage = getBestArticleImage(article);
                       const imageSrc = selectedImage.src;
@@ -5574,12 +5599,12 @@ export default function Home() {
               {sportsTabArticles
                 .filter(
                   (article) =>
-                    !breakingSportsArticles.some(
+                    !sportsBreakingArticles.some(
                       (breakingArticle) =>
                         getArticleDeduplicationKey(breakingArticle) ===
                         getArticleDeduplicationKey(article)
                     ) &&
-                    !featuredSportsArticles.some(
+                    !sportsFeaturedArticles.some(
                       (featuredArticle) =>
                         getArticleDeduplicationKey(featuredArticle) ===
                         getArticleDeduplicationKey(article)
@@ -5630,12 +5655,12 @@ export default function Home() {
               {sportsTabArticles
                 .filter(
                   (article) =>
-                    !breakingSportsArticles.some(
+                    !sportsBreakingArticles.some(
                       (breakingArticle) =>
                         getArticleDeduplicationKey(breakingArticle) ===
                         getArticleDeduplicationKey(article)
                     ) &&
-                    !featuredSportsArticles.some(
+                    !sportsFeaturedArticles.some(
                       (featuredArticle) =>
                         getArticleDeduplicationKey(featuredArticle) ===
                         getArticleDeduplicationKey(article)
