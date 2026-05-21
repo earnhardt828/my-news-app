@@ -563,6 +563,105 @@ input {
   min-width: 0;
 }
 
+.top-trending-list-rail {
+  gap: 10px;
+}
+
+.top-trending-list-card {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.top-trending-list-link {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.top-trending-list-rank {
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--brand-600);
+  text-align: left;
+}
+
+.top-trending-list-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.top-trending-list-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.top-trending-list-source,
+.top-trending-list-date {
+  min-width: 0;
+}
+
+.top-trending-list-title {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.34;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.top-trending-list-media {
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+}
+
+.top-trending-list-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.top-trending-list-logo-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 190, 118, 0.18), transparent 38%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(245, 247, 252, 0.95));
+}
+
 .source-rankings-list,
 .local-feed-shell,
 .category-swipe-row,
