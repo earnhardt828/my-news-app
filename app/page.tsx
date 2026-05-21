@@ -4164,6 +4164,20 @@ export default function Home() {
 
       const shouldShowLikeAction = sortMode !== "trending";
       const shouldShowLogoFallbackTile = !shouldUseLargeImage && hasSourceLogoFallback;
+      const fallbackImageNode = shouldShowLogoFallbackTile ? (
+        <div className="article-hero-shell" aria-hidden="true">
+          <div className="article-image article-image-placeholder article-image-logo-fallback">
+            <span className="article-image-placeholder-orb article-image-placeholder-orb-left" />
+            <span className="article-image-placeholder-orb article-image-placeholder-orb-right" />
+            <div className="article-image-placeholder-content">
+              <span className="article-image-placeholder-brand">
+                <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
+              </span>
+              <span className="article-image-placeholder-kicker">{safeSourceName}</span>
+            </div>
+          </div>
+        </div>
+      ) : null;
 
       return (
         <article
@@ -4229,24 +4243,24 @@ export default function Home() {
               });
             }}
           >
-            {shouldUseLargeImage ? (
-              <div className="news-card-body news-card-body-with-hero">
-                <div className="news-card-copy">
-                  <div className="trending-title-row">
-                    <h3 className="trending-article-title">
-                      {cleanDisplayText(article.title)}
-                    </h3>
-                  </div>
-                  {article.description ? (
-                    <p className="article-card-summary">
-                      {cleanDisplayText(article.description)
-                        .split(/(?<=[.!?])\s+/)
-                        .slice(0, 2)
-                        .join(" ")
-                        .trim()}
-                    </p>
-                  ) : null}
+            <div className="news-card-body news-card-body-with-hero">
+              <div className="news-card-copy">
+                <div className="trending-title-row">
+                  <h3 className="trending-article-title">
+                    {cleanDisplayText(article.title)}
+                  </h3>
                 </div>
+                {article.description ? (
+                  <p className="article-card-summary">
+                    {cleanDisplayText(article.description)
+                      .split(/(?<=[.!?])\s+/)
+                      .slice(0, 2)
+                      .join(" ")
+                      .trim()}
+                  </p>
+                ) : null}
+              </div>
+              {shouldUseLargeImage ? (
                 <div className="article-hero-shell">
                   <img
                     src={imageSrc as string}
@@ -4268,45 +4282,10 @@ export default function Home() {
                     }}
                   />
                 </div>
-              </div>
-            ) : (
-              <div
-                className={`news-card-body ${
-                  shouldShowLogoFallbackTile
-                    ? "news-card-body-with-thumb"
-                    : "news-card-body-text-only"
-                }`}
-              >
-                <div className="news-card-copy">
-                  <div className="trending-title-row">
-                    <h3 className="trending-article-title">
-                      {cleanDisplayText(article.title)}
-                    </h3>
-                  </div>
-                  {article.description ? (
-                    <p className="article-card-summary">
-                      {cleanDisplayText(article.description)
-                        .split(/(?<=[.!?])\s+/)
-                        .slice(0, 2)
-                        .join(" ")
-                        .trim()}
-                    </p>
-                  ) : null}
-                </div>
-                {shouldShowLogoFallbackTile ? (
-                  <div className="article-thumb-shell article-thumb-shell-inline article-image-placeholder" aria-hidden="true">
-                    <span className="article-image-placeholder-orb article-image-placeholder-orb-left" />
-                    <span className="article-image-placeholder-orb article-image-placeholder-orb-right" />
-                    <div className="article-image-placeholder-content">
-                      <span className="article-image-placeholder-brand">
-                        <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
-                      </span>
-                      <span className="article-image-placeholder-kicker">{safeSourceName}</span>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
+              ) : (
+                fallbackImageNode
+              )}
+            </div>
           </Link>
           <div className="news-card-footer">
             <div className="engagement-row trending-stats-row news-card-actions">
@@ -4580,6 +4559,47 @@ export default function Home() {
   const renderFeaturedVideosBreak = () => {
     if (secondaryNewsClipVideos.length === 0) {
       return null;
+    }
+
+    if (secondaryNewsClipVideos.length < 3) {
+      const video = secondaryNewsClipVideos[0];
+
+      if (!video) {
+        return null;
+      }
+
+      return (
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Featured Video</strong>
+            </div>
+          </div>
+          <div className="stack home-section-list">
+            <div>
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`featured-videos:${video.id}`) &&
+                  !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[`featured-videos:${video.id}`] = node;
+                }}
+                autoplayKey={`featured-videos:${video.id}`}
+                previewDurationMs={4000}
+                label="Featured Video"
+                className="video-card-inline featured-video-single-card"
+                variant="article"
+              />
+            </div>
+          </div>
+        </section>
+      );
     }
 
     return (
@@ -4899,19 +4919,23 @@ export default function Home() {
               <span>Heart a source from Search or its profile to build the rankings.</span>
             </div>
           ) : (
-            <div className="source-rankings-list">
+            <div className="source-rankings-carousel" role="list" aria-label="Source rankings">
               {homeSourceRankings.map((source, index) => (
                 <Link
                   key={source.sourceName}
                   href={`/source/${slugifySourceName(source.sourceName)}/`}
-                  className="source-rankings-row"
+                  className="source-rankings-card"
+                  role="listitem"
                 >
-                  <span className="source-rankings-rank">#{index + 1}</span>
-                  <div className="source-rankings-brand">
-                    <SourceBadge sourceName={source.sourceName} />
-                    <span className="source-rankings-name">{source.sourceName}</span>
+                  <div className="source-rankings-card-art-shell">
+                    <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
+                    <span className="source-rankings-rank">#{index + 1}</span>
                   </div>
-                  <div className="source-rankings-metrics">
+                  <div className="source-rankings-card-copy">
+                    <span className="source-rankings-name">{source.sourceName}</span>
+                    <span className="source-rankings-card-meta">News Source</span>
+                  </div>
+                  <div className="source-rankings-card-actions">
                     <button
                       type="button"
                       className={`icon-action-pill icon-action-pill-icon-only ${
@@ -5049,6 +5073,44 @@ export default function Home() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Featured Profiles</strong>
+              <span className="muted">Popular source profiles to explore right now.</span>
+            </div>
+          </div>
+
+          {homeSourceRankings.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No featured profiles yet</strong>
+              <span>Check back shortly as more sources gain momentum.</span>
+            </div>
+          ) : (
+            <div className="source-rankings-carousel" role="list" aria-label="Featured profiles">
+              {homeSourceRankings.slice(0, 8).map((source) => (
+                <Link
+                  key={`featured-profile-${source.sourceName}`}
+                  href={`/source/${slugifySourceName(source.sourceName)}/`}
+                  className="source-rankings-card featured-profile-card"
+                  role="listitem"
+                >
+                  <div className="source-rankings-card-art-shell">
+                    <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
+                  </div>
+                  <div className="source-rankings-card-copy">
+                    <span className="source-rankings-name">{source.sourceName}</span>
+                    <span className="source-rankings-card-meta">News Source</span>
+                  </div>
+                  <div className="featured-profile-card-stats">
+                    <span>{source.likes} hearts</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="home-section-block home-section-plain">

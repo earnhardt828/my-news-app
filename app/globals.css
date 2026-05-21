@@ -1367,6 +1367,10 @@ input {
   width: 100%;
 }
 
+.article-image-logo-fallback {
+  aspect-ratio: 16 / 9;
+}
+
 .article-logo-fallback-shell {
   display: flex;
   align-items: center;
@@ -1491,6 +1495,11 @@ input {
   max-height: 380px;
   max-width: 100%;
   margin: 0;
+}
+
+.featured-video-single-card {
+  width: 100%;
+  max-width: 100%;
 }
 
 .news-card-footer {
@@ -2804,6 +2813,79 @@ input {
   gap: 0;
   border-top: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+}
+
+.source-rankings-carousel {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.source-rankings-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.source-rankings-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  flex: 0 0 min(42vw, 172px);
+  min-height: 196px;
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  color: var(--foreground);
+  text-decoration: none;
+  text-align: center;
+  box-shadow: var(--shadow-soft);
+  box-sizing: border-box;
+}
+
+.source-rankings-card-art-shell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+
+.source-rankings-card-art {
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.96),
+    0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.source-rankings-card-copy {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  min-width: 0;
+}
+
+.source-rankings-card-meta {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.source-rankings-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.featured-profile-card-stats {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .source-rankings-row {
