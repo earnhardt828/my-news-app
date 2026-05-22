@@ -24,6 +24,7 @@ import {
   type PollWithResults,
 } from "../../lib/polls";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
+import { formatRelativeTimestamp } from "../../lib/relative-time";
 import { slugifySourceName } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -419,7 +420,7 @@ export default function MyFeed() {
                         <div className="news-card-copy">
                           <div className="news-card-header">
                             <div className="news-meta">
-                              <span>{article.publishedAt ?? article.time}</span>
+                              <span>{formatRelativeTimestamp(article.publishedAt, article.time)}</span>
                             </div>
                           </div>
 

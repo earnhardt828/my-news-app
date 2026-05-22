@@ -8,6 +8,7 @@ import { apiFetch } from "../../../lib/api-base";
 import { getCategoryLabel } from "../../../lib/categories";
 import { cleanDisplayText } from "../../../lib/display-text";
 import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
+import { formatRelativeTimestamp } from "../../../lib/relative-time";
 import {
   getSourceNameFromSlug,
   slugifySourceName,
@@ -53,22 +54,7 @@ function normalizeSourceNewsPayload(payload: SourceArticle[] | SourceNewsRespons
 }
 
 function formatSourceDate(publishedAt?: string | null, fallback?: string) {
-  if (!publishedAt) {
-    return fallback ?? "Recent";
-  }
-
-  const timestamp = new Date(publishedAt).getTime();
-
-  if (Number.isNaN(timestamp)) {
-    return fallback ?? "Recent";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
+  return formatRelativeTimestamp(publishedAt, fallback);
 }
 
 function normalizeSourceLabel(value?: string | null) {

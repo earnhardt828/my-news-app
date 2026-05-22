@@ -17,6 +17,7 @@ import SourceBadge from "../components/source-badge";
 import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
+import { formatRelativeTimestamp } from "../../lib/relative-time";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -172,36 +173,7 @@ function getSourceAliasTerms(sourceName: string | null | undefined) {
 }
 
 function formatSearchDate(publishedAt?: string | null, fallback?: string) {
-  if (!publishedAt) {
-    return fallback ?? "Recent";
-  }
-
-  const timestamp = new Date(publishedAt).getTime();
-
-  if (Number.isNaN(timestamp)) {
-    return fallback ?? "Recent";
-  }
-
-  const diffMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
-
-  if (diffMinutes < 1) {
-    return "Just now";
-  }
-
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60);
-
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(timestamp));
+  return formatRelativeTimestamp(publishedAt, fallback);
 }
 
 function persistSearchArticleMetadata(article: NewsArticle) {
@@ -1421,11 +1393,6 @@ export default function Search() {
                               <span className="trending-published-date">
                                 {formatSearchDate(article.publishedAt, article.time)}
                               </span>
-                              {formatSearchDateDetail(article.publishedAt) ? (
-                                <span className="search-result-date-detail">
-                                  {formatSearchDateDetail(article.publishedAt)}
-                                </span>
-                              ) : null}
                               {!isArticleWithinDays(article, 30) ? (
                                 <span className="chip search-result-age-chip">Older</span>
                               ) : null}

@@ -1213,6 +1213,40 @@ export default function Profile() {
               </button>
 
               <div className="profile-meta">
+                <div className="profile-meta-header">
+                  <span className="profile-section-label">Profile</span>
+                  <Link
+                    href="/settings/"
+                    className="profile-settings-link"
+                    aria-label="Open settings"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="3.2" />
+                      <path d="M12 2.75v2.1" />
+                      <path d="m15.74 4.26-1.05 1.82" />
+                      <path d="m19.74 8.26-1.82 1.05" />
+                      <path d="M21.25 12h-2.1" />
+                      <path d="m19.74 15.74-1.82-1.05" />
+                      <path d="m15.74 19.74-1.05-1.82" />
+                      <path d="M12 21.25v-2.1" />
+                      <path d="m8.26 19.74 1.05-1.82" />
+                      <path d="m4.26 15.74 1.82-1.05" />
+                      <path d="M2.75 12h2.1" />
+                      <path d="m4.26 8.26 1.82 1.05" />
+                      <path d="m8.26 4.26 1.05 1.82" />
+                    </svg>
+                  </Link>
+                </div>
                 {isEditingUsername ? (
                   <div className="profile-name-editor">
                     <input

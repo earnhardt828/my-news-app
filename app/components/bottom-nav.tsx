@@ -42,16 +42,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: "/videos/",
-    label: "Videos",
-    icon: (
-      <svg {...iconProps}>
-        <rect x="3.5" y="5" width="13" height="14" rx="3" />
-        <path d="m16.5 10 4-2.5v9L16.5 14" />
-      </svg>
-    ),
-  },
-  {
     href: "/search/",
     label: "Search",
     icon: (
@@ -62,33 +52,34 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    href: "/videos/",
+    label: "Videos",
+    icon: (
+      <svg {...iconProps}>
+        <rect x="3.5" y="5" width="13" height="14" rx="3" />
+        <path d="m16.5 10 4-2.5v9L16.5 14" />
+      </svg>
+    ),
+  },
+  {
+    href: "/podcasts/",
+    label: "Podcasts",
+    icon: (
+      <svg {...iconProps}>
+        <path d="M6 5.2a2.2 2.2 0 0 1 2.2-2.2h7.6A2.2 2.2 0 0 1 18 5.2v13.6A2.2 2.2 0 0 1 15.8 21H8.2A2.2 2.2 0 0 1 6 18.8Z" />
+        <path d="M9.2 8.2h5.6" />
+        <path d="M9.2 11.2h5.6" />
+        <path d="M9.2 14.2h3.2" />
+      </svg>
+    ),
+  },
+  {
     href: "/profile/",
     label: "Profile",
     icon: (
       <svg {...iconProps}>
         <circle cx="12" cy="8" r="3.25" />
         <path d="M5.5 19a6.5 6.5 0 0 1 13 0" />
-      </svg>
-    ),
-  },
-  {
-    href: "/settings/",
-    label: "Settings",
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="12" cy="12" r="3.2" />
-        <path d="M12 2.75v2.1" />
-        <path d="m15.74 4.26-1.05 1.82" />
-        <path d="m19.74 8.26-1.82 1.05" />
-        <path d="M21.25 12h-2.1" />
-        <path d="m19.74 15.74-1.82-1.05" />
-        <path d="m15.74 19.74-1.05-1.82" />
-        <path d="M12 21.25v-2.1" />
-        <path d="m8.26 19.74 1.05-1.82" />
-        <path d="m4.26 15.74 1.82-1.05" />
-        <path d="M2.75 12h2.1" />
-        <path d="m4.26 8.26 1.82 1.05" />
-        <path d="m8.26 4.26 1.05 1.82" />
       </svg>
     ),
   },

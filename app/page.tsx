@@ -24,6 +24,12 @@ import {
   saveArticleReturnState,
 } from "../lib/article-navigation";
 import {
+  FAVORITE_TEAMS_BY_LEAGUE,
+  TEAM_PICKER_LEAGUES,
+  type FavoriteLeagueKey,
+  type FavoriteTeamOption,
+} from "../lib/favorite-teams";
+import {
   applyPollVoteUpdate,
   getPollFeedScore,
   hydratePolls,
@@ -31,6 +37,7 @@ import {
   type PollWithResults,
 } from "../lib/polls";
 import { ensureProfileRow, saveProfilePatch } from "../lib/profile-store";
+import { formatRelativeTimestamp } from "../lib/relative-time";
 import {
   buildLocalNewsQueryText,
   DEFAULT_LOCAL_CITY,
@@ -221,12 +228,9 @@ type WeatherCardData = {
   cityLabel: string;
 };
 
-type FavoriteTeamPlaceholder = {
-  team_id: string;
-  team_name: string;
-  league: string;
-  logo_url: string | null;
-  user_id: string;
+type FavoriteTeamUpdate = {
+  team: FavoriteTeamOption;
+  article: Article | null;
 };
 
 function formatTopRankLabel(rank: number) {
@@ -626,21 +630,7 @@ const actionIconProps = {
 };
 
 function formatPublishedDate(publishedAt?: string | null, fallback?: string) {
-  if (!publishedAt) {
-    return fallback ? `Published ${fallback}` : "Published recently";
-  }
-
-  const date = new Date(publishedAt);
-
-  if (Number.isNaN(date.getTime())) {
-    return fallback ? `Published ${fallback}` : "Published recently";
-  }
-
-  return `Published ${new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date)}`;
+  return formatRelativeTimestamp(publishedAt, fallback);
 }
 
 function formatRelativeTime(timestamp: string | null) {
@@ -692,43 +682,7 @@ function formatFreshnessTime(
   timestamp: string | null | undefined,
   fallback?: string | null
 ) {
-  if (!timestamp) {
-    return fallback ?? "Just now";
-  }
-
-  const publishedAt = new Date(timestamp).getTime();
-
-  if (Number.isNaN(publishedAt)) {
-    return fallback ?? "Just now";
-  }
-
-  const diffMs = Date.now() - publishedAt;
-  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-
-  if (diffMinutes < 1) {
-    return "Just now";
-  }
-
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60);
-
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
-
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffDays < 7) {
-    return `${diffDays}d ago`;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(publishedAt));
+  return formatRelativeTimestamp(timestamp, fallback);
 }
 
 function getArticleDeduplicationKey(article: Pick<Article, "id" | "url" | "title" | "source">) {
@@ -1112,6 +1066,10 @@ export default function Home() {
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [sportsVideos, setSportsVideos] = useState<VideoItem[]>([]);
+  const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
+  const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
+  const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
+  const [activeTeamLeague, setActiveTeamLeague] = useState<FavoriteLeagueKey>("NFL");
   const [autoplayTrendingVideoKeys, setAutoplayTrendingVideoKeys] = useState<string[]>([]);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
@@ -1152,6 +1110,7 @@ export default function Home() {
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const teamPickerPagesRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextPageRef = useRef(false);
   const activeFeedRequestIdRef = useRef(0);
   const [replyTarget, setReplyTarget] = useState<{
@@ -1163,6 +1122,11 @@ export default function Home() {
   useEffect(() => {
     console.log("APP RENDERED");
   }, []);
+
+  const favoriteTeamsStorageKey = useMemo(
+    () => `graffiti-favorite-teams:${userId ?? "guest"}`,
+    [userId]
+  );
 
   useEffect(() => {
     console.log(
@@ -1177,6 +1141,23 @@ export default function Home() {
       cityOptions.map((city) => city.displayName)
     );
   }, [cityOptions]);
+
+  useEffect(() => {
+    if (!isTeamPickerOpen) {
+      return;
+    }
+
+    const node = teamPickerPagesRef.current;
+    const leagueIndex = TEAM_PICKER_LEAGUES.indexOf(activeTeamLeague);
+
+    if (!node || leagueIndex < 0) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      node.scrollLeft = node.clientWidth * leagueIndex;
+    });
+  }, [activeTeamLeague, isTeamPickerOpen]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -4151,12 +4132,65 @@ export default function Home() {
     [sportsVideoPool]
   );
 
-  const favoriteTeams = useMemo<FavoriteTeamPlaceholder[]>(() => {
-    // TODO: hydrate from a future `user_favorite_teams` table keyed by user_id.
-    // Suggested fields: team_id, team_name, league, logo_url, user_id.
-    // TODO: merge followed-team updates into the Sports page using team-level queries once the API is ready.
-    return [];
-  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    // TODO: replace localStorage hydration with a real `user_favorite_teams`
+    // table keyed by user_id, team_id, team_name, league, and logo_url.
+    try {
+      const rawValue = window.localStorage.getItem(favoriteTeamsStorageKey);
+      const parsedValue = rawValue ? (JSON.parse(rawValue) as FavoriteTeamOption[]) : [];
+      const validTeamIds = new Set(
+        TEAM_PICKER_LEAGUES.flatMap((league) =>
+          FAVORITE_TEAMS_BY_LEAGUE[league].map((team) => team.team_id)
+        )
+      );
+
+      setFavoriteTeams(
+        parsedValue.filter(
+          (team): team is FavoriteTeamOption =>
+            Boolean(team?.team_id) && validTeamIds.has(team.team_id)
+        )
+      );
+    } catch (error) {
+      console.error("FAVORITE TEAMS LOAD FAILED", error);
+      setFavoriteTeams([]);
+    } finally {
+      setHasLoadedFavoriteTeams(true);
+    }
+  }, [favoriteTeamsStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasLoadedFavoriteTeams) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(favoriteTeamsStorageKey, JSON.stringify(favoriteTeams));
+    } catch (error) {
+      console.error("FAVORITE TEAMS SAVE FAILED", error);
+    }
+  }, [favoriteTeams, favoriteTeamsStorageKey, hasLoadedFavoriteTeams]);
+
+  const favoriteTeamUpdates = useMemo<FavoriteTeamUpdate[]>(() => {
+    // TODO: swap this lightweight article matching for live game/team updates
+    // once the sports API integration is ready.
+    return favoriteTeams.map((team) => {
+      const normalizedTeamName = team.team_name.toLowerCase();
+      const article =
+        sportsTabArticles.find((candidate) => {
+          const haystack = `${candidate.title} ${candidate.description ?? ""}`.toLowerCase();
+          return haystack.includes(normalizedTeamName);
+        }) ?? null;
+
+      return {
+        team,
+        article,
+      };
+    });
+  }, [favoriteTeams, sportsTabArticles]);
 
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
@@ -4854,6 +4888,161 @@ export default function Home() {
       <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
         <path d="M7.2 18.2a4.2 4.2 0 1 1 .7-8.35A5.7 5.7 0 0 1 18.7 11a3.5 3.5 0 0 1-.3 7.1H7.2Z" />
       </svg>
+    );
+  };
+
+  const getFavoriteTeamInitials = (teamName: string) =>
+    teamName
+      .split(/\s+/)
+      .filter((word) => !["fc", "cf", "sc", "city"].includes(word.toLowerCase()))
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("");
+
+  const handleToggleFavoriteTeam = (team: FavoriteTeamOption) => {
+    setFavoriteTeams((current) => {
+      const alreadyFollowed = current.some((savedTeam) => savedTeam.team_id === team.team_id);
+
+      if (alreadyFollowed) {
+        return current.filter((savedTeam) => savedTeam.team_id !== team.team_id);
+      }
+
+      return [...current, team];
+    });
+  };
+
+  const handleTeamLeagueSelect = (league: FavoriteLeagueKey) => {
+    setActiveTeamLeague(league);
+
+    const leagueIndex = TEAM_PICKER_LEAGUES.indexOf(league);
+    const node = teamPickerPagesRef.current;
+
+    if (!node || leagueIndex < 0) {
+      return;
+    }
+
+    node.scrollTo({
+      left: node.clientWidth * leagueIndex,
+      behavior: "smooth",
+    });
+  };
+
+  const renderFavoriteTeamBadge = (team: FavoriteTeamOption) => (
+    <span className="favorite-team-logo-shell" aria-hidden="true">
+      {team.logo_url ? (
+        <img
+          src={team.logo_url}
+          alt={team.team_name}
+          className="favorite-team-logo"
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        <span className="favorite-team-logo-fallback">{getFavoriteTeamInitials(team.team_name)}</span>
+      )}
+    </span>
+  );
+
+  const renderTeamPickerModal = () => {
+    if (!isTeamPickerOpen) {
+      return null;
+    }
+
+    return (
+      <div
+        className="bottom-sheet-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="favorite-teams-picker-title"
+      >
+        <div className="bottom-sheet favorite-teams-sheet">
+          <div className="bottom-sheet-handle" aria-hidden="true" />
+          <div className="bottom-sheet-header">
+            <div className="stack" style={{ gap: "6px" }}>
+              <h3 id="favorite-teams-picker-title" className="modal-title">
+                Add Teams
+              </h3>
+              <p className="muted bottom-sheet-title">
+                Pick favorite teams for quicker Sports updates. TODO: connect this picker to a
+                future `user_favorite_teams` table and live sports API.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setIsTeamPickerOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="favorite-teams-tabs" role="tablist" aria-label="Favorite team leagues">
+            {TEAM_PICKER_LEAGUES.map((league) => (
+              <button
+                key={league}
+                type="button"
+                role="tab"
+                aria-selected={activeTeamLeague === league}
+                className={`favorite-teams-tab ${
+                  activeTeamLeague === league ? "favorite-teams-tab-active" : ""
+                }`}
+                onClick={() => handleTeamLeagueSelect(league)}
+              >
+                {league}
+              </button>
+            ))}
+          </div>
+
+          <div
+            ref={teamPickerPagesRef}
+            className="favorite-teams-pages"
+            onScroll={(event) => {
+              const target = event.currentTarget;
+              const pageWidth = target.clientWidth || 1;
+              const nextIndex = Math.round(target.scrollLeft / pageWidth);
+              const nextLeague = TEAM_PICKER_LEAGUES[nextIndex];
+
+              if (nextLeague && nextLeague !== activeTeamLeague) {
+                setActiveTeamLeague(nextLeague);
+              }
+            }}
+          >
+            {TEAM_PICKER_LEAGUES.map((league) => (
+              <section
+                key={league}
+                className="favorite-teams-page"
+                role="tabpanel"
+                aria-label={`${league} teams`}
+              >
+                <div className="favorite-teams-grid">
+                  {FAVORITE_TEAMS_BY_LEAGUE[league].map((team) => {
+                    const isSelected = favoriteTeams.some(
+                      (savedTeam) => savedTeam.team_id === team.team_id
+                    );
+
+                    return (
+                      <button
+                        key={team.team_id}
+                        type="button"
+                        className={`favorite-team-card ${
+                          isSelected ? "favorite-team-card-selected" : ""
+                        }`}
+                        onClick={() => handleToggleFavoriteTeam(team)}
+                      >
+                        {renderFavoriteTeamBadge(team)}
+                        <span className="favorite-team-name">{team.team_name}</span>
+                        <span className="favorite-team-meta">
+                          {isSelected ? "Following" : "Tap to follow"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -5770,14 +5959,44 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">Your Teams</strong>
                     <span className="muted">Follow your favorite teams for updates.</span>
                   </div>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => setIsTeamPickerOpen(true)}
+                  >
+                    Add Teams
+                  </button>
                 </div>
 
-                {favoriteTeams.length === 0 ? (
+                {favoriteTeamUpdates.length === 0 ? (
                   <div className="empty-state compact-empty-state">
                     <strong>Follow your favorite teams for updates.</strong>
                     <span>Team alerts and game-day updates will appear here once favorites are enabled.</span>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="favorite-team-updates-row" role="list" aria-label="Favorite team updates">
+                    {favoriteTeamUpdates.map(({ team, article }) => (
+                      <article
+                        key={`favorite-team-update-${team.team_id}`}
+                        className="favorite-team-update-card"
+                        role="listitem"
+                      >
+                        <div className="favorite-team-update-top">
+                          {renderFavoriteTeamBadge(team)}
+                          <div className="favorite-team-update-copy">
+                            <strong>{team.team_name}</strong>
+                            <span>{team.league} Team</span>
+                          </div>
+                        </div>
+                        <p className="favorite-team-update-headline">
+                          {article
+                            ? cleanDisplayText(article.title)
+                            : "Latest team news and live game updates will appear here once the sports API is connected."}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </section>
 
               {sportsFeaturedArticle ? (
@@ -5883,6 +6102,7 @@ export default function Home() {
             </div>
           )}
         </section>
+        {renderTeamPickerModal()}
       </section>
     );
   }
