@@ -8,7 +8,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ShareButton from "./components/share-button";
 import {
   createBlockedUser,
   listBlockedUsers,
@@ -837,19 +836,35 @@ function selectSourceBalancedVideos(videos: VideoItem[], limit: number) {
 }
 
 function selectSourceBalancedArticles<T extends { source: string }>(articles: T[], limit: number) {
-  if (articles.length <= limit) {
-    return articles;
+  const prioritizedArticles = [...articles].sort((leftArticle, rightArticle) => {
+    const rightScore = getArticlePriorityScore(rightArticle as unknown as Article);
+    const leftScore = getArticlePriorityScore(leftArticle as unknown as Article);
+
+    if (rightScore !== leftScore) {
+      return rightScore - leftScore;
+    }
+
+    return (
+      getPublishedAtTimestamp((rightArticle as unknown as Article).publishedAt) -
+      getPublishedAtTimestamp((leftArticle as unknown as Article).publishedAt)
+    );
+  });
+
+  if (prioritizedArticles.length <= limit) {
+    return prioritizedArticles;
   }
 
   const normalizedSourceCounts = new Map<string, number>();
   const normalizedSources = new Set(
-    articles.map((article) => cleanDisplayText(article.source).trim().toLowerCase()).filter(Boolean)
+    prioritizedArticles
+      .map((article) => cleanDisplayText(article.source).trim().toLowerCase())
+      .filter(Boolean)
   );
   const maxPerSource = normalizedSources.size > 1 ? 2 : limit;
   const selected: T[] = [];
   const deferred: T[] = [];
 
-  articles.forEach((article) => {
+  prioritizedArticles.forEach((article) => {
     const normalizedSource = cleanDisplayText(article.source).trim().toLowerCase() || "unknown";
     const nextCount = (normalizedSourceCounts.get(normalizedSource) ?? 0) + 1;
 
@@ -937,6 +952,41 @@ function isSportsVideo(video: VideoItem) {
       haystack
     )
   );
+}
+
+function getArticlePriorityScore(article: Article) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${
+    article.category ?? ""
+  }`.toLowerCase();
+  let score = 0;
+
+  const source = getSafeSourceLabel(article.source).toLowerCase();
+
+  if (
+    /(ap news|associated press|reuters|bbc news|cnn|new york times|washington post|politico|npr|espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report|bloomberg|wall street journal|the weather channel)/.test(
+      source
+    )
+  ) {
+    score += 120;
+  }
+
+  if (/(breaking|urgent|developing|just in|live updates?|exclusive|major|top story|alert)/.test(haystack)) {
+    score += 90;
+  }
+
+  if (/(analysis|opinion|newsletter|sponsored|advertiser|promo|bonus code)/.test(haystack)) {
+    score -= 70;
+  }
+
+  score += Math.min(120, article.likes * 3);
+  score += Math.min(80, (article.comments?.length ?? 0) * 6);
+
+  const ageHours = article.publishedAt
+    ? Math.max(0, (Date.now() - new Date(article.publishedAt).getTime()) / (1000 * 60 * 60))
+    : 72;
+  score += Math.max(0, 72 - ageHours * 3);
+
+  return score;
 }
 
 function getWeatherConditionIconLabel(condition: string | null | undefined) {
@@ -1036,7 +1086,6 @@ export default function Home() {
     articleId: number;
     commentId: number;
   } | null>(null);
-  const [activeSaveArticleId, setActiveSaveArticleId] = useState<number | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [activeCommentsArticleId, setActiveCommentsArticleId] = useState<number | null>(
     null
@@ -2820,74 +2869,6 @@ export default function Home() {
     }
   };
 
-  const handleToggleSaveArticle = async (article: Article) => {
-    if (!userId) {
-      alert("Log in to save articles");
-      return;
-    }
-
-    setActiveSaveArticleId(article.id);
-
-    if (article.saved) {
-      const { error } = await supabase
-        .from("saved_articles")
-        .delete()
-        .eq("user_id", userId)
-        .eq("article_id", article.id);
-
-      setActiveSaveArticleId(null);
-
-      if (error) {
-        console.error("Error removing saved article:", error);
-        alert(error.message ?? "Could not remove saved article");
-        return;
-      }
-
-      setArticles((prev) =>
-        prev.map((currentArticle) =>
-          currentArticle.id === article.id
-            ? { ...currentArticle, saved: false }
-            : currentArticle
-        )
-      );
-
-      return;
-    }
-
-    const { error } = await supabase.from("saved_articles").upsert(
-      {
-        user_id: userId,
-        article_id: article.id,
-        title: cleanDisplayText(article.title),
-        source: article.source,
-        category: article.category,
-        time: article.time,
-        url: article.url ?? null,
-        image: getBestArticleImage(article).src,
-        published_at: article.publishedAt ?? null,
-      },
-      {
-        onConflict: "user_id,article_id",
-      }
-    );
-
-    setActiveSaveArticleId(null);
-
-    if (error) {
-      console.error("Error saving article:", error);
-      alert(error.message ?? "Could not save article");
-      return;
-    }
-
-    setArticles((prev) =>
-      prev.map((currentArticle) =>
-        currentArticle.id === article.id
-          ? { ...currentArticle, saved: true }
-          : currentArticle
-      )
-    );
-  };
-
   const handleCommentInputChange = (articleId: number, value: string) => {
     setCommentComposerStatus(null);
     setCommentInputs((prev) => ({
@@ -3456,6 +3437,22 @@ export default function Home() {
     if (sortMode === "latest") {
       return rankArticlesWithSourcePreferences(copied, {
         mode: "latest",
+      });
+    }
+
+    if (sortMode === "trending" || sortMode === "sports") {
+      return [...copied].sort((leftArticle, rightArticle) => {
+        const scoreDifference =
+          getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle);
+
+        if (scoreDifference !== 0) {
+          return scoreDifference;
+        }
+
+        return (
+          getPublishedAtTimestamp(rightArticle.publishedAt) -
+          getPublishedAtTimestamp(leftArticle.publishedAt)
+        );
       });
     }
 
@@ -4311,7 +4308,6 @@ export default function Home() {
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
 
-      const shouldShowLikeAction = sortMode !== "trending";
       const visualBoxNode = shouldUseLargeImage ? (
         <div className="article-thumb-shell article-card-visual-shell" aria-hidden="true">
           <img
@@ -4394,9 +4390,6 @@ export default function Home() {
                   </div>
                 </Link>
               )}
-              <span className="trending-published-date trending-published-date-inline">
-                {publishedLabel}
-              </span>
             </div>
             <div className="trending-card-top-meta">
               {options?.rankLabel ? (
@@ -4443,25 +4436,24 @@ export default function Home() {
           </Link>
           <div className="news-card-footer">
             <div className="engagement-row trending-stats-row news-card-actions">
-              {shouldShowLikeAction ? (
-                <button
-                  className={`icon-action-pill icon-action-pill-ghost ${
-                    article.likedByCurrentUser ? "icon-action-pill-active" : ""
-                  }`}
-                  onClick={() => handleLike(articleRouteId)}
-                  aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
-                >
-                  <span className="icon-action-glyph" aria-hidden="true">
-                    <svg {...actionIconProps}>
-                      <path
-                        d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                        fill={article.likedByCurrentUser ? "currentColor" : "none"}
-                      />
-                    </svg>
-                  </span>
-                  <span>{article.likes}</span>
-                </button>
-              ) : null}
+              <span className="trending-published-date news-card-footer-date">{publishedLabel}</span>
+              <button
+                className={`icon-action-pill icon-action-pill-ghost ${
+                  article.likedByCurrentUser ? "icon-action-pill-active" : ""
+                }`}
+                onClick={() => handleLike(articleRouteId)}
+                aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
+              >
+                <span className="icon-action-glyph" aria-hidden="true">
+                  <svg {...actionIconProps}>
+                    <path
+                      d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                      fill={article.likedByCurrentUser ? "currentColor" : "none"}
+                    />
+                  </svg>
+                </span>
+                <span>{article.likes}</span>
+              </button>
               <button
                 className="icon-action-pill icon-action-pill-ghost"
                 onClick={() => {
@@ -4475,37 +4467,6 @@ export default function Home() {
                   </svg>
                 </span>
                 <span>{article.comments.length}</span>
-              </button>
-              <ShareButton
-                path={`/article/${articleRouteId}`}
-                title={cleanDisplayText(article.title)}
-                url={article.url}
-                iconOnly
-                className="icon-action-pill-ghost"
-              />
-              <button
-                className={`bookmark-button icon-action-pill-ghost ${
-                  article.saved ? "bookmark-button-active" : ""
-                }`}
-                onClick={() => handleToggleSaveArticle(article)}
-                disabled={activeSaveArticleId === articleRouteId}
-                aria-label={article.saved ? "Remove bookmark" : "Save article"}
-              >
-                <span className="icon-action-glyph" aria-hidden="true">
-                  {activeSaveArticleId === articleRouteId ? (
-                    <svg {...actionIconProps}>
-                      <path d="M12 5v7" />
-                      <path d="m8.5 8.5 3.5 3.5 3.5-3.5" />
-                    </svg>
-                  ) : (
-                    <svg {...actionIconProps}>
-                      <path
-                        d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
-                        fill={article.saved ? "currentColor" : "none"}
-                      />
-                    </svg>
-                  )}
-                </span>
               </button>
             </div>
           </div>

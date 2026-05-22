@@ -180,6 +180,10 @@ export function buildVideoEmbedUrl(youtubeId: string, autoplay: boolean) {
   url.searchParams.set("controls", "0");
   url.searchParams.set("rel", "0");
   url.searchParams.set("modestbranding", "1");
+  if (autoplay) {
+    url.searchParams.set("loop", "1");
+    url.searchParams.set("playlist", youtubeId);
+  }
   return url.toString();
 }
 

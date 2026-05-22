@@ -994,33 +994,33 @@ input {
 .news-card {
   position: relative;
   display: grid;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
   max-width: 100%;
   margin-inline: auto;
   box-sizing: border-box;
-  padding: 18px;
+  padding: 15px 16px;
   background: var(--surface-strong);
   border: 1px solid var(--border);
   border-radius: 22px;
-  box-shadow: 0 18px 42px rgba(20, 33, 61, 0.07);
+  box-shadow: 0 14px 32px rgba(20, 33, 61, 0.06);
   color: var(--foreground);
 }
 
 .article-link {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .news-card-body {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .news-card-body-with-thumb {
   grid-template-columns: minmax(0, 1fr) 96px;
   align-items: start;
-  gap: 14px;
+  gap: 12px;
 }
 
 .news-card-body-compact {
@@ -1038,7 +1038,7 @@ input {
 
 .news-card-copy {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1535,8 +1535,8 @@ input {
 
 .trending-article-title {
   margin: 0;
-  font-size: clamp(1.24rem, 4.95vw, 1.54rem);
-  line-height: 1.22;
+  font-size: clamp(1.08rem, 4.3vw, 1.34rem);
+  line-height: 1.24;
   letter-spacing: -0.025em;
   font-weight: 850;
   max-width: none;
@@ -1545,10 +1545,10 @@ input {
 .article-card-summary {
   margin: 0;
   color: var(--text-soft);
-  font-size: 0.95rem;
-  line-height: 1.52;
+  font-size: 0.9rem;
+  line-height: 1.45;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1578,9 +1578,9 @@ input {
 }
 
 .article-thumb-shell {
-  width: 96px;
-  height: 96px;
-  border-radius: 18px;
+  width: 92px;
+  height: 92px;
+  border-radius: 16px;
   overflow: hidden;
   background: rgba(20, 33, 61, 0.08);
   flex-shrink: 0;
@@ -1809,7 +1809,7 @@ input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -1817,6 +1817,11 @@ input {
   margin-left: 0;
   flex-wrap: wrap;
   justify-content: flex-start;
+  gap: 8px;
+}
+
+.news-card-footer-date {
+  margin-right: auto;
 }
 
 .icon-action-pill-ghost {
@@ -1826,6 +1831,12 @@ input {
   background: transparent;
   box-shadow: none;
   color: var(--text-soft);
+}
+
+.news-card-actions .icon-action-pill-ghost {
+  min-height: 32px;
+  padding: 0;
+  font-size: 0.84rem;
 }
 
 .icon-action-pill-ghost:hover {
