@@ -101,14 +101,14 @@ export function looksLikeLowQualityImageUrl(url: string) {
 
 export function getBestArticleImage(article: ArticleImageFields) {
   const candidates: Array<[ArticleImageSource, string | null]> = [
-    ["urlToImage", normalizeImageValue(article.urlToImage)],
-    ["imageUrl", normalizeImageValue(article.imageUrl)],
     ["image", normalizeImageValue(article.image)],
     ["ogImage", normalizeImageValue(article.ogImage)],
-    ["twitterImage", normalizeImageValue(article.twitterImage)],
+    ["thumbnail", normalizeImageValue(article.thumbnail)],
     ["mediaContent", normalizeImageValue(article.mediaContent)],
     ["enclosureUrl", normalizeImageValue(article.enclosureUrl)],
-    ["thumbnail", normalizeImageValue(article.thumbnail)],
+    ["urlToImage", normalizeImageValue(article.urlToImage)],
+    ["imageUrl", normalizeImageValue(article.imageUrl)],
+    ["twitterImage", normalizeImageValue(article.twitterImage)],
   ];
 
   const usableCandidates = candidates.filter(([, value]) => Boolean(value)) as Array<
@@ -137,6 +137,8 @@ export function isLikelyHighQualityArticleImage(
   }
 
   return (
+    source === "thumbnail" ||
+    source === "enclosureUrl" ||
     source === "urlToImage" ||
     source === "imageUrl" ||
     source === "image" ||

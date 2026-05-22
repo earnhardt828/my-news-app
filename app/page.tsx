@@ -4108,78 +4108,13 @@ export default function Home() {
     [sportsVideos, videos]
   );
 
-  const sportsBreakingArticles = useMemo(() => {
-    if (sortMode !== "sports") {
-      return [] as Article[];
-    }
-
-    const trustedSportsSources = /(espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report)/i;
-    const breakingSportsTerms = /(breaking|latest|urgent|live|developing|just in|trade|injury|suspension|fires coach|signs|playoff)/i;
-
-    const scored = sportsTabArticles
-      .map((article) => {
-        const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
-        let score = 0;
-
-        if (trustedSportsSources.test(article.source)) {
-          score += 80;
-        }
-
-        if (breakingSportsTerms.test(haystack)) {
-          score += 120;
-        }
-
-        if (/(nfl|nba|mlb|nhl|soccer|premier league|wnba|ncaa|college football|college basketball)/i.test(haystack)) {
-          score += 36;
-        }
-
-        score += Math.floor(getPublishedAtTimestamp(article.publishedAt) / 10000000);
-        return { article, score };
-      })
-      .sort((left, right) => right.score - left.score);
-
-    return scored.map((entry) => entry.article).slice(0, 5);
-  }, [sortMode, sportsTabArticles]);
-
-  const sportsFeaturedArticles = useMemo(() => {
-    if (sortMode !== "sports") {
-      return [] as Article[];
-    }
-
-    const usedKeys = new Set(
-      sportsBreakingArticles.map((article) => getArticleDeduplicationKey(article))
-    );
-
-    return sportsTabArticles
-      .filter((article) => {
-        const dedupeKey = getArticleDeduplicationKey(article);
-        if (usedKeys.has(dedupeKey)) {
-          return false;
-        }
-
-        const image = getBestArticleImage(article);
-        return Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src);
-      })
-      .slice(0, 8);
-  }, [sortMode, sportsBreakingArticles, sportsTabArticles]);
-
   const sportsStandardArticles = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as Article[];
     }
 
-    return sportsTabArticles.filter(
-      (article) =>
-        !sportsBreakingArticles.some(
-          (breakingArticle) =>
-            getArticleDeduplicationKey(breakingArticle) === getArticleDeduplicationKey(article)
-        ) &&
-        !sportsFeaturedArticles.some(
-          (featuredArticle) =>
-            getArticleDeduplicationKey(featuredArticle) === getArticleDeduplicationKey(article)
-        )
-    );
-  }, [sortMode, sportsBreakingArticles, sportsFeaturedArticles, sportsTabArticles]);
+    return sportsTabArticles;
+  }, [sortMode, sportsTabArticles]);
 
   const sportsQuickWatchVideos = useMemo(() => sportsVideoPool.slice(0, 6), [sportsVideoPool]);
 
@@ -4187,20 +4122,6 @@ export default function Home() {
     () => sportsVideoPool[6] ?? sportsVideoPool[0] ?? null,
     [sportsVideoPool]
   );
-
-  const sportsTopSources = useMemo(() => {
-    if (sortMode !== "sports") {
-      return [] as typeof homeSourceRankings;
-    }
-
-    return homeSourceRankings
-      .filter((source) =>
-        /(espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report|the athletic)/i.test(
-          source.sourceName
-        )
-      )
-      .slice(0, 6);
-  }, [homeSourceRankings, sortMode]);
 
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
@@ -4241,13 +4162,10 @@ export default function Home() {
 
     if (sortMode === "sports") {
       console.log("SPORTS VIDEO COUNT", sportsVideoPool.length);
-      console.log("SPORTS FEATURED ARTICLES COUNT", sportsFeaturedArticles.length);
+      console.log("SPORTS INSERT QUICK WATCH AFTER INDEX 3");
+      console.log("SPORTS INSERT FEATURED VIDEO AFTER INDEX 6");
       console.log("SPORTS QUICK WATCH COUNT", sportsQuickWatchVideos.length);
-      console.log("SPORTS QUICK WATCH RENDER COUNT", sportsQuickWatchVideos.slice(0, 6).length);
       console.log("SPORTS FEATURED VIDEO EXISTS", Boolean(sportsFeaturedVideo));
-      console.log("SPORTS QUICK WATCH POSITION", "after sports articles 1-3");
-      console.log("SPORTS FEATURED VIDEO POSITION", "after sports articles 4-6");
-      console.log("SPORTS FEATURED ARTICLE POSITION", "after sports articles 7-9");
       console.log("SPORTS IMAGE COUNT", sportsImageCount);
     }
   }, [
@@ -4257,7 +4175,6 @@ export default function Home() {
     sportsImageCount,
     sportsVideoPool.length,
     sortMode,
-    sportsFeaturedArticles.length,
     sportsFeaturedVideo,
     sportsQuickWatchVideos.length,
   ]);
@@ -5833,23 +5750,6 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {sportsBreakingArticles.length > 0 ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Breaking Sports</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list">
-                    {sportsBreakingArticles.map((article) => (
-                      <div key={`breaking-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderArticleFeedCard(article)}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
               {sportsStandardArticles.slice(0, 3).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
@@ -5936,104 +5836,7 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {sportsStandardArticles.slice(9, 12).map((article) => (
-                <div key={`sports-pre-featured-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-
-              {sportsFeaturedArticles.length > 0 ? (
-                <section className="home-section-block home-section-plain featured-stories-row">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Featured Sports</strong>
-                    </div>
-                  </div>
-                  <div className="featured-stories-scroll" role="list" aria-label="Featured sports">
-                    {sportsFeaturedArticles.map((article) => {
-                      const routeId = getArticleRouteId(article);
-                      const selectedImage = getBestArticleImage(article);
-                      const imageSrc = selectedImage.src;
-
-                      if (!routeId) {
-                        return null;
-                      }
-
-                      return (
-                        <Link
-                          key={`featured-sports-${routeId}`}
-                          href={`/article/${routeId}/`}
-                          className="featured-story-card"
-                          role="listitem"
-                          onClick={() => {
-                            persistArticleMetadata(article);
-                            saveArticleReturnState({
-                              path: "/",
-                              scrollY: window.scrollY,
-                              source: "home",
-                              sortMode,
-                              selectedLocalCity,
-                              localLocationLabel,
-                            });
-                          }}
-                        >
-                          {imageSrc ? (
-                            <img
-                              src={imageSrc}
-                              alt={cleanDisplayText(article.title)}
-                              className="featured-story-image"
-                              loading="lazy"
-                              decoding="async"
-                            />
-                          ) : (
-                            <div className="featured-story-fallback-brand" aria-hidden="true">
-                              <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                            </div>
-                          )}
-                          <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
-                          <div className="featured-story-copy">
-                            <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
-                            <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-
-              {sportsTopSources.length > 0 ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Top Sources in Sports</strong>
-                    </div>
-                  </div>
-                  <div className="source-rankings-carousel" role="list" aria-label="Top sports sources">
-                    {sportsTopSources.map((source) => (
-                      <Link
-                        key={`sports-source-${source.sourceName}`}
-                        href={`/source/${slugifySourceName(source.sourceName)}/`}
-                        className="source-rankings-card featured-profile-card"
-                        role="listitem"
-                      >
-                        <div className="source-rankings-card-art-shell">
-                          <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
-                        </div>
-                        <div className="source-rankings-card-copy">
-                          <span className="source-rankings-name">{source.sourceName}</span>
-                          <span className="source-rankings-card-meta">Sports Source</span>
-                        </div>
-                        <div className="featured-profile-card-stats">
-                          <span>{source.likes} hearts</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {sportsStandardArticles.slice(12).map((article) => (
+              {sportsStandardArticles.slice(6).map((article) => (
                 <div key={`sports-rest-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                   {renderArticleFeedCard(article)}
                 </div>
