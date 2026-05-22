@@ -929,6 +929,36 @@ function isSportsPromotionalArticle(article: Article) {
   );
 }
 
+function getWeatherConditionIconLabel(condition: string | null | undefined) {
+  const value = `${condition ?? ""}`.toLowerCase();
+
+  if (/(thunder|storm)/.test(value)) {
+    return "storm";
+  }
+
+  if (/(snow|sleet|blizzard|ice)/.test(value)) {
+    return "snow";
+  }
+
+  if (/(rain|showers?|drizzle)/.test(value)) {
+    return "rain";
+  }
+
+  if (/(wind|breezy|gust)/.test(value)) {
+    return "wind";
+  }
+
+  if (/(cloud|overcast|fog|mist)/.test(value)) {
+    return "cloud";
+  }
+
+  if (/(sun|clear|fair)/.test(value)) {
+    return "sun";
+  }
+
+  return "cloud";
+}
+
 function getSafeSourceLabel(value: unknown) {
   if (typeof value !== "string") {
     return "Unknown source";
@@ -4799,6 +4829,62 @@ export default function Home() {
     );
   };
 
+  const renderWeatherConditionIcon = (condition: string | null | undefined) => {
+    const icon = getWeatherConditionIconLabel(condition);
+
+    if (icon === "sun") {
+      return (
+        <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.2" />
+          <path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.55 5.45l-1.7 1.7M7.15 16.85l-1.7 1.7M18.55 18.55l-1.7-1.7M7.15 7.15l-1.7-1.7" />
+        </svg>
+      );
+    }
+
+    if (icon === "rain") {
+      return (
+        <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
+          <path d="M7 18.2a4.2 4.2 0 1 1 .7-8.35A5.7 5.7 0 0 1 18.5 11a3.4 3.4 0 0 1-.3 6.8H7Z" />
+          <path d="M8.5 19.3 7.4 21M12.1 19.3 11 21M15.7 19.3 14.6 21" />
+        </svg>
+      );
+    }
+
+    if (icon === "snow") {
+      return (
+        <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
+          <path d="M7 17.8a4.1 4.1 0 1 1 .65-8.15A5.6 5.6 0 0 1 18.4 10.8a3.3 3.3 0 0 1-.25 6.6H7Z" />
+          <path d="M9 19.2h0M12 20.4h0M15 19.2h0" />
+        </svg>
+      );
+    }
+
+    if (icon === "storm") {
+      return (
+        <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
+          <path d="M7 17.7a4.1 4.1 0 1 1 .65-8.15A5.6 5.6 0 0 1 18.45 10.7a3.3 3.3 0 0 1-.25 6.6H7Z" />
+          <path d="m11.2 18.1-1.1 2.5 2.15-.2-1.2 2.8 3.1-4.3-2.2.15 1.15-1.95" />
+        </svg>
+      );
+    }
+
+    if (icon === "wind") {
+      return (
+        <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
+          <path d="M3 9.2h11.5a2.3 2.3 0 1 0-2.3-2.3" />
+          <path d="M3 13.2h15.7a2.1 2.1 0 1 1-2.1 2.1" />
+          <path d="M3 17.2h9.8a1.9 1.9 0 1 0-1.9 1.9" />
+        </svg>
+      );
+    }
+
+    return (
+      <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
+        <path d="M7.2 18.2a4.2 4.2 0 1 1 .7-8.35A5.7 5.7 0 0 1 18.7 11a3.5 3.5 0 0 1-.3 7.1H7.2Z" />
+      </svg>
+    );
+  };
+
   const renderTopTrendingListItem = (article: Article, rank: number) => {
     const articleRouteId = getArticleRouteId(article);
 
@@ -5205,9 +5291,14 @@ export default function Home() {
             <div className="home-weather-card">
               <div className="stack" style={{ gap: "4px" }}>
                 <span className="home-weather-city">{selectedLocalCity ?? localLocationLabel}</span>
-                <strong className="home-weather-temp">
-                  {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
-                </strong>
+                <div className="home-weather-temp-row">
+                  <span className="home-weather-icon-shell">
+                    {renderWeatherConditionIcon(weatherCard?.weatherLabel)}
+                  </span>
+                  <strong className="home-weather-temp">
+                    {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
+                  </strong>
+                </div>
                 <span className="muted">
                   {weatherCard ? weatherCard.weatherLabel : isWeatherLoading ? "Loading forecast..." : "Forecast unavailable"}
                 </span>
@@ -5669,8 +5760,94 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {sportsStandardArticles.slice(0, 4).map((article) => (
+              {sportsStandardArticles.slice(0, 3).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+
+              {sportsStandardArticles.slice(3, 6).map((article) => (
+                <div key={`sports-mid-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+
+              {sportsQuickWatchVideos.length > 0 ? (
+                <section className="home-section-block home-section-plain quick-watch-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Sports Quick Watch</strong>
+                    </div>
+                  </div>
+                  <div className="quick-watch-scroll" role="list" aria-label="Sports quick watch videos">
+                    {sportsQuickWatchVideos.slice(0, 6).map((video) => (
+                      <div key={video.id} className="quick-watch-item" role="listitem">
+                        <VideoFeedCard
+                          video={video}
+                          isAutoplaying={
+                            autoplayTrendingVideoKeys.includes(`sports-quickwatch:${video.id}`) &&
+                            !video.fallback
+                          }
+                          onToggleLike={handleToggleVideoLike}
+                          onToggleSave={handleToggleVideoSave}
+                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                          onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                          frameRef={(node) => {
+                            trendingVideoFrameRefs.current[`sports-quickwatch:${video.id}`] = node;
+                          }}
+                          autoplayKey={`sports-quickwatch:${video.id}`}
+                          previewDurationMs={4000}
+                          label="Quick Watch"
+                          className="video-card-inline quick-watch-video-card"
+                          variant="article"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {sportsStandardArticles.slice(6, 9).map((article) => (
+                <div key={`sports-post-video-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+
+              {sportsFeaturedVideo ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Featured Sports Video</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list">
+                    <div>
+                      <VideoFeedCard
+                        video={sportsFeaturedVideo}
+                        isAutoplaying={
+                          autoplayTrendingVideoKeys.includes(`sports-featured-video:${sportsFeaturedVideo.id}`) &&
+                          !sportsFeaturedVideo.fallback
+                        }
+                        onToggleLike={handleToggleVideoLike}
+                        onToggleSave={handleToggleVideoSave}
+                        onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                        frameRef={(node) => {
+                          trendingVideoFrameRefs.current[`sports-featured-video:${sportsFeaturedVideo.id}`] = node;
+                        }}
+                        autoplayKey={`sports-featured-video:${sportsFeaturedVideo.id}`}
+                        previewDurationMs={4000}
+                        label="Featured Sports Video"
+                        className="video-card-inline featured-video-single-card"
+                        variant="article"
+                      />
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {sportsStandardArticles.slice(9, 12).map((article) => (
+                <div key={`sports-pre-featured-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                   {renderArticleFeedCard(article)}
                 </div>
               ))}
@@ -5735,80 +5912,6 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {sportsStandardArticles.slice(4, 10).map((article) => (
-                <div key={`sports-mid-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-
-              {sportsQuickWatchVideos.length > 0 ? (
-                <section className="home-section-block home-section-plain quick-watch-row">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Sports Quick Watch</strong>
-                    </div>
-                  </div>
-                  <div className="quick-watch-scroll" role="list" aria-label="Sports quick watch videos">
-                    {sportsQuickWatchVideos.slice(0, 6).map((video) => (
-                      <div key={video.id} className="quick-watch-item" role="listitem">
-                        <VideoFeedCard
-                          video={video}
-                          isAutoplaying={
-                            autoplayTrendingVideoKeys.includes(`sports-quickwatch:${video.id}`) &&
-                            !video.fallback
-                          }
-                          onToggleLike={handleToggleVideoLike}
-                          onToggleSave={handleToggleVideoSave}
-                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                          onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                          frameRef={(node) => {
-                            trendingVideoFrameRefs.current[`sports-quickwatch:${video.id}`] = node;
-                          }}
-                          autoplayKey={`sports-quickwatch:${video.id}`}
-                          previewDurationMs={4000}
-                          label="Quick Watch"
-                          className="video-card-inline quick-watch-video-card"
-                          variant="article"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {sportsFeaturedVideo ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Featured Sports Video</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list">
-                    <div>
-                      <VideoFeedCard
-                        video={sportsFeaturedVideo}
-                        isAutoplaying={
-                          autoplayTrendingVideoKeys.includes(`sports-featured-video:${sportsFeaturedVideo.id}`) &&
-                          !sportsFeaturedVideo.fallback
-                        }
-                        onToggleLike={handleToggleVideoLike}
-                        onToggleSave={handleToggleVideoSave}
-                        onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                        frameRef={(node) => {
-                          trendingVideoFrameRefs.current[`sports-featured-video:${sportsFeaturedVideo.id}`] = node;
-                        }}
-                        autoplayKey={`sports-featured-video:${sportsFeaturedVideo.id}`}
-                        previewDurationMs={4000}
-                        label="Featured Sports Video"
-                        className="video-card-inline featured-video-single-card"
-                        variant="article"
-                      />
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-
               {sportsTopSources.length > 0 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
@@ -5840,7 +5943,7 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {sportsStandardArticles.slice(10).map((article) => (
+              {sportsStandardArticles.slice(12).map((article) => (
                 <div key={`sports-rest-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                   {renderArticleFeedCard(article)}
                 </div>
@@ -6133,9 +6236,14 @@ export default function Home() {
           <div className="home-weather-card">
             <div className="stack" style={{ gap: "4px" }}>
               <span className="home-weather-city">{localCityLabel}</span>
-              <strong className="home-weather-temp">
-                {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
-              </strong>
+              <div className="home-weather-temp-row">
+                <span className="home-weather-icon-shell">
+                  {renderWeatherConditionIcon(weatherCard?.weatherLabel)}
+                </span>
+                <strong className="home-weather-temp">
+                  {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
+                </strong>
+              </div>
               <span className="muted">
                 {weatherCard
                   ? weatherCard.weatherLabel
