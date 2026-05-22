@@ -159,6 +159,12 @@ export default function VideoFeedCard({
       ? probedOrientation.value
       : baseOrientation;
 
+  useEffect(() => {
+    if (isAutoplaying && autoplayKey?.includes("sports")) {
+      console.log("SPORTS VIDEO AUTOPLAY ATTEMPT", autoplayKey, video.id);
+    }
+  }, [autoplayKey, isAutoplaying, video.id]);
+
   const articleFrameClass =
     resolvedOrientation === "vertical"
       ? "video-frame-article-vertical"

@@ -2647,6 +2647,10 @@ input {
   overflow: hidden;
 }
 
+.quick-watch-row-compact {
+  gap: 10px;
+}
+
 .quick-watch-scroll {
   display: flex;
   gap: 14px;
@@ -2664,6 +2668,14 @@ input {
   flex: 0 0 min(78vw, 320px);
   scroll-snap-align: start;
   box-sizing: border-box;
+}
+
+.quick-watch-item-compact {
+  flex: 0 0 min(38vw, 148px);
+}
+
+.quick-watch-video-card-compact {
+  border-radius: 22px;
 }
 
 .featured-stories-scroll {

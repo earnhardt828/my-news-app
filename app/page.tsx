@@ -221,6 +221,14 @@ type WeatherCardData = {
   cityLabel: string;
 };
 
+type FavoriteTeamPlaceholder = {
+  team_id: string;
+  team_name: string;
+  league: string;
+  logo_url: string | null;
+  user_id: string;
+};
+
 function formatTopRankLabel(rank: number) {
   if (rank === 1) return "Top 1 🥇";
   if (rank === 2) return "Top 2 🥈";
@@ -4113,12 +4121,42 @@ export default function Home() {
     return sportsTabArticles;
   }, [sortMode, sportsTabArticles]);
 
+  const sportsFeaturedArticle = useMemo(() => {
+    if (sortMode !== "sports") {
+      return null;
+    }
+
+    return sportsTabArticles[0] ?? null;
+  }, [sortMode, sportsTabArticles]);
+
+  const sportsFeedArticles = useMemo(() => {
+    if (sortMode !== "sports") {
+      return [] as Article[];
+    }
+
+    if (!sportsFeaturedArticle) {
+      return sportsStandardArticles;
+    }
+
+    const featuredKey = getArticleDeduplicationKey(sportsFeaturedArticle);
+    return sportsStandardArticles.filter(
+      (article) => getArticleDeduplicationKey(article) !== featuredKey
+    );
+  }, [sortMode, sportsFeaturedArticle, sportsStandardArticles]);
+
   const sportsQuickWatchVideos = useMemo(() => sportsVideoPool.slice(0, 6), [sportsVideoPool]);
 
   const sportsFeaturedVideo = useMemo(
     () => sportsVideoPool[6] ?? sportsVideoPool[0] ?? null,
     [sportsVideoPool]
   );
+
+  const favoriteTeams = useMemo<FavoriteTeamPlaceholder[]>(() => {
+    // TODO: hydrate from a future `user_favorite_teams` table keyed by user_id.
+    // Suggested fields: team_id, team_name, league, logo_url, user_id.
+    // TODO: merge followed-team updates into the Sports page using team-level queries once the API is ready.
+    return [];
+  }, []);
 
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
@@ -4514,13 +4552,17 @@ export default function Home() {
     }
   };
 
-  const renderQuickWatchRow = () => {
+  const renderQuickWatchRow = (compact = false) => {
     if (myNewsQuickWatchVideos.length === 0) {
       return null;
     }
 
     return (
-      <section className="home-section-block home-section-plain quick-watch-row">
+      <section
+        className={`home-section-block home-section-plain quick-watch-row ${
+          compact ? "quick-watch-row-compact" : ""
+        }`.trim()}
+      >
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
             <strong className="profile-section-title home-section-title">Quick Watch</strong>
@@ -4528,7 +4570,11 @@ export default function Home() {
         </div>
         <div className="quick-watch-scroll" role="list" aria-label="Quick watch videos">
           {myNewsQuickWatchVideos.map((video) => (
-            <div key={video.id} className="quick-watch-item" role="listitem">
+            <div
+              key={video.id}
+              className={`quick-watch-item ${compact ? "quick-watch-item-compact" : ""}`.trim()}
+              role="listitem"
+            >
               <VideoFeedCard
                 video={video}
                 isAutoplaying={
@@ -4543,9 +4589,11 @@ export default function Home() {
                   trendingVideoFrameRefs.current[`quickwatch:${video.id}`] = node;
                 }}
                 autoplayKey={`quickwatch:${video.id}`}
-                previewDurationMs={4000}
+                previewDurationMs={compact ? null : 4000}
                 label="Quick Watch"
-                className="video-card-inline quick-watch-video-card"
+                className={`video-card-inline quick-watch-video-card ${
+                  compact ? "quick-watch-video-card-compact" : ""
+                }`.trim()}
                 variant="article"
               />
             </div>
@@ -5127,74 +5175,7 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Source Rankings</strong>
-              <span className="muted">News companies people are hearting right now.</span>
-            </div>
-            <Link href="/source-rankings/" className="button button-secondary">
-              See all
-            </Link>
-          </div>
-
-          {isHomeSourceRankingsLoading ? (
-            <div className="muted">Loading source rankings...</div>
-          ) : homeSourceRankings.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No source hearts yet</strong>
-              <span>Heart a source from Search or its profile to build the rankings.</span>
-            </div>
-          ) : (
-            <div className="source-rankings-carousel" role="list" aria-label="Source rankings">
-              {homeSourceRankings.map((source, index) => (
-                <Link
-                  key={source.sourceName}
-                  href={`/source/${slugifySourceName(source.sourceName)}/`}
-                  className="source-rankings-card"
-                  role="listitem"
-                >
-                  <div className="source-rankings-card-art-shell">
-                    <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
-                    <span className="source-rankings-rank">#{index + 1}</span>
-                  </div>
-                  <div className="source-rankings-card-copy">
-                    <span className="source-rankings-name">{source.sourceName}</span>
-                    <span className="source-rankings-card-meta">News Source</span>
-                  </div>
-                  <div className="source-rankings-card-actions">
-                    <button
-                      type="button"
-                      className={`icon-action-pill icon-action-pill-icon-only ${
-                        source.heartedByCurrentUser ? "icon-action-pill-active" : ""
-                      }`}
-                      aria-label={
-                        userId ? `Open ${source.sourceName} source profile` : "Log in to heart sources"
-                      }
-                      onClick={(event) => handlePromptSourceHeart(event, source.sourceName)}
-                    >
-                      <span className="icon-action-glyph" aria-hidden="true">
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill={source.heartedByCurrentUser ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          strokeWidth="1.9"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
-                        </svg>
-                      </span>
-                    </button>
-                    <strong>{source.likes}</strong>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+        {renderQuickWatchRow(true)}
 
         {breakingNewsPreviewArticles.length > 0 ? (
           <section className="home-section-block home-section-plain">
@@ -5233,8 +5214,6 @@ export default function Home() {
             ))}
           </div>
         </section>
-
-        {renderQuickWatchRow()}
 
         <section id="my-news-section" className="home-section-block home-section-plain">
           <div className="home-section-header">
@@ -5609,6 +5588,75 @@ export default function Home() {
           )}
         </section>
 
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Source Rankings</strong>
+              <span className="muted">News companies people are hearting right now.</span>
+            </div>
+            <Link href="/source-rankings/" className="button button-secondary">
+              See all
+            </Link>
+          </div>
+
+          {isHomeSourceRankingsLoading ? (
+            <div className="muted">Loading source rankings...</div>
+          ) : homeSourceRankings.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No source hearts yet</strong>
+              <span>Heart a source from Search or its profile to build the rankings.</span>
+            </div>
+          ) : (
+            <div className="source-rankings-carousel" role="list" aria-label="Source rankings">
+              {homeSourceRankings.map((source, index) => (
+                <Link
+                  key={source.sourceName}
+                  href={`/source/${slugifySourceName(source.sourceName)}/`}
+                  className="source-rankings-card"
+                  role="listitem"
+                >
+                  <div className="source-rankings-card-art-shell">
+                    <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
+                    <span className="source-rankings-rank">#{index + 1}</span>
+                  </div>
+                  <div className="source-rankings-card-copy">
+                    <span className="source-rankings-name">{source.sourceName}</span>
+                    <span className="source-rankings-card-meta">News Source</span>
+                  </div>
+                  <div className="source-rankings-card-actions">
+                    <button
+                      type="button"
+                      className={`icon-action-pill icon-action-pill-icon-only ${
+                        source.heartedByCurrentUser ? "icon-action-pill-active" : ""
+                      }`}
+                      aria-label={
+                        userId ? `Open ${source.sourceName} source profile` : "Log in to heart sources"
+                      }
+                      onClick={(event) => handlePromptSourceHeart(event, source.sourceName)}
+                    >
+                      <span className="icon-action-glyph" aria-hidden="true">
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill={source.heartedByCurrentUser ? "currentColor" : "none"}
+                          stroke="currentColor"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
+                        </svg>
+                      </span>
+                    </button>
+                    <strong>{source.likes}</strong>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
         {renderNewsClipsRow()}
 
         {isCategorySheetOpen ? (
@@ -5716,7 +5764,38 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {sportsStandardArticles.slice(0, 3).map((article) => (
+              <section className="home-section-block home-section-plain">
+                <div className="home-section-header">
+                  <div className="stack" style={{ gap: "4px" }}>
+                    <strong className="profile-section-title home-section-title">Your Teams</strong>
+                    <span className="muted">Follow your favorite teams for updates.</span>
+                  </div>
+                </div>
+
+                {favoriteTeams.length === 0 ? (
+                  <div className="empty-state compact-empty-state">
+                    <strong>Follow your favorite teams for updates.</strong>
+                    <span>Team alerts and game-day updates will appear here once favorites are enabled.</span>
+                  </div>
+                ) : null}
+              </section>
+
+              {sportsFeaturedArticle ? (
+                <section className="home-section-block home-section-plain featured-stories-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Featured Article</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list">
+                    <div>
+                      {renderArticleFeedCard(sportsFeaturedArticle)}
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {sportsFeedArticles.slice(0, 3).map((article) => (
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
@@ -5742,29 +5821,23 @@ export default function Home() {
                           onToggleSave={handleToggleVideoSave}
                           onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
                           onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                          frameRef={(node) => {
-                            trendingVideoFrameRefs.current[`sports-quickwatch:${video.id}`] = node;
-                          }}
-                          autoplayKey={`sports-quickwatch:${video.id}`}
-                          previewDurationMs={4000}
-                          label="Quick Watch"
-                          className="video-card-inline quick-watch-video-card"
-                          variant="article"
-                        />
+                        frameRef={(node) => {
+                          trendingVideoFrameRefs.current[`sports-quickwatch:${video.id}`] = node;
+                        }}
+                        autoplayKey={`sports-quickwatch:${video.id}`}
+                        previewDurationMs={null}
+                        label="Quick Watch"
+                        className="video-card-inline quick-watch-video-card"
+                        variant="article"
+                      />
                       </div>
                     ))}
                   </div>
                 </section>
               ) : null}
 
-              {sportsStandardArticles.slice(3, 6).map((article) => (
+              {sportsFeedArticles.slice(3, 6).map((article) => (
                 <div key={`sports-mid-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-
-              {sportsStandardArticles.slice(6, 9).map((article) => (
-                <div key={`sports-post-video-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                   {renderArticleFeedCard(article)}
                 </div>
               ))}
@@ -5792,7 +5865,7 @@ export default function Home() {
                           trendingVideoFrameRefs.current[`sports-featured-video:${sportsFeaturedVideo.id}`] = node;
                         }}
                         autoplayKey={`sports-featured-video:${sportsFeaturedVideo.id}`}
-                        previewDurationMs={4000}
+                        previewDurationMs={null}
                         label="Featured Sports Video"
                         className="video-card-inline featured-video-single-card"
                         variant="article"
@@ -5802,7 +5875,7 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {sportsStandardArticles.slice(6).map((article) => (
+              {sportsFeedArticles.slice(6).map((article) => (
                 <div key={`sports-rest-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                   {renderArticleFeedCard(article)}
                 </div>
