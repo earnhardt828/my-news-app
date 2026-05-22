@@ -1123,10 +1123,7 @@ export default function Home() {
     console.log("APP RENDERED");
   }, []);
 
-  const favoriteTeamsStorageKey = useMemo(
-    () => `graffiti-favorite-teams:${userId ?? "guest"}`,
-    [userId]
-  );
+  const favoriteTeamsStorageKey = "favoriteSportsTeams";
 
   useEffect(() => {
     console.log(
@@ -4137,11 +4134,18 @@ export default function Home() {
       return;
     }
 
-    // TODO: replace localStorage hydration with a real `user_favorite_teams`
-    // table keyed by user_id, team_id, team_name, league, and logo_url.
     try {
       const rawValue = window.localStorage.getItem(favoriteTeamsStorageKey);
-      const parsedValue = rawValue ? (JSON.parse(rawValue) as FavoriteTeamOption[]) : [];
+      const parsedValue = rawValue
+        ? (JSON.parse(rawValue) as
+            | FavoriteTeamOption[]
+            | Array<{
+                league?: string;
+                teamName?: string;
+                teamId?: string;
+                logo?: string | null;
+              }>)
+        : [];
       const validTeamIds = new Set(
         TEAM_PICKER_LEAGUES.flatMap((league) =>
           FAVORITE_TEAMS_BY_LEAGUE[league].map((team) => team.team_id)
@@ -4149,10 +4153,35 @@ export default function Home() {
       );
 
       setFavoriteTeams(
-        parsedValue.filter(
-          (team): team is FavoriteTeamOption =>
-            Boolean(team?.team_id) && validTeamIds.has(team.team_id)
-        )
+        parsedValue
+          .map((team) => {
+            if ("team_id" in team && team.team_id) {
+              return team as FavoriteTeamOption;
+            }
+
+            if (!("teamId" in team) || !("teamName" in team)) {
+              return null;
+            }
+
+            const league = TEAM_PICKER_LEAGUES.find(
+              (candidate) => candidate === (team.league as FavoriteLeagueKey)
+            );
+
+            if (!league || !team.teamId || !team.teamName) {
+              return null;
+            }
+
+            return {
+              team_id: team.teamId,
+              team_name: team.teamName,
+              league,
+              logo_url: team.logo ?? null,
+            } satisfies FavoriteTeamOption;
+          })
+          .filter(
+            (team): team is FavoriteTeamOption =>
+              team !== null && Boolean(team.team_id) && validTeamIds.has(team.team_id)
+          )
       );
     } catch (error) {
       console.error("FAVORITE TEAMS LOAD FAILED", error);
@@ -4168,15 +4197,23 @@ export default function Home() {
     }
 
     try {
-      window.localStorage.setItem(favoriteTeamsStorageKey, JSON.stringify(favoriteTeams));
+      window.localStorage.setItem(
+        favoriteTeamsStorageKey,
+        JSON.stringify(
+          favoriteTeams.map((team) => ({
+            league: team.league,
+            teamName: team.team_name,
+            teamId: team.team_id,
+            logo: team.logo_url,
+          }))
+        )
+      );
     } catch (error) {
       console.error("FAVORITE TEAMS SAVE FAILED", error);
     }
   }, [favoriteTeams, favoriteTeamsStorageKey, hasLoadedFavoriteTeams]);
 
   const favoriteTeamUpdates = useMemo<FavoriteTeamUpdate[]>(() => {
-    // TODO: swap this lightweight article matching for live game/team updates
-    // once the sports API integration is ready.
     return favoriteTeams.map((team) => {
       const normalizedTeamName = team.team_name.toLowerCase();
       const article =
@@ -4900,6 +4937,11 @@ export default function Home() {
       .join("");
 
   const handleToggleFavoriteTeam = (team: FavoriteTeamOption) => {
+    if (!userId) {
+      alert("Log in to save favorite teams.");
+      return;
+    }
+
     setFavoriteTeams((current) => {
       const alreadyFollowed = current.some((savedTeam) => savedTeam.team_id === team.team_id);
 
@@ -4936,10 +4978,12 @@ export default function Home() {
           className="favorite-team-logo"
           loading="lazy"
           decoding="async"
+          onError={(event) => {
+            event.currentTarget.style.visibility = "hidden";
+          }}
         />
-      ) : (
-        <span className="favorite-team-logo-fallback">{getFavoriteTeamInitials(team.team_name)}</span>
-      )}
+      ) : null}
+      <span className="favorite-team-logo-fallback">{getFavoriteTeamInitials(team.team_name)}</span>
     </span>
   );
 
@@ -4950,30 +4994,37 @@ export default function Home() {
 
     return (
       <div
-        className="bottom-sheet-backdrop"
+        className="favorite-teams-page-shell"
         role="dialog"
         aria-modal="true"
         aria-labelledby="favorite-teams-picker-title"
       >
-        <div className="bottom-sheet favorite-teams-sheet">
-          <div className="bottom-sheet-handle" aria-hidden="true" />
-          <div className="bottom-sheet-header">
-            <div className="stack" style={{ gap: "6px" }}>
-              <h3 id="favorite-teams-picker-title" className="modal-title">
-                Add Teams
-              </h3>
-              <p className="muted bottom-sheet-title">
-                Pick favorite teams for quicker Sports updates. TODO: connect this picker to a
-                future `user_favorite_teams` table and live sports API.
-              </p>
-            </div>
+        <div className="favorite-teams-page">
+          <div className="favorite-teams-page-header">
             <button
               type="button"
-              className="button button-secondary"
+              className="favorite-teams-close"
               onClick={() => setIsTeamPickerOpen(false)}
+              aria-label="Close favorite teams"
             >
-              Close
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m15 18-6-6 6-6" />
+              </svg>
             </button>
+            <h3 id="favorite-teams-picker-title" className="favorite-teams-page-title">
+              Favorite Teams
+            </h3>
+            <span className="favorite-teams-header-spacer" aria-hidden="true" />
           </div>
 
           <div className="favorite-teams-tabs" role="tablist" aria-label="Favorite team leagues">
@@ -5010,7 +5061,7 @@ export default function Home() {
             {TEAM_PICKER_LEAGUES.map((league) => (
               <section
                 key={league}
-                className="favorite-teams-page"
+                className="favorite-teams-page-panel"
                 role="tabpanel"
                 aria-label={`${league} teams`}
               >
@@ -5032,7 +5083,7 @@ export default function Home() {
                         {renderFavoriteTeamBadge(team)}
                         <span className="favorite-team-name">{team.team_name}</span>
                         <span className="favorite-team-meta">
-                          {isSelected ? "Following" : "Tap to follow"}
+                          {isSelected ? "Selected" : "Tap to follow"}
                         </span>
                       </button>
                     );

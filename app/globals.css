@@ -4334,11 +4334,231 @@ input {
   flex: 1;
 }
 
+.profile-meta-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-settings-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--button-secondary-bg);
+  color: var(--foreground);
+}
+
 .profile-stats-row {
   display: flex;
   gap: 18px;
   flex-wrap: wrap;
   align-items: flex-start;
+}
+
+.favorite-teams-page-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--surface);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.favorite-teams-page {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+}
+
+.favorite-teams-page-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.favorite-teams-close,
+.favorite-teams-header-spacer {
+  width: 44px;
+  height: 44px;
+}
+
+.favorite-teams-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+.favorite-teams-page-title {
+  margin: 0;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.favorite-teams-tabs {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 14px 16px 12px;
+  scroll-snap-type: x proximity;
+}
+
+.favorite-teams-tab {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--button-secondary-bg);
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.favorite-teams-tab-active {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+
+.favorite-teams-pages {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+}
+
+.favorite-teams-page-panel {
+  flex: 0 0 100%;
+  min-width: 100%;
+  padding: 8px 16px 24px;
+  overflow-y: auto;
+  scroll-snap-align: start;
+}
+
+.favorite-teams-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 14px;
+}
+
+.favorite-team-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
+}
+
+.favorite-team-card-selected .favorite-team-logo-shell {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 5px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+:root[data-theme="dark"] .favorite-team-card-selected .favorite-team-logo-shell {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 5px rgba(255, 149, 234, 0.35);
+}
+
+.favorite-team-logo-shell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 82px;
+  height: 82px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--surface-strong) 82%, transparent));
+  overflow: hidden;
+}
+
+.favorite-team-logo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.favorite-team-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--foreground);
+}
+
+.favorite-team-name {
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--foreground);
+}
+
+.favorite-team-meta {
+  font-size: 0.75rem;
+  color: var(--text-soft);
+}
+
+.favorite-team-updates-row {
+  display: grid;
+  gap: 12px;
+}
+
+.favorite-team-update-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-elevated);
+}
+
+.favorite-team-update-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.favorite-team-update-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.favorite-team-update-copy strong {
+  font-size: 0.96rem;
+}
+
+.favorite-team-update-copy span {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.favorite-team-update-headline {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--foreground);
 }
 
 .profile-stat-block {

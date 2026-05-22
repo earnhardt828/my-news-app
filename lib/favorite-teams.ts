@@ -17,7 +17,10 @@ const withLeague = (league: FavoriteLeagueKey, teamNames: string[]): FavoriteTea
       .replace(/^-+|-+$/g, "")}`,
     team_name: teamName,
     league,
-    logo_url: null,
+    logo_url: `/team-logos/${teamName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")}.png`,
   }));
 
 export const FAVORITE_TEAMS_BY_LEAGUE: Record<FavoriteLeagueKey, FavoriteTeamOption[]> = {
