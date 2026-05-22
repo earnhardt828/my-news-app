@@ -4312,21 +4312,50 @@ export default function Home() {
         : formatPublishedDate(article.publishedAt, article.time);
 
       const shouldShowLikeAction = sortMode !== "trending";
-      const shouldShowLogoFallbackTile = !shouldUseLargeImage && hasSourceLogoFallback;
-      const fallbackImageNode = shouldShowLogoFallbackTile ? (
-        <div className="article-hero-shell" aria-hidden="true">
-          <div className="article-image article-image-placeholder article-image-logo-fallback">
-            <span className="article-image-placeholder-orb article-image-placeholder-orb-left" />
-            <span className="article-image-placeholder-orb article-image-placeholder-orb-right" />
-            <div className="article-image-placeholder-content">
-              <span className="article-image-placeholder-brand">
-                <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
-              </span>
-              <span className="article-image-placeholder-kicker">{safeSourceName}</span>
-            </div>
+      const visualBoxNode = shouldUseLargeImage ? (
+        <div className="article-thumb-shell article-card-visual-shell" aria-hidden="true">
+          <img
+            src={imageSrc as string}
+            alt={cleanDisplayText(article.title)}
+            className="article-thumb-image article-card-visual-image"
+            loading="lazy"
+            decoding="async"
+            onError={() => {
+              setFailedArticleImages((prev) => {
+                if (prev[imageFailureKey]) {
+                  return prev;
+                }
+
+                return {
+                  ...prev,
+                  [imageFailureKey]: true,
+                };
+              });
+            }}
+          />
+        </div>
+      ) : hasSourceLogoFallback ? (
+        <div
+          className="article-thumb-shell article-card-visual-shell article-card-visual-placeholder"
+          aria-hidden="true"
+        >
+          <div className="article-card-visual-content">
+            <span className="article-card-visual-brand">
+              <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
+            </span>
+            <span className="article-card-visual-label">{safeSourceName}</span>
           </div>
         </div>
-      ) : null;
+      ) : (
+        <div
+          className={`article-thumb-shell article-card-visual-shell article-card-category-placeholder article-card-category-placeholder-${safeCategoryName.toLowerCase()}`}
+          aria-hidden="true"
+        >
+          <div className="article-card-visual-content">
+            <span className="article-card-category-chip">{getCategoryLabel(safeCategoryName)}</span>
+          </div>
+        </div>
+      );
 
       return (
         <article
@@ -4392,7 +4421,7 @@ export default function Home() {
               });
             }}
           >
-            <div className="news-card-body news-card-body-with-hero">
+            <div className="news-card-body news-card-body-with-thumb news-card-body-compact">
               <div className="news-card-copy">
                 <div className="trending-title-row">
                   <h3 className="trending-article-title">
@@ -4409,31 +4438,7 @@ export default function Home() {
                   </p>
                 ) : null}
               </div>
-              {shouldUseLargeImage ? (
-                <div className="article-hero-shell">
-                  <img
-                    src={imageSrc as string}
-                    alt={cleanDisplayText(article.title)}
-                    className="article-image article-image-lg"
-                    loading="lazy"
-                    decoding="async"
-                    onError={() => {
-                      setFailedArticleImages((prev) => {
-                        if (prev[imageFailureKey]) {
-                          return prev;
-                        }
-
-                        return {
-                          ...prev,
-                          [imageFailureKey]: true,
-                        };
-                      });
-                    }}
-                  />
-                </div>
-              ) : (
-                fallbackImageNode
-              )}
+              {visualBoxNode}
             </div>
           </Link>
           <div className="news-card-footer">
