@@ -929,6 +929,16 @@ function isSportsPromotionalArticle(article: Article) {
   );
 }
 
+function isSportsVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  return (
+    video.category === "Sports" ||
+    /(espn|sportscenter|nba|nfl|mlb|nhl|soccer|golf|nascar|cbs sports|nbc sports|fox sports|highlight|top plays|touchdown|dunk|home run|goal|save|replay|buzzer beater)/.test(
+      haystack
+    )
+  );
+}
+
 function getWeatherConditionIconLabel(condition: string | null | undefined) {
   const value = `${condition ?? ""}`.toLowerCase();
 
@@ -3926,8 +3936,8 @@ export default function Home() {
     return items;
   }, [balancedTrendingArticles, sortMode, videos]);
 
-  const quickWatchVideos = useMemo(() => {
-    const playableVideos = videos.filter((video) => !video.fallback);
+  const myNewsVideoPool = useMemo(() => {
+    const playableVideos = videos.filter((video) => !video.fallback && !isSportsVideo(video));
     const preferredVertical = playableVideos.filter(
       (video) =>
         video.orientation === "vertical" ||
@@ -3940,18 +3950,25 @@ export default function Home() {
     return selectSourceBalancedVideos(preferredPool, 24);
   }, [videos]);
 
-  const myNewsQuickWatchVideos = useMemo(() => quickWatchVideos.slice(0, 5), [quickWatchVideos]);
+  const myNewsQuickWatchVideos = useMemo(
+    () => myNewsVideoPool.slice(0, 5),
+    [myNewsVideoPool]
+  );
   const myNewsFeaturedVideos = useMemo(
-    () => quickWatchVideos.slice(myNewsQuickWatchVideos.length, myNewsQuickWatchVideos.length + 8),
-    [myNewsQuickWatchVideos.length, quickWatchVideos]
+    () =>
+      myNewsVideoPool.slice(
+        myNewsQuickWatchVideos.length,
+        myNewsQuickWatchVideos.length + 8
+      ),
+    [myNewsQuickWatchVideos.length, myNewsVideoPool]
   );
   const primaryNewsClipVideos = useMemo(
     () =>
-      quickWatchVideos.slice(
+      myNewsVideoPool.slice(
         myNewsQuickWatchVideos.length + myNewsFeaturedVideos.length,
         myNewsQuickWatchVideos.length + myNewsFeaturedVideos.length + 5
       ),
-    [myNewsQuickWatchVideos.length, myNewsFeaturedVideos.length, quickWatchVideos]
+    [myNewsQuickWatchVideos.length, myNewsFeaturedVideos.length, myNewsVideoPool]
   );
 
   const topTenTrendingArticles = useMemo(
@@ -4058,14 +4075,7 @@ export default function Home() {
               return false;
             }
 
-            const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
-            const matchesSports =
-              video.category === "Sports" ||
-              /(espn|sportscenter|nba|nfl|mlb|nhl|soccer|golf|nascar|cbs sports|nbc sports|fox sports|highlight|top plays|touchdown|dunk|home run|goal|save|replay)/.test(
-                haystack
-              );
-
-            return matchesSports;
+            return isSportsVideo(video);
           })
           .sort((left, right) => {
             const scoreVideo = (video: VideoItem) => {
@@ -4192,10 +4202,41 @@ export default function Home() {
       .slice(0, 6);
   }, [homeSourceRankings, sortMode]);
 
+  const myNewsImageCount = useMemo(() => {
+    const sampleArticles = [
+      ...breakingNewsPreviewArticles,
+      ...topTenTrendingArticles,
+      ...myNewsFeaturedArticles,
+    ];
+
+    return sampleArticles.filter((article) => {
+      const sourceName = getSafeSourceLabel(article.source);
+      const image = getBestArticleImage(article);
+      return (
+        (Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src)) ||
+        hasMappedSourceLogo(sourceName)
+      );
+    }).length;
+  }, [breakingNewsPreviewArticles, myNewsFeaturedArticles, topTenTrendingArticles]);
+
+  const sportsImageCount = useMemo(
+    () =>
+      sportsTabArticles.filter((article) => {
+        const sourceName = getSafeSourceLabel(article.source);
+        const image = getBestArticleImage(article);
+        return (
+          (Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src)) ||
+          hasMappedSourceLogo(sourceName)
+        );
+      }).length,
+    [sportsTabArticles]
+  );
+
   useEffect(() => {
     if (sortMode === "trending") {
       console.log("MY NEWS FEATURED ARTICLES COUNT", myNewsFeaturedArticles.length);
       console.log("MY NEWS FEATURED VIDEOS COUNT", myNewsFeaturedVideos.length);
+      console.log("MY NEWS IMAGE COUNT", myNewsImageCount);
     }
 
     if (sortMode === "sports") {
@@ -4204,10 +4245,16 @@ export default function Home() {
       console.log("SPORTS QUICK WATCH COUNT", sportsQuickWatchVideos.length);
       console.log("SPORTS QUICK WATCH RENDER COUNT", sportsQuickWatchVideos.slice(0, 6).length);
       console.log("SPORTS FEATURED VIDEO EXISTS", Boolean(sportsFeaturedVideo));
+      console.log("SPORTS QUICK WATCH POSITION", "after sports articles 1-3");
+      console.log("SPORTS FEATURED VIDEO POSITION", "after sports articles 4-6");
+      console.log("SPORTS FEATURED ARTICLE POSITION", "after sports articles 7-9");
+      console.log("SPORTS IMAGE COUNT", sportsImageCount);
     }
   }, [
+    myNewsImageCount,
     myNewsFeaturedArticles.length,
     myNewsFeaturedVideos.length,
+    sportsImageCount,
     sportsVideoPool.length,
     sortMode,
     sportsFeaturedArticles.length,
@@ -4342,13 +4389,7 @@ export default function Home() {
       const shouldUseLargeImage =
         Boolean(imageSrc) &&
         !failedArticleImages[imageFailureKey] &&
-        isLikelyHighQualityArticleImage(selectedImage.source, imageSrc) &&
-        (selectedImage.source === "urlToImage" ||
-          selectedImage.source === "imageUrl" ||
-          selectedImage.source === "image" ||
-          selectedImage.source === "ogImage" ||
-          selectedImage.source === "twitterImage" ||
-          selectedImage.source === "mediaContent");
+        isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
@@ -4950,6 +4991,87 @@ export default function Home() {
     );
   };
 
+  const renderCompactSideImageArticle = (
+    article: Article,
+    options?: {
+      showRank?: number | null;
+      imageFallbackLabel?: string | null;
+      className?: string;
+    }
+  ) => {
+    const articleRouteId = getArticleRouteId(article);
+
+    if (!articleRouteId || !isRenderableArticleRecord(article)) {
+      return null;
+    }
+
+    const safeSourceName = getSafeSourceLabel(article.source);
+    const selectedImage = getBestArticleImage(article);
+    const shouldUseImage =
+      Boolean(selectedImage.src) &&
+      isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
+
+    return (
+      <article
+        className={`top-trending-list-card ${
+          typeof options?.showRank === "number" ? "top-trending-list-card-ranked" : ""
+        } ${options?.className ?? ""}`.trim()}
+      >
+        <Link
+          href={`/article/${articleRouteId}/`}
+          className="top-trending-list-link"
+          onClick={() => {
+            persistArticleMetadata(article);
+            saveArticleReturnState({
+              path: "/",
+              scrollY: window.scrollY,
+              source: "home",
+              sortMode,
+              selectedLocalCity,
+              localLocationLabel,
+            });
+          }}
+        >
+          {typeof options?.showRank === "number" ? (
+            <div className="top-trending-list-rank" aria-hidden="true">
+              {options.showRank}
+            </div>
+          ) : null}
+          <div className="top-trending-list-copy">
+            <div className="top-trending-list-meta">
+              <span className="top-trending-list-source">{safeSourceName}</span>
+              <span className="top-trending-list-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="top-trending-list-date">
+                {formatPublishedDate(article.publishedAt, article.time)}
+              </span>
+            </div>
+            <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
+          </div>
+          <div className="top-trending-list-media" aria-hidden="true">
+            {shouldUseImage && selectedImage.src ? (
+              <img
+                src={selectedImage.src}
+                alt={cleanDisplayText(article.title)}
+                className="top-trending-list-image"
+                loading="lazy"
+                decoding="async"
+              />
+            ) : hasMappedSourceLogo(safeSourceName) ? (
+              <div className="top-trending-list-logo-fallback">
+                <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
+                {options?.imageFallbackLabel ? (
+                  <span className="top-trending-list-fallback-label">{options.imageFallbackLabel}</span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </Link>
+      </article>
+    );
+  };
+
   const renderHomeTopNavigation = (
     activeMode:
       | "trending"
@@ -5122,94 +5244,6 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        {breakingNewsPreviewArticles.length > 0 ? (
-          <section className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">
-                  Breaking News
-                </strong>
-                <span className="home-section-date">{todayLabel}</span>
-              </div>
-            </div>
-            <div className="stack home-section-list">
-              {breakingNewsPreviewArticles.map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {renderFeaturedStoriesRow()}
-        {renderNewsClipsRow()}
-
-        <section className="home-section-block home-section-plain home-top-trending-block">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Trending Top 10</strong>
-            </div>
-          </div>
-          <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
-            {topTenTrendingArticles.map((article, index) => (
-              <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                {renderTopTrendingListItem(article, index + 1)}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {renderQuickWatchRow()}
-
-        <section id="my-news-section" className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">My News</strong>
-            </div>
-          </div>
-
-          {!userId ? (
-            <div className="empty-state compact-empty-state">
-              <strong>Log in to personalize My News</strong>
-              <span>Follow categories and sources to build your own feed here.</span>
-            </div>
-          ) : categories.length === 0 ? (
-            <div className="stack" style={{ gap: "12px" }}>
-              <div className="category-grid">
-                {CATEGORY_OPTIONS.slice(0, 8).map((category) => (
-                  <button
-                    key={category}
-                    className="category-pill"
-                    onClick={() => {
-                      setCategoryDraft([category]);
-                      setCategorySheetStatus(null);
-                      setIsCategorySheetOpen(true);
-                    }}
-                  >
-                    {getCategoryLabel(category)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : isCategorySectionLoading ? (
-            <div className="muted">Loading category stories...</div>
-          ) : categorySectionArticles.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No category stories yet</strong>
-              <span>Try updating your interests or check back shortly.</span>
-            </div>
-          ) : (
-            <div className="stack home-section-list">
-              {categorySectionArticles.slice(0, 6).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
@@ -5274,6 +5308,94 @@ export default function Home() {
                     <strong>{source.likes}</strong>
                   </div>
                 </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {breakingNewsPreviewArticles.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title breaking-news-title">
+                  Breaking News
+                </strong>
+                <span className="home-section-date">{todayLabel}</span>
+              </div>
+            </div>
+            <div className="stack home-section-list">
+              {breakingNewsPreviewArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {renderFeaturedStoriesRow()}
+        {renderNewsClipsRow()}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Trending Top 10</strong>
+            </div>
+          </div>
+          <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
+            {topTenTrendingArticles.map((article, index) => (
+              <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                {renderCompactSideImageArticle(article, { showRank: index + 1 })}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {renderQuickWatchRow()}
+
+        <section id="my-news-section" className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">My News</strong>
+            </div>
+          </div>
+
+          {!userId ? (
+            <div className="empty-state compact-empty-state">
+              <strong>Log in to personalize My News</strong>
+              <span>Follow categories and sources to build your own feed here.</span>
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="stack" style={{ gap: "12px" }}>
+              <div className="category-grid">
+                {CATEGORY_OPTIONS.slice(0, 8).map((category) => (
+                  <button
+                    key={category}
+                    className="category-pill"
+                    onClick={() => {
+                      setCategoryDraft([category]);
+                      setCategorySheetStatus(null);
+                      setIsCategorySheetOpen(true);
+                    }}
+                  >
+                    {getCategoryLabel(category)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : isCategorySectionLoading ? (
+            <div className="muted">Loading category stories...</div>
+          ) : categorySectionArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No category stories yet</strong>
+              <span>Try updating your interests or check back shortly.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {categorySectionArticles.slice(0, 6).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
               ))}
             </div>
           )}
@@ -5379,10 +5501,13 @@ export default function Home() {
                 <span>Try another supported city or check back shortly.</span>
               </div>
             ) : (
-              <div className="stack home-section-list">
+              <div className="stack home-section-list top-trending-card-rail weather-story-list">
                 {weatherNewsArticles.slice(0, 3).map((article) => (
                   <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                    {renderArticleFeedCard(article)}
+                    {renderCompactSideImageArticle(article, {
+                      className: "weather-compact-card",
+                      imageFallbackLabel: "Weather",
+                    })}
                   </div>
                 ))}
               </div>
@@ -5491,41 +5616,6 @@ export default function Home() {
             </div>
           )}
         </section>
-
-        {sportsQuickWatchVideos.length > 0 ? (
-          <section className="home-section-block home-section-plain quick-watch-row">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Sports Videos</strong>
-              </div>
-            </div>
-            <div className="quick-watch-scroll" role="list" aria-label="Sports videos">
-              {sportsQuickWatchVideos.slice(0, 6).map((video) => (
-                <div key={`sports-home-video-${video.id}`} className="quick-watch-item" role="listitem">
-                  <VideoFeedCard
-                    video={video}
-                    isAutoplaying={
-                      autoplayTrendingVideoKeys.includes(`sports-home:${video.id}`) &&
-                      !video.fallback
-                    }
-                    onToggleLike={handleToggleVideoLike}
-                    onToggleSave={handleToggleVideoSave}
-                    onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                    onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                    frameRef={(node) => {
-                      trendingVideoFrameRefs.current[`sports-home:${video.id}`] = node;
-                    }}
-                    autoplayKey={`sports-home:${video.id}`}
-                    previewDurationMs={4000}
-                    label="Sports Video"
-                    className="video-card-inline quick-watch-video-card"
-                    variant="article"
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
@@ -5766,12 +5856,6 @@ export default function Home() {
                 </div>
               ))}
 
-              {sportsStandardArticles.slice(3, 6).map((article) => (
-                <div key={`sports-mid-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-
               {sportsQuickWatchVideos.length > 0 ? (
                 <section className="home-section-block home-section-plain quick-watch-row">
                   <div className="home-section-header">
@@ -5806,6 +5890,12 @@ export default function Home() {
                   </div>
                 </section>
               ) : null}
+
+              {sportsStandardArticles.slice(3, 6).map((article) => (
+                <div key={`sports-mid-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
 
               {sportsStandardArticles.slice(6, 9).map((article) => (
                 <div key={`sports-post-video-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
