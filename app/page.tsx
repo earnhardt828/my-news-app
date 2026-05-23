@@ -233,6 +233,26 @@ type FavoriteTeamUpdate = {
   article: Article | null;
 };
 
+type SportsScoreLeague = "NFL" | "NBA" | "MLB" | "NHL" | "MLS";
+
+type SportsScoreGame = {
+  id: string;
+  league: SportsScoreLeague;
+  status: "Live" | "Final" | "Today" | "Upcoming";
+  homeTeam: {
+    name: string;
+    logoUrl: string | null;
+    score: string | null;
+  };
+  awayTeam: {
+    name: string;
+    logoUrl: string | null;
+    score: string | null;
+  };
+  shortDetail: string | null;
+  scheduledAt: string | null;
+};
+
 function formatTopRankLabel(rank: number) {
   if (rank === 1) return "Top 1 🥇";
   if (rank === 2) return "Top 2 🥈";
@@ -1070,6 +1090,18 @@ export default function Home() {
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
   const [activeTeamLeague, setActiveTeamLeague] = useState<FavoriteLeagueKey>("NFL");
+  const [activeScoresLeague, setActiveScoresLeague] = useState<SportsScoreLeague>("NFL");
+  const [sportsScoresByLeague, setSportsScoresByLeague] = useState<
+    Record<SportsScoreLeague, SportsScoreGame[]>
+  >({
+    NFL: [],
+    NBA: [],
+    MLB: [],
+    NHL: [],
+    MLS: [],
+  });
+  const [isSportsScoresLoading, setIsSportsScoresLoading] = useState(false);
+  const [areSportsScoresAvailable, setAreSportsScoresAvailable] = useState(true);
   const [autoplayTrendingVideoKeys, setAutoplayTrendingVideoKeys] = useState<string[]>([]);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
@@ -1155,6 +1187,64 @@ export default function Home() {
       node.scrollLeft = node.clientWidth * leagueIndex;
     });
   }, [activeTeamLeague, isTeamPickerOpen]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSportsScores() {
+      if (sortMode !== "sports") {
+        return;
+      }
+
+      setIsSportsScoresLoading(true);
+
+      try {
+        const response = await apiFetch("/api/sports-scores");
+        const payload = (await response.json()) as {
+          providerConfigured: boolean;
+          leagues: Partial<Record<SportsScoreLeague, SportsScoreGame[]>>;
+        };
+
+        if (!isMounted) {
+          return;
+        }
+
+        setAreSportsScoresAvailable(payload.providerConfigured);
+        setSportsScoresByLeague({
+          NFL: payload.leagues.NFL ?? [],
+          NBA: payload.leagues.NBA ?? [],
+          MLB: payload.leagues.MLB ?? [],
+          NHL: payload.leagues.NHL ?? [],
+          MLS: payload.leagues.MLS ?? [],
+        });
+      } catch (error) {
+        console.error("SPORTS SCORES LOAD FAILED", error);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setAreSportsScoresAvailable(false);
+        setSportsScoresByLeague({
+          NFL: [],
+          NBA: [],
+          MLB: [],
+          NHL: [],
+          MLS: [],
+        });
+      } finally {
+        if (isMounted) {
+          setIsSportsScoresLoading(false);
+        }
+      }
+    }
+
+    void loadSportsScores();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [sortMode]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -4229,6 +4319,46 @@ export default function Home() {
     });
   }, [favoriteTeams, sportsTabArticles]);
 
+  const prioritizedSportsScores = useMemo(() => {
+    const selectedGames = sportsScoresByLeague[activeScoresLeague] ?? [];
+
+    if (selectedGames.length === 0) {
+      return [];
+    }
+
+    const favoriteNames = new Set(
+      favoriteTeams
+        .filter((team) => team.league === activeScoresLeague)
+        .map((team) => team.team_name.toLowerCase())
+    );
+
+    return [...selectedGames].sort((left, right) => {
+      const leftFavoriteScore =
+        Number(favoriteNames.has(left.homeTeam.name.toLowerCase())) +
+        Number(favoriteNames.has(left.awayTeam.name.toLowerCase()));
+      const rightFavoriteScore =
+        Number(favoriteNames.has(right.homeTeam.name.toLowerCase())) +
+        Number(favoriteNames.has(right.awayTeam.name.toLowerCase()));
+
+      if (rightFavoriteScore !== leftFavoriteScore) {
+        return rightFavoriteScore - leftFavoriteScore;
+      }
+
+      const leftPriority =
+        (left.status === "Live" ? 3 : left.status === "Today" ? 2 : left.status === "Upcoming" ? 1 : 0);
+      const rightPriority =
+        (right.status === "Live" ? 3 : right.status === "Today" ? 2 : right.status === "Upcoming" ? 1 : 0);
+
+      if (rightPriority !== leftPriority) {
+        return rightPriority - leftPriority;
+      }
+
+      const rightTime = right.scheduledAt ? new Date(right.scheduledAt).getTime() : 0;
+      const leftTime = left.scheduledAt ? new Date(left.scheduledAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+  }, [activeScoresLeague, favoriteTeams, sportsScoresByLeague]);
+
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
       ...breakingNewsPreviewArticles,
@@ -4953,6 +5083,27 @@ export default function Home() {
         />
       ) : null}
       <span className="favorite-team-logo-fallback">{getFavoriteTeamInitials(team.team_name)}</span>
+    </span>
+  );
+
+  const renderScoreTeamMark = (
+    team: { name: string; logoUrl: string | null },
+    className = ""
+  ) => (
+    <span className={`sports-score-team-mark ${className}`.trim()} aria-hidden="true">
+      {team.logoUrl ? (
+        <img
+          src={team.logoUrl}
+          alt={team.name}
+          className="sports-score-team-logo"
+          loading="lazy"
+          decoding="async"
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
+      ) : null}
+      <span className="sports-score-team-fallback">{getFavoriteTeamInitials(team.name)}</span>
     </span>
   );
 
@@ -6013,6 +6164,80 @@ export default function Home() {
                             ? cleanDisplayText(article.title)
                             : "Latest team news and live game updates will appear here once the sports API is connected."}
                         </p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="home-section-block home-section-plain">
+                <div className="home-section-header">
+                  <div className="stack" style={{ gap: "4px" }}>
+                    <strong className="profile-section-title home-section-title">Scores</strong>
+                    <span className="muted">Live, upcoming, and recent games.</span>
+                  </div>
+                </div>
+
+                <div className="favorite-teams-tabs sports-scores-tabs" role="tablist" aria-label="Sports score leagues">
+                  {(["NFL", "NBA", "MLB", "NHL", "MLS"] as SportsScoreLeague[]).map((league) => (
+                    <button
+                      key={`scores-${league}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeScoresLeague === league}
+                      className={`favorite-teams-tab ${
+                        activeScoresLeague === league ? "favorite-teams-tab-active" : ""
+                      }`}
+                      onClick={() => setActiveScoresLeague(league)}
+                    >
+                      {league}
+                    </button>
+                  ))}
+                </div>
+
+                {isSportsScoresLoading ? (
+                  <div className="muted">Loading scores...</div>
+                ) : !areSportsScoresAvailable ? (
+                  <div className="empty-state compact-empty-state">
+                    <strong>Scores unavailable right now.</strong>
+                    <span>Add `THESPORTSDB_API_KEY` or `API_SPORTS_KEY` to enable live score cards.</span>
+                  </div>
+                ) : prioritizedSportsScores.length === 0 ? (
+                  <div className="empty-state compact-empty-state">
+                    <strong>Scores unavailable right now.</strong>
+                    <span>Try again shortly while the score feeds refresh.</span>
+                  </div>
+                ) : (
+                  <div className="sports-scores-scroll" role="list" aria-label={`${activeScoresLeague} scores`}>
+                    {prioritizedSportsScores.map((game) => (
+                      <article
+                        key={game.id}
+                        className="sports-score-card"
+                        role="listitem"
+                      >
+                        <div className="sports-score-card-top">
+                          <span className="sports-score-league">{game.league}</span>
+                          <span className={`sports-score-status sports-score-status-${game.status.toLowerCase()}`}>
+                            {game.status}
+                          </span>
+                        </div>
+                        <div className="sports-score-team-row">
+                          <div className="sports-score-team-copy">
+                            {renderScoreTeamMark(game.awayTeam)}
+                            <span className="sports-score-team-name">{game.awayTeam.name}</span>
+                          </div>
+                          <strong className="sports-score-points">{game.awayTeam.score ?? "—"}</strong>
+                        </div>
+                        <div className="sports-score-team-row">
+                          <div className="sports-score-team-copy">
+                            {renderScoreTeamMark(game.homeTeam)}
+                            <span className="sports-score-team-name">{game.homeTeam.name}</span>
+                          </div>
+                          <strong className="sports-score-points">{game.homeTeam.score ?? "—"}</strong>
+                        </div>
+                        <div className="sports-score-meta">
+                          <span>{game.shortDetail ?? "Upcoming game"}</span>
+                        </div>
                       </article>
                     ))}
                   </div>
