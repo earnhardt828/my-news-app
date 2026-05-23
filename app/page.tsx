@@ -928,12 +928,16 @@ function isSportsPromotionalArticle(article: Article) {
 
 function isSportsVideo(video: VideoItem) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
-  return (
-    video.category === "Sports" ||
-    /(espn|sportscenter|nba|nfl|mlb|nhl|soccer|golf|nascar|cbs sports|nbc sports|fox sports|highlight|top plays|touchdown|dunk|home run|goal|save|replay|buzzer beater)/.test(
+  const hasSportsTerms =
+    /(sports|espn|sportscenter|nfl|nba|mlb|nhl|mls|soccer|football|basketball|baseball|hockey|golf|tennis|nascar|formula 1|formula1|f1|ufc|mma|highlights?|touchdown|dunk|home run|goals?|save|replay|top plays|bleacher report|fox sports|cbs sports|nbc sports|sports illustrated|pga|masters|grand prix|race winner)/.test(
       haystack
-    )
-  );
+    ) || video.category === "Sports";
+  const hasRejectedTerms =
+    /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/.test(
+      haystack
+    );
+
+  return hasSportsTerms && !hasRejectedTerms;
 }
 
 function getArticlePriorityScore(article: Article) {
@@ -4155,16 +4159,20 @@ export default function Home() {
               const haystack = `${video.title} ${video.creator} ${video.category}`.toLowerCase();
               let score = 0;
 
-              if (/(highlights|top plays|goals?|dunk|touchdown|home run|save|replay|buzzer beater)/.test(haystack)) {
+              if (/(highlights|top plays|goals?|dunk|touchdown|home run|save|replay|buzzer beater|walk off|game winner|slam dunk)/.test(haystack)) {
                 score += 140;
               }
 
-              if (/(sportscenter|espn highlights|nfl highlights|nba highlights|mlb highlights|nhl highlights|soccer goals|cbs sports highlights|bleacher report highlights|fox sports highlights)/.test(haystack)) {
-                score += 100;
+              if (/(sportscenter|espn highlights|nfl highlights|nba highlights|mlb highlights|nhl highlights|mls highlights|soccer goals|cbs sports highlights|bleacher report highlights|fox sports highlights|formula 1 highlights|f1 highlights)/.test(haystack)) {
+                score += 130;
+              }
+
+              if (/(espn|sportscenter|cbs sports|fox sports|nbc sports|bleacher report|sports illustrated|mlb|nfl|nba|nhl|mls|golf|nascar|formula 1|formula1|f1)/.test(haystack)) {
+                score += 70;
               }
 
               if (video.orientation === "vertical") {
-                score += 28;
+                score += 56;
               }
 
               if (/(debate|podcast|interview|reaction|preview|rumors)/.test(haystack)) {
@@ -4176,7 +4184,7 @@ export default function Home() {
 
             return scoreVideo(right) - scoreVideo(left);
           }),
-        12
+        16
       ),
     [sportsVideos, videos]
   );
@@ -4212,10 +4220,10 @@ export default function Home() {
     );
   }, [sortMode, sportsFeaturedArticle, sportsStandardArticles]);
 
-  const sportsQuickWatchVideos = useMemo(() => sportsVideoPool.slice(0, 6), [sportsVideoPool]);
+  const sportsQuickWatchVideos = useMemo(() => sportsVideoPool.slice(0, 8), [sportsVideoPool]);
 
   const sportsFeaturedVideo = useMemo(
-    () => sportsVideoPool[6] ?? sportsVideoPool[0] ?? null,
+    () => sportsVideoPool[8] ?? sportsVideoPool[0] ?? null,
     [sportsVideoPool]
   );
 

@@ -32,6 +32,12 @@ type VideoFeedItem = {
 
 type VideoFeedTab = "all" | "news" | "sports";
 
+const SPORTS_POSITIVE_PATTERN =
+  /(sports|espn|sportscenter|nfl|nba|mlb|nhl|mls|soccer|football|basketball|baseball|hockey|golf|tennis|nascar|formula 1|formula1|f1|ufc|mma|highlights?|touchdown|dunk|home run|goals?|save|replay|top plays|bleacher report|fox sports|cbs sports|nbc sports|sports illustrated|pga|masters|grand prix|race winner)/;
+
+const SPORTS_REJECTED_PATTERN =
+  /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/;
+
 const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCiWLfSweyRNmLpgEHekhoAg", name: "ESPN" },
   { channelId: "UC16niRr50-MSBwiO3YDb3RA", name: "BBC News" },
@@ -290,8 +296,12 @@ function getSportsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "c
   const haystack = getVideoSearchHaystack(video);
   let score = 0;
 
+  if (!isStrictSportsVideo(video)) {
+    return -1000;
+  }
+
   if (
-    /(highlights?|top plays|touchdown|dunk|home run|goals?|save|replay|buzzer beater)/.test(
+    /(highlights?|top plays|touchdown|dunk|home run|goals?|save|replay|buzzer beater|walk off|slam dunk|game winner)/.test(
       haystack
     )
   ) {
@@ -299,7 +309,7 @@ function getSportsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "c
   }
 
   if (
-    /(sportscenter top plays|espn highlights|nba highlights|nfl highlights|mlb highlights|nhl highlights|soccer goals highlights|cbs sports highlights|bleacher report highlights|fox sports highlights|pga tour highlights|nascar highlights)/.test(
+    /(sportscenter top plays|espn highlights|nba highlights|nfl highlights|mlb highlights|nhl highlights|mls highlights|soccer goals highlights|cbs sports highlights|bleacher report highlights|fox sports highlights|pga tour highlights|nascar highlights|formula 1 highlights|f1 highlights)/.test(
       haystack
     )
   ) {
@@ -307,7 +317,7 @@ function getSportsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "c
   }
 
   if (
-    /(espn|sportscenter|nba|nfl|mlb|nhl|soccer|goal|golf|nascar|formula 1|bleacher report|cbs sports|fox sports|nbc sports|sports illustrated)/.test(
+    /(espn|sportscenter|nba|nfl|mlb|nhl|mls|soccer|goal|golf|tennis|nascar|formula 1|formula1|f1|ufc|mma|bleacher report|cbs sports|fox sports|nbc sports|sports illustrated|pga)/.test(
       haystack
     )
   ) {
@@ -319,7 +329,7 @@ function getSportsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "c
   }
 
   if (video.orientation === "vertical") {
-    score += 24;
+    score += 64;
   }
 
   if (/(debate|podcast|interview|rumors?|preview|reaction)/.test(haystack)) {
@@ -356,6 +366,22 @@ function getNewsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "cat
   score -= Math.max(0, getSportsVideoScore(video));
 
   return score;
+}
+
+function isStrictSportsVideo(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+
+  const hasSportsTerms =
+    SPORTS_POSITIVE_PATTERN.test(
+      haystack
+    ) || video.category === "Sports";
+
+  const hasRejectedTerms =
+    SPORTS_REJECTED_PATTERN.test(haystack);
+
+  return hasSportsTerms && !hasRejectedTerms;
 }
 
 function diversifyVideoSources(videos: VideoFeedItem[], maxPerSource = 2) {
@@ -490,7 +516,7 @@ function filterAndSortVideos(
 
   const tabFiltered =
     options.tab === "sports"
-      ? categoryFiltered.filter((video) => getSportsVideoScore(video) > 0)
+      ? categoryFiltered.filter((video) => isStrictSportsVideo(video))
       : options.tab === "news"
         ? categoryFiltered.filter(
             (video) =>

@@ -9,6 +9,39 @@ export type FavoriteTeamOption = {
   logo_url: string | null;
 };
 
+const MLB_TEAM_LOGO_OVERRIDES: Record<string, string> = {
+  "Arizona Diamondbacks": "/team-logos/mlb-diamondbacks.png",
+  "Atlanta Braves": "/team-logos/mlb-braves.png",
+  "Baltimore Orioles": "/team-logos/mlb-orioles.png",
+  "Boston Red Sox": "/team-logos/mlb-red-sox.png",
+  "Chicago Cubs": "/team-logos/mlb-cubs.png",
+  "Chicago White Sox": "/team-logos/mlb-white-sox.png",
+  "Cincinnati Reds": "/team-logos/mlb-reds.png",
+  "Cleveland Guardians": "/team-logos/mlb-guardians.png",
+  "Colorado Rockies": "/team-logos/mlb-rockies.png",
+  "Detroit Tigers": "/team-logos/mlb-tigers.png",
+  "Houston Astros": "/team-logos/mlb-astros.png",
+  "Kansas City Royals": "/team-logos/mlb-royals.png",
+  "Los Angeles Angels": "/team-logos/mlb-angels.png",
+  "Los Angeles Dodgers": "/team-logos/mlb-dodgers.png",
+  "Miami Marlins": "/team-logos/mlb-marlins.png",
+  "Milwaukee Brewers": "/team-logos/mlb-brewers.png",
+  "Minnesota Twins": "/team-logos/mlb-twins.png",
+  "New York Mets": "/team-logos/mlb-mets.png",
+  "New York Yankees": "/team-logos/mlb-yankees.png",
+  Athletics: "/team-logos/mlb-athletics.png",
+  "Philadelphia Phillies": "/team-logos/mlb-phillies.png",
+  "Pittsburgh Pirates": "/team-logos/mlb-pirates.png",
+  "San Diego Padres": "/team-logos/mlb-padres.png",
+  "San Francisco Giants": "/team-logos/mlb-giants.png",
+  "Seattle Mariners": "/team-logos/mlb-mariners.png",
+  "St. Louis Cardinals": "/team-logos/mlb-cardinals.png",
+  "Tampa Bay Rays": "/team-logos/mlb-rays.png",
+  "Texas Rangers": "/team-logos/mlb-rangers.png",
+  "Toronto Blue Jays": "/team-logos/mlb-blue-jays.png",
+  "Washington Nationals": "/team-logos/mlb-nationals.png",
+};
+
 const withLeague = (league: FavoriteLeagueKey, teamNames: string[]): FavoriteTeamOption[] =>
   teamNames.map((teamName) => ({
     team_id: `${league.toLowerCase()}-${teamName
@@ -17,10 +50,12 @@ const withLeague = (league: FavoriteLeagueKey, teamNames: string[]): FavoriteTea
       .replace(/^-+|-+$/g, "")}`,
     team_name: teamName,
     league,
-    logo_url: `/team-logos/${teamName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")}.png`,
+    logo_url:
+      (league === "MLB" ? MLB_TEAM_LOGO_OVERRIDES[teamName] : null) ??
+      `/team-logos/${teamName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")}.png`,
   }));
 
 export const FAVORITE_TEAMS_BY_LEAGUE: Record<FavoriteLeagueKey, FavoriteTeamOption[]> = {
