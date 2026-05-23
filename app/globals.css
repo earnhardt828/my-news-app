@@ -2665,7 +2665,7 @@ input {
 }
 
 .quick-watch-item {
-  flex: 0 0 min(86vw, 360px);
+  flex: 0 0 min(88vw, 372px);
   scroll-snap-align: start;
   box-sizing: border-box;
 }

@@ -4629,6 +4629,8 @@ export default function Home() {
                 autoplayKey={`quickwatch:${video.id}`}
                 previewDurationMs={compact ? null : 4000}
                 label="Quick Watch"
+                hideActions
+                useRelativeTime
                 className={`video-card-inline quick-watch-video-card ${
                   compact ? "quick-watch-video-card-compact" : ""
                 }`.trim()}
@@ -6064,6 +6066,8 @@ export default function Home() {
                         autoplayKey={`sports-quickwatch:${video.id}`}
                         previewDurationMs={null}
                         label="Quick Watch"
+                        hideActions
+                        useRelativeTime
                         className="video-card-inline quick-watch-video-card"
                         variant="article"
                       />

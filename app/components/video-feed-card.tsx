@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import ShareButton from "./share-button";
 import SourceBadge from "./source-badge";
+import { formatRelativeTimestamp } from "../../lib/relative-time";
 import {
   buildVideoEmbedUrl,
   formatVideoPublishedDate,
@@ -25,6 +26,8 @@ type VideoFeedCardProps = {
   variant?: "default" | "article";
   autoplayKey?: string;
   previewDurationMs?: number | null;
+  hideActions?: boolean;
+  useRelativeTime?: boolean;
 };
 
 const actionIconProps = {
@@ -53,6 +56,8 @@ export default function VideoFeedCard({
   variant = "default",
   autoplayKey,
   previewDurationMs = null,
+  hideActions = false,
+  useRelativeTime = false,
 }: VideoFeedCardProps) {
   const isArticleVariant = variant === "article";
   const defaultTrendingOrientation = inferVideoOrientation(undefined, undefined, {
@@ -174,6 +179,9 @@ export default function VideoFeedCard({
       ? "video-card-article-vertical"
       : "video-card-article-horizontal";
   const shouldAutoplayFrame = isAutoplaying && (!previewDurationMs || isPreviewActive);
+  const publishedLabel = useRelativeTime
+    ? formatRelativeTimestamp(video.publishedAt)
+    : formatVideoPublishedDate(video.publishedAt);
 
   if (isArticleVariant) {
     return (
@@ -196,7 +204,7 @@ export default function VideoFeedCard({
         </div>
 
         <div className="trending-meta-row">
-          <span className="trending-published-date">{formatVideoPublishedDate(video.publishedAt)}</span>
+          <span className="trending-published-date">{publishedLabel}</span>
         </div>
 
         <div
@@ -253,59 +261,61 @@ export default function VideoFeedCard({
           )}
         </div>
 
-        <div className="engagement-row trending-stats-row">
-          <button
-            className={`icon-action-pill ${video.liked ? "icon-action-pill-active" : ""}`}
-            onClick={() => onToggleLike(video.id)}
-            aria-label={video.liked ? "Unlike video" : "Like video"}
-          >
-            <span className="icon-action-glyph" aria-hidden="true">
-              <svg {...actionIconProps}>
-                <path
-                  d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                  fill={video.liked ? "currentColor" : "none"}
-                />
-              </svg>
-            </span>
-            <span>{video.likes}</span>
-          </button>
-          <button
-            className="icon-action-pill"
-            onClick={() => onOpenComments(video.id)}
-            aria-label="Open video comments"
-          >
-            <span className="icon-action-glyph" aria-hidden="true">
-              <svg {...actionIconProps}>
-                <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-              </svg>
-            </span>
-            <span>{video.comments}</span>
-          </button>
-          <ShareButton
-            path={`/videos#video-${video.id}`}
-            title={video.title}
-            url={
-              video.watchUrl ||
-              `https://my-news-app-omega-orpin.vercel.app/videos#video-${video.id}`
-            }
-            iconOnly
-            className="share-trigger-button-inline"
-          />
-          <button
-            className={`bookmark-button ${video.saved ? "bookmark-button-active" : ""}`}
-            onClick={() => onToggleSave(video.id)}
-            aria-label={video.saved ? "Remove bookmark" : "Save video"}
-          >
-            <span className="icon-action-glyph" aria-hidden="true">
-              <svg {...actionIconProps}>
-                <path
-                  d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
-                  fill={video.saved ? "currentColor" : "none"}
-                />
-              </svg>
-            </span>
-          </button>
-        </div>
+        {hideActions ? null : (
+          <div className="engagement-row trending-stats-row">
+            <button
+              className={`icon-action-pill ${video.liked ? "icon-action-pill-active" : ""}`}
+              onClick={() => onToggleLike(video.id)}
+              aria-label={video.liked ? "Unlike video" : "Like video"}
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg {...actionIconProps}>
+                  <path
+                    d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                    fill={video.liked ? "currentColor" : "none"}
+                  />
+                </svg>
+              </span>
+              <span>{video.likes}</span>
+            </button>
+            <button
+              className="icon-action-pill"
+              onClick={() => onOpenComments(video.id)}
+              aria-label="Open video comments"
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg {...actionIconProps}>
+                  <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                </svg>
+              </span>
+              <span>{video.comments}</span>
+            </button>
+            <ShareButton
+              path={`/videos#video-${video.id}`}
+              title={video.title}
+              url={
+                video.watchUrl ||
+                `https://my-news-app-omega-orpin.vercel.app/videos#video-${video.id}`
+              }
+              iconOnly
+              className="share-trigger-button-inline"
+            />
+            <button
+              className={`bookmark-button ${video.saved ? "bookmark-button-active" : ""}`}
+              onClick={() => onToggleSave(video.id)}
+              aria-label={video.saved ? "Remove bookmark" : "Save video"}
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg {...actionIconProps}>
+                  <path
+                    d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                    fill={video.saved ? "currentColor" : "none"}
+                  />
+                </svg>
+              </span>
+            </button>
+          </div>
+        )}
       </article>
     );
   }
