@@ -6197,15 +6197,10 @@ export default function Home() {
 
                 {isSportsScoresLoading ? (
                   <div className="muted">Loading scores...</div>
-                ) : !areSportsScoresAvailable ? (
-                  <div className="empty-state compact-empty-state">
-                    <strong>Scores unavailable right now.</strong>
-                    <span>Add `THESPORTSDB_API_KEY` or `API_SPORTS_KEY` to enable live score cards.</span>
-                  </div>
                 ) : prioritizedSportsScores.length === 0 ? (
                   <div className="empty-state compact-empty-state">
-                    <strong>Scores unavailable right now.</strong>
-                    <span>Try again shortly while the score feeds refresh.</span>
+                    <strong>No scores loaded right now.</strong>
+                    <span>Recent and upcoming games will appear here as soon as the score feeds respond.</span>
                   </div>
                 ) : (
                   <div className="sports-scores-scroll" role="list" aria-label={`${activeScoresLeague} scores`}>

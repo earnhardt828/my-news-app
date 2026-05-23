@@ -1,4 +1,4 @@
-const THESPORTSDB_API_KEY = process.env.THESPORTSDB_API_KEY ?? "";
+const THESPORTSDB_API_KEY = process.env.THESPORTSDB_API_KEY || "123";
 const API_SPORTS_KEY = process.env.API_SPORTS_KEY ?? "";
 
 const SPORTS_SCORE_LEAGUES = {
@@ -101,13 +101,15 @@ function normalizeTheSportsDbStatus(
 
 async function fetchTheSportsDbLeagueScores(league: ScoreLeagueKey): Promise<SportsScoreGame[]> {
   const config = SPORTS_SCORE_LEAGUES[league];
+  const apiKey = process.env.THESPORTSDB_API_KEY || "123";
+  console.log("SPORTS DB API KEY USED", apiKey);
   const [nextResponse, pastResponse] = await Promise.all([
     fetch(
-      `https://www.thesportsdb.com/api/v1/json/${THESPORTSDB_API_KEY}/eventsnextleague.php?id=${config.theSportsDbLeagueId}`,
+      `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsnextleague.php?id=${config.theSportsDbLeagueId}`,
       { next: { revalidate: 300 } }
     ),
     fetch(
-      `https://www.thesportsdb.com/api/v1/json/${THESPORTSDB_API_KEY}/eventspastleague.php?id=${config.theSportsDbLeagueId}`,
+      `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventspastleague.php?id=${config.theSportsDbLeagueId}`,
       { next: { revalidate: 300 } }
     ),
   ]);
@@ -123,9 +125,17 @@ async function fetchTheSportsDbLeagueScores(league: ScoreLeagueKey): Promise<Spo
     ? ((await pastResponse.json()) as { events?: Array<Record<string, string | null>> })
     : { events: [] };
 
+  console.log("SCORES RAW RESPONSE", {
+    league,
+    nextOk: nextResponse.ok,
+    pastOk: pastResponse.ok,
+    nextCount: nextPayload.events?.length ?? 0,
+    pastCount: pastPayload.events?.length ?? 0,
+  });
+
   const combined = [...(pastPayload.events ?? []).slice(0, 5), ...(nextPayload.events ?? []).slice(0, 5)];
 
-  return combined
+  const normalizedGames = combined
     .map((event) => {
       const homeScore = event.intHomeScore ?? null;
       const awayScore = event.intAwayScore ?? null;
@@ -152,6 +162,9 @@ async function fetchTheSportsDbLeagueScores(league: ScoreLeagueKey): Promise<Spo
       } satisfies SportsScoreGame;
     })
     .filter((game) => game.homeTeam.name && game.awayTeam.name);
+
+  console.log("SCORES FINAL COUNT", league, normalizedGames.length);
+  return normalizedGames;
 }
 
 function normalizeApiSportsStatus(rawStatus: string | null) {
@@ -239,7 +252,7 @@ export async function GET(request: Request) {
     ? [requestedLeague]
     : (Object.keys(SPORTS_SCORE_LEAGUES) as ScoreLeagueKey[]);
 
-  const hasConfiguredProvider = Boolean(THESPORTSDB_API_KEY || API_SPORTS_KEY);
+  const hasConfiguredProvider = Boolean((process.env.THESPORTSDB_API_KEY || "123") || API_SPORTS_KEY);
 
   if (!hasConfiguredProvider) {
     return Response.json({
