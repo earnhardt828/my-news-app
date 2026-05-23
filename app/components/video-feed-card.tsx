@@ -193,22 +193,10 @@ export default function VideoFeedCard({
             <SourceBadge sourceName={video.creator} />
             <span className="trending-source-name">{video.creator}</span>
           </div>
-          {label ? <span className="chip video-chip">{label}</span> : null}
         </div>
 
-        <button
-          type="button"
-          className="video-card-detail-trigger"
-          onClick={() => onOpenPlayer(video.id)}
-          aria-label={`Open details for ${video.title}`}
-        >
-          <h3 className="trending-article-title">{video.title}</h3>
-        </button>
-
         <div className="trending-meta-row">
-          <span className="trending-published-date">
-            Published {formatVideoPublishedDate(video.publishedAt)}
-          </span>
+          <span className="trending-published-date">{formatVideoPublishedDate(video.publishedAt)}</span>
         </div>
 
         <div
@@ -220,13 +208,18 @@ export default function VideoFeedCard({
           }`}
         >
           {shouldAutoplayFrame && !video.fallback ? (
-            <iframe
-              src={buildVideoEmbedUrl(video.youtubeId, true)}
-              title={video.title}
-              className="video-player-frame"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            <>
+              <iframe
+                src={buildVideoEmbedUrl(video.youtubeId, true)}
+                title={video.title}
+                className="video-player-frame"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+              <div className="video-card-title-overlay" aria-hidden="true">
+                <h3 className="video-card-title-overlay-text">{video.title}</h3>
+              </div>
+            </>
           ) : (
             <button
               className="video-frame-button"
@@ -247,15 +240,13 @@ export default function VideoFeedCard({
                 <span className="video-play-badge" aria-hidden="true">
                   ▶
                 </span>
-                <span className="video-live-pill">
-                  {video.fallback ? "Placeholder video" : "Tap to play"}
-                </span>
+              </div>
+              <div className="video-card-title-overlay">
+                <h3 className="video-card-title-overlay-text">{video.title}</h3>
               </div>
               {!video.thumbnailUrl ? (
                 <div className="video-frame-fallback-copy">
-                  <span className="video-live-pill">
-                    {video.fallback ? "Placeholder video" : "Watch video"}
-                  </span>
+                  <h3 className="video-card-title-overlay-text">{video.title}</h3>
                 </div>
               ) : null}
             </button>

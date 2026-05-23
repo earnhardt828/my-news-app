@@ -37,6 +37,9 @@ const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UC16niRr50-MSBwiO3YDb3RA", name: "BBC News" },
   { channelId: "UCupvZG-5ko_eiXAupbDfxWw", name: "CNN" },
   { channelId: "UCXIJgqnII2ZOINSWNOGFThA", name: "Fox News" },
+  { channelId: "UCeY0bbntWzzVIaj2z3QigXg", name: "NBC News" },
+  { channelId: "UC8p1vwvWtl6T73JiExfWs1g", name: "CBS News" },
+  { channelId: "UC6ZFN9Tx6xh-skXCuRHCDpQ", name: "PBS NewsHour" },
   { channelId: "UCrp_UI8XtuYfpiqluWLD7Lw", name: "CNBC" },
   { channelId: "UCUMZ7gohGI9HcU9VNsr2FJQ", name: "Bloomberg" },
   { channelId: "UChqUTb7kYRX8-EiaN3XFrSQ", name: "Reuters" },
@@ -264,6 +267,25 @@ function getVideoSearchHaystack(video: Pick<VideoFeedItem, "title" | "creator" |
   return `${video.title} ${video.creator} ${video.category}`.toLowerCase();
 }
 
+function normalizeVideoSourceName(source: string) {
+  const normalized = source.trim().toLowerCase();
+
+  if (normalized === "associated press" || normalized === "ap news") {
+    return "ap";
+  }
+
+  return normalized;
+}
+
+function normalizeVideoTitleKey(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/\[[^\]]+\]/g, " ")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getSportsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">) {
   const haystack = getVideoSearchHaystack(video);
   let score = 0;
@@ -319,7 +341,7 @@ function getNewsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "cat
     score += 48;
   }
 
-  if (/(bbc news|cnn|fox news|reuters|associated press|ap news|abc news|sky news|al jazeera|bloomberg|cnbc)/.test(haystack)) {
+  if (/(bbc news|cnn|fox news|reuters|associated press|ap news|abc news|nbc news|cbs news|pbs newshour|sky news|al jazeera|bloomberg|cnbc|guardian|usa today)/.test(haystack)) {
     score += 56;
   }
 
@@ -334,6 +356,27 @@ function getNewsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "cat
   score -= Math.max(0, getSportsVideoScore(video));
 
   return score;
+}
+
+function diversifyVideoSources(videos: VideoFeedItem[], maxPerSource = 2) {
+  const selected: VideoFeedItem[] = [];
+  const overflow: VideoFeedItem[] = [];
+  const sourceCounts = new Map<string, number>();
+
+  videos.forEach((video) => {
+    const normalizedSource = normalizeVideoSourceName(video.creator);
+    const currentCount = sourceCounts.get(normalizedSource) ?? 0;
+
+    if (currentCount < maxPerSource) {
+      selected.push(video);
+      sourceCounts.set(normalizedSource, currentCount + 1);
+      return;
+    }
+
+    overflow.push(video);
+  });
+
+  return [...selected, ...overflow];
 }
 
 function getPublishedAfterIso(daysAgo: number) {
@@ -457,7 +500,17 @@ function filterAndSortVideos(
         : categoryFiltered;
 
   const deduped = Array.from(
-    new Map(tabFiltered.map((video) => [video.youtubeId, video])).values()
+    new Map(
+      tabFiltered.map((video) => [
+        [
+          video.youtubeId,
+          normalizeVideoTitleKey(video.title),
+          normalizeVideoSourceName(video.creator),
+          video.watchUrl,
+        ].join("::"),
+        video,
+      ])
+    ).values()
   );
 
   deduped.sort((a, b) => {
@@ -476,7 +529,7 @@ function filterAndSortVideos(
   });
 
   if (isTrendingFeed) {
-    return deduped;
+    return diversifyVideoSources(deduped);
   }
 
   const sevenDayCutoff = new Date(getPublishedAfterIso(7)).getTime();
@@ -486,14 +539,14 @@ function filterAndSortVideos(
   );
 
   if (withinSevenDays.length >= 6) {
-    return withinSevenDays;
+    return diversifyVideoSources(withinSevenDays);
   }
 
   const withinFourteenDays = deduped.filter(
     (video) => getVideoTimestamp(video.publishedAt) >= fourteenDayCutoff
   );
 
-  return withinFourteenDays;
+  return diversifyVideoSources(withinFourteenDays);
 }
 
 export async function GET(request: Request) {

@@ -4544,40 +4544,7 @@ export default function Home() {
             </div>
           </Link>
           <div className="news-card-footer">
-            <div className="engagement-row trending-stats-row news-card-actions">
-              <span className="trending-published-date news-card-footer-date">{publishedLabel}</span>
-              <button
-                className={`icon-action-pill icon-action-pill-ghost ${
-                  article.likedByCurrentUser ? "icon-action-pill-active" : ""
-                }`}
-                onClick={() => handleLike(articleRouteId)}
-                aria-label={article.likedByCurrentUser ? "Unlike article" : "Like article"}
-              >
-                <span className="icon-action-glyph" aria-hidden="true">
-                  <svg {...actionIconProps}>
-                    <path
-                      d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                      fill={article.likedByCurrentUser ? "currentColor" : "none"}
-                    />
-                  </svg>
-                </span>
-                <span>{article.likes}</span>
-              </button>
-              <button
-                className="icon-action-pill icon-action-pill-ghost"
-                onClick={() => {
-                  router.push(`/article/${articleRouteId}/#comments`);
-                }}
-                aria-label="Open article comments"
-              >
-                <span className="icon-action-glyph" aria-hidden="true">
-                  <svg {...actionIconProps}>
-                    <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-                  </svg>
-                </span>
-                <span>{article.comments.length}</span>
-              </button>
-            </div>
+            <span className="trending-published-date news-card-footer-date">{publishedLabel}</span>
           </div>
         </article>
       );
