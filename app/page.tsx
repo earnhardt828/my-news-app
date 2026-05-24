@@ -4143,6 +4143,35 @@ export default function Home() {
     visibleArticles,
   ]);
 
+  const myNewsFeaturedArticle = useMemo(() => {
+    if (sortMode !== "trending") {
+      return null;
+    }
+
+    const usedKeys = new Set(
+      [...breakingNewsPreviewArticles, ...topTenTrendingArticles].map((article) =>
+        getArticleDeduplicationKey(article)
+      )
+    );
+
+    return (
+      balancedTrendingArticles.find((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+
+        if (usedKeys.has(dedupeKey)) {
+          return false;
+        }
+
+        const categoryKey = getSafeCategoryLabel(article.category, article).toLowerCase();
+        if (categoryKey === "sports") {
+          return false;
+        }
+
+        return isRenderableArticleRecord(article);
+      }) ?? null
+    );
+  }, [balancedTrendingArticles, breakingNewsPreviewArticles, sortMode, topTenTrendingArticles]);
+
   const sportsVideoPool = useMemo(
     () =>
       selectSourceBalancedVideos(
@@ -4197,28 +4226,59 @@ export default function Home() {
     return sportsTabArticles;
   }, [sortMode, sportsTabArticles]);
 
+  const sportsBreakingArticles = useMemo(() => {
+    if (sortMode !== "sports") {
+      return [] as Article[];
+    }
+
+    const breakingCandidates = sportsStandardArticles
+      .filter((article) => {
+        const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
+        return /(breaking|urgent|developing|just in|live updates?|major trade|game 7|injury update|playoff|finals|stanley cup|world series|super bowl)/.test(
+          haystack
+        );
+      })
+      .sort(
+        (leftArticle, rightArticle) =>
+          getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle)
+      )
+      .slice(0, 3);
+
+    return breakingCandidates;
+  }, [sortMode, sportsStandardArticles]);
+
   const sportsFeaturedArticle = useMemo(() => {
     if (sortMode !== "sports") {
       return null;
     }
 
-    return sportsTabArticles[0] ?? null;
-  }, [sortMode, sportsTabArticles]);
+    const usedBreakingKeys = new Set(
+      sportsBreakingArticles.map((article) => getArticleDeduplicationKey(article))
+    );
+
+    return (
+      sportsStandardArticles.find((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+        return !usedBreakingKeys.has(dedupeKey);
+      }) ?? null
+    );
+  }, [sortMode, sportsBreakingArticles, sportsStandardArticles]);
 
   const sportsFeedArticles = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as Article[];
     }
 
-    if (!sportsFeaturedArticle) {
-      return sportsStandardArticles;
-    }
-
-    const featuredKey = getArticleDeduplicationKey(sportsFeaturedArticle);
-    return sportsStandardArticles.filter(
-      (article) => getArticleDeduplicationKey(article) !== featuredKey
+    const excludedKeys = new Set(
+      [...sportsBreakingArticles, ...(sportsFeaturedArticle ? [sportsFeaturedArticle] : [])].map(
+        (article) => getArticleDeduplicationKey(article)
+      )
     );
-  }, [sortMode, sportsFeaturedArticle, sportsStandardArticles]);
+
+    return sportsStandardArticles.filter(
+      (article) => !excludedKeys.has(getArticleDeduplicationKey(article))
+    );
+  }, [sortMode, sportsBreakingArticles, sportsFeaturedArticle, sportsStandardArticles]);
 
   const sportsQuickWatchVideos = useMemo(() => sportsVideoPool.slice(0, 8), [sportsVideoPool]);
 
@@ -4782,7 +4842,14 @@ export default function Home() {
   };
 
   const renderFeaturedStoriesRow = () => {
-    if (myNewsFeaturedArticles.length === 0) {
+    const featuredArticleKey = myNewsFeaturedArticle
+      ? getArticleDeduplicationKey(myNewsFeaturedArticle)
+      : null;
+    const rowArticles = myNewsFeaturedArticles.filter(
+      (article) => getArticleDeduplicationKey(article) !== featuredArticleKey
+    );
+
+    if (rowArticles.length === 0) {
       return null;
     }
 
@@ -4796,7 +4863,7 @@ export default function Home() {
           </div>
         </div>
         <div className="featured-stories-scroll" role="list" aria-label="Featured articles">
-          {myNewsFeaturedArticles.map((article) => {
+          {rowArticles.map((article) => {
             const routeId = getArticleRouteId(article);
             const selectedImage = getBestArticleImage(article);
             const imageSrc =
@@ -5283,7 +5350,13 @@ export default function Home() {
               <div className="top-trending-list-logo-fallback">
                 <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
               </div>
-            ) : null}
+            ) : (
+              <div className="top-trending-list-logo-fallback top-trending-list-category-fallback">
+                <span className="top-trending-list-fallback-label">
+                  {getCategoryLabel(getSafeCategoryLabel(article.category, article))}
+                </span>
+              </div>
+            )}
           </div>
         </Link>
       </article>
@@ -5305,6 +5378,7 @@ export default function Home() {
     }
 
     const safeSourceName = getSafeSourceLabel(article.source);
+    const safeCategoryName = getSafeCategoryLabel(article.category, article);
     const selectedImage = getBestArticleImage(article);
     const shouldUseImage =
       Boolean(selectedImage.src) &&
@@ -5364,7 +5438,15 @@ export default function Home() {
                   <span className="top-trending-list-fallback-label">{options.imageFallbackLabel}</span>
                 ) : null}
               </div>
-            ) : null}
+            ) : (
+              <div
+                className={`top-trending-list-logo-fallback top-trending-list-category-fallback top-trending-list-category-fallback-${safeCategoryName.toLowerCase()}`}
+              >
+                <span className="top-trending-list-fallback-label">
+                  {options?.imageFallbackLabel ?? getCategoryLabel(safeCategoryName)}
+                </span>
+              </div>
+            )}
           </div>
         </Link>
       </article>
@@ -5816,6 +5898,28 @@ export default function Home() {
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Featured Article</strong>
+              <span className="muted">A standout news story from the broader feed.</span>
+            </div>
+          </div>
+
+          {!myNewsFeaturedArticle ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No featured news story yet</strong>
+              <span>Check back shortly for a broader top story.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              <div>
+                {renderArticleFeedCard(myNewsFeaturedArticle)}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Sports</strong>
             </div>
             <button
@@ -6247,17 +6351,19 @@ export default function Home() {
                 )}
               </section>
 
-              {sportsFeaturedArticle ? (
+              {sportsBreakingArticles.length > 0 ? (
                 <section className="home-section-block home-section-plain featured-stories-row">
                   <div className="home-section-header">
                     <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Featured Article</strong>
+                      <strong className="profile-section-title home-section-title">Breaking Sports</strong>
                     </div>
                   </div>
                   <div className="stack home-section-list">
-                    <div>
-                      {renderArticleFeedCard(sportsFeaturedArticle)}
-                    </div>
+                    {sportsBreakingArticles.map((article) => (
+                      <div key={`sports-breaking-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderArticleFeedCard(article)}
+                      </div>
+                    ))}
                   </div>
                 </section>
               ) : null}
@@ -6339,6 +6445,21 @@ export default function Home() {
                         className="video-card-inline featured-video-single-card"
                         variant="article"
                       />
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {sportsFeaturedArticle ? (
+                <section className="home-section-block home-section-plain featured-stories-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Featured Sports</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list">
+                    <div>
+                      {renderArticleFeedCard(sportsFeaturedArticle)}
                     </div>
                   </div>
                 </section>
