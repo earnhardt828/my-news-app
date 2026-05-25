@@ -2,10 +2,15 @@
 
 import { type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "../../lib/api-base";
 import ShareButton from "../components/share-button";
 import SourceBadge from "../components/source-badge";
+import {
+  readVideoReturnState,
+  savePendingVideoReturnState,
+  type VideoReturnState,
+} from "../../lib/video-navigation";
 import {
   buildVideoEmbedUrl,
   initialVideos,
@@ -29,6 +34,7 @@ const actionIconProps = {
 type VideoTab = "news" | "sports";
 
 export default function VideosPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<VideoTab>("news");
   const [videosByTab, setVideosByTab] = useState<Record<VideoTab, VideoItem[]>>({
@@ -64,6 +70,11 @@ export default function VideosPage() {
   const isCurrentTabLoading = tabLoading[activeTab];
   const requestedTab = searchParams.get("tab") === "sports" ? "sports" : "news";
   const requestedVideoId = searchParams.get("video");
+  const [returnState, setReturnState] = useState<VideoReturnState | null>(null);
+
+  useEffect(() => {
+    setReturnState(readVideoReturnState());
+  }, []);
 
   const loadVideosForTab = useCallback(async (tab: VideoTab, force = false) => {
     if (loadedTabsRef.current[tab] && !force) {
@@ -287,12 +298,46 @@ export default function VideosPage() {
     setActiveTab(diffX < 0 ? "sports" : "news");
   };
 
+  const handleCloseViewer = useCallback(() => {
+    if (!returnState) {
+      router.push("/");
+      return;
+    }
+
+    savePendingVideoReturnState(returnState);
+    router.push(returnState.path || "/");
+  }, [returnState, router]);
+
   return (
     <section
       className="reels-shell videos-page-shell"
       onTouchStart={handleHorizontalSwipeStart}
       onTouchEnd={handleHorizontalSwipeEnd}
     >
+      {returnState ? (
+        <button
+          type="button"
+          className="header-icon-button videos-page-close"
+          onClick={handleCloseViewer}
+          aria-label={`Close ${returnState.originLabel ?? "videos"} viewer`}
+        >
+          <span className="header-icon-glyph" aria-hidden="true">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </span>
+        </button>
+      ) : null}
       <div className="videos-page-tab-row" role="tablist" aria-label="Video categories">
         <button
           type="button"

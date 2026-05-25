@@ -764,6 +764,22 @@ input {
   line-height: 1.06;
 }
 
+.sports-page-title {
+  font-size: clamp(2.55rem, 8vw, 3.45rem);
+  line-height: 0.96;
+}
+
+.sports-subsection-title {
+  font-size: clamp(1.18rem, 4.8vw, 1.52rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.sports-more-title {
+  font-size: clamp(2.2rem, 6.6vw, 2.85rem);
+}
+
 .home-section-title-row {
   display: inline-flex;
   align-items: baseline;
@@ -4648,6 +4664,8 @@ input {
   overflow-x: auto;
   padding: 14px 16px 12px;
   scroll-snap-type: x proximity;
+  position: relative;
+  z-index: 2;
 }
 
 .favorite-teams-tab {
@@ -4660,6 +4678,9 @@ input {
   color: var(--text-soft);
   font-size: 0.9rem;
   font-weight: 800;
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
 }
 
 .favorite-teams-tab-active {
@@ -4673,6 +4694,7 @@ input {
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 .favorite-teams-page-panel {
@@ -5994,6 +6016,7 @@ input {
   min-height: 100svh;
   margin-top: calc(-1 * (var(--header-height, 72px) + env(safe-area-inset-top)));
   background: transparent;
+  position: relative;
 }
 
 .videos-page-tab-row {
@@ -6010,6 +6033,13 @@ input {
   background: rgba(10, 13, 20, 0.68);
   backdrop-filter: blur(16px);
   transform: translateX(-50%);
+}
+
+.videos-page-close {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 28px);
+  left: 14px;
+  z-index: 32;
 }
 
 .videos-page-tab {

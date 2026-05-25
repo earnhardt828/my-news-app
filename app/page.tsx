@@ -24,6 +24,10 @@ import {
   saveArticleReturnState,
 } from "../lib/article-navigation";
 import {
+  consumePendingVideoReturnState,
+  saveVideoReturnState,
+} from "../lib/video-navigation";
+import {
   FAVORITE_TEAMS_BY_LEAGUE,
   TEAM_PICKER_LEAGUES,
   type FavoriteLeagueKey,
@@ -1357,6 +1361,13 @@ export default function Home() {
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const teamPickerPagesRef = useRef<HTMLDivElement | null>(null);
+  const teamPickerPanelRefs = useRef<Record<FavoriteLeagueKey, HTMLElement | null>>({
+    MLB: null,
+    NFL: null,
+    NBA: null,
+    MLS: null,
+    NHL: null,
+  });
   const isFetchingNextPageRef = useRef(false);
   const activeFeedRequestIdRef = useRef(0);
   const [replyTarget, setReplyTarget] = useState<{
@@ -1390,15 +1401,18 @@ export default function Home() {
       return;
     }
 
-    const node = teamPickerPagesRef.current;
-    const leagueIndex = TEAM_PICKER_LEAGUES.indexOf(activeTeamLeague);
+    const panel = teamPickerPanelRefs.current[activeTeamLeague];
 
-    if (!node || leagueIndex < 0) {
+    if (!panel) {
       return;
     }
 
     window.requestAnimationFrame(() => {
-      node.scrollLeft = node.clientWidth * leagueIndex;
+      panel.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "start",
+      });
     });
   }, [activeTeamLeague, isTeamPickerOpen]);
 
@@ -2742,9 +2756,23 @@ export default function Home() {
 
   const handleOpenFeedVideo = useCallback(
     (videoId: string, tab: "news" | "sports") => {
+      saveVideoReturnState({
+        path: "/",
+        scrollY: window.scrollY,
+        sortMode,
+        selectedLocalCity,
+        localLocationLabel,
+        tab,
+        originLabel:
+          sortMode === "sports"
+            ? "Sports"
+            : sortMode === "local"
+              ? "Local"
+              : "My News",
+      });
       router.push(`/videos?tab=${tab}&video=${videoId}`);
     },
-    [router]
+    [localLocationLabel, router, selectedLocalCity, sortMode]
   );
 
   const applyLocalCitySelection = useCallback((city: string) => {
@@ -2933,6 +2961,36 @@ export default function Home() {
       }
 
       if (pendingReturnState.sortMode === "local" && pendingReturnState.selectedLocalCity) {
+        applyLocalCitySelection(pendingReturnState.selectedLocalCity);
+      }
+
+      window.scrollTo({
+        top: pendingReturnState.scrollY ?? 0,
+        behavior: "auto",
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(restoreFrameId);
+    };
+  }, [applyLocalCitySelection]);
+
+  useEffect(() => {
+    const pendingReturnState = consumePendingVideoReturnState();
+
+    if (!pendingReturnState || pendingReturnState.path !== "/") {
+      return;
+    }
+
+    const restoreFrameId = window.requestAnimationFrame(() => {
+      if (pendingReturnState.sortMode) {
+        setSortMode(pendingReturnState.sortMode);
+      }
+
+      if (
+        pendingReturnState.sortMode === "local" &&
+        pendingReturnState.selectedLocalCity
+      ) {
         applyLocalCitySelection(pendingReturnState.selectedLocalCity);
       }
 
@@ -5626,18 +5684,6 @@ export default function Home() {
 
   const handleTeamLeagueSelect = (league: FavoriteLeagueKey) => {
     setActiveTeamLeague(league);
-
-    const leagueIndex = TEAM_PICKER_LEAGUES.indexOf(league);
-    const node = teamPickerPagesRef.current;
-
-    if (!node || leagueIndex < 0) {
-      return;
-    }
-
-    node.scrollTo({
-      left: node.clientWidth * leagueIndex,
-      behavior: "smooth",
-    });
   };
 
   const renderFavoriteTeamBadge = (team: FavoriteTeamOption) => (
@@ -5947,6 +5993,9 @@ export default function Home() {
             {TEAM_PICKER_LEAGUES.map((league) => (
               <section
                 key={league}
+                ref={(node) => {
+                  teamPickerPanelRefs.current[league] = node;
+                }}
                 className="favorite-teams-page-panel"
                 role="tabpanel"
                 aria-label={`${league} teams`}
@@ -6916,7 +6965,9 @@ export default function Home() {
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Sports</strong>
+              <strong className="profile-section-title home-section-title sports-page-title">
+                Sports
+              </strong>
               <span className="home-section-date">{todayLabel}</span>
             </div>
           </div>
@@ -6931,7 +6982,9 @@ export default function Home() {
               <section className="home-section-block home-section-plain">
                 <div className="home-section-header">
                   <div className="stack" style={{ gap: "4px" }}>
-                    <strong className="profile-section-title home-section-title">Your Teams</strong>
+                    <strong className="profile-section-title sports-subsection-title">
+                      Your Teams
+                    </strong>
                     <span className="muted">Follow your favorite teams for updates.</span>
                   </div>
                   <button
@@ -7066,7 +7119,13 @@ export default function Home() {
                 >
                   <div className="home-section-header">
                     <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">
+                      <strong
+                        className={`profile-section-title ${
+                          section.key === "MORE"
+                            ? "home-section-title sports-more-title"
+                            : "sports-subsection-title"
+                        }`}
+                      >
                         {section.label}
                       </strong>
                     </div>

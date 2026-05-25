@@ -168,6 +168,10 @@ export default function VideoFeedCard({
     if (isAutoplaying && autoplayKey?.includes("sports")) {
       console.log("SPORTS VIDEO AUTOPLAY ATTEMPT", autoplayKey, video.id);
     }
+
+    if (isAutoplaying && autoplayKey?.includes("sports-more-quickwatch")) {
+      console.log("MORE SPORTS VIDEO AUTOPLAY ATTEMPT", autoplayKey, video.id);
+    }
   }, [autoplayKey, isAutoplaying, video.id]);
 
   const articleFrameClass =
