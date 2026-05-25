@@ -262,6 +262,7 @@ type WeatherCardData = {
 type FavoriteTeamUpdate = {
   team: FavoriteTeamOption;
   article: Article | null;
+  game: SportsScoreGame | null;
 };
 
 type SportsScoreLeague = "NFL" | "NBA" | "MLB" | "NHL" | "MLS";
@@ -2838,7 +2839,7 @@ export default function Home() {
   }, [feedPage, hasMoreArticles, isLoading, isLoadingMoreArticles, loadFeedPage]);
 
   useEffect(() => {
-    if (sortMode !== "trending" && sortMode !== "sports") {
+    if (sortMode !== "trending" && sortMode !== "sports" && sortMode !== "local") {
       return;
     }
 
@@ -4725,6 +4726,12 @@ export default function Home() {
   const favoriteTeamUpdates = useMemo<FavoriteTeamUpdate[]>(() => {
     return favoriteTeams.map((team) => {
       const normalizedTeamName = team.team_name.toLowerCase();
+      const game =
+        (sportsScoresByLeague[team.league] ?? []).find((candidate) => {
+          const homeTeam = candidate.homeTeam.name.toLowerCase();
+          const awayTeam = candidate.awayTeam.name.toLowerCase();
+          return homeTeam === normalizedTeamName || awayTeam === normalizedTeamName;
+        }) ?? null;
       const article =
         sportsTabArticles.find((candidate) => {
           const haystack = `${candidate.title} ${candidate.description ?? ""}`.toLowerCase();
@@ -4734,9 +4741,120 @@ export default function Home() {
       return {
         team,
         article,
+        game,
       };
     });
-  }, [favoriteTeams, sportsTabArticles]);
+  }, [favoriteTeams, sportsScoresByLeague, sportsTabArticles]);
+
+  const usedSportsSectionArticleKeys = useMemo(() => {
+    const usedKeys = new Set<string>();
+
+    sportsFeaturedArticles.forEach((article) => {
+      usedKeys.add(getArticleDeduplicationKey(article));
+    });
+
+    sportsLeagueSections.forEach((section) => {
+      section.articles.forEach((article) => {
+        usedKeys.add(getArticleDeduplicationKey(article));
+      });
+    });
+
+    return usedKeys;
+  }, [sportsFeaturedArticles, sportsLeagueSections]);
+
+  const favoriteTeamNewsArticles = useMemo(() => {
+    if (sortMode !== "sports" || favoriteTeams.length === 0) {
+      return [] as Article[];
+    }
+
+    const selectedArticles = sportsStandardArticles.filter((article) => {
+      const dedupeKey = getArticleDeduplicationKey(article);
+      if (usedSportsSectionArticleKeys.has(dedupeKey)) {
+        return false;
+      }
+
+      const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
+      return favoriteTeams.some((team) => haystack.includes(team.team_name.toLowerCase()));
+    });
+
+    return selectSourceBalancedArticles(selectedArticles, 8);
+  }, [favoriteTeams, sortMode, sportsStandardArticles, usedSportsSectionArticleKeys]);
+
+  const localSectionArticles = useMemo(() => {
+    if (sortMode !== "local") {
+      return {
+        localSports: [] as Article[],
+        developmentBusiness: [] as Article[],
+        eventsThingsToDo: [] as Article[],
+        foodRestaurants: [] as Article[],
+      };
+    }
+
+    const cityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
+    const cityName = cityLabel.split(",")[0]?.trim().toLowerCase() ?? "";
+    const usedTopLocalKeys = new Set(
+      balancedLocalArticles
+        .slice(0, 6)
+        .map((article) => getArticleDeduplicationKey(article))
+    );
+
+    const cityAwareArticles = balancedLocalArticles.filter((article) => {
+      const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
+      return cityName ? haystack.includes(cityName) || haystack.includes("local") : true;
+    });
+
+    const pickSection = (pattern: RegExp, limit: number) =>
+      selectSourceBalancedArticles(
+        cityAwareArticles.filter((article) => {
+          const dedupeKey = getArticleDeduplicationKey(article);
+          if (usedTopLocalKeys.has(dedupeKey)) {
+            return false;
+          }
+
+          const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
+          return pattern.test(haystack);
+        }),
+        limit
+      );
+
+    return {
+      localSports: pickSection(
+        /\b(sports?|game|match|playoffs?|team|athlete|baseball|football|basketball|soccer|hockey)\b/i,
+        4
+      ),
+      developmentBusiness: pickSection(
+        /\b(development|business|economy|downtown|housing|real estate|construction|retail|office|zoning|infrastructure)\b/i,
+        4
+      ),
+      eventsThingsToDo: pickSection(
+        /\b(events?|things to do|festival|concert|weekend|arts|museum|show|fair|community event)\b/i,
+        4
+      ),
+      foodRestaurants: pickSection(
+        /\b(food|restaurant|restaurants|dining|chef|bar|cafe|eatery|menu|brunch)\b/i,
+        4
+      ),
+    };
+  }, [balancedLocalArticles, selectedLocalCity, sortMode]);
+
+  const localVideoItems = useMemo(() => {
+    if (sortMode !== "local") {
+      return [] as VideoItem[];
+    }
+
+    const cityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
+    const cityName = cityLabel.split(",")[0]?.trim().toLowerCase() ?? "";
+    if (!cityName) {
+      return [] as VideoItem[];
+    }
+
+    const localMatches = videos.filter((video) => {
+      const haystack = `${video.title} ${video.creator} ${video.category}`.toLowerCase();
+      return haystack.includes(cityName);
+    });
+
+    return selectSourceBalancedVideos(localMatches, 6);
+  }, [selectedLocalCity, sortMode, videos]);
 
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
@@ -6828,11 +6946,11 @@ export default function Home() {
                 {favoriteTeamUpdates.length === 0 ? (
                   <div className="empty-state compact-empty-state">
                     <strong>Follow your favorite teams for updates.</strong>
-                    <span>Team alerts and game-day updates will appear here once favorites are enabled.</span>
+                    <span>No updates yet for your teams.</span>
                   </div>
                 ) : (
                   <div className="favorite-team-updates-row" role="list" aria-label="Favorite team updates">
-                    {favoriteTeamUpdates.map(({ team, article }) => (
+                    {favoriteTeamUpdates.map(({ team, article, game }) => (
                       <article
                         key={`favorite-team-update-${team.team_id}`}
                         className="favorite-team-update-card"
@@ -6848,8 +6966,15 @@ export default function Home() {
                         <p className="favorite-team-update-headline">
                           {article
                             ? cleanDisplayText(article.title)
-                            : "Latest team news and live game updates will appear here once the sports API is connected."}
+                            : game
+                              ? `${game.awayTeam.name} ${game.awayTeam.score ?? "—"} at ${game.homeTeam.name} ${game.homeTeam.score ?? "—"}`
+                              : "No updates yet for your teams."}
                         </p>
+                        {game ? (
+                          <span className="favorite-team-update-meta">
+                            {game.status} · {game.shortDetail ?? "Game update"}
+                          </span>
+                        ) : null}
                       </article>
                     ))}
                   </div>
@@ -6974,11 +7099,43 @@ export default function Home() {
 
                   {renderSportsLeagueVideos(
                     section.key,
-                    `${section.label} Quick Watch`,
+                    section.key === "NFL"
+                      ? "Quick Watch"
+                      : section.key === "MORE"
+                        ? "More Videos"
+                        : `${section.label} Quick Watch`,
                     section.videos
                   )}
                 </section>
               ))}
+
+              {favoriteTeams.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Your Team News</strong>
+                    </div>
+                  </div>
+                  {favoriteTeamNewsArticles.length === 0 ? (
+                    <div className="empty-state compact-empty-state">
+                      <strong>No updates yet for your teams.</strong>
+                    </div>
+                  ) : (
+                    <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
+                      {favoriteTeamNewsArticles.map((article) => (
+                        <div
+                          key={`favorite-team-news-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                        >
+                          {renderCompactSideImageArticle(article, {
+                            className: "sports-league-compact-card",
+                            imageFallbackLabel: "Your Team",
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ) : null}
             </div>
           )}
         </section>
@@ -7320,6 +7477,122 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        {localSectionArticles.localSports.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Local Sports</strong>
+              </div>
+            </div>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localSectionArticles.localSports.map((article) => (
+                <div key={`local-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Local Sports",
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {localSectionArticles.developmentBusiness.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Development & Business</strong>
+              </div>
+            </div>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localSectionArticles.developmentBusiness.map((article) => (
+                <div key={`local-development-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Business",
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {localSectionArticles.eventsThingsToDo.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Events & Things To Do</strong>
+              </div>
+            </div>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localSectionArticles.eventsThingsToDo.map((article) => (
+                <div key={`local-events-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Events",
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {localSectionArticles.foodRestaurants.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Food & Restaurants</strong>
+              </div>
+            </div>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localSectionArticles.foodRestaurants.map((article) => (
+                <div key={`local-food-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Food",
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {localVideoItems.length > 0 ? (
+          <section className="home-section-block home-section-plain quick-watch-row">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Local Videos</strong>
+              </div>
+            </div>
+            <div className="quick-watch-scroll" role="list" aria-label="Local videos">
+              {localVideoItems.map((video) => (
+                <div key={`local-video-${video.id}`} className="quick-watch-item" role="listitem">
+                  <VideoFeedCard
+                    video={video}
+                    isAutoplaying={
+                      autoplayTrendingVideoKeys.includes(`local-videos:${video.id}`) && !video.fallback
+                    }
+                    onToggleLike={handleToggleVideoLike}
+                    onToggleSave={handleToggleVideoSave}
+                    onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                    onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                    frameRef={(node) => {
+                      trendingVideoFrameRefs.current[`local-videos:${video.id}`] = node;
+                    }}
+                    autoplayKey={`local-videos:${video.id}`}
+                    previewDurationMs={null}
+                    label="Local Videos"
+                    hideActions
+                    useRelativeTime
+                    className="video-card-inline quick-watch-video-card"
+                    variant="article"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {isCategorySheetOpen ? (
           <div
