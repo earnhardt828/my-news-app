@@ -109,7 +109,7 @@ const FEATURED_SOURCE_NAMES = [
 const MY_NEWS_FEATURED_SPORTS_PATTERN =
   /\b(sports?|espn|cbs sports|sports illustrated|bleacher report|mlb|nba|nfl|nhl|mls|soccer|football|basketball|baseball|hockey)\b/i;
 
-type SportsSectionKey = FavoriteLeagueKey | "MMA" | "MORE";
+type SportsSectionKey = FavoriteLeagueKey | "NFL" | "MMA" | "MORE";
 
 type SportsSectionConfig = {
   key: SportsSectionKey;
@@ -1113,9 +1113,6 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
   if (section.key === "MLB" && matchesFavoriteLeagueTeamName(haystack, "MLB")) {
     return true;
   }
-  if (section.key === "NFL" && matchesFavoriteLeagueTeamName(haystack, "NFL")) {
-    return true;
-  }
   if (section.key === "NBA" && matchesFavoriteLeagueTeamName(haystack, "NBA")) {
     return true;
   }
@@ -1137,9 +1134,6 @@ function matchesSportsSectionVideo(video: VideoItem, section: SportsSectionConfi
   }
 
   if (section.key === "MLB" && matchesFavoriteLeagueTeamName(haystack, "MLB")) {
-    return true;
-  }
-  if (section.key === "NFL" && matchesFavoriteLeagueTeamName(haystack, "NFL")) {
     return true;
   }
   if (section.key === "NBA" && matchesFavoriteLeagueTeamName(haystack, "NBA")) {
