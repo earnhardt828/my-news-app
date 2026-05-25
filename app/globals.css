@@ -6259,6 +6259,17 @@ input {
   border: 0;
 }
 
+.video-frame-hitbox {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
 .video-thumbnail {
   object-fit: cover;
 }

@@ -2,6 +2,7 @@
 
 import { type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "../../lib/api-base";
 import ShareButton from "../components/share-button";
 import SourceBadge from "../components/source-badge";
@@ -28,6 +29,7 @@ const actionIconProps = {
 type VideoTab = "news" | "sports";
 
 export default function VideosPage() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<VideoTab>("news");
   const [videosByTab, setVideosByTab] = useState<Record<VideoTab, VideoItem[]>>({
     news: initialVideos,
@@ -60,6 +62,8 @@ export default function VideosPage() {
   const displayedVideos = videosByTab[activeTab];
   const statusMessage = statusMessages[activeTab];
   const isCurrentTabLoading = tabLoading[activeTab];
+  const requestedTab = searchParams.get("tab") === "sports" ? "sports" : "news";
+  const requestedVideoId = searchParams.get("video");
 
   const loadVideosForTab = useCallback(async (tab: VideoTab, force = false) => {
     if (loadedTabsRef.current[tab] && !force) {
@@ -122,6 +126,10 @@ export default function VideosPage() {
   }, [activeTab, loadVideosForTab]);
 
   useEffect(() => {
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
+
+  useEffect(() => {
     setActiveVideoId(null);
     setActiveCommentsVideoId(null);
     setAutoplayVideoId(null);
@@ -182,6 +190,31 @@ export default function VideosPage() {
 
     return () => observer.disconnect();
   }, [displayedVideos]);
+
+  useEffect(() => {
+    if (!requestedVideoId || activeTab !== requestedTab || displayedVideos.length === 0) {
+      return;
+    }
+
+    const targetVideo = displayedVideos.find((video) => video.id === requestedVideoId);
+    const targetNode = targetVideo ? videoFrameRefs.current[targetVideo.id] : null;
+
+    if (!targetVideo || !targetNode) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      targetNode.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+      setAutoplayVideoId(targetVideo.id);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [activeTab, displayedVideos, requestedTab, requestedVideoId]);
 
   const activeVideo = useMemo(
     () => displayedVideos.find((video) => video.id === activeVideoId) ?? null,
@@ -304,7 +337,7 @@ export default function VideosPage() {
             const isAutoplaying = autoplayVideoId === video.id && !video.fallback;
 
             return (
-              <article key={video.id} className="reel-card">
+              <article key={video.id} id={`video-${video.id}`} className="reel-card">
                 <div
                   ref={(node) => {
                     videoFrameRefs.current[video.id] = node;

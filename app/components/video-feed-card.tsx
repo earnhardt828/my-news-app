@@ -224,6 +224,12 @@ export default function VideoFeedCard({
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
               />
+              <button
+                type="button"
+                className="video-frame-hitbox"
+                onClick={() => onOpenPlayer(video.id)}
+                aria-label={`Open ${video.title}`}
+              />
               <div className="video-card-title-overlay" aria-hidden="true">
                 <h3 className="video-card-title-overlay-text">{video.title}</h3>
               </div>

@@ -60,7 +60,7 @@ const INITIAL_FEED_TIMEOUT_MS = 5000;
 const DIRECT_ROUTE_TIMEOUT_MS = 10000;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 const SPORTS_UNIFIED_QUERY =
-  "sports news | ESPN top headlines | NFL NBA MLB NHL sports news | Sports Illustrated latest | CBS Sports latest";
+  "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | ESPN | Bleacher Report | AP News Sports | BBC Sport | MMA Fighting | NHL.com | MLB.com | NBA.com | NFL.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest";
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TECHNOLOGY_FEED_QUERY =
@@ -87,6 +87,16 @@ const BREAKING_NEWS_TRUSTED_SOURCES = [
   "Bloomberg",
   "NPR",
 ] as const;
+
+type SportsSectionKey = FavoriteLeagueKey | "MMA" | "MORE";
+
+type SportsSectionConfig = {
+  key: SportsSectionKey;
+  label: string;
+  scoreLeague?: SportsScoreLeague;
+  articlePattern: RegExp;
+  videoPattern: RegExp;
+};
 
 type Comment = {
   id: number;
@@ -910,6 +920,86 @@ function arraysShallowEqual(left: string[], right: string[]) {
   return left.every((value, index) => value === right[index]);
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildLeagueTeamRegex(league: FavoriteLeagueKey) {
+  const pattern = FAVORITE_TEAMS_BY_LEAGUE[league]
+    .map((team) => escapeRegExp(team.team_name))
+    .join("|");
+
+  return new RegExp(pattern, "i");
+}
+
+const MLB_TEAM_REGEX = buildLeagueTeamRegex("MLB");
+const NFL_TEAM_REGEX = buildLeagueTeamRegex("NFL");
+const NBA_TEAM_REGEX = buildLeagueTeamRegex("NBA");
+const MLS_TEAM_REGEX = buildLeagueTeamRegex("MLS");
+const NHL_TEAM_REGEX = buildLeagueTeamRegex("NHL");
+
+const SPORTS_SECTION_CONFIGS: SportsSectionConfig[] = [
+  {
+    key: "MLB",
+    label: "MLB",
+    scoreLeague: "MLB",
+    articlePattern:
+      /(mlb|baseball|world series|home run|pitcher|bullpen|diamondbacks|braves|orioles|red sox|cubs|white sox|reds|guardians|rockies|tigers|astros|royals|angels|dodgers|marlins|brewers|twins|mets|yankees|athletics|phillies|pirates|padres|giants|mariners|cardinals|rays|rangers|blue jays|nationals)/i,
+    videoPattern:
+      /(mlb|baseball|world series|home run|walk off|pitcher|bullpen|sportscenter top plays|espn highlights|mlb highlights|baseball highlights)/i,
+  },
+  {
+    key: "NHL",
+    label: "NHL",
+    scoreLeague: "NHL",
+    articlePattern:
+      /(nhl|hockey|stanley cup|goalie|power play|hat trick|puck|bruins|sabres|flames|hurricanes|blackhawks|avalanche|blue jackets|stars|red wings|oilers|panthers|kings|minnesota wild|canadiens|predators|devils|islanders|rangers|senators|flyers|penguins|sharks|kraken|blues|lightning|maple leafs|utah mammoth|canucks|golden knights|capitals|jets)/i,
+    videoPattern:
+      /(nhl|hockey|stanley cup|goalie|hat trick|save|replay|top plays|nhl highlights|hockey highlights)/i,
+  },
+  {
+    key: "NBA",
+    label: "NBA",
+    scoreLeague: "NBA",
+    articlePattern:
+      /(nba|basketball|playoffs|finals|dunk|buzzer beater|hawks|celtics|nets|hornets|bulls|cavaliers|mavericks|nuggets|pistons|warriors|rockets|pacers|clippers|lakers|grizzlies|heat|bucks|timberwolves|pelicans|knicks|thunder|magic|76ers|suns|trail blazers|kings|spurs|raptors|jazz|wizards)/i,
+    videoPattern:
+      /(nba|basketball|dunk|buzzer beater|replay|top plays|nba highlights|basketball highlights)/i,
+  },
+  {
+    key: "NFL",
+    label: "NFL",
+    scoreLeague: "NFL",
+    articlePattern:
+      /(nfl|football|super bowl|touchdown|quarterback|draft|cardinals|falcons|ravens|bills|panthers|bears|bengals|browns|cowboys|broncos|lions|packers|texans|colts|jaguars|chiefs|raiders|chargers|rams|dolphins|vikings|patriots|saints|giants|jets|eagles|steelers|49ers|seahawks|buccaneers|titans|commanders)/i,
+    videoPattern:
+      /(nfl|football|touchdown|quarterback|top plays|replay|nfl highlights|football highlights)/i,
+  },
+  {
+    key: "MLS",
+    label: "Soccer / MLS",
+    scoreLeague: "MLS",
+    articlePattern:
+      /(mls|soccer|football club|fc|goal|premier league|champions league|atlanta united|austin fc|charlotte fc|chicago fire|fc cincinnati|colorado rapids|columbus crew|d\.c\. united|fc dallas|houston dynamo|inter miami|la galaxy|los angeles fc|minnesota united|cf montreal|nashville sc|new england revolution|new york city fc|new york red bulls|orlando city|philadelphia union|portland timbers|real salt lake|san diego fc|san jose earthquakes|seattle sounders|sporting kansas city|st\. louis city|toronto fc|vancouver whitecaps|bbc sport)/i,
+    videoPattern:
+      /(mls|soccer|goal|assist|save|replay|soccer highlights|mls highlights|football highlights)/i,
+  },
+  {
+    key: "MMA",
+    label: "MMA",
+    articlePattern:
+      /(mma|ufc|bellator|pfl|boxing|knockout|submission|weigh in|octagon|fight card|combat sports|mma fighting)/i,
+    videoPattern:
+      /(mma|ufc|bellator|boxing|knockout|submission|fight highlights|mma highlights|ufc highlights)/i,
+  },
+  {
+    key: "MORE",
+    label: "More Sports",
+    articlePattern: /(sports|athlete|coach|league|tournament|golf|tennis|nascar|formula 1|formula1|f1|olympics|ncaa)/i,
+    videoPattern: /(sports|golf|tennis|nascar|formula 1|formula1|f1|olympics|top plays|highlights)/i,
+  },
+];
+
 function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
   if (!publishedAt) {
     return 0;
@@ -940,6 +1030,64 @@ function isSportsVideo(video: VideoItem) {
   return hasSportsTerms && !hasRejectedTerms;
 }
 
+function matchesFavoriteLeagueTeamName(text: string, league: FavoriteLeagueKey) {
+  const regexByLeague = {
+    MLB: MLB_TEAM_REGEX,
+    NFL: NFL_TEAM_REGEX,
+    NBA: NBA_TEAM_REGEX,
+    MLS: MLS_TEAM_REGEX,
+    NHL: NHL_TEAM_REGEX,
+  } satisfies Record<FavoriteLeagueKey, RegExp>;
+
+  return regexByLeague[league].test(text);
+}
+
+function matchesSportsSectionArticle(article: Article, section: SportsSectionConfig) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${
+    article.category ?? ""
+  }`.toLowerCase();
+
+  if (section.key === "MLB" && matchesFavoriteLeagueTeamName(haystack, "MLB")) {
+    return true;
+  }
+  if (section.key === "NFL" && matchesFavoriteLeagueTeamName(haystack, "NFL")) {
+    return true;
+  }
+  if (section.key === "NBA" && matchesFavoriteLeagueTeamName(haystack, "NBA")) {
+    return true;
+  }
+  if (section.key === "MLS" && matchesFavoriteLeagueTeamName(haystack, "MLS")) {
+    return true;
+  }
+  if (section.key === "NHL" && matchesFavoriteLeagueTeamName(haystack, "NHL")) {
+    return true;
+  }
+
+  return section.articlePattern.test(haystack);
+}
+
+function matchesSportsSectionVideo(video: VideoItem, section: SportsSectionConfig) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+
+  if (section.key === "MLB" && matchesFavoriteLeagueTeamName(haystack, "MLB")) {
+    return true;
+  }
+  if (section.key === "NFL" && matchesFavoriteLeagueTeamName(haystack, "NFL")) {
+    return true;
+  }
+  if (section.key === "NBA" && matchesFavoriteLeagueTeamName(haystack, "NBA")) {
+    return true;
+  }
+  if (section.key === "MLS" && matchesFavoriteLeagueTeamName(haystack, "MLS")) {
+    return true;
+  }
+  if (section.key === "NHL" && matchesFavoriteLeagueTeamName(haystack, "NHL")) {
+    return true;
+  }
+
+  return section.videoPattern.test(haystack);
+}
+
 function getArticlePriorityScore(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${
     article.category ?? ""
@@ -949,7 +1097,7 @@ function getArticlePriorityScore(article: Article) {
   const source = getSafeSourceLabel(article.source).toLowerCase();
 
   if (
-    /(ap news|associated press|reuters|bbc news|cnn|new york times|washington post|politico|npr|espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report|bloomberg|wall street journal|the weather channel)/.test(
+    /(ap news|associated press|reuters|bbc news|bbc sport|cnn|new york times|washington post|politico|npr|espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report|bloomberg|wall street journal|the weather channel|mma fighting|mlb\.com|nba\.com|nfl\.com|nhl\.com)/.test(
       source
     )
   ) {
@@ -1094,7 +1242,6 @@ export default function Home() {
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
   const [activeTeamLeague, setActiveTeamLeague] = useState<FavoriteLeagueKey>("NFL");
-  const [activeScoresLeague, setActiveScoresLeague] = useState<SportsScoreLeague>("NFL");
   const [sportsScoresByLeague, setSportsScoresByLeague] = useState<
     Record<SportsScoreLeague, SportsScoreGame[]>
   >({
@@ -2530,6 +2677,13 @@ export default function Home() {
     setSportsVideos((prev) => updateVideos(prev));
   };
 
+  const handleOpenFeedVideo = useCallback(
+    (videoId: string, tab: "news" | "sports") => {
+      router.push(`/videos?tab=${tab}&video=${videoId}`);
+    },
+    [router]
+  );
+
   const applyLocalCitySelection = useCallback((city: string) => {
     const nextConfig = getLocalCityConfigByName(city);
     const nextDisplayName = nextConfig?.displayName ?? city;
@@ -2622,7 +2776,7 @@ export default function Home() {
   }, [feedPage, hasMoreArticles, isLoading, isLoadingMoreArticles, loadFeedPage]);
 
   useEffect(() => {
-    if (sortMode !== "trending") {
+    if (sortMode !== "trending" && sortMode !== "sports") {
       return;
     }
 
@@ -2670,7 +2824,7 @@ export default function Home() {
     return () => {
       observer.disconnect();
     };
-  }, [articles.length, sortMode, videos]);
+  }, [articles.length, sortMode, sportsVideos, videos]);
 
   useEffect(() => {
     if (sortMode !== "local") {
@@ -4226,66 +4380,174 @@ export default function Home() {
     return sportsTabArticles;
   }, [sortMode, sportsTabArticles]);
 
-  const sportsBreakingArticles = useMemo(() => {
-    if (sortMode !== "sports") {
-      return [] as Article[];
-    }
-
-    const breakingCandidates = sportsStandardArticles
-      .filter((article) => {
-        const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
-        return /(breaking|urgent|developing|just in|live updates?|major trade|game 7|injury update|playoff|finals|stanley cup|world series|super bowl)/.test(
-          haystack
-        );
-      })
-      .sort(
-        (leftArticle, rightArticle) =>
-          getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle)
-      )
-      .slice(0, 3);
-
-    return breakingCandidates;
-  }, [sortMode, sportsStandardArticles]);
-
   const sportsFeaturedArticle = useMemo(() => {
     if (sortMode !== "sports") {
       return null;
     }
 
-    const usedBreakingKeys = new Set(
-      sportsBreakingArticles.map((article) => getArticleDeduplicationKey(article))
-    );
+    return sportsStandardArticles[0] ?? null;
+  }, [sortMode, sportsStandardArticles]);
 
-    return (
-      sportsStandardArticles.find((article) => {
-        const dedupeKey = getArticleDeduplicationKey(article);
-        return !usedBreakingKeys.has(dedupeKey);
-      }) ?? null
-    );
-  }, [sortMode, sportsBreakingArticles, sportsStandardArticles]);
+  const favoriteTeamGames = useMemo(() => {
+    const matchedGames: SportsScoreGame[] = [];
+    const seenGameIds = new Set<string>();
 
-  const sportsFeedArticles = useMemo(() => {
+    favoriteTeams.forEach((team) => {
+      const leagueGames = sportsScoresByLeague[team.league] ?? [];
+      const teamName = team.team_name.toLowerCase();
+      const matchingGame = leagueGames.find(
+        (game) =>
+          game.homeTeam.name.toLowerCase() === teamName ||
+          game.awayTeam.name.toLowerCase() === teamName
+      );
+
+      if (!matchingGame || seenGameIds.has(matchingGame.id)) {
+        return;
+      }
+
+      seenGameIds.add(matchingGame.id);
+      matchedGames.push(matchingGame);
+    });
+
+    return matchedGames;
+  }, [favoriteTeams, sportsScoresByLeague]);
+
+  const topSportsGames = useMemo(() => {
+    return Object.values(sportsScoresByLeague)
+      .flat()
+      .sort((left, right) => {
+        const statusRank = (game: SportsScoreGame) =>
+          game.status === "Live" ? 3 : game.status === "Today" ? 2 : game.status === "Upcoming" ? 1 : 0;
+
+        const statusDelta = statusRank(right) - statusRank(left);
+        if (statusDelta !== 0) {
+          return statusDelta;
+        }
+
+        const rightTime = right.scheduledAt ? new Date(right.scheduledAt).getTime() : 0;
+        const leftTime = left.scheduledAt ? new Date(left.scheduledAt).getTime() : 0;
+        return rightTime - leftTime;
+      })
+      .slice(0, 8);
+  }, [sportsScoresByLeague]);
+
+  const sportsLeagueSections = useMemo(() => {
     if (sortMode !== "sports") {
-      return [] as Article[];
+      return [] as Array<{
+        key: SportsSectionKey;
+        label: string;
+        scoreLeague?: SportsScoreLeague;
+        scores: SportsScoreGame[];
+        articles: Article[];
+        videos: VideoItem[];
+      }>;
     }
 
-    const excludedKeys = new Set(
-      [...sportsBreakingArticles, ...(sportsFeaturedArticle ? [sportsFeaturedArticle] : [])].map(
-        (article) => getArticleDeduplicationKey(article)
-      )
-    );
+    const usedArticleKeys = new Set<string>();
+    const usedVideoKeys = new Set<string>();
 
-    return sportsStandardArticles.filter(
-      (article) => !excludedKeys.has(getArticleDeduplicationKey(article))
-    );
-  }, [sortMode, sportsBreakingArticles, sportsFeaturedArticle, sportsStandardArticles]);
+    if (sportsFeaturedArticle) {
+      usedArticleKeys.add(getArticleDeduplicationKey(sportsFeaturedArticle));
+    }
 
-  const sportsQuickWatchVideos = useMemo(() => sportsVideoPool.slice(0, 8), [sportsVideoPool]);
+    return SPORTS_SECTION_CONFIGS.map((section) => {
+      const favoriteLeagueTeams =
+        section.key === "MMA" || section.key === "MORE"
+          ? []
+          : favoriteTeams.filter((team) => team.league === section.key);
 
-  const sportsFeaturedVideo = useMemo(
-    () => sportsVideoPool[8] ?? sportsVideoPool[0] ?? null,
-    [sportsVideoPool]
-  );
+      const candidateArticles = sportsStandardArticles.filter((article) => {
+        if (usedArticleKeys.has(getArticleDeduplicationKey(article))) {
+          return false;
+        }
+
+        if (section.key === "MORE") {
+          return !SPORTS_SECTION_CONFIGS.filter((candidate) => candidate.key !== "MORE").some(
+            (candidate) => matchesSportsSectionArticle(article, candidate)
+          );
+        }
+
+        return matchesSportsSectionArticle(article, section);
+      });
+
+      const sortedArticles = [...candidateArticles].sort((leftArticle, rightArticle) => {
+        const leftText = `${leftArticle.title} ${leftArticle.description ?? ""}`.toLowerCase();
+        const rightText = `${rightArticle.title} ${rightArticle.description ?? ""}`.toLowerCase();
+        const leftFavoriteBoost = favoriteLeagueTeams.some((team) =>
+          leftText.includes(team.team_name.toLowerCase())
+        )
+          ? 1
+          : 0;
+        const rightFavoriteBoost = favoriteLeagueTeams.some((team) =>
+          rightText.includes(team.team_name.toLowerCase())
+        )
+          ? 1
+          : 0;
+
+        if (rightFavoriteBoost !== leftFavoriteBoost) {
+          return rightFavoriteBoost - leftFavoriteBoost;
+        }
+
+        return getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle);
+      });
+
+      const selectedArticles = selectSourceBalancedArticles(sortedArticles, 5);
+      selectedArticles.forEach((article) => {
+        usedArticleKeys.add(getArticleDeduplicationKey(article));
+      });
+
+      const candidateVideos = sportsVideoPool.filter((video) => {
+        if (usedVideoKeys.has(video.id)) {
+          return false;
+        }
+
+        if (section.key === "MORE") {
+          return !SPORTS_SECTION_CONFIGS.filter((candidate) => candidate.key !== "MORE").some(
+            (candidate) => matchesSportsSectionVideo(video, candidate)
+          );
+        }
+
+        return matchesSportsSectionVideo(video, section);
+      });
+
+      const selectedVideos = selectSourceBalancedVideos(candidateVideos, 5);
+      selectedVideos.forEach((video) => {
+        usedVideoKeys.add(video.id);
+      });
+
+      const scores = section.scoreLeague
+        ? [...(sportsScoresByLeague[section.scoreLeague] ?? [])].sort((left, right) => {
+            const normalizedFavoriteNames = new Set(
+              favoriteLeagueTeams.map((team) => team.team_name.toLowerCase())
+            );
+            const leftFavoriteScore =
+              Number(normalizedFavoriteNames.has(left.homeTeam.name.toLowerCase())) +
+              Number(normalizedFavoriteNames.has(left.awayTeam.name.toLowerCase()));
+            const rightFavoriteScore =
+              Number(normalizedFavoriteNames.has(right.homeTeam.name.toLowerCase())) +
+              Number(normalizedFavoriteNames.has(right.awayTeam.name.toLowerCase()));
+
+            if (rightFavoriteScore !== leftFavoriteScore) {
+              return rightFavoriteScore - leftFavoriteScore;
+            }
+
+            const statusRank = (game: SportsScoreGame) =>
+              game.status === "Live" ? 3 : game.status === "Today" ? 2 : game.status === "Upcoming" ? 1 : 0;
+
+            return statusRank(right) - statusRank(left);
+          })
+        : [];
+
+      return {
+        key: section.key,
+        label: section.label,
+        scoreLeague: section.scoreLeague,
+        scores,
+        articles: selectedArticles,
+        videos: selectedVideos,
+      };
+    }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
+  }, [favoriteTeams, sortMode, sportsFeaturedArticle, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -4387,46 +4649,6 @@ export default function Home() {
     });
   }, [favoriteTeams, sportsTabArticles]);
 
-  const prioritizedSportsScores = useMemo(() => {
-    const selectedGames = sportsScoresByLeague[activeScoresLeague] ?? [];
-
-    if (selectedGames.length === 0) {
-      return [];
-    }
-
-    const favoriteNames = new Set(
-      favoriteTeams
-        .filter((team) => team.league === activeScoresLeague)
-        .map((team) => team.team_name.toLowerCase())
-    );
-
-    return [...selectedGames].sort((left, right) => {
-      const leftFavoriteScore =
-        Number(favoriteNames.has(left.homeTeam.name.toLowerCase())) +
-        Number(favoriteNames.has(left.awayTeam.name.toLowerCase()));
-      const rightFavoriteScore =
-        Number(favoriteNames.has(right.homeTeam.name.toLowerCase())) +
-        Number(favoriteNames.has(right.awayTeam.name.toLowerCase()));
-
-      if (rightFavoriteScore !== leftFavoriteScore) {
-        return rightFavoriteScore - leftFavoriteScore;
-      }
-
-      const leftPriority =
-        (left.status === "Live" ? 3 : left.status === "Today" ? 2 : left.status === "Upcoming" ? 1 : 0);
-      const rightPriority =
-        (right.status === "Live" ? 3 : right.status === "Today" ? 2 : right.status === "Upcoming" ? 1 : 0);
-
-      if (rightPriority !== leftPriority) {
-        return rightPriority - leftPriority;
-      }
-
-      const rightTime = right.scheduledAt ? new Date(right.scheduledAt).getTime() : 0;
-      const leftTime = left.scheduledAt ? new Date(left.scheduledAt).getTime() : 0;
-      return rightTime - leftTime;
-    });
-  }, [activeScoresLeague, favoriteTeams, sportsScoresByLeague]);
-
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
       ...breakingNewsPreviewArticles,
@@ -4466,10 +4688,15 @@ export default function Home() {
 
     if (sortMode === "sports") {
       console.log("SPORTS VIDEO COUNT", sportsVideoPool.length);
-      console.log("SPORTS INSERT QUICK WATCH AFTER INDEX 3");
-      console.log("SPORTS INSERT FEATURED VIDEO AFTER INDEX 6");
-      console.log("SPORTS QUICK WATCH COUNT", sportsQuickWatchVideos.length);
-      console.log("SPORTS FEATURED VIDEO EXISTS", Boolean(sportsFeaturedVideo));
+      console.log(
+        "SPORTS LEAGUE SECTION COUNTS",
+        sportsLeagueSections.map((section) => ({
+          key: section.key,
+          articleCount: section.articles.length,
+          videoCount: section.videos.length,
+          scoreCount: section.scores.length,
+        }))
+      );
       console.log("SPORTS IMAGE COUNT", sportsImageCount);
     }
   }, [
@@ -4477,10 +4704,9 @@ export default function Home() {
     myNewsFeaturedArticles.length,
     myNewsFeaturedVideos.length,
     sportsImageCount,
+    sportsLeagueSections,
     sportsVideoPool.length,
     sortMode,
-    sportsFeaturedVideo,
-    sportsQuickWatchVideos.length,
   ]);
 
   const topPollsSection = useMemo(
@@ -4820,7 +5046,7 @@ export default function Home() {
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
                 frameRef={(node) => {
                   trendingVideoFrameRefs.current[`quickwatch:${video.id}`] = node;
                 }}
@@ -4947,7 +5173,7 @@ export default function Home() {
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
                 frameRef={(node) => {
                   trendingVideoFrameRefs.current[`news-clips:${video.id}`] = node;
                 }}
@@ -4994,7 +5220,7 @@ export default function Home() {
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
                 frameRef={(node) => {
                   trendingVideoFrameRefs.current[`featured-videos:${video.id}`] = node;
                 }}
@@ -5029,7 +5255,7 @@ export default function Home() {
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
                 frameRef={(node) => {
                   trendingVideoFrameRefs.current[`featured-videos:${video.id}`] = node;
                 }}
@@ -5181,6 +5407,100 @@ export default function Home() {
       <span className="sports-score-team-fallback">{getFavoriteTeamInitials(team.name)}</span>
     </span>
   );
+
+  const renderSportsScoreRow = (
+    games: SportsScoreGame[],
+    leagueLabel: string,
+    emptyLabel = "Scores unavailable right now."
+  ) => {
+    if (games.length === 0) {
+      return (
+        <div className="empty-state compact-empty-state">
+          <strong>{emptyLabel}</strong>
+          <span>Check back shortly for live, upcoming, and recent games.</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="sports-scores-scroll" role="list" aria-label={`${leagueLabel} scores`}>
+        {games.map((game) => (
+          <article key={game.id} className="sports-score-card" role="listitem">
+            <div className="sports-score-card-top">
+              <span className="sports-score-league">{game.league}</span>
+              <span className={`sports-score-status sports-score-status-${game.status.toLowerCase()}`}>
+                {game.status}
+              </span>
+            </div>
+            <div className="sports-score-team-row">
+              <div className="sports-score-team-copy">
+                {renderScoreTeamMark(game.awayTeam)}
+                <span className="sports-score-team-name">{game.awayTeam.name}</span>
+              </div>
+              <strong className="sports-score-points">{game.awayTeam.score ?? "—"}</strong>
+            </div>
+            <div className="sports-score-team-row">
+              <div className="sports-score-team-copy">
+                {renderScoreTeamMark(game.homeTeam)}
+                <span className="sports-score-team-name">{game.homeTeam.name}</span>
+              </div>
+              <strong className="sports-score-points">{game.homeTeam.score ?? "—"}</strong>
+            </div>
+            <div className="sports-score-meta">
+              <span>{game.shortDetail ?? "Upcoming game"}</span>
+            </div>
+          </article>
+        ))}
+      </div>
+    );
+  };
+
+  const renderSportsLeagueVideos = (
+    sectionKey: SportsSectionKey,
+    label: string,
+    leagueVideos: VideoItem[]
+  ) => {
+    if (leagueVideos.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">{label}</strong>
+          </div>
+        </div>
+        <div className="quick-watch-scroll" role="list" aria-label={`${label} videos`}>
+          {leagueVideos.map((video) => (
+            <div key={`${sectionKey}-video-${video.id}`} className="quick-watch-item" role="listitem">
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`sports-${sectionKey.toLowerCase()}-quickwatch:${video.id}`) &&
+                  !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "sports")}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[`sports-${sectionKey.toLowerCase()}-quickwatch:${video.id}`] = node;
+                }}
+                autoplayKey={`sports-${sectionKey.toLowerCase()}-quickwatch:${video.id}`}
+                previewDurationMs={null}
+                label={label}
+                hideActions
+                useRelativeTime
+                className="video-card-inline quick-watch-video-card"
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
 
   const renderTeamPickerModal = () => {
     if (!isTeamPickerOpen) {
@@ -6285,170 +6605,21 @@ export default function Home() {
               <section className="home-section-block home-section-plain">
                 <div className="home-section-header">
                   <div className="stack" style={{ gap: "4px" }}>
-                    <strong className="profile-section-title home-section-title">Scores</strong>
-                    <span className="muted">Live, upcoming, and recent games.</span>
+                    <strong className="profile-section-title home-section-title">Current Games</strong>
+                    <span className="muted">Live and upcoming matchups for the leagues you follow.</span>
                   </div>
-                </div>
-
-                <div className="favorite-teams-tabs sports-scores-tabs" role="tablist" aria-label="Sports score leagues">
-                  {(["NFL", "NBA", "MLB", "NHL", "MLS"] as SportsScoreLeague[]).map((league) => (
-                    <button
-                      key={`scores-${league}`}
-                      type="button"
-                      role="tab"
-                      aria-selected={activeScoresLeague === league}
-                      className={`favorite-teams-tab ${
-                        activeScoresLeague === league ? "favorite-teams-tab-active" : ""
-                      }`}
-                      onClick={() => setActiveScoresLeague(league)}
-                    >
-                      {league}
-                    </button>
-                  ))}
                 </div>
 
                 {isSportsScoresLoading ? (
-                  <div className="muted">Loading scores...</div>
-                ) : prioritizedSportsScores.length === 0 ? (
-                  <div className="empty-state compact-empty-state">
-                    <strong>No scores loaded right now.</strong>
-                    <span>Recent and upcoming games will appear here as soon as the score feeds respond.</span>
-                  </div>
+                  <div className="muted">Loading current games...</div>
                 ) : (
-                  <div className="sports-scores-scroll" role="list" aria-label={`${activeScoresLeague} scores`}>
-                    {prioritizedSportsScores.map((game) => (
-                      <article
-                        key={game.id}
-                        className="sports-score-card"
-                        role="listitem"
-                      >
-                        <div className="sports-score-card-top">
-                          <span className="sports-score-league">{game.league}</span>
-                          <span className={`sports-score-status sports-score-status-${game.status.toLowerCase()}`}>
-                            {game.status}
-                          </span>
-                        </div>
-                        <div className="sports-score-team-row">
-                          <div className="sports-score-team-copy">
-                            {renderScoreTeamMark(game.awayTeam)}
-                            <span className="sports-score-team-name">{game.awayTeam.name}</span>
-                          </div>
-                          <strong className="sports-score-points">{game.awayTeam.score ?? "—"}</strong>
-                        </div>
-                        <div className="sports-score-team-row">
-                          <div className="sports-score-team-copy">
-                            {renderScoreTeamMark(game.homeTeam)}
-                            <span className="sports-score-team-name">{game.homeTeam.name}</span>
-                          </div>
-                          <strong className="sports-score-points">{game.homeTeam.score ?? "—"}</strong>
-                        </div>
-                        <div className="sports-score-meta">
-                          <span>{game.shortDetail ?? "Upcoming game"}</span>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
+                  renderSportsScoreRow(
+                    favoriteTeamGames.length > 0 ? favoriteTeamGames : topSportsGames,
+                    "Favorite team current games",
+                    "Scores unavailable right now."
+                  )
                 )}
               </section>
-
-              {sportsBreakingArticles.length > 0 ? (
-                <section className="home-section-block home-section-plain featured-stories-row">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Breaking Sports</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list">
-                    {sportsBreakingArticles.map((article) => (
-                      <div key={`sports-breaking-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderArticleFeedCard(article)}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {sportsFeedArticles.slice(0, 3).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-
-              {sportsQuickWatchVideos.length > 0 ? (
-                <section className="home-section-block home-section-plain quick-watch-row">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Sports Quick Watch</strong>
-                    </div>
-                  </div>
-                  <div className="quick-watch-scroll" role="list" aria-label="Sports quick watch videos">
-                    {sportsQuickWatchVideos.slice(0, 6).map((video) => (
-                      <div key={video.id} className="quick-watch-item" role="listitem">
-                        <VideoFeedCard
-                          video={video}
-                          isAutoplaying={
-                            autoplayTrendingVideoKeys.includes(`sports-quickwatch:${video.id}`) &&
-                            !video.fallback
-                          }
-                          onToggleLike={handleToggleVideoLike}
-                          onToggleSave={handleToggleVideoSave}
-                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                          onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                        frameRef={(node) => {
-                          trendingVideoFrameRefs.current[`sports-quickwatch:${video.id}`] = node;
-                        }}
-                        autoplayKey={`sports-quickwatch:${video.id}`}
-                        previewDurationMs={null}
-                        label="Quick Watch"
-                        hideActions
-                        useRelativeTime
-                        className="video-card-inline quick-watch-video-card"
-                        variant="article"
-                      />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {sportsFeedArticles.slice(3, 6).map((article) => (
-                <div key={`sports-mid-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-
-              {sportsFeaturedVideo ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Featured Sports Video</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list">
-                    <div>
-                      <VideoFeedCard
-                        video={sportsFeaturedVideo}
-                        isAutoplaying={
-                          autoplayTrendingVideoKeys.includes(`sports-featured-video:${sportsFeaturedVideo.id}`) &&
-                          !sportsFeaturedVideo.fallback
-                        }
-                        onToggleLike={handleToggleVideoLike}
-                        onToggleSave={handleToggleVideoSave}
-                        onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                        onOpenPlayer={(videoId) => router.push(`/video/${videoId}/`)}
-                        frameRef={(node) => {
-                          trendingVideoFrameRefs.current[`sports-featured-video:${sportsFeaturedVideo.id}`] = node;
-                        }}
-                        autoplayKey={`sports-featured-video:${sportsFeaturedVideo.id}`}
-                        previewDurationMs={null}
-                        label="Featured Sports Video"
-                        className="video-card-inline featured-video-single-card"
-                        variant="article"
-                      />
-                    </div>
-                  </div>
-                </section>
-              ) : null}
 
               {sportsFeaturedArticle ? (
                 <section className="home-section-block home-section-plain featured-stories-row">
@@ -6458,17 +6629,55 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="stack home-section-list">
-                    <div>
-                      {renderArticleFeedCard(sportsFeaturedArticle)}
-                    </div>
+                    <div>{renderArticleFeedCard(sportsFeaturedArticle)}</div>
                   </div>
                 </section>
               ) : null}
 
-              {sportsFeedArticles.slice(6).map((article) => (
-                <div key={`sports-rest-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                  {renderArticleFeedCard(article)}
-                </div>
+              {sportsLeagueSections.map((section) => (
+                <section
+                  key={`sports-section-${section.key}`}
+                  className="home-section-block home-section-plain"
+                >
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">
+                        {section.label}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {section.scoreLeague ? (
+                    isSportsScoresLoading ? (
+                      <div className="muted">Loading {section.label} scores...</div>
+                    ) : (
+                      renderSportsScoreRow(section.scores.slice(0, 6), `${section.label} scores`)
+                    )
+                  ) : null}
+
+                  {section.articles.length > 0 ? (
+                    <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
+                      {section.articles.map((article) => (
+                        <div
+                          key={`sports-section-article-${section.key}-${
+                            article.id || article.url || getArticleDeduplicationKey(article)
+                          }`}
+                        >
+                          {renderCompactSideImageArticle(article, {
+                            className: "sports-league-compact-card",
+                            imageFallbackLabel: section.label,
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {renderSportsLeagueVideos(
+                    section.key,
+                    `${section.label} Quick Watch`,
+                    section.videos
+                  )}
+                </section>
               ))}
             </div>
           )}

@@ -171,13 +171,20 @@ const IMAGE_ENRICHMENT_TIMEOUT_MS = 2500;
 const CACHE_TTL_MS = 7 * 60 * 1000;
 const SPORTS_RSS_SOURCES = [
   "ESPN",
+  "AP News",
+  "BBC Sport",
   "Sports Illustrated",
+  "MLB.com",
+  "NBA.com",
+  "NFL.com",
+  "NHL.com",
   "CBS Sports",
   "NBC Sports",
   "Fox Sports",
   "Bleacher Report",
   "Yahoo Sports",
   "SB Nation",
+  "MMA Fighting",
 ] as const;
 const SPORTS_QUERY_TERMS = [
   "sports news",
@@ -185,13 +192,21 @@ const SPORTS_QUERY_TERMS = [
   "NBA news",
   "MLB news",
   "NHL news",
+  "MLS news",
+  "MMA news",
   "college football news",
   "college basketball news",
   "soccer news",
 ] as const;
 const SPORTS_SOURCE_SEARCHES = [
   "ESPN",
+  "AP News Sports",
+  "BBC Sport",
   "Sports Illustrated",
+  "MLB.com",
+  "NBA.com",
+  "NFL.com",
+  "NHL.com",
   "CBS Sports",
   "NBC Sports",
   "Fox Sports",
@@ -200,6 +215,7 @@ const SPORTS_SOURCE_SEARCHES = [
   "SB Nation",
   "The Athletic",
   "SportsCenter",
+  "MMA Fighting",
 ] as const;
 const CELEBRITY_SOURCE_NAMES = [
   "TMZ",
@@ -380,13 +396,19 @@ const SOURCE_ALIAS_RULES: SourceAliasRule[] = [
   { match: /(^|\b)the washington post(\b|$)|(^|\b)washington post(\b|$)/i, canonical: "The Washington Post" },
   { match: /(^|\b)fox news(\b|$)/i, canonical: "Fox News" },
   { match: /(^|\b)espn(\b|$)/i, canonical: "ESPN" },
+  { match: /(^|\b)bbc sport(\b|$)/i, canonical: "BBC Sport" },
   { match: /(^|\b)sports illustrated(\b|$)|(^|\b)si\.com(\b|$)/i, canonical: "Sports Illustrated" },
+  { match: /(^|\b)mlb\.com(\b|$)|(^|\b)mlb com(\b|$)/i, canonical: "MLB.com" },
+  { match: /(^|\b)nba\.com(\b|$)|(^|\b)nba com(\b|$)/i, canonical: "NBA.com" },
+  { match: /(^|\b)nfl\.com(\b|$)|(^|\b)nfl com(\b|$)/i, canonical: "NFL.com" },
+  { match: /(^|\b)nhl\.com(\b|$)|(^|\b)nhl com(\b|$)/i, canonical: "NHL.com" },
   { match: /(^|\b)cbs sports(\b|$)/i, canonical: "CBS Sports" },
   { match: /(^|\b)nbc sports(\b|$)/i, canonical: "NBC Sports" },
   { match: /(^|\b)fox sports(\b|$)/i, canonical: "Fox Sports" },
   { match: /(^|\b)bleacher report(\b|$)/i, canonical: "Bleacher Report" },
   { match: /(^|\b)yahoo sports(\b|$)/i, canonical: "Yahoo Sports" },
   { match: /(^|\b)sb nation(\b|$)/i, canonical: "SB Nation" },
+  { match: /(^|\b)mma fighting(\b|$)/i, canonical: "MMA Fighting" },
   { match: /(^|\b)khou(\b|$)/i, canonical: "KHOU Houston" },
   { match: /(^|\b)click2houston(\b|$)|(^|\b)kprc(\b|$)/i, canonical: "KPRC 2 Houston" },
   { match: /(^|\b)abc13(\b|$)/i, canonical: "ABC13 Houston" },
@@ -2989,7 +3011,7 @@ async function fetchSportsArticles(params: ProviderFetchParams): Promise<NewsRou
           .flatMap((query) => query.toLowerCase().split(/[^a-z0-9]+/i))
           .filter((term) => term.length > 2)
           .join("|")
-      : "sports|nfl|nba|mlb|nhl|soccer|golf|nascar|formula|wnba|college",
+      : "sports|nfl|nba|mlb|nhl|mls|soccer|mma|ufc|golf|nascar|formula|wnba|college",
     "i"
   );
   const sportsArticles = sortArticlesForMode(combined, params).filter((article) => {
@@ -2998,8 +3020,8 @@ async function fetchSportsArticles(params: ProviderFetchParams): Promise<NewsRou
     return (
       article.category.toLowerCase() === "sports" ||
       SPORTS_RSS_SOURCES.some((name) => source.includes(name.toLowerCase())) ||
-      /the athletic|sports illustrated|sportscenter/.test(source) ||
-      /(nfl|nba|mlb|nhl|soccer|golf|nascar|formula|playoff|season|league|coach|draft|wnba|college)/.test(
+      /the athletic|sports illustrated|sportscenter|bbc sport|mma fighting|mlb\.com|nba\.com|nfl\.com|nhl\.com/.test(source) ||
+      /(nfl|nba|mlb|nhl|mls|mma|ufc|soccer|golf|nascar|formula|playoff|season|league|coach|draft|wnba|college)/.test(
         text
       )
     );
