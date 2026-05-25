@@ -291,6 +291,13 @@ type RainViewerWeatherMapsResponse = {
   } | null;
 };
 
+type RadarFramePoint = {
+  tileUrl: string;
+  timestamp: number;
+  label: string;
+  isFuture: boolean;
+};
+
 type FeedArticlePayload = Omit<
   Article,
   "likes" | "likeUsers" | "likedByCurrentUser" | "comments" | "saved"
@@ -721,6 +728,19 @@ function formatForecastDateLabel(dateString: string) {
   }).format(date);
 }
 
+function formatRadarTimeLabel(timestampSeconds: number) {
+  const date = new Date(timestampSeconds * 1000);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function getLocalSearchTerms(localQuery: string, localLocationLabel: string) {
   const combined = normalizeLookupValue(`${localLocationLabel} ${localQuery}`);
   const terms = combined
@@ -1044,9 +1064,12 @@ function buildTopQuickWatchRow(videos: VideoItem[], limit: number) {
   return selected;
 }
 
-function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[], pastFrameCount: number) {
-  const serializedFrames = JSON.stringify(radarFrameUrls);
-  const currentFrameIndex = Math.max(0, radarFrameUrls.length - 1);
+function buildNationalWeatherMapEmbedHtml(framePoints: RadarFramePoint[], pastFrameCount: number) {
+  const serializedFrames = JSON.stringify(framePoints);
+  const currentFrameIndex = Math.max(0, pastFrameCount - 1);
+  const leftBoundaryLabel = framePoints[0]?.label ?? "";
+  const rightBoundaryLabel = framePoints[framePoints.length - 1]?.label ?? "";
+  const hasFutureFrames = framePoints.some((frame) => frame.isFuture);
 
   return `<!doctype html>
 <html lang="en">
@@ -1104,8 +1127,7 @@ function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[], pastFrameCou
       }
       .timeline-label-row {
         font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.02em;
       }
       .timeline-meta-row {
         font-size: 12px;
@@ -1124,17 +1146,17 @@ function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[], pastFrameCou
       </div>
       <div class="timeline-shell">
         <div class="timeline-label-row">
-          <span>Past radar</span>
-          <span>Current</span>
-          <span>Future forecast</span>
+          <span>${leftBoundaryLabel}</span>
+          <span>Now</span>
+          <span>${hasFutureFrames ? rightBoundaryLabel : "Current"}</span>
         </div>
         <input id="timeline" class="timeline-slider" type="range" min="0" max="${Math.max(
           0,
-          radarFrameUrls.length - 1
+          framePoints.length - 1
         )}" step="1" value="${currentFrameIndex}" />
         <div class="timeline-meta-row">
           <span id="timelinePosition">Current</span>
-          <span id="timelineFrameCount">${radarFrameUrls.length} frames</span>
+          <span id="timelineFrameCount">${framePoints.length} frames</span>
         </div>
       </div>
     </div>
@@ -1168,7 +1190,7 @@ function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[], pastFrameCou
 
       if (frames.length > 0) {
         const overlays = frames.map((frame) => {
-          const overlay = L.tileLayer(frame, {
+          const overlay = L.tileLayer(frame.tileUrl, {
             tileSize: 256,
             opacity: 0,
             updateWhenIdle: true,
@@ -1192,12 +1214,13 @@ function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[], pastFrameCou
           }
 
           if (timelinePosition) {
-            if (activeIndex < ${Math.max(0, pastFrameCount - 1)}) {
-              timelinePosition.textContent = "Past radar";
-            } else if (activeIndex === ${Math.max(0, pastFrameCount - 1)}) {
+            const frame = frames[activeIndex];
+            if (activeIndex === ${Math.max(0, pastFrameCount - 1)}) {
               timelinePosition.textContent = "Current";
+            } else if (frame && frame.isFuture) {
+              timelinePosition.textContent = "Forecast " + frame.label;
             } else {
-              timelinePosition.textContent = "Future forecast";
+              timelinePosition.textContent = frame ? frame.label : "Past radar";
             }
           }
         };
@@ -2737,24 +2760,31 @@ export default function Home() {
 
         const payload = (await response.json()) as RainViewerWeatherMapsResponse;
         const host = payload.host?.trim() ?? "";
-        const pastFramePaths = (payload.radar?.past ?? [])
-          .map((frame) => frame.path?.trim() ?? "")
-          .filter(Boolean)
+        const pastFrames = (payload.radar?.past ?? [])
+          .map((frame) => ({
+            path: frame.path?.trim() ?? "",
+            time: typeof frame.time === "number" ? frame.time : null,
+          }))
+          .filter((frame) => Boolean(frame.path) && typeof frame.time === "number")
           .slice(-6);
-        const futureFramePaths = (payload.radar?.nowcast ?? [])
-          .map((frame) => frame.path?.trim() ?? "")
-          .filter(Boolean)
+        const futureFrames = (payload.radar?.nowcast ?? [])
+          .map((frame) => ({
+            path: frame.path?.trim() ?? "",
+            time: typeof frame.time === "number" ? frame.time : null,
+          }))
+          .filter((frame) => Boolean(frame.path) && typeof frame.time === "number")
           .slice(0, 3);
-        const framePaths = [...pastFramePaths, ...futureFramePaths];
+        const framePoints = [...pastFrames, ...futureFrames].map((frame, index) => ({
+          tileUrl: `${host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`,
+          timestamp: frame.time as number,
+          label: formatRadarTimeLabel(frame.time as number),
+          isFuture: index >= pastFrames.length,
+        }));
 
-        if (!host || framePaths.length === 0) {
+        if (!host || framePoints.length === 0) {
           throw new Error("RainViewer payload missing host or frame paths");
         }
-
-        const radarFrameUrls = framePaths.map(
-          (framePath) => `${host}${framePath}/256/{z}/{x}/{y}/2/1_1.png`
-        );
-        const embedHtml = buildNationalWeatherMapEmbedHtml(radarFrameUrls, pastFramePaths.length);
+        const embedHtml = buildNationalWeatherMapEmbedHtml(framePoints, pastFrames.length);
 
         if (!cancelled) {
           setNationalWeatherMapEmbedHtml(embedHtml);
@@ -8630,66 +8660,6 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {weatherSectionContent.localWeather.length > 0 ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Local Weather</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
-                    {weatherSectionContent.localWeather.map((article) => (
-                      <div key={`weather-local-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderCompactSideImageArticle(article, {
-                          className: "weather-compact-card",
-                          imageFallbackLabel: "Local Weather",
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {weatherSectionContent.forecastRadar.length > 0 ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Forecast & Radar</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
-                    {weatherSectionContent.forecastRadar.map((article) => (
-                      <div key={`weather-forecast-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderCompactSideImageArticle(article, {
-                          className: "weather-compact-card",
-                          imageFallbackLabel: "Forecast",
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {weatherSectionContent.climateEnvironment.length > 0 ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Climate & Environment</strong>
-                    </div>
-                  </div>
-                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
-                    {weatherSectionContent.climateEnvironment.map((article) => (
-                      <div key={`weather-climate-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderCompactSideImageArticle(article, {
-                          className: "weather-compact-card",
-                          imageFallbackLabel: "Climate",
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
               {weatherPageVideos.length > 0 ? (
                 <section className="home-section-block home-section-plain quick-watch-row">
                   <div className="home-section-header">
@@ -8720,6 +8690,26 @@ export default function Home() {
                           className="video-card-inline quick-watch-video-card"
                           variant="article"
                         />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {weatherSectionContent.localWeather.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Local Weather</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    {weatherSectionContent.localWeather.map((article) => (
+                      <div key={`weather-local-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, {
+                          className: "weather-compact-card",
+                          imageFallbackLabel: "Local Weather",
+                        })}
                       </div>
                     ))}
                   </div>
@@ -8782,6 +8772,46 @@ export default function Home() {
                   )}
                 </div>
               </section>
+
+              {weatherSectionContent.forecastRadar.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Forecast & Radar</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    {weatherSectionContent.forecastRadar.map((article) => (
+                      <div key={`weather-forecast-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, {
+                          className: "weather-compact-card",
+                          imageFallbackLabel: "Forecast",
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {weatherSectionContent.climateEnvironment.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Climate & Environment</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    {weatherSectionContent.climateEnvironment.map((article) => (
+                      <div key={`weather-climate-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, {
+                          className: "weather-compact-card",
+                          imageFallbackLabel: "Climate",
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </div>
           )}
         </section>

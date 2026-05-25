@@ -677,8 +677,9 @@ input {
 }
 
 .weather-forecast-card {
-  min-width: 132px;
-  padding: 14px 12px;
+  min-width: 108px;
+  max-width: 108px;
+  padding: 12px 10px;
 }
 
 .weather-forecast-icon {
