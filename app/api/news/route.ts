@@ -395,6 +395,12 @@ const FOOD_SOURCE_NAMES = [
   "Food & Wine",
   "Bon Appétit",
   "Serious Eats",
+  "NYT Cooking",
+  "Taste of Home",
+  "Allrecipes",
+  "Delish",
+  "Epicurious",
+  "Saveur",
   "Restaurant Business",
   "Food Network",
   "CNN Food",
@@ -412,6 +418,12 @@ const FOOD_QUERY_TERMS = [
   "Food & Wine",
   "Bon Appétit",
   "Serious Eats",
+  "NYT Cooking",
+  "Taste of Home",
+  "Allrecipes",
+  "Delish",
+  "Epicurious",
+  "Saveur",
   "Restaurant Business",
   "Food Network",
   "CNN Food",
@@ -3263,7 +3275,7 @@ async function fetchFoodArticles(params: ProviderFetchParams): Promise<NewsRoute
   );
   const combined = dedupeArticles([...rssArticles, ...queryArticles]);
   const foodPattern =
-    /(food|restaurant|fast food|food safety|grocery|recipes|dining|chef|menu|eater|food network|bon appétit|serious eats)/i;
+    /(food|restaurant|fast food|food safety|grocery|recipes|dining|chef|menu|eater|food network|bon appétit|serious eats|nyt cooking|taste of home|allrecipes|delish|epicurious|saveur|food & wine)/i;
   const foodArticles = sortArticlesForMode(combined, params).filter((article) => {
     const source = article.source.toLowerCase();
     const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`;

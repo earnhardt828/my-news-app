@@ -121,6 +121,39 @@ const FEATURED_SOURCE_NAMES = [
   "AP News",
   "Fox News",
 ] as const;
+const SELECTED_CATEGORY_MATCHERS: Record<string, RegExp> = {
+  Politics: /\b(politics?|election|campaign|congress|senate|white house|government|supreme court)\b/i,
+  World: /\b(world|international|global|war|ukraine|russia|china|gaza|israel|europe|asia|middle east)\b/i,
+  Business: /\b(business|earnings|company|companies|ceo|trade|commerce)\b/i,
+  Tech: /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|meta|startup|cybersecurity|software)\b/i,
+  Sports: /\b(sports?|espn|sportscenter|game|match|tournament|playoff|athlete|coach|league)\b/i,
+  MLB: /\b(mlb|major league baseball|baseball)\b/i,
+  NFL: /\b(nfl|national football league|football|touchdown|quarterback|super bowl)\b/i,
+  NHL: /\b(nhl|national hockey league|hockey|stanley cup)\b/i,
+  MLS: /\b(mls|major league soccer|soccer|fc\b|united\b)\b/i,
+  "College Football": /\b(college football|ncaa football|sec football|big ten football|acc football)\b/i,
+  "College Basketball": /\b(college basketball|ncaa basketball|march madness|final four)\b/i,
+  Golf: /\b(golf|pga|masters|open championship|ryder cup)\b/i,
+  NASCAR: /\b(nascar|daytona|indycar|stock car|cup series)\b/i,
+  Health: /\b(health|medical|hospital|disease|wellness|vaccine|cdc|nih)\b/i,
+  Science: /\b(science|research|space|nasa|study|physics|biology|astronomy)\b/i,
+  Entertainment: /\b(entertainment|movie|movies|tv|television|streaming|hollywood|showbiz)\b/i,
+  Celebrity: /\b(celebrity|celebrities|hollywood|tmz|people magazine|red carpet|actor|actress|singer)\b/i,
+  Art: /\b(art|artist|museum|gallery|exhibit|painting|sculpture)\b/i,
+  Music: /\b(music|album|song|concert|tour|billboard|recording)\b/i,
+  Finance: /\b(finance|stock market|wall street|investing|fed|inflation|interest rate|banking)\b/i,
+  Crime: /\b(crime|police|arrest|court|trial|murder|shooting|investigation)\b/i,
+  Weather: /\b(weather|storm|forecast|tornado|hurricane|rain|snow|climate|radar)\b/i,
+  Education: /\b(education|school|student|teacher|college|university|campus)\b/i,
+  "Real Estate": /\b(real estate|housing|mortgage|home sales|property|rent)\b/i,
+  "Local News": /\b(local news|community|county|city hall|neighborhood|regional)\b/i,
+  Culture: /\b(culture|festival|heritage|museum|books|literature|theater)\b/i,
+  Lifestyle: /\b(lifestyle|fashion|style|beauty|wellness|relationships|home)\b/i,
+  Travel: /\b(travel|airline|airport|hotel|vacation|tourism|destination|cruise)\b/i,
+  Food: /\b(food|restaurant|recipe|dining|chef|cooking|kitchen|grocery|menu)\b/i,
+  Opinion: /\b(opinion|editorial|column|analysis|commentary)\b/i,
+  "Breaking News": /\b(breaking|live updates|developing|urgent|just in|alert)\b/i,
+};
 const MY_NEWS_FEATURED_SPORTS_PATTERN =
   /\b(sports?|espn|cbs sports|sports illustrated|bleacher report|mlb|nba|nfl|nhl|mls|soccer|football|basketball|baseball|hockey)\b/i;
 const TOP_QUICK_WATCH_PREFERRED_SOURCE_PATTERN =
@@ -488,6 +521,47 @@ function isSportsFeaturedCandidate(article: Pick<Article, "title" | "source" | "
   });
   const haystack = `${article.title} ${article.source} ${categoryLabel}`.toLowerCase();
   return MY_NEWS_FEATURED_SPORTS_PATTERN.test(haystack);
+}
+
+function articleMatchesSelectedCategory(article: Article, selectedCategory: string) {
+  const displayCategory = getDisplayCategory(article.category, {
+    source: article.source,
+    title: article.title,
+  });
+
+  if (displayCategory.toLowerCase() === selectedCategory.toLowerCase()) {
+    return true;
+  }
+
+  const matcher = SELECTED_CATEGORY_MATCHERS[selectedCategory];
+
+  if (!matcher) {
+    return false;
+  }
+
+  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${displayCategory}`.toLowerCase();
+  return matcher.test(haystack);
+}
+
+function filterArticlesBySelectedCategories(articles: Article[], selectedCategories: string[]) {
+  if (selectedCategories.length === 0) {
+    return {
+      filteredArticles: articles,
+      removedCount: 0,
+    };
+  }
+
+  const normalizedSelectedCategories = Array.from(
+    new Set(selectedCategories.map((category) => cleanDisplayText(category).trim()).filter(Boolean))
+  );
+  const filteredArticles = articles.filter((article) =>
+    normalizedSelectedCategories.some((category) => articleMatchesSelectedCategory(article, category))
+  );
+
+  return {
+    filteredArticles,
+    removedCount: Math.max(0, articles.length - filteredArticles.length),
+  };
 }
 
 const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: number }> = {
@@ -1882,6 +1956,8 @@ export default function Home() {
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
   const [businessPreviewArticles, setBusinessPreviewArticles] = useState<Article[]>([]);
   const [isBusinessPreviewLoading, setIsBusinessPreviewLoading] = useState(false);
+  const [foodPreviewArticles, setFoodPreviewArticles] = useState<Article[]>([]);
+  const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -3105,7 +3181,7 @@ export default function Home() {
 
       try {
         const responses = await Promise.allSettled(
-          categories.slice(0, 4).map(async (category) => {
+          categories.slice(0, 8).map(async (category) => {
             const response = await apiFetch(
               `/api/news?mode=myfeed&category=${encodeURIComponent(category)}&page=1&pageSize=8`
             );
@@ -3134,8 +3210,16 @@ export default function Home() {
 
           return mergeArticlesByIdentity(accumulator, result.value);
         }, []);
+        const { filteredArticles, removedCount } = filterArticlesBySelectedCategories(
+          mergedArticles,
+          categories
+        );
 
-        setCategorySectionArticles(mergedArticles);
+        console.log("MY NEWS SELECTED CATEGORIES", categories);
+        console.log("MY NEWS FILTERED COUNT", filteredArticles.length);
+        console.log("MY NEWS REMOVED UNSELECTED COUNT", removedCount);
+
+        setCategorySectionArticles(filteredArticles);
       } catch (error) {
         console.error("Error loading category section:", error);
         if (!isCancelled) {
@@ -3388,11 +3472,13 @@ export default function Home() {
         setCelebrityPreviewArticles([]);
         setTechnologyPreviewArticles([]);
         setBusinessPreviewArticles([]);
+        setFoodPreviewArticles([]);
         setIsBreakingPreviewLoading(false);
         setIsSportsPreviewLoading(false);
         setIsCelebrityPreviewLoading(false);
         setIsTechnologyPreviewLoading(false);
         setIsBusinessPreviewLoading(false);
+        setIsFoodPreviewLoading(false);
         return;
       }
 
@@ -3401,9 +3487,17 @@ export default function Home() {
       setIsCelebrityPreviewLoading(true);
       setIsTechnologyPreviewLoading(true);
       setIsBusinessPreviewLoading(true);
+      setIsFoodPreviewLoading(true);
 
       try {
-        const [breakingResponse, sportsResponse, celebrityResponse, technologyResponse, businessResponse] = await Promise.all([
+        const [
+          breakingResponse,
+          sportsResponse,
+          celebrityResponse,
+          technologyResponse,
+          businessResponse,
+          foodResponse,
+        ] = await Promise.all([
           fetch(
             `/api/news?mode=search&query=${encodeURIComponent(
               BREAKING_NEWS_FEED_QUERY
@@ -3429,9 +3523,20 @@ export default function Home() {
             cache: "no-store",
             headers: { Accept: "application/json" },
           }),
+          fetch("/api/news?mode=food&pageSize=25", {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }),
         ]);
 
-        const [breakingPayload, sportsPayload, celebrityPayload, technologyPayload, businessPayload] = await Promise.all([
+        const [
+          breakingPayload,
+          sportsPayload,
+          celebrityPayload,
+          technologyPayload,
+          businessPayload,
+          foodPayload,
+        ] = await Promise.all([
           breakingResponse.ok ? breakingResponse.json().catch(() => null) : Promise.resolve(null),
           sportsResponse.ok ? sportsResponse.json().catch(() => null) : Promise.resolve(null),
           celebrityResponse.ok
@@ -3443,6 +3548,7 @@ export default function Home() {
           businessResponse.ok
             ? businessResponse.json().catch(() => null)
             : Promise.resolve(null),
+          foodResponse.ok ? foodResponse.json().catch(() => null) : Promise.resolve(null),
         ]);
 
         if (isCancelled) {
@@ -3484,12 +3590,20 @@ export default function Home() {
               ).articles
             )
           : [];
+        const nextFoodArticles = foodPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                foodPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            )
+          : [];
 
         setBreakingPreviewArticles(nextBreakingArticles);
         setSportsPreviewArticles(nextSportsArticles);
         setCelebrityPreviewArticles(nextCelebrityArticles);
         setTechnologyPreviewArticles(nextTechnologyArticles);
         setBusinessPreviewArticles(nextBusinessArticles);
+        setFoodPreviewArticles(nextFoodArticles);
       } catch (error) {
         console.error("TRENDING SECTION PREVIEW LOAD FAILED", error);
         if (!isCancelled) {
@@ -3498,6 +3612,7 @@ export default function Home() {
           setCelebrityPreviewArticles([]);
           setTechnologyPreviewArticles([]);
           setBusinessPreviewArticles([]);
+          setFoodPreviewArticles([]);
         }
       } finally {
         if (!isCancelled) {
@@ -3506,6 +3621,7 @@ export default function Home() {
           setIsCelebrityPreviewLoading(false);
           setIsTechnologyPreviewLoading(false);
           setIsBusinessPreviewLoading(false);
+          setIsFoodPreviewLoading(false);
         }
       }
     }
@@ -3968,6 +4084,7 @@ export default function Home() {
       setCelebrityPreviewArticles((prev) => updateArticles(prev));
       setTechnologyPreviewArticles((prev) => updateArticles(prev));
       setBusinessPreviewArticles((prev) => updateArticles(prev));
+      setFoodPreviewArticles((prev) => updateArticles(prev));
     },
     []
   );
@@ -5156,12 +5273,28 @@ export default function Home() {
   }, [sortMode, visibleArticles]);
 
   const foodTabArticles = useMemo(() => {
+    if (sortMode === "trending") {
+      return selectSourceBalancedArticles(foodPreviewArticles.slice(0, 40), 25).filter((article) =>
+        articleMatchesSelectedCategory(
+          {
+            ...article,
+            comments: article.comments ?? [],
+            likeUsers: article.likeUsers ?? [],
+            likedByCurrentUser: article.likedByCurrentUser ?? false,
+            saved: article.saved ?? false,
+            likes: article.likes ?? 0,
+          } as Article,
+          "Food"
+        )
+      );
+    }
+
     if (sortMode !== "food") {
       return [] as Article[];
     }
 
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
-  }, [sortMode, visibleArticles]);
+  }, [foodPreviewArticles, sortMode, visibleArticles]);
 
   useEffect(() => {
     if (sortMode === "sports") {
@@ -8111,10 +8244,14 @@ export default function Home() {
           </div>
 
           {foodTabArticles.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No food stories yet</strong>
-              <span>Check back shortly for fresh food coverage.</span>
-            </div>
+            isFoodPreviewLoading ? (
+              <div className="muted">Loading food stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No food stories yet</strong>
+                <span>Check back shortly for fresh food coverage.</span>
+              </div>
+            )
           ) : (
             <div className="stack home-section-list">
               {foodTabArticles.slice(0, 6).map((article) => (
