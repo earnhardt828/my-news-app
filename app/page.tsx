@@ -90,6 +90,7 @@ const BREAKING_NEWS_TRUSTED_SOURCES = [
   "AP News",
   "Reuters",
   "CNN",
+  "Fox News",
   "BBC News",
   "NBC News",
   "CBS News",
@@ -99,6 +100,8 @@ const BREAKING_NEWS_TRUSTED_SOURCES = [
   "Politico",
   "Bloomberg",
   "NPR",
+  "USA Today",
+  "Al Jazeera",
 ] as const;
 const FEATURED_SOURCE_NAMES = [
   "CNN",
@@ -117,7 +120,7 @@ const FEATURED_SOURCE_NAMES = [
 const MY_NEWS_FEATURED_SPORTS_PATTERN =
   /\b(sports?|espn|cbs sports|sports illustrated|bleacher report|mlb|nba|nfl|nhl|mls|soccer|football|basketball|baseball|hockey)\b/i;
 const TOP_QUICK_WATCH_PREFERRED_SOURCE_PATTERN =
-  /\b(cnn|nbc news|cbs news|abc news|reuters|associated press|ap news|bbc news|pbs newshour|cnbc|bloomberg|usa today|the guardian|guardian)\b/i;
+  /\b(cnn|the new york times|new york times|nbc news|cbs news|abc news|reuters|associated press|ap news|bbc news|pbs newshour|cnbc|bloomberg|usa today|the guardian|guardian)\b/i;
 const TOP_QUICK_WATCH_DEPRIORITIZED_SOURCE_PATTERN =
   /\b(al jazeera|al jazeera english|fox news)\b/i;
 const QUICK_WATCH_COMBINED_LIMITED_SOURCES = new Set(["al jazeera", "al jazeera english", "fox news"]);
@@ -1048,8 +1051,9 @@ function buildTopQuickWatchRow(videos: VideoItem[], limit: number) {
   const selected: VideoItem[] = [];
   const sourceCounts = new Map<string, number>();
   let combinedLimitedCount = 0;
+  const prioritizedVideos = prioritizeTopQuickWatchVideos(videos);
 
-  for (const video of prioritizeTopQuickWatchVideos(videos)) {
+  for (const video of prioritizedVideos) {
     const normalizedSource = cleanDisplayText(video.creator).trim().toLowerCase() || "unknown";
     const sourceCount = sourceCounts.get(normalizedSource) ?? 0;
     const isCombinedLimitedSource = QUICK_WATCH_COMBINED_LIMITED_SOURCES.has(normalizedSource);
@@ -1074,7 +1078,66 @@ function buildTopQuickWatchRow(videos: VideoItem[], limit: number) {
     }
   }
 
+  if (selected.length < limit) {
+    for (const video of prioritizedVideos) {
+      const normalizedSource = cleanDisplayText(video.creator).trim().toLowerCase() || "unknown";
+      const sourceCount = sourceCounts.get(normalizedSource) ?? 0;
+      const isCombinedLimitedSource = QUICK_WATCH_COMBINED_LIMITED_SOURCES.has(normalizedSource);
+
+      if (selected.some((selectedVideo) => selectedVideo.id === video.id)) {
+        continue;
+      }
+
+      if (sourceCount >= 2) {
+        continue;
+      }
+
+      if (isCombinedLimitedSource && combinedLimitedCount >= 2) {
+        continue;
+      }
+
+      selected.push(video);
+      sourceCounts.set(normalizedSource, sourceCount + 1);
+
+      if (isCombinedLimitedSource) {
+        combinedLimitedCount += 1;
+      }
+
+      if (selected.length >= limit) {
+        break;
+      }
+    }
+  }
+
   return selected;
+}
+
+function dedupeVideosBySourceTitleAndUrl(videos: VideoItem[]) {
+  return Array.from(
+    new Map(
+      videos.map((video) => [
+        [
+          cleanDisplayText(video.watchUrl).trim().toLowerCase(),
+          cleanDisplayText(video.title).trim().toLowerCase(),
+          cleanDisplayText(video.creator).trim().toLowerCase(),
+        ].join("::"),
+        video,
+      ])
+    ).values()
+  );
+}
+
+function getBreakingNewsSourcePriority(article: Article) {
+  const normalizedSource = getSafeSourceLabel(article.source).trim().toLowerCase();
+  const trustedIndex = BREAKING_NEWS_TRUSTED_SOURCES.findIndex((source) =>
+    normalizedSource.includes(source.toLowerCase())
+  );
+
+  if (trustedIndex >= 0) {
+    return BREAKING_NEWS_TRUSTED_SOURCES.length - trustedIndex;
+  }
+
+  return 0;
 }
 
 function buildNationalWeatherMapEmbedHtml(
@@ -1449,7 +1512,7 @@ function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
 function isSportsBettingAd(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
   const hasLegitimateReportingContext =
-    /(sports betting legislation|gambling investigation|betting scandal|sportsbook revenue|state betting law)/i.test(
+    /(sports betting legislation|gambling investigation|betting scandal|sportsbook revenue|state betting law|betting law|sportsbook business news|gambling probe|betting investigation)/i.test(
       haystack
     );
 
@@ -1457,7 +1520,7 @@ function isSportsBettingAd(article: Article) {
     return false;
   }
 
-  return /(betmgm bonus code|bonus code|promo code|sportsbook promo|sign up bonus|get \$1,500|draftkings promo|fanduel promo|caesars promo|bet365 promo|odds boost|parlay picks)/i.test(
+  return /(sports betting line|betting line|odds tracker|sportsbook promo|sign up bonus|get \$1,500|betmgm|draftkings|fanduel|caesars|bet365|parlay|spread pick|over\/under|bonus code|promo code|odds boost|\bodds\b)/i.test(
     haystack
   );
 }
@@ -5269,8 +5332,11 @@ export default function Home() {
         )
     );
 
-    const preferredPool = preferredVertical.length > 0 ? preferredVertical : playableVideos;
-    return selectSourceBalancedVideos(prioritizeTopQuickWatchVideos(preferredPool), 24);
+    const mergedPreferredPool = dedupeVideosBySourceTitleAndUrl([
+      ...preferredVertical,
+      ...playableVideos,
+    ]);
+    return selectSourceBalancedVideos(prioritizeTopQuickWatchVideos(mergedPreferredPool), 24);
   }, [videos]);
 
   const myNewsQuickWatchVideos = useMemo(
@@ -5315,20 +5381,29 @@ export default function Home() {
     );
 
     const candidateArticles =
-      trustedBreakingArticles.length > 0 ? trustedBreakingArticles : breakingPreviewArticles;
+      trustedBreakingArticles.length >= 5 ? trustedBreakingArticles : breakingPreviewArticles;
 
-    return candidateArticles
-      .filter((article) => !topTrendingKeys.has(getArticleDeduplicationKey(article)))
-      .sort((leftArticle, rightArticle) => {
-        const leftTime = leftArticle.publishedAt
-          ? new Date(leftArticle.publishedAt).getTime()
-          : 0;
-        const rightTime = rightArticle.publishedAt
-          ? new Date(rightArticle.publishedAt).getTime()
-          : 0;
-        return rightTime - leftTime;
-      })
-      .slice(0, 5);
+    return selectSourceBalancedArticles(
+      candidateArticles
+        .filter((article) => !topTrendingKeys.has(getArticleDeduplicationKey(article)))
+        .sort((leftArticle, rightArticle) => {
+          const sourcePriorityDelta =
+            getBreakingNewsSourcePriority(rightArticle) - getBreakingNewsSourcePriority(leftArticle);
+
+          if (sourcePriorityDelta !== 0) {
+            return sourcePriorityDelta;
+          }
+
+          const leftTime = leftArticle.publishedAt
+            ? new Date(leftArticle.publishedAt).getTime()
+            : 0;
+          const rightTime = rightArticle.publishedAt
+            ? new Date(rightArticle.publishedAt).getTime()
+            : 0;
+          return rightTime - leftTime;
+        }),
+      5
+    ).slice(0, 5);
   }, [breakingPreviewArticles, sortMode, topTenTrendingArticles]);
 
   const myNewsFeaturedArticles = useMemo(() => {
@@ -5396,34 +5471,6 @@ export default function Home() {
     topTenTrendingArticles,
     visibleArticles,
   ]);
-
-  const myNewsFeaturedArticle = useMemo(() => {
-    if (sortMode !== "trending") {
-      return null;
-    }
-
-    const usedKeys = new Set(
-      [...breakingNewsPreviewArticles, ...topTenTrendingArticles].map((article) =>
-        getArticleDeduplicationKey(article)
-      )
-    );
-
-    return (
-      balancedTrendingArticles.find((article) => {
-        const dedupeKey = getArticleDeduplicationKey(article);
-
-        if (usedKeys.has(dedupeKey)) {
-          return false;
-        }
-
-        if (isSportsFeaturedCandidate(article)) {
-          return false;
-        }
-
-        return isRenderableArticleRecord(article);
-      }) ?? null
-    );
-  }, [balancedTrendingArticles, breakingNewsPreviewArticles, sortMode, topTenTrendingArticles]);
 
   const sportsVideoPool = useMemo(
     () =>
@@ -6464,12 +6511,7 @@ export default function Home() {
   };
 
   const renderFeaturedStoriesRow = () => {
-    const featuredArticleKey = myNewsFeaturedArticle
-      ? getArticleDeduplicationKey(myNewsFeaturedArticle)
-      : null;
-    const rowArticles = myNewsFeaturedArticles.filter(
-      (article) => getArticleDeduplicationKey(article) !== featuredArticleKey
-    );
+    const rowArticles = myNewsFeaturedArticles;
 
     if (rowArticles.length === 0) {
       return null;
@@ -7802,28 +7844,6 @@ export default function Home() {
                   </div>
                 </Link>
               ))}
-            </div>
-          )}
-        </section>
-
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Featured Article</strong>
-              <span className="muted">A standout news story from the broader feed.</span>
-            </div>
-          </div>
-
-          {!myNewsFeaturedArticle ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No featured news story yet</strong>
-              <span>Check back shortly for a broader top story.</span>
-            </div>
-          ) : (
-            <div className="stack home-section-list">
-              <div>
-                {renderArticleFeedCard(myNewsFeaturedArticle)}
-              </div>
             </div>
           )}
         </section>
