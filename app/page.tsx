@@ -284,6 +284,10 @@ type RainViewerWeatherMapsResponse = {
       time?: number | null;
       path?: string | null;
     }>;
+    nowcast?: Array<{
+      time?: number | null;
+      path?: string | null;
+    }>;
   } | null;
 };
 
@@ -323,6 +327,17 @@ type WeatherCardData = {
   weatherLabel: string;
   windMph: number | null;
   cityLabel: string;
+  highTemp?: number | null;
+  lowTemp?: number | null;
+  humidity?: number | null;
+};
+
+type WeatherForecastDay = {
+  label: string;
+  dateLabel: string;
+  weatherLabel: string;
+  highTemp: number | null;
+  lowTemp: number | null;
 };
 
 type FavoriteTeamUpdate = {
@@ -680,6 +695,32 @@ function getWeatherLabel(weatherCode: number | null | undefined) {
   return "Forecast";
 }
 
+function formatForecastDayLabel(dateString: string, index: number) {
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return index === 0 ? "Today" : `Day ${index + 1}`;
+  }
+
+  if (index === 0) return "Today";
+  if (index === 1) return "Tomorrow";
+
+  return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(date);
+}
+
+function formatForecastDateLabel(dateString: string) {
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
 function getLocalSearchTerms(localQuery: string, localLocationLabel: string) {
   const combined = normalizeLookupValue(`${localLocationLabel} ${localQuery}`);
   const terms = combined
@@ -1003,8 +1044,9 @@ function buildTopQuickWatchRow(videos: VideoItem[], limit: number) {
   return selected;
 }
 
-function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[]) {
+function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[], pastFrameCount: number) {
   const serializedFrames = JSON.stringify(radarFrameUrls);
+  const currentFrameIndex = Math.max(0, radarFrameUrls.length - 1);
 
   return `<!doctype html>
 <html lang="en">
@@ -1026,10 +1068,16 @@ function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[]) {
           linear-gradient(180deg, #08111f, #0b1728);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
+      .map-shell {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
+        height: 100%;
+        width: 100%;
+      }
       .map-badge {
         position: absolute;
         left: 12px;
-        bottom: 12px;
+        top: 12px;
         z-index: 999;
         padding: 8px 10px;
         border-radius: 999px;
@@ -1040,11 +1088,56 @@ function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[]) {
         font-size: 12px;
         letter-spacing: 0.01em;
       }
+      .timeline-shell {
+        display: grid;
+        gap: 8px;
+        padding: 12px 14px 14px;
+        background: rgba(7, 17, 31, 0.82);
+        border-top: 1px solid rgba(148, 163, 184, 0.14);
+      }
+      .timeline-label-row, .timeline-meta-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: rgba(226, 232, 240, 0.92);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .timeline-label-row {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .timeline-meta-row {
+        font-size: 12px;
+      }
+      .timeline-slider {
+        width: 100%;
+        accent-color: #38bdf8;
+      }
     </style>
   </head>
   <body>
-    <div id="map"></div>
-    <div class="map-badge">National radar</div>
+    <div class="map-shell">
+      <div style="position: relative; min-height: 0;">
+        <div id="map"></div>
+        <div class="map-badge">National radar</div>
+      </div>
+      <div class="timeline-shell">
+        <div class="timeline-label-row">
+          <span>Past radar</span>
+          <span>Current</span>
+          <span>Future forecast</span>
+        </div>
+        <input id="timeline" class="timeline-slider" type="range" min="0" max="${Math.max(
+          0,
+          radarFrameUrls.length - 1
+        )}" step="1" value="${currentFrameIndex}" />
+        <div class="timeline-meta-row">
+          <span id="timelinePosition">Current</span>
+          <span id="timelineFrameCount">${radarFrameUrls.length} frames</span>
+        </div>
+      </div>
+    </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script>
       const frames = ${serializedFrames};
@@ -1070,25 +1163,57 @@ function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[]) {
       );
       map.fitBounds(bounds, { padding: [0, 0] });
 
+      const timeline = document.getElementById("timeline");
+      const timelinePosition = document.getElementById("timelinePosition");
+
       if (frames.length > 0) {
-        const overlays = frames.map((frame) =>
-          L.tileLayer(frame, {
+        const overlays = frames.map((frame) => {
+          const overlay = L.tileLayer(frame, {
             tileSize: 256,
-            opacity: 0.58,
+            opacity: 0,
             updateWhenIdle: true,
             crossOrigin: true
-          })
-        );
+          });
+          overlay.addTo(map);
+          return overlay;
+        });
 
-        let activeIndex = overlays.length - 1;
-        overlays[activeIndex].addTo(map);
+        let activeIndex = ${currentFrameIndex};
 
-        if (overlays.length > 1) {
-          window.setInterval(() => {
-            map.removeLayer(overlays[activeIndex]);
-            activeIndex = (activeIndex + 1) % overlays.length;
-            overlays[activeIndex].addTo(map);
-          }, 900);
+        const setActiveFrame = (nextIndex) => {
+          activeIndex = Math.max(0, Math.min(overlays.length - 1, Number(nextIndex) || 0));
+
+          overlays.forEach((overlay, index) => {
+            overlay.setOpacity(index === activeIndex ? 0.6 : 0);
+          });
+
+          if (timeline) {
+            timeline.value = String(activeIndex);
+          }
+
+          if (timelinePosition) {
+            if (activeIndex < ${Math.max(0, pastFrameCount - 1)}) {
+              timelinePosition.textContent = "Past radar";
+            } else if (activeIndex === ${Math.max(0, pastFrameCount - 1)}) {
+              timelinePosition.textContent = "Current";
+            } else {
+              timelinePosition.textContent = "Future forecast";
+            }
+          }
+        };
+
+        overlays.forEach((overlay) => {
+          try {
+            overlay.once("load", () => {});
+          } catch (error) {}
+        });
+
+        setActiveFrame(activeIndex);
+
+        if (timeline) {
+          timeline.addEventListener("input", (event) => {
+            setActiveFrame(event.target.value);
+          });
         }
       }
     </script>
@@ -1601,6 +1726,11 @@ export default function Home() {
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const [weatherNewsArticles, setWeatherNewsArticles] = useState<Article[]>([]);
   const [isWeatherNewsLoading, setIsWeatherNewsLoading] = useState(false);
+  const [weatherSearchDraft, setWeatherSearchDraft] = useState("");
+  const [selectedWeatherLocation, setSelectedWeatherLocation] = useState("");
+  const [weatherPageCard, setWeatherPageCard] = useState<WeatherCardData | null>(null);
+  const [weatherForecastDays, setWeatherForecastDays] = useState<WeatherForecastDay[]>([]);
+  const [isWeatherPageLoading, setIsWeatherPageLoading] = useState(false);
   const [nationalWeatherMapEmbedHtml, setNationalWeatherMapEmbedHtml] = useState<string | null>(null);
   const [isNationalWeatherMapLoading, setIsNationalWeatherMapLoading] = useState(false);
   const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
@@ -1641,6 +1771,7 @@ export default function Home() {
   }, []);
 
   const favoriteTeamsStorageKey = "favoriteSportsTeams";
+  const weatherLocationStorageKey = "lastWeatherLocation";
 
   useEffect(() => {
     console.log(
@@ -2606,10 +2737,15 @@ export default function Home() {
 
         const payload = (await response.json()) as RainViewerWeatherMapsResponse;
         const host = payload.host?.trim() ?? "";
-        const framePaths = (payload.radar?.past ?? [])
+        const pastFramePaths = (payload.radar?.past ?? [])
           .map((frame) => frame.path?.trim() ?? "")
           .filter(Boolean)
           .slice(-6);
+        const futureFramePaths = (payload.radar?.nowcast ?? [])
+          .map((frame) => frame.path?.trim() ?? "")
+          .filter(Boolean)
+          .slice(0, 3);
+        const framePaths = [...pastFramePaths, ...futureFramePaths];
 
         if (!host || framePaths.length === 0) {
           throw new Error("RainViewer payload missing host or frame paths");
@@ -2618,7 +2754,7 @@ export default function Home() {
         const radarFrameUrls = framePaths.map(
           (framePath) => `${host}${framePath}/256/{z}/{x}/{y}/2/1_1.png`
         );
-        const embedHtml = buildNationalWeatherMapEmbedHtml(radarFrameUrls);
+        const embedHtml = buildNationalWeatherMapEmbedHtml(radarFrameUrls, pastFramePaths.length);
 
         if (!cancelled) {
           setNationalWeatherMapEmbedHtml(embedHtml);
@@ -2642,6 +2778,153 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const fallbackLocation =
+      localStorage.getItem(weatherLocationStorageKey)?.trim() ||
+      selectedLocalCity ||
+      (savedLocalCity && savedLocalState ? `${savedLocalCity}, ${savedLocalState}` : "") ||
+      localLocationLabel ||
+      DEFAULT_LOCAL_CITY;
+
+    setSelectedWeatherLocation(fallbackLocation);
+    setWeatherSearchDraft(fallbackLocation);
+  }, [localLocationLabel, savedLocalCity, savedLocalState, selectedLocalCity, weatherLocationStorageKey]);
+
+  useEffect(() => {
+    if (!selectedWeatherLocation.trim()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadWeatherLocationData() {
+      setIsWeatherPageLoading(true);
+
+      try {
+        const normalizedLocation = selectedWeatherLocation.trim();
+        const supportedCityCoords = LOCAL_CITY_COORDINATES[normalizedLocation];
+
+        let latitude = supportedCityCoords?.latitude ?? null;
+        let longitude = supportedCityCoords?.longitude ?? null;
+        let resolvedLabel = normalizedLocation;
+
+        if (latitude === null || longitude === null) {
+          const geocodeResponse = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+              normalizedLocation
+            )}&count=1&language=en&format=json`
+          );
+
+          if (!geocodeResponse.ok) {
+            throw new Error(`Weather geocode request failed (${geocodeResponse.status})`);
+          }
+
+          const geocodePayload = (await geocodeResponse.json()) as {
+            results?: Array<{
+              name?: string;
+              admin1?: string;
+              country_code?: string;
+              latitude?: number;
+              longitude?: number;
+            }>;
+          };
+
+          const firstResult = geocodePayload.results?.[0];
+
+          if (
+            typeof firstResult?.latitude !== "number" ||
+            typeof firstResult?.longitude !== "number"
+          ) {
+            throw new Error("No weather geocoding result found");
+          }
+
+          latitude = firstResult.latitude;
+          longitude = firstResult.longitude;
+          resolvedLabel = [firstResult.name, firstResult.admin1, firstResult.country_code]
+            .filter(Boolean)
+            .join(", ");
+        }
+
+        const forecastResponse = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=10`,
+          {
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (!forecastResponse.ok) {
+          throw new Error(`Weather forecast request failed (${forecastResponse.status})`);
+        }
+
+        const forecastPayload = (await forecastResponse.json()) as {
+          current?: {
+            temperature_2m?: number;
+            weather_code?: number;
+            wind_speed_10m?: number;
+            relative_humidity_2m?: number;
+          };
+          daily?: {
+            time?: string[];
+            weather_code?: number[];
+            temperature_2m_max?: number[];
+            temperature_2m_min?: number[];
+          };
+        };
+
+        if (cancelled || typeof forecastPayload.current?.temperature_2m !== "number") {
+          return;
+        }
+
+        const nextForecastDays = (forecastPayload.daily?.time ?? []).slice(0, 10).map((date, index) => ({
+          label: formatForecastDayLabel(date, index),
+          dateLabel: formatForecastDateLabel(date),
+          weatherLabel: getWeatherLabel(forecastPayload.daily?.weather_code?.[index]),
+          highTemp:
+            typeof forecastPayload.daily?.temperature_2m_max?.[index] === "number"
+              ? forecastPayload.daily?.temperature_2m_max?.[index] ?? null
+              : null,
+          lowTemp:
+            typeof forecastPayload.daily?.temperature_2m_min?.[index] === "number"
+              ? forecastPayload.daily?.temperature_2m_min?.[index] ?? null
+              : null,
+        }));
+
+        setWeatherPageCard({
+          temperature: forecastPayload.current.temperature_2m,
+          weatherLabel: getWeatherLabel(forecastPayload.current.weather_code),
+          windMph: forecastPayload.current.wind_speed_10m ?? null,
+          humidity: forecastPayload.current.relative_humidity_2m ?? null,
+          highTemp: nextForecastDays[0]?.highTemp ?? null,
+          lowTemp: nextForecastDays[0]?.lowTemp ?? null,
+          cityLabel: resolvedLabel,
+        });
+        setWeatherForecastDays(nextForecastDays);
+        setSelectedWeatherLocation(resolvedLabel);
+        setWeatherSearchDraft(resolvedLabel);
+        localStorage.setItem(weatherLocationStorageKey, resolvedLabel);
+      } catch (error) {
+        console.error("WEATHER PAGE LOAD ERROR", error);
+
+        if (!cancelled) {
+          setWeatherPageCard(null);
+          setWeatherForecastDays([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsWeatherPageLoading(false);
+        }
+      }
+    }
+
+    void loadWeatherLocationData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedWeatherLocation, weatherLocationStorageKey]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -3198,6 +3481,16 @@ export default function Home() {
       }
     }
   }, [savedLocalCity, savedLocalState, sortMode, userEmail, userId]);
+
+  const handleUpdateWeatherLocation = useCallback(() => {
+    const nextLocation = cleanDisplayText(weatherSearchDraft).trim();
+
+    if (!nextLocation) {
+      return;
+    }
+
+    setSelectedWeatherLocation(nextLocation);
+  }, [weatherSearchDraft]);
 
   useEffect(() => {
     if (replyTarget) {
@@ -8203,6 +8496,111 @@ export default function Home() {
               <strong className="profile-section-title home-section-title">Weather</strong>
               <span className="home-section-date">{todayLabel}</span>
             </div>
+          </div>
+
+          <div className="section-card stack local-feed-shell local-search-card">
+            <div className="local-feed-top-row">
+              <span className="local-feed-selected-label">
+                {(weatherPageCard?.cityLabel ?? selectedWeatherLocation) || "Weather search"}
+              </span>
+            </div>
+            <div className="local-feed-controls">
+              <div className="local-feed-input-shell">
+                <input
+                  className="search-input local-feed-input"
+                  type="text"
+                  placeholder="Search city or zip"
+                  value={weatherSearchDraft}
+                  onChange={(event) => setWeatherSearchDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleUpdateWeatherLocation();
+                    }
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="button button-secondary local-feed-button"
+                onClick={handleUpdateWeatherLocation}
+              >
+                Update
+              </button>
+            </div>
+            <div className="home-weather-card">
+              <div className="stack" style={{ gap: "4px" }}>
+                <span className="home-weather-city">
+                  {(weatherPageCard?.cityLabel ?? selectedWeatherLocation) || "Weather"}
+                </span>
+                <div className="home-weather-temp-row">
+                  <span className="home-weather-icon-shell">
+                    {renderWeatherConditionIcon(weatherPageCard?.weatherLabel)}
+                  </span>
+                  <strong className="home-weather-temp">
+                    {weatherPageCard ? `${Math.round(weatherPageCard.temperature)}°` : "—"}
+                  </strong>
+                </div>
+                <span className="muted">
+                  {weatherPageCard
+                    ? weatherPageCard.weatherLabel
+                    : isWeatherPageLoading
+                    ? "Loading current conditions..."
+                    : "Forecast unavailable"}
+                </span>
+              </div>
+              <div className="stack home-weather-meta" style={{ gap: "6px" }}>
+                <span className="muted">
+                  {weatherPageCard &&
+                  weatherPageCard.highTemp !== null &&
+                  weatherPageCard.highTemp !== undefined &&
+                  weatherPageCard.lowTemp !== null &&
+                  weatherPageCard.lowTemp !== undefined
+                    ? `H ${Math.round(weatherPageCard.highTemp ?? 0)}° / L ${Math.round(
+                        weatherPageCard.lowTemp ?? 0
+                      )}°`
+                    : "Daily outlook"}
+                </span>
+                <span className="muted">
+                  {weatherPageCard?.windMph ? `Wind ${Math.round(weatherPageCard.windMph)} mph` : "Wind unavailable"}
+                </span>
+                <span className="muted">
+                  {weatherPageCard?.humidity !== null && weatherPageCard?.humidity !== undefined
+                    ? `Humidity ${Math.round(weatherPageCard.humidity)}%`
+                    : "Humidity unavailable"}
+                </span>
+              </div>
+            </div>
+
+            {weatherForecastDays.length > 0 ? (
+              <div className="quick-watch-row">
+                <div className="home-section-header">
+                  <div className="stack" style={{ gap: "4px" }}>
+                    <strong className="profile-section-title home-section-title">10-Day Forecast</strong>
+                  </div>
+                </div>
+                <div className="quick-watch-scroll" role="list" aria-label="10-day weather forecast">
+                  {weatherForecastDays.map((day) => (
+                    <div key={`forecast-${day.label}-${day.dateLabel}`} className="quick-watch-item" role="listitem">
+                      <article className="section-card weather-forecast-card">
+                        <div className="stack" style={{ gap: "4px", alignItems: "center", textAlign: "center" }}>
+                          <strong>{day.label}</strong>
+                          <span className="muted">{day.dateLabel}</span>
+                          <span className="home-weather-icon-shell weather-forecast-icon">
+                            {renderWeatherConditionIcon(day.weatherLabel)}
+                          </span>
+                          <strong>{day.highTemp !== null ? `${Math.round(day.highTemp)}°` : "—"}</strong>
+                          <span className="muted">
+                            {day.lowTemp !== null ? `${Math.round(day.lowTemp)}° low` : "Low unavailable"}
+                          </span>
+                          <span className="muted weather-forecast-label">{day.weatherLabel}</span>
+                        </div>
+                      </article>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {weatherTabArticles.length === 0 ? (
