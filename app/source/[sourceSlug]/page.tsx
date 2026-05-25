@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import SourceBadge from "../../components/source-badge";
 import { apiFetch } from "../../../lib/api-base";
+import { getBestArticleImage } from "../../../lib/article-images";
 import { getCategoryLabel } from "../../../lib/categories";
 import { cleanDisplayText } from "../../../lib/display-text";
 import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
@@ -21,8 +22,16 @@ type SourceArticle = {
   source: string;
   category: string;
   time: string;
+  image?: string | null;
+  imageUrl?: string | null;
+  urlToImage?: string | null;
+  mediaContent?: string | null;
+  enclosureUrl?: string | null;
+  thumbnail?: string | null;
   description?: string | null;
+  url?: string | null;
   publishedAt?: string | null;
+  content?: string | null;
 };
 
 type SourceRatingRow = {
@@ -44,6 +53,8 @@ type UserState = {
   id: string;
   email: string | null;
 };
+
+const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 
 function normalizeSourceNewsPayload(payload: SourceArticle[] | SourceNewsResponse) {
   if (Array.isArray(payload)) {
@@ -132,6 +143,44 @@ function dedupeSourceArticles(articles: SourceArticle[]) {
   });
 
   return Array.from(bestByKey.values());
+}
+
+function persistSourceArticleMetadata(article: SourceArticle) {
+  if (typeof window === "undefined" || typeof article.id !== "number" || article.id <= 0) {
+    return;
+  }
+
+  try {
+    const cardImage = getBestArticleImage(article).src;
+    const existingRaw = window.localStorage.getItem(ARTICLE_METADATA_STORAGE_KEY);
+    const existingCache = existingRaw
+      ? (JSON.parse(existingRaw) as Record<string, Record<string, unknown>>)
+      : {};
+
+    existingCache[String(article.id)] = {
+      id: article.id,
+      title: article.title,
+      source: article.source,
+      category: article.category,
+      time: article.time,
+      cardImage: cardImage ?? null,
+      image: article.image ?? null,
+      imageUrl: article.imageUrl ?? null,
+      urlToImage: article.urlToImage ?? null,
+      mediaContent: article.mediaContent ?? null,
+      enclosureUrl: article.enclosureUrl ?? null,
+      thumbnail: article.thumbnail ?? null,
+      description: article.description ?? null,
+      url: article.url ?? null,
+      publishedAt: article.publishedAt ?? null,
+      content: article.content ?? null,
+      storedAt: Date.now(),
+    };
+
+    window.localStorage.setItem(ARTICLE_METADATA_STORAGE_KEY, JSON.stringify(existingCache));
+  } catch (error) {
+    console.error("SOURCE ARTICLE METADATA CACHE WRITE FAILED", error);
+  }
 }
 
 export default function SourcePage({
@@ -506,6 +555,9 @@ export default function SourcePage({
               key={article.id}
               href={`/article/${article.id}/`}
               className="section-card search-result-card"
+              onClick={() => {
+                persistSourceArticleMetadata(article);
+              }}
             >
               <div className="search-result-source-row">
                 <div className="trending-source-brand">

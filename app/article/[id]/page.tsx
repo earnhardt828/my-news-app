@@ -10,6 +10,10 @@ import SourceBadge from "../../components/source-badge";
 import SourceHeaderMark from "../../components/source-header-mark";
 import { apiFetch } from "../../../lib/api-base";
 import {
+  buildStableArticleKey,
+  isMissingCommentKeyColumnError,
+} from "../../../lib/article-identity";
+import {
   getBestArticleImage,
   looksLikeLowQualityImageUrl,
 } from "../../../lib/article-images";
@@ -68,6 +72,7 @@ type CommentReply = {
 type DbComment = {
   id: number;
   article_id: number | string | null;
+  article_key?: string | null;
   article_title?: string | null;
   article_source?: string | null;
   article_image?: string | null;
@@ -414,6 +419,10 @@ function isMissingCommentMetadataColumnError(message: string | null | undefined)
   }
 
   return /article_title|article_source|article_image|article_url/i.test(message);
+}
+
+function getStableArticleKey(article: Pick<ArticleRecord, "id" | "title" | "source" | "url" | "publishedAt">) {
+  return buildStableArticleKey(article);
 }
 
 function normalizeNewsPayload(payload: ArticleRecord[] | PaginatedNewsResponse) {
@@ -961,6 +970,10 @@ export default function ArticleDetailPage() {
       targetArticle = targetArticle ?? newsData.find((item) => item.id === articleId) ?? null;
       const clientStoredArticle = readStoredArticleMetadata(articleId);
       targetArticle = mergeArticleImageMetadata(targetArticle, clientStoredArticle);
+      const resolvedArticleKey =
+        targetArticle || clientStoredArticle
+          ? getStableArticleKey((targetArticle ?? clientStoredArticle) as ArticleRecord)
+          : `id:${articleId}`;
       console.log("COMPARE TOTAL CANDIDATES", newsData.length);
       console.log("ARTICLE LIVE MATCH", targetArticle);
       console.log("ARTICLE CLIENT CACHE MATCH", clientStoredArticle);
@@ -1006,12 +1019,24 @@ export default function ArticleDetailPage() {
       let commentsRes: {
         data: DbComment[] | null;
         error: { message?: string } | null;
-      } = await supabase
+      };
+
+      const commentSelectFields =
+        "id, article_id, article_key, article_title, article_source, article_image, article_url, user_id, username, text, created_at";
+
+      commentsRes = await supabase
         .from("comments")
-        .select(
-          "id, article_id, article_title, article_source, article_image, article_url, user_id, username, text, created_at"
-        )
-        .in("article_id", articleIdCandidates);
+        .select(commentSelectFields)
+        .eq("article_key", resolvedArticleKey);
+
+      if (commentsRes.error && isMissingCommentKeyColumnError(commentsRes.error.message)) {
+        commentsRes = await supabase
+          .from("comments")
+          .select(
+            "id, article_id, article_title, article_source, article_image, article_url, user_id, username, text, created_at"
+          )
+          .in("article_id", articleIdCandidates);
+      }
 
       if (
         commentsRes.error &&
@@ -1194,8 +1219,10 @@ export default function ArticleDetailPage() {
               const normalizedCommentArticleId = normalizeArticleId(comment.article_id);
 
               return (
-                normalizedCommentArticleId !== null &&
-                articleIdCandidates.includes(normalizedCommentArticleId) &&
+                (comment.article_key?.trim()
+                  ? comment.article_key === resolvedArticleKey
+                  : normalizedCommentArticleId !== null &&
+                    articleIdCandidates.includes(normalizedCommentArticleId)) &&
                 (!comment.user_id || !blockedIds.has(comment.user_id))
               );
             }
@@ -1570,6 +1597,9 @@ export default function ArticleDetailPage() {
       : null;
     const commentInsertPayload = {
       article_id: articleId,
+      article_key: currentCommentArticle
+        ? getStableArticleKey(currentCommentArticle)
+        : `id:${articleId}`,
       article_title: cleanDisplayText(currentCommentArticle?.title ?? null) || null,
       article_source: currentCommentArticle?.source ?? null,
       article_image: currentCommentArticleImage,
@@ -1589,7 +1619,8 @@ export default function ArticleDetailPage() {
 
     if (
       insertResponse.error &&
-      isMissingCommentMetadataColumnError(insertResponse.error.message)
+      (isMissingCommentMetadataColumnError(insertResponse.error.message) ||
+        isMissingCommentKeyColumnError(insertResponse.error.message))
     ) {
       console.error(
         "Article comment insert failed with article metadata payload, retrying without optional columns:",

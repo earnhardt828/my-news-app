@@ -7,13 +7,17 @@ import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createBlockedUser,
   listBlockedUsers,
   listMutuallyHiddenUserIds,
 } from "../lib/blocked-users";
 import { apiFetch, buildApiUrl } from "../lib/api-base";
+import {
+  buildStableArticleKey,
+  isMissingCommentKeyColumnError,
+} from "../lib/article-identity";
 import {
   getBestArticleImage,
   isLikelyHighQualityArticleImage,
@@ -123,6 +127,20 @@ type SportsSectionConfig = {
   videoPattern: RegExp;
 };
 
+const SWIPEABLE_SORT_MODES = [
+  "trending",
+  "local",
+  "sports",
+  "celebrity",
+  "weather",
+  "technology",
+  "travel",
+  "food",
+  "business",
+] as const;
+
+type SwipeableSortMode = (typeof SWIPEABLE_SORT_MODES)[number];
+
 type Comment = {
   id: number;
   text: string;
@@ -180,6 +198,7 @@ type LikeUser = {
 type DbComment = {
   id: number;
   article_id: number;
+  article_key?: string | null;
   text: string;
   username: string | null;
   user_id: string | null;
@@ -379,6 +398,10 @@ function persistArticleMetadata(article: Article) {
   } catch (error) {
     console.error("ARTICLE METADATA CACHE WRITE FAILED", error);
   }
+}
+
+function getStableArticleKey(article: Pick<Article, "id" | "title" | "source" | "url" | "publishedAt">) {
+  return buildStableArticleKey(article);
 }
 
 function isSportsFeaturedCandidate(article: Pick<Article, "title" | "source" | "category">) {
@@ -1361,6 +1384,9 @@ export default function Home() {
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const teamPickerPagesRef = useRef<HTMLDivElement | null>(null);
+  const topTabButtonRefs = useRef<Partial<Record<SwipeableSortMode, HTMLButtonElement | null>>>({});
+  const pageSwipeStartXRef = useRef<number | null>(null);
+  const pageSwipeStartYRef = useRef<number | null>(null);
   const teamPickerPanelRefs = useRef<Record<FavoriteLeagueKey, HTMLElement | null>>({
     MLB: null,
     NFL: null,
@@ -1867,7 +1893,7 @@ export default function Home() {
         supabase.from("likes").select("id, article_id, user_id"),
         supabase
           .from("comments")
-          .select("id, article_id, text, username, user_id, created_at"),
+          .select("id, article_id, article_key, text, username, user_id, created_at"),
         supabase
           .from("comment_reactions")
           .select("id, comment_id, user_id, reaction_type"),
@@ -1910,7 +1936,19 @@ export default function Home() {
       };
 
       const likes = (readSettledData("likes", likesResult) ?? []) as DbLike[];
-      const comments = (readSettledData("comments", commentsResult) ?? []) as DbComment[];
+      let comments = (readSettledData("comments", commentsResult) ?? []) as DbComment[];
+      const commentsError =
+        commentsResult.status === "fulfilled" ? commentsResult.value.error : null;
+      if (
+        commentsResult.status === "fulfilled" &&
+        commentsError &&
+        isMissingCommentKeyColumnError(commentsError.message)
+      ) {
+        const legacyCommentsResult = await supabase
+          .from("comments")
+          .select("id, article_id, text, username, user_id, created_at");
+        comments = ((legacyCommentsResult.data ?? []) as DbComment[]) ?? [];
+      }
       const commentReactions = (readSettledData(
         "comment reactions",
         commentReactionsResult
@@ -1940,6 +1978,7 @@ export default function Home() {
       const usernameLookup = new Map(profiles.map((profile) => [profile.id, profile.username]));
 
       const mergedArticles: Article[] = newsData.map((item) => {
+        const stableArticleKey = getStableArticleKey(item);
         const articleLikes = likes.filter((like) => like.article_id === item.id).length;
         const articleLikeUsers = likes
           .filter((like) => like.article_id === item.id)
@@ -1950,7 +1989,7 @@ export default function Home() {
         const articleComments = comments
           .filter(
             (comment) =>
-              comment.article_id === item.id &&
+              ((comment.article_key?.trim() ? comment.article_key === stableArticleKey : comment.article_id === item.id)) &&
               (!comment.user_id || !blockedIds.has(comment.user_id))
           )
           .map((comment) => {
@@ -3350,9 +3389,11 @@ export default function Home() {
     }
 
     const targetArticle = articles.find((article) => article.id === articleId);
+    const stableArticleKey = targetArticle ? getStableArticleKey(targetArticle) : `id:${articleId}`;
 
     const fullCommentPayload = {
       article_id: articleId,
+      article_key: stableArticleKey,
       article_title: cleanDisplayText(targetArticle?.title ?? null) || null,
       article_source: targetArticle?.source ?? null,
       article_image: targetArticle ? getBestArticleImage(targetArticle).src : null,
@@ -3370,7 +3411,8 @@ export default function Home() {
 
     if (
       insertResponse.error &&
-      isMissingCommentMetadataColumnError(insertResponse.error.message)
+      (isMissingCommentMetadataColumnError(insertResponse.error.message) ||
+        isMissingCommentKeyColumnError(insertResponse.error.message))
     ) {
       console.error(
         "Comment insert failed with article metadata payload, retrying without optional columns:",
@@ -4142,6 +4184,68 @@ export default function Home() {
   useEffect(() => {
     if (sortMode === "trending") {
       topTabsRef.current?.scrollTo({ left: 0, behavior: "auto" });
+    }
+  }, [sortMode]);
+
+  useEffect(() => {
+    if (!SWIPEABLE_SORT_MODES.includes(sortMode as SwipeableSortMode)) {
+      return;
+    }
+
+    const activeButton = topTabButtonRefs.current[sortMode as SwipeableSortMode];
+    activeButton?.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+  }, [sortMode]);
+
+  const handlePageSwipeStart = useCallback((touchEvent: TouchEvent<HTMLElement>) => {
+    const interactiveTarget = touchEvent.target as HTMLElement | null;
+
+    if (
+      interactiveTarget?.closest(
+        ".quick-watch-scroll, .featured-stories-scroll, .source-rankings-list, .category-swipe-row, .polls-carousel, .sports-scores-scroll, .favorite-team-updates-row, .favorite-teams-pages"
+      )
+    ) {
+      pageSwipeStartXRef.current = null;
+      pageSwipeStartYRef.current = null;
+      return;
+    }
+
+    const touch = touchEvent.touches[0];
+    pageSwipeStartXRef.current = touch.clientX;
+    pageSwipeStartYRef.current = touch.clientY;
+  }, []);
+
+  const handlePageSwipeEnd = useCallback((touchEvent: TouchEvent<HTMLElement>) => {
+    const startX = pageSwipeStartXRef.current;
+    const startY = pageSwipeStartYRef.current;
+    pageSwipeStartXRef.current = null;
+    pageSwipeStartYRef.current = null;
+
+    if (
+      startX === null ||
+      startY === null ||
+      !SWIPEABLE_SORT_MODES.includes(sortMode as SwipeableSortMode)
+    ) {
+      return;
+    }
+
+    const touch = touchEvent.changedTouches[0];
+    const diffX = touch.clientX - startX;
+    const diffY = touch.clientY - startY;
+
+    if (Math.abs(diffX) < 60 || Math.abs(diffX) <= Math.abs(diffY)) {
+      return;
+    }
+
+    const currentIndex = SWIPEABLE_SORT_MODES.indexOf(sortMode as SwipeableSortMode);
+    const nextMode = SWIPEABLE_SORT_MODES[diffX < 0 ? currentIndex + 1 : currentIndex - 1];
+
+    if (nextMode) {
+      setSortMode(nextMode);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [sortMode]);
 
@@ -6208,6 +6312,9 @@ export default function Home() {
     <div ref={topTabsRef} className="trending-tabs-wrap home-sections-nav">
       <div className="toolbar toolbar-centered">
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.trending = node;
+          }}
           className={`toolbar-pill ${activeMode === "trending" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("trending")}
@@ -6215,6 +6322,9 @@ export default function Home() {
           My News
         </button>
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.local = node;
+          }}
           className={`toolbar-pill ${activeMode === "local" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("local")}
@@ -6222,6 +6332,9 @@ export default function Home() {
           Local
         </button>
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.sports = node;
+          }}
           className={`toolbar-pill ${activeMode === "sports" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("sports")}
@@ -6229,6 +6342,9 @@ export default function Home() {
           Sports
         </button>
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.celebrity = node;
+          }}
           className={`toolbar-pill ${activeMode === "celebrity" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("celebrity")}
@@ -6236,6 +6352,9 @@ export default function Home() {
           Celebrity
         </button>
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.weather = node;
+          }}
           className={`toolbar-pill ${activeMode === "weather" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("weather")}
@@ -6243,6 +6362,9 @@ export default function Home() {
           Weather
         </button>
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.technology = node;
+          }}
           className={`toolbar-pill ${activeMode === "technology" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("technology")}
@@ -6250,6 +6372,9 @@ export default function Home() {
           Technology
         </button>
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.travel = node;
+          }}
           className={`toolbar-pill ${activeMode === "travel" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("travel")}
@@ -6257,6 +6382,9 @@ export default function Home() {
           Travel
         </button>
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.food = node;
+          }}
           className={`toolbar-pill ${activeMode === "food" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("food")}
@@ -6264,6 +6392,9 @@ export default function Home() {
           Food
         </button>
         <button
+          ref={(node) => {
+            topTabButtonRefs.current.business = node;
+          }}
           className={`toolbar-pill ${activeMode === "business" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("business")}
@@ -6293,7 +6424,11 @@ export default function Home() {
       "/Users/erniewilson/my-news-app/app/page.tsx"
     );
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation(
           sortMode === "local"
             ? "local"
@@ -6362,7 +6497,11 @@ export default function Home() {
 
   if (sortMode === "trending") {
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation("trending")}
 
         {renderQuickWatchRow(true)}
@@ -6959,7 +7098,11 @@ export default function Home() {
 
   if (sortMode === "sports") {
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation("sports")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7206,7 +7349,11 @@ export default function Home() {
 
   if (sortMode === "celebrity") {
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation("celebrity")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7238,7 +7385,11 @@ export default function Home() {
 
   if (sortMode === "weather") {
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation("weather")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7270,7 +7421,11 @@ export default function Home() {
 
   if (sortMode === "technology") {
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation("technology")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7302,7 +7457,11 @@ export default function Home() {
 
   if (sortMode === "travel") {
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation("travel")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7334,7 +7493,11 @@ export default function Home() {
 
   if (sortMode === "food") {
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation("food")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7366,7 +7529,11 @@ export default function Home() {
 
   if (sortMode === "business") {
     return (
-      <section className="page-shell home-sections-shell">
+      <section
+        className="page-shell home-sections-shell"
+        onTouchStart={handlePageSwipeStart}
+        onTouchEnd={handlePageSwipeEnd}
+      >
         {renderHomeTopNavigation("business")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
