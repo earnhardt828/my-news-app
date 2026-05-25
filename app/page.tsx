@@ -298,6 +298,11 @@ type RadarFramePoint = {
   isFuture: boolean;
 };
 
+type NationalWeatherMapEmbedOptions = {
+  showSelectedTimeLabel?: boolean;
+  interactive?: boolean;
+};
+
 type FeedArticlePayload = Omit<
   Article,
   "likes" | "likeUsers" | "likedByCurrentUser" | "comments" | "saved"
@@ -702,8 +707,16 @@ function getWeatherLabel(weatherCode: number | null | undefined) {
   return "Forecast";
 }
 
+function parseForecastCalendarDate(dateString: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return new Date(`${dateString}T12:00:00`);
+  }
+
+  return new Date(dateString);
+}
+
 function formatForecastDayLabel(dateString: string, index: number) {
-  const date = new Date(dateString);
+  const date = parseForecastCalendarDate(dateString);
 
   if (Number.isNaN(date.getTime())) {
     return index === 0 ? "Today" : `Day ${index + 1}`;
@@ -716,7 +729,7 @@ function formatForecastDayLabel(dateString: string, index: number) {
 }
 
 function formatForecastDateLabel(dateString: string) {
-  const date = new Date(dateString);
+  const date = parseForecastCalendarDate(dateString);
 
   if (Number.isNaN(date.getTime())) {
     return "";
@@ -1064,12 +1077,17 @@ function buildTopQuickWatchRow(videos: VideoItem[], limit: number) {
   return selected;
 }
 
-function buildNationalWeatherMapEmbedHtml(framePoints: RadarFramePoint[], pastFrameCount: number) {
+function buildNationalWeatherMapEmbedHtml(
+  framePoints: RadarFramePoint[],
+  pastFrameCount: number,
+  options?: NationalWeatherMapEmbedOptions
+) {
+  const showSelectedTimeLabel = options?.showSelectedTimeLabel ?? false;
+  const interactive = options?.interactive ?? false;
   const serializedFrames = JSON.stringify(framePoints);
   const currentFrameIndex = Math.max(0, pastFrameCount - 1);
   const leftBoundaryLabel = framePoints[0]?.label ?? "";
   const rightBoundaryLabel = framePoints[framePoints.length - 1]?.label ?? "";
-  const hasFutureFrames = framePoints.some((frame) => frame.isFuture);
 
   return `<!doctype html>
 <html lang="en">
@@ -1132,6 +1150,9 @@ function buildNationalWeatherMapEmbedHtml(framePoints: RadarFramePoint[], pastFr
       .timeline-meta-row {
         font-size: 12px;
       }
+      .timeline-meta-row[hidden] {
+        display: none;
+      }
       .timeline-slider {
         width: 100%;
         accent-color: #38bdf8;
@@ -1148,15 +1169,14 @@ function buildNationalWeatherMapEmbedHtml(framePoints: RadarFramePoint[], pastFr
         <div class="timeline-label-row">
           <span>${leftBoundaryLabel}</span>
           <span>Now</span>
-          <span>${hasFutureFrames ? rightBoundaryLabel : "Current"}</span>
+          <span>${rightBoundaryLabel}</span>
         </div>
         <input id="timeline" class="timeline-slider" type="range" min="0" max="${Math.max(
           0,
           framePoints.length - 1
         )}" step="1" value="${currentFrameIndex}" />
-        <div class="timeline-meta-row">
+        <div class="timeline-meta-row" ${showSelectedTimeLabel ? "" : "hidden"}>
           <span id="timelinePosition">Current</span>
-          <span id="timelineFrameCount">${framePoints.length} frames</span>
         </div>
       </div>
     </div>
@@ -1166,10 +1186,10 @@ function buildNationalWeatherMapEmbedHtml(framePoints: RadarFramePoint[], pastFr
       const map = L.map("map", {
         zoomControl: false,
         attributionControl: false,
-        dragging: false,
-        scrollWheelZoom: false,
-        doubleClickZoom: false,
-        boxZoom: false,
+        dragging: ${interactive ? "true" : "false"},
+        scrollWheelZoom: ${interactive ? "true" : "false"},
+        doubleClickZoom: ${interactive ? "true" : "false"},
+        boxZoom: ${interactive ? "true" : "false"},
         keyboard: false,
         tap: false
       }).setView([39.8283, -98.5795], 4);
@@ -1218,9 +1238,9 @@ function buildNationalWeatherMapEmbedHtml(framePoints: RadarFramePoint[], pastFr
             if (activeIndex === ${Math.max(0, pastFrameCount - 1)}) {
               timelinePosition.textContent = "Current";
             } else if (frame && frame.isFuture) {
-              timelinePosition.textContent = "Forecast " + frame.label;
+              timelinePosition.textContent = frame.label;
             } else {
-              timelinePosition.textContent = frame ? frame.label : "Past radar";
+              timelinePosition.textContent = frame ? frame.label : "";
             }
           }
         };
@@ -1753,9 +1773,14 @@ export default function Home() {
   const [selectedWeatherLocation, setSelectedWeatherLocation] = useState("");
   const [weatherPageCard, setWeatherPageCard] = useState<WeatherCardData | null>(null);
   const [weatherForecastDays, setWeatherForecastDays] = useState<WeatherForecastDay[]>([]);
+  const [weatherForecastError, setWeatherForecastError] = useState<string | null>(null);
   const [isWeatherPageLoading, setIsWeatherPageLoading] = useState(false);
   const [nationalWeatherMapEmbedHtml, setNationalWeatherMapEmbedHtml] = useState<string | null>(null);
+  const [nationalWeatherMapFullscreenHtml, setNationalWeatherMapFullscreenHtml] = useState<string | null>(
+    null
+  );
   const [isNationalWeatherMapLoading, setIsNationalWeatherMapLoading] = useState(false);
+  const [isWeatherRadarOpen, setIsWeatherRadarOpen] = useState(false);
   const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
   const [isBreakingPreviewLoading, setIsBreakingPreviewLoading] = useState(false);
   const [sportsPreviewArticles, setSportsPreviewArticles] = useState<Article[]>([]);
@@ -2785,15 +2810,21 @@ export default function Home() {
           throw new Error("RainViewer payload missing host or frame paths");
         }
         const embedHtml = buildNationalWeatherMapEmbedHtml(framePoints, pastFrames.length);
+        const fullscreenEmbedHtml = buildNationalWeatherMapEmbedHtml(framePoints, pastFrames.length, {
+          showSelectedTimeLabel: true,
+          interactive: true,
+        });
 
         if (!cancelled) {
           setNationalWeatherMapEmbedHtml(embedHtml);
+          setNationalWeatherMapFullscreenHtml(fullscreenEmbedHtml);
         }
       } catch (error) {
         console.error("NATIONAL WEATHER MAP LOAD ERROR", error);
 
         if (!cancelled) {
           setNationalWeatherMapEmbedHtml(null);
+          setNationalWeatherMapFullscreenHtml(null);
         }
       } finally {
         if (!cancelled) {
@@ -2908,21 +2939,20 @@ export default function Home() {
           return;
         }
 
-        const nextForecastDays = (forecastPayload.daily?.time ?? []).slice(0, 10).map((date, index) => ({
+        const dailyTimes = forecastPayload.daily?.time ?? [];
+        const dailyCodes = forecastPayload.daily?.weather_code ?? [];
+        const dailyHighs = forecastPayload.daily?.temperature_2m_max ?? [];
+        const dailyLows = forecastPayload.daily?.temperature_2m_min ?? [];
+
+        const nextForecastDays = dailyTimes.slice(0, 10).map((date, index) => ({
           label: formatForecastDayLabel(date, index),
           dateLabel: formatForecastDateLabel(date),
-          weatherLabel: getWeatherLabel(forecastPayload.daily?.weather_code?.[index]),
-          highTemp:
-            typeof forecastPayload.daily?.temperature_2m_max?.[index] === "number"
-              ? forecastPayload.daily?.temperature_2m_max?.[index] ?? null
-              : null,
-          lowTemp:
-            typeof forecastPayload.daily?.temperature_2m_min?.[index] === "number"
-              ? forecastPayload.daily?.temperature_2m_min?.[index] ?? null
-              : null,
+          weatherLabel: getWeatherLabel(dailyCodes[index]),
+          highTemp: typeof dailyHighs[index] === "number" ? dailyHighs[index] ?? null : null,
+          lowTemp: typeof dailyLows[index] === "number" ? dailyLows[index] ?? null : null,
         }));
 
-        setWeatherPageCard({
+        const nextWeatherPageCard = {
           temperature: forecastPayload.current.temperature_2m,
           weatherLabel: getWeatherLabel(forecastPayload.current.weather_code),
           windMph: forecastPayload.current.wind_speed_10m ?? null,
@@ -2930,8 +2960,19 @@ export default function Home() {
           highTemp: nextForecastDays[0]?.highTemp ?? null,
           lowTemp: nextForecastDays[0]?.lowTemp ?? null,
           cityLabel: resolvedLabel,
-        });
-        setWeatherForecastDays(nextForecastDays);
+        };
+
+        setWeatherPageCard(nextWeatherPageCard);
+        setWeatherForecastError(null);
+
+        if (nextForecastDays.length < 2) {
+          console.error("10-DAY FORECAST INCOMPLETE", nextForecastDays);
+          setWeatherForecastDays([]);
+          setWeatherForecastError("10-day forecast unavailable right now.");
+        } else {
+          setWeatherForecastDays(nextForecastDays);
+        }
+
         setSelectedWeatherLocation(resolvedLabel);
         setWeatherSearchDraft(resolvedLabel);
         localStorage.setItem(weatherLocationStorageKey, resolvedLabel);
@@ -2941,6 +2982,7 @@ export default function Home() {
         if (!cancelled) {
           setWeatherPageCard(null);
           setWeatherForecastDays([]);
+          setWeatherForecastError("10-day forecast unavailable right now.");
         }
       } finally {
         if (!cancelled) {
@@ -8609,9 +8651,13 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">10-Day Forecast</strong>
                   </div>
                 </div>
-                <div className="quick-watch-scroll" role="list" aria-label="10-day weather forecast">
+                <div className="weather-forecast-scroll" role="list" aria-label="10-day weather forecast">
                   {weatherForecastDays.map((day) => (
-                    <div key={`forecast-${day.label}-${day.dateLabel}`} className="quick-watch-item" role="listitem">
+                    <div
+                      key={`forecast-${day.label}-${day.dateLabel}`}
+                      className="weather-forecast-item"
+                      role="listitem"
+                    >
                       <article className="section-card weather-forecast-card">
                         <div className="stack" style={{ gap: "4px", alignItems: "center", textAlign: "center" }}>
                           <strong>{day.label}</strong>
@@ -8630,6 +8676,8 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+            ) : weatherForecastError && !isWeatherPageLoading ? (
+              <div className="status-message status-error">{weatherForecastError}</div>
             ) : null}
           </div>
 
@@ -8722,7 +8770,26 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">National Weather Map</strong>
                   </div>
                 </div>
-                <div className="section-card stack weather-map-placeholder-card">
+                <div
+                  className="section-card stack weather-map-placeholder-card weather-map-launch-surface"
+                  role={nationalWeatherMapEmbedHtml ? "button" : undefined}
+                  tabIndex={nationalWeatherMapEmbedHtml ? 0 : -1}
+                  onClick={() => {
+                    if (nationalWeatherMapFullscreenHtml) {
+                      setIsWeatherRadarOpen(true);
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (!nationalWeatherMapFullscreenHtml) {
+                      return;
+                    }
+
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setIsWeatherRadarOpen(true);
+                    }
+                  }}
+                >
                   {nationalWeatherMapEmbedHtml ? (
                     <>
                       <iframe
@@ -8737,12 +8804,14 @@ export default function Home() {
                         <span className="muted">
                           Dark basemap with live RainViewer radar overlay across the U.S.
                         </span>
+                        <span className="muted weather-map-card-hint">Tap to open fullscreen radar</span>
                       </div>
                       <a
                         href="https://radar.weather.gov/"
                         target="_blank"
                         rel="noreferrer"
                         className="button button-secondary"
+                        onClick={(event) => event.stopPropagation()}
                       >
                         Open NWS Radar
                       </a>
@@ -8765,6 +8834,7 @@ export default function Home() {
                         target="_blank"
                         rel="noreferrer"
                         className="button button-secondary"
+                        onClick={(event) => event.stopPropagation()}
                       >
                         Open NWS Radar
                       </a>
@@ -9494,6 +9564,39 @@ export default function Home() {
                 {isSavingCategories ? "Saving..." : "Save categories"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isWeatherRadarOpen && nationalWeatherMapFullscreenHtml ? (
+        <div
+          className="weather-radar-fullscreen-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="National weather radar"
+        >
+          <div className="weather-radar-fullscreen">
+            <div className="weather-radar-fullscreen-header">
+              <button
+                type="button"
+                className="header-icon-button"
+                onClick={() => setIsWeatherRadarOpen(false)}
+                aria-label="Close radar"
+              >
+                <span className="header-icon-glyph" aria-hidden="true">
+                  ✕
+                </span>
+              </button>
+              <strong className="profile-section-title home-section-title">National Weather Map</strong>
+              <div className="app-header-side-spacer" aria-hidden="true" />
+            </div>
+            <iframe
+              title="Fullscreen national U.S. weather radar map"
+              srcDoc={nationalWeatherMapFullscreenHtml}
+              className="weather-radar-fullscreen-frame"
+              loading="eager"
+              sandbox="allow-scripts allow-same-origin"
+            />
           </div>
         </div>
       ) : null}
