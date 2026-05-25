@@ -120,6 +120,10 @@ const TOP_QUICK_WATCH_PREFERRED_SOURCE_PATTERN =
   /\b(cnn|nbc news|cbs news|abc news|reuters|associated press|ap news|bbc news|pbs newshour|cnbc|bloomberg|usa today|the guardian|guardian)\b/i;
 const TOP_QUICK_WATCH_DEPRIORITIZED_SOURCE_PATTERN =
   /\b(al jazeera|al jazeera english|fox news)\b/i;
+const QUICK_WATCH_COMBINED_LIMITED_SOURCES = new Set(["al jazeera", "al jazeera english", "fox news"]);
+const WEATHER_SOURCE_RENAME_PATTERN = /\bweather news\b/i;
+const WEATHER_LIKE_ARTICLE_PATTERN =
+  /\b(weather|storm|tornado|hurricane|rain|snow|forecast|radar|climate|flood|wildfire|local weather|severe weather)\b/i;
 const FEED_META_ICON_PROPS = {
   viewBox: "0 0 24 24",
   width: 14,
@@ -943,6 +947,39 @@ function prioritizeTopQuickWatchVideos(videos: VideoItem[]) {
   });
 }
 
+function buildTopQuickWatchRow(videos: VideoItem[], limit: number) {
+  const selected: VideoItem[] = [];
+  const sourceCounts = new Map<string, number>();
+  let combinedLimitedCount = 0;
+
+  for (const video of prioritizeTopQuickWatchVideos(videos)) {
+    const normalizedSource = cleanDisplayText(video.creator).trim().toLowerCase() || "unknown";
+    const sourceCount = sourceCounts.get(normalizedSource) ?? 0;
+    const isCombinedLimitedSource = QUICK_WATCH_COMBINED_LIMITED_SOURCES.has(normalizedSource);
+
+    if (sourceCount >= 1) {
+      continue;
+    }
+
+    if (isCombinedLimitedSource && combinedLimitedCount >= 2) {
+      continue;
+    }
+
+    selected.push(video);
+    sourceCounts.set(normalizedSource, sourceCount + 1);
+
+    if (isCombinedLimitedSource) {
+      combinedLimitedCount += 1;
+    }
+
+    if (selected.length >= limit) {
+      break;
+    }
+  }
+
+  return selected;
+}
+
 function selectSourceBalancedArticles<T extends { source: string }>(articles: T[], limit: number) {
   const prioritizedArticles = [...articles].sort((leftArticle, rightArticle) => {
     const rightScore = getArticlePriorityScore(rightArticle as unknown as Article);
@@ -1311,6 +1348,21 @@ function getSafeSourceLabel(value: unknown) {
   return cleaned;
 }
 
+function getDisplaySourceLabel(
+  article: Pick<Article, "source" | "title" | "category" | "description" | "url">
+) {
+  const safeSource = getSafeSourceLabel(article.source);
+  const haystack = `${safeSource} ${article.title ?? ""} ${article.category ?? ""} ${
+    article.description ?? ""
+  } ${article.url ?? ""}`;
+
+  if (WEATHER_SOURCE_RENAME_PATTERN.test(safeSource) && WEATHER_LIKE_ARTICLE_PATTERN.test(haystack)) {
+    return "Local Weather";
+  }
+
+  return safeSource;
+}
+
 function getSafeCategoryLabel(value: unknown, article?: Pick<Article, "source" | "title">) {
   return getDisplayCategory(typeof value === "string" ? value : null, {
     source: article?.source ?? null,
@@ -1381,6 +1433,7 @@ export default function Home() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [sportsVideos, setSportsVideos] = useState<VideoItem[]>([]);
   const [celebrityVideos, setCelebrityVideos] = useState<VideoItem[]>([]);
+  const [weatherVideos, setWeatherVideos] = useState<VideoItem[]>([]);
   const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);

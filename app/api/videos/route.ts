@@ -31,6 +31,7 @@ type VideoFeedItem = {
 };
 
 type VideoFeedTab = "all" | "news" | "sports" | "celebrity";
+type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
 
 const SPORTS_POSITIVE_PATTERN =
   /(sports|espn|sportscenter|nfl|nba|mlb|nhl|mls|soccer|football|basketball|baseball|hockey|golf|tennis|nascar|formula 1|formula1|f1|ufc|mma|highlights?|touchdown|dunk|home run|goals?|save|replay|top plays|bleacher report|fox sports|cbs sports|nbc sports|sports illustrated|pga|masters|grand prix|race winner)/;
@@ -43,6 +44,10 @@ const CELEBRITY_POSITIVE_PATTERN =
 
 const CELEBRITY_REJECTED_PATTERN =
   /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|sportscenter|touchdown|dunk|home run|goal|nfl|nba|mlb|nhl|mls|market|stocks|finance|policy|senate|president|breaking news|world news|flood|earthquake|shooting|inflation|tariffs)/;
+const WEATHER_POSITIVE_PATTERN =
+  /(weather|storm|tornado|hurricane|rain|snow|flooding|wildfire|radar|forecast|climate|severe weather|the weather channel|fox weather|accuweather|noaa|national weather service|cnn weather|storm tracker|storm surge|heat wave|blizzard)/;
+const WEATHER_REJECTED_PATTERN =
+  /(politics|election|economy|stocks|market|crime|celebrity|red carpet|hollywood|sportscenter|touchdown|dunk|home run|goal|nfl|nba|mlb|nhl|mls|war|white house|congress|president|music awards)/;
 
 const BLOCKED_VIDEO_SOURCE_PATTERN = /\b(kanak news|kanak news odisha)\b/i;
 const BLOCKED_VIDEO_URL_PATTERN = /kanaknews\.com/i;
@@ -62,6 +67,8 @@ const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCBi2mrWuNuyYy4gbM6fU18Q", name: "ABC News" },
   { channelId: "UCoMdktPbSTixAyNGwb-UYkQ", name: "Sky News" },
   { channelId: "UCNye-wNBqNL5ZzHSJj3l8Bg", name: "Al Jazeera English" },
+  { channelId: "UCGTUbwceCMibvpbd2NaIP7A", name: "The Weather Channel" },
+  { channelId: "UCJRTDulllTmEvB3dJFxXP3Q", name: "Fox Weather" },
 ];
 
 const FALLBACK_VIDEOS: VideoFeedItem[] = [
@@ -458,6 +465,54 @@ function getCelebrityVideoScore(
   return score;
 }
 
+function isStrictWeatherVideo(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+  return WEATHER_POSITIVE_PATTERN.test(haystack) && !WEATHER_REJECTED_PATTERN.test(haystack);
+}
+
+function getWeatherVideoScore(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+  let score = 0;
+
+  if (!isStrictWeatherVideo(video)) {
+    return -1000;
+  }
+
+  if (
+    /(the weather channel|fox weather|accuweather|noaa|national weather service|cnn weather)/.test(
+      haystack
+    )
+  ) {
+    score += 180;
+  }
+
+  if (
+    /(severe weather|hurricane|tornado|storm|storm surge|flooding|wildfire|radar|forecast|blizzard|heat wave|storm tracker)/.test(
+      haystack
+    )
+  ) {
+    score += 130;
+  }
+
+  if (video.category === "Weather") {
+    score += 80;
+  }
+
+  if (video.orientation === "vertical") {
+    score += 48;
+  }
+
+  if (/(podcast|debate|reaction|recap only|full press conference)/.test(haystack)) {
+    score -= 120;
+  }
+
+  return score;
+}
+
 function isBlockedVideo(video: Pick<VideoFeedItem, "title" | "creator" | "watchUrl">) {
   const haystack = `${video.title} ${video.creator} ${video.watchUrl}`;
   return (
@@ -558,7 +613,7 @@ function filterAndSortVideos(
   options: {
     category: string;
     searchTerm: string;
-    tab: VideoFeedTab;
+    tab: WeatherCapableVideoFeedTab;
   }
 ) {
   const normalizedSearch = normalizeForSearch(options.searchTerm);
@@ -621,9 +676,12 @@ function filterAndSortVideos(
         ? categoryFiltered.filter(
             (video) =>
               getSportsVideoScore(video) < 120 &&
+              getWeatherVideoScore(video) < 120 &&
               (getNewsVideoScore(video) > 0 || video.category !== "Sports")
           )
-        : categoryFiltered;
+      : options.tab === "weather"
+        ? categoryFiltered.filter((video) => isStrictWeatherVideo(video))
+      : categoryFiltered;
 
   const deduped = Array.from(
     new Map(
@@ -645,6 +703,8 @@ function filterAndSortVideos(
         ? getSportsVideoScore(b) - getSportsVideoScore(a)
         : options.tab === "celebrity"
           ? getCelebrityVideoScore(b) - getCelebrityVideoScore(a)
+        : options.tab === "weather"
+          ? getWeatherVideoScore(b) - getWeatherVideoScore(a)
         : options.tab === "news"
           ? getNewsVideoScore(b) - getNewsVideoScore(a)
           : 0;
@@ -681,7 +741,7 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const searchTerm = requestUrl.searchParams.get("q")?.trim() ?? "";
   const category = requestUrl.searchParams.get("category")?.trim() ?? "Trending";
-  const tab = (requestUrl.searchParams.get("tab")?.trim().toLowerCase() ?? "all") as VideoFeedTab;
+  const tab = (requestUrl.searchParams.get("tab")?.trim().toLowerCase() ?? "all") as WeatherCapableVideoFeedTab;
 
   try {
     const results = await Promise.allSettled(
@@ -720,7 +780,10 @@ export async function GET(request: Request) {
     const videos = filterAndSortVideos(successfulEntries, {
       category,
       searchTerm,
-      tab: tab === "sports" || tab === "news" || tab === "celebrity" ? tab : "all",
+      tab:
+        tab === "sports" || tab === "news" || tab === "celebrity" || tab === "weather"
+          ? tab
+          : "all",
     });
 
     if (videos.length === 0) {
