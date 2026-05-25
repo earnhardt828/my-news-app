@@ -264,6 +264,16 @@ type DbCommentReply = {
   created_at: string | null;
 };
 
+type RainViewerWeatherMapsResponse = {
+  host?: string | null;
+  radar?: {
+    past?: Array<{
+      time?: number | null;
+      path?: string | null;
+    }>;
+  } | null;
+};
+
 type FeedArticlePayload = Omit<
   Article,
   "likes" | "likeUsers" | "likedByCurrentUser" | "comments" | "saved"
@@ -1477,6 +1487,8 @@ export default function Home() {
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const [weatherNewsArticles, setWeatherNewsArticles] = useState<Article[]>([]);
   const [isWeatherNewsLoading, setIsWeatherNewsLoading] = useState(false);
+  const [nationalWeatherMapUrl, setNationalWeatherMapUrl] = useState<string | null>(null);
+  const [isNationalWeatherMapLoading, setIsNationalWeatherMapLoading] = useState(false);
   const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
   const [isBreakingPreviewLoading, setIsBreakingPreviewLoading] = useState(false);
   const [sportsPreviewArticles, setSportsPreviewArticles] = useState<Article[]>([]);
@@ -2463,6 +2475,53 @@ export default function Home() {
     }
 
     void loadTrendingVideos();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNationalWeatherMap() {
+      setIsNationalWeatherMapLoading(true);
+
+      try {
+        const response = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+
+        if (!response.ok) {
+          throw new Error(`RainViewer request failed (${response.status})`);
+        }
+
+        const payload = (await response.json()) as RainViewerWeatherMapsResponse;
+        const host = payload.host?.trim() ?? "";
+        const latestFrame = payload.radar?.past?.at(-1);
+        const framePath = latestFrame?.path?.trim() ?? "";
+
+        if (!host || !framePath) {
+          throw new Error("RainViewer payload missing host or frame path");
+        }
+
+        const nationalMapUrl = `${host}${framePath}/512/3/39.8283/-98.5795/2/1_1.png`;
+
+        if (!cancelled) {
+          setNationalWeatherMapUrl(nationalMapUrl);
+        }
+      } catch (error) {
+        console.error("NATIONAL WEATHER MAP LOAD ERROR", error);
+
+        if (!cancelled) {
+          setNationalWeatherMapUrl(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsNationalWeatherMapLoading(false);
+        }
+      }
+    }
+
+    void loadNationalWeatherMap();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -8157,10 +8216,45 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="section-card stack weather-map-placeholder-card">
-                  <strong>Radar coming soon</strong>
-                  <span className="muted">
-                    A live national weather map and radar view will appear here when the map feed is connected.
-                  </span>
+                  {nationalWeatherMapUrl ? (
+                    <>
+                      <img
+                        src={nationalWeatherMapUrl}
+                        alt="National U.S. weather radar map"
+                        className="national-weather-map-image"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <div className="stack" style={{ gap: "4px" }}>
+                        <strong>Current U.S. radar</strong>
+                        <span className="muted">
+                          Live radar image powered by RainViewer.
+                        </span>
+                      </div>
+                    </>
+                  ) : isNationalWeatherMapLoading ? (
+                    <>
+                      <strong>Loading national radar...</strong>
+                      <span className="muted">
+                        Pulling the latest U.S. radar frame.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <strong>Radar coming soon</strong>
+                      <span className="muted">
+                        RainViewer is unavailable right now. Open the national radar map from the National Weather Service.
+                      </span>
+                      <a
+                        href="https://radar.weather.gov/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="button button-secondary"
+                      >
+                        Open NWS Radar
+                      </a>
+                    </>
+                  )}
                 </div>
               </section>
             </div>
