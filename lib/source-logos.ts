@@ -1,8 +1,10 @@
 export const sourceLogoMap: Record<string, string> = {
   CNN: "/source-logos/cnn.png",
+  BBC: "/source-logos/bbc.png",
   "BBC News": "/source-logos/bbc.png",
   CNBC: "/source-logos/cnbc.png",
   "Fox News": "/source-logos/fox-news.png",
+  AP: "/source-logos/ap-news.png",
   "Associated Press": "/source-logos/ap-news.png",
   "AP News": "/source-logos/ap-news.png",
   Reuters: "/source-logos/reuters.png",

@@ -1652,6 +1652,10 @@ input {
   text-align: center;
 }
 
+.article-card-visual-content-brand-fill {
+  padding: 6px;
+}
+
 .article-card-visual-brand {
   display: inline-flex;
   align-items: center;
@@ -1661,6 +1665,29 @@ input {
 .article-card-visual-brand .source-avatar {
   width: 42px;
   height: 42px;
+}
+
+.article-card-visual-brand-fill {
+  width: 100%;
+  height: 100%;
+}
+
+.source-avatar.article-card-source-fill-badge {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 96%, white);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--border) 76%, transparent),
+    0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.article-card-source-fill-badge .source-avatar-image {
+  object-fit: cover;
+}
+
+.article-card-source-fill-badge .source-avatar-fallback {
+  font-size: 1.45rem;
 }
 
 .article-card-visual-label,

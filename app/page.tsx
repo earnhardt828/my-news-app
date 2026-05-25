@@ -87,6 +87,20 @@ const BREAKING_NEWS_TRUSTED_SOURCES = [
   "Bloomberg",
   "NPR",
 ] as const;
+const FEATURED_SOURCE_NAMES = [
+  "CNN",
+  "Reuters",
+  "BBC News",
+  "NBC News",
+  "CBS News",
+  "ABC News",
+  "NPR",
+  "CNBC",
+  "Bloomberg",
+  "ESPN",
+  "AP News",
+  "Fox News",
+] as const;
 
 type SportsSectionKey = FavoriteLeagueKey | "MMA" | "MORE";
 
@@ -4725,6 +4739,51 @@ export default function Home() {
     [myFeedPolls]
   );
 
+  const featuredSources = useMemo<RankedSourceSummary[]>(() => {
+    const featuredSourceMap = new Map<string, RankedSourceSummary>();
+
+    homeSourceRankings.forEach((source) => {
+      if (hasMappedSourceLogo(source.sourceName)) {
+        featuredSourceMap.set(source.sourceName, source);
+      }
+    });
+
+    FEATURED_SOURCE_NAMES.forEach((sourceName) => {
+      if (!featuredSourceMap.has(sourceName) && hasMappedSourceLogo(sourceName)) {
+        featuredSourceMap.set(sourceName, {
+          sourceName,
+          likes: 0,
+          heartedByCurrentUser: false,
+        });
+      }
+    });
+
+    return [...featuredSourceMap.values()]
+      .sort((left, right) => {
+        if (right.likes !== left.likes) {
+          return right.likes - left.likes;
+        }
+
+        const leftCuratedIndex = FEATURED_SOURCE_NAMES.indexOf(
+          left.sourceName as (typeof FEATURED_SOURCE_NAMES)[number]
+        );
+        const rightCuratedIndex = FEATURED_SOURCE_NAMES.indexOf(
+          right.sourceName as (typeof FEATURED_SOURCE_NAMES)[number]
+        );
+        const normalizedLeftIndex =
+          leftCuratedIndex === -1 ? FEATURED_SOURCE_NAMES.length : leftCuratedIndex;
+        const normalizedRightIndex =
+          rightCuratedIndex === -1 ? FEATURED_SOURCE_NAMES.length : rightCuratedIndex;
+
+        if (normalizedLeftIndex !== normalizedRightIndex) {
+          return normalizedLeftIndex - normalizedRightIndex;
+        }
+
+        return left.sourceName.localeCompare(right.sourceName);
+      })
+      .slice(0, 12);
+  }, [homeSourceRankings]);
+
   const todayLabel = useMemo(
     () =>
       new Intl.DateTimeFormat("en-US", {
@@ -4868,11 +4927,14 @@ export default function Home() {
           className="article-thumb-shell article-card-visual-shell article-card-visual-placeholder"
           aria-hidden="true"
         >
-          <div className="article-card-visual-content">
-            <span className="article-card-visual-brand">
-              <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
+          <div className="article-card-visual-content article-card-visual-content-brand-fill">
+            <span className="article-card-visual-brand article-card-visual-brand-fill">
+              <SourceBadge
+                sourceName={safeSourceName}
+                className="article-card-source-fill-badge"
+                showInitialFallback={false}
+              />
             </span>
-            <span className="article-card-visual-label">{safeSourceName}</span>
           </div>
         </div>
       ) : (
@@ -6180,21 +6242,21 @@ export default function Home() {
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Featured Profiles</strong>
+              <strong className="profile-section-title home-section-title">Featured Sources</strong>
               <span className="muted">Popular source profiles to explore right now.</span>
             </div>
           </div>
 
-          {homeSourceRankings.length === 0 ? (
+          {featuredSources.length === 0 ? (
             <div className="empty-state compact-empty-state">
-              <strong>No featured profiles yet</strong>
+              <strong>No featured sources yet</strong>
               <span>Check back shortly as more sources gain momentum.</span>
             </div>
           ) : (
-            <div className="source-rankings-carousel" role="list" aria-label="Featured profiles">
-              {homeSourceRankings.slice(0, 8).map((source) => (
+            <div className="source-rankings-carousel" role="list" aria-label="Featured sources">
+              {featuredSources.map((source) => (
                 <Link
-                  key={`featured-profile-${source.sourceName}`}
+                  key={`featured-source-${source.sourceName}`}
                   href={`/source/${slugifySourceName(source.sourceName)}/`}
                   className="source-rankings-card featured-profile-card"
                   role="listitem"
