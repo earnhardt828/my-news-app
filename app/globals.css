@@ -658,6 +658,15 @@ input {
   flex: 0 0 auto;
 }
 
+.weather-map-placeholder-card {
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(14, 165, 233, 0.08)),
+    var(--surface-elevated);
+  min-height: 140px;
+  justify-content: center;
+}
+
 .top-trending-list-title {
   margin: 0;
   font-size: 1rem;

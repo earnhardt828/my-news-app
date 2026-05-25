@@ -2348,10 +2348,11 @@ export default function Home() {
   useEffect(() => {
     async function loadTrendingVideos() {
       try {
-        const [newsResponse, sportsResponse, celebrityResponse] = await Promise.all([
+        const [newsResponse, sportsResponse, celebrityResponse, weatherResponse] = await Promise.all([
           apiFetch("/api/videos?tab=news"),
           apiFetch("/api/videos?tab=sports"),
           apiFetch("/api/videos?tab=celebrity"),
+          apiFetch("/api/videos?tab=weather"),
         ]);
         if (!newsResponse.ok) {
           const responseText = await newsResponse.text();
@@ -2368,7 +2369,12 @@ export default function Home() {
           throw new Error(`Trending celebrity videos request failed (${celebrityResponse.status}): ${responseText}`);
         }
 
-        const [newsData, sportsData, celebrityData] = await Promise.all([
+        if (!weatherResponse.ok) {
+          const responseText = await weatherResponse.text();
+          throw new Error(`Trending weather videos request failed (${weatherResponse.status}): ${responseText}`);
+        }
+
+        const [newsData, sportsData, celebrityData, weatherData] = await Promise.all([
           newsResponse.json() as Promise<{
             videos?: VideoApiItem[];
             fallback?: boolean;
@@ -2380,6 +2386,11 @@ export default function Home() {
             message?: string;
           }>,
           celebrityResponse.json() as Promise<{
+            videos?: VideoApiItem[];
+            fallback?: boolean;
+            message?: string;
+          }>,
+          weatherResponse.json() as Promise<{
             videos?: VideoApiItem[];
             fallback?: boolean;
             message?: string;
@@ -2401,6 +2412,12 @@ export default function Home() {
         if (celebrityData.fallback) {
           console.error("Trending celebrity videos fallback used", {
             message: celebrityData.message ?? "Unknown reason",
+          });
+        }
+
+        if (weatherData.fallback) {
+          console.error("Trending weather videos fallback used", {
+            message: weatherData.message ?? "Unknown reason",
           });
         }
 
@@ -2431,11 +2448,17 @@ export default function Home() {
             normalizeVideoFeedItems(celebrityData.videos).filter((video) => !video.fallback)
           )
         );
+        setWeatherVideos(
+          sortVerticalFirst(
+            normalizeVideoFeedItems(weatherData.videos).filter((video) => !video.fallback)
+          )
+        );
       } catch (error) {
         console.error("Error loading trending videos:", error);
         setVideos([]);
         setSportsVideos([]);
         setCelebrityVideos([]);
+        setWeatherVideos([]);
       }
     }
 
@@ -3044,7 +3067,8 @@ export default function Home() {
       sortMode !== "trending" &&
       sortMode !== "sports" &&
       sortMode !== "local" &&
-      sortMode !== "celebrity"
+      sortMode !== "celebrity" &&
+      sortMode !== "weather"
     ) {
       return;
     }
@@ -3093,7 +3117,7 @@ export default function Home() {
     return () => {
       observer.disconnect();
     };
-  }, [articles.length, celebrityVideos, sortMode, sportsVideos, videos]);
+  }, [articles.length, celebrityVideos, sortMode, sportsVideos, videos, weatherVideos]);
 
   useEffect(() => {
     if (sortMode !== "local") {
@@ -4394,6 +4418,77 @@ export default function Home() {
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [sortMode, visibleArticles]);
 
+  const weatherSectionContent = useMemo(() => {
+    if (sortMode !== "weather") {
+      return {
+        severeWeather: [] as Article[],
+        localWeather: [] as Article[],
+        forecastRadar: [] as Article[],
+        climateEnvironment: [] as Article[],
+      };
+    }
+
+    const cityName =
+      selectedLocalCity?.split(",")[0]?.trim().toLowerCase() ||
+      localLocationLabel.split(",")[0]?.trim().toLowerCase() ||
+      "";
+    const usedKeys = new Set<string>();
+
+    const pickSection = (pattern: RegExp, limit: number, options?: { requireCity?: boolean }) => {
+      const matchingArticles = weatherTabArticles.filter((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+
+        if (usedKeys.has(dedupeKey)) {
+          return false;
+        }
+
+        const haystack =
+          `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
+
+        if (!pattern.test(haystack)) {
+          return false;
+        }
+
+        if (options?.requireCity && cityName) {
+          return haystack.includes(cityName);
+        }
+
+        return true;
+      });
+
+      const selected = selectSourceBalancedArticles(matchingArticles, limit);
+      selected.forEach((article) => usedKeys.add(getArticleDeduplicationKey(article)));
+      return selected;
+    };
+
+    const severeWeather = pickSection(
+      /\b(severe weather|storm|tornado|hurricane|flood|flooding|wildfire|blizzard|heat wave|storm surge|weather alert)\b/i,
+      6
+    );
+    const localWeather = pickSection(
+      /\b(local weather|weather news|forecast|rain|snow|storm|temperature|radar)\b/i,
+      6,
+      { requireCity: true }
+    );
+    const forecastRadar = pickSection(
+      /\b(forecast|radar|outlook|futurecast|conditions|storm tracker|doppler)\b/i,
+      6
+    );
+    const climateEnvironment = pickSection(
+      /\b(climate|environment|wildfire smoke|heat advisory|air quality|drought|el niño|la niña)\b/i,
+      6
+    );
+
+    return {
+      severeWeather,
+      localWeather,
+      forecastRadar,
+      climateEnvironment,
+    };
+  }, [localLocationLabel, selectedLocalCity, sortMode, weatherTabArticles]);
+
+  const weatherPageVideos = useMemo(() => selectSourceBalancedVideos(weatherVideos, 8, 2), [weatherVideos]);
+
   const technologyTabArticles = useMemo(() => {
     if (sortMode === "trending") {
       return selectSourceBalancedArticles(technologyPreviewArticles.slice(0, 40), 25);
@@ -4636,7 +4731,7 @@ export default function Home() {
   }, [videos]);
 
   const myNewsQuickWatchVideos = useMemo(
-    () => selectSourceBalancedVideos(prioritizeTopQuickWatchVideos(myNewsVideoPool), 5, 1),
+    () => buildTopQuickWatchRow(myNewsVideoPool, 5),
     [myNewsVideoPool]
   );
   const myNewsFeaturedVideos = useMemo(
@@ -5541,6 +5636,7 @@ export default function Home() {
       }
 
       const safeSourceName = getSafeSourceLabel(article.source);
+      const displaySourceName = getDisplaySourceLabel(article);
       const safeCategoryName = getSafeCategoryLabel(article.category, article);
       const selectedImage = getBestArticleImage(article);
       const imageSrc = selectedImage.src;
@@ -5624,7 +5720,7 @@ export default function Home() {
               {sortMode === "local" ? (
                 <div className="trending-source-brand trending-source-brand-static">
                   <SourceBadge sourceName={safeSourceName} />
-                  <span className="trending-source-name">{safeSourceName}</span>
+                  <span className="trending-source-name">{displaySourceName}</span>
                   <span className="trending-source-category-separator" aria-hidden="true">
                     ·
                   </span>
@@ -5642,7 +5738,7 @@ export default function Home() {
                 >
                   <div className="trending-source-brand">
                     <SourceBadge sourceName={safeSourceName} />
-                    <span className="trending-source-name">{safeSourceName}</span>
+                    <span className="trending-source-name">{displaySourceName}</span>
                     <span className="trending-source-category-separator" aria-hidden="true">
                       ·
                     </span>
@@ -5724,7 +5820,7 @@ export default function Home() {
             <div className="trending-source-stack trending-source-stack-primary">
               <div className="trending-source-brand">
                 <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                <span className="trending-source-name">{getSafeSourceLabel(article.source)}</span>
+                <span className="trending-source-name">{getDisplaySourceLabel(article)}</span>
               </div>
             </div>
             <div className="trending-card-top-meta">
@@ -6471,6 +6567,7 @@ export default function Home() {
     }
 
     const safeSourceName = getSafeSourceLabel(article.source);
+    const displaySourceName = getDisplaySourceLabel(article);
     const selectedImage = getBestArticleImage(article);
     const shouldUseImage =
       Boolean(selectedImage.src) &&
@@ -6513,7 +6610,7 @@ export default function Home() {
           </div>
           <div className="top-trending-list-copy">
             <div className="top-trending-list-meta">
-              <span className="top-trending-list-source">{safeSourceName}</span>
+              <span className="top-trending-list-source">{displaySourceName}</span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
@@ -6586,6 +6683,7 @@ export default function Home() {
     }
 
     const safeSourceName = getSafeSourceLabel(article.source);
+    const displaySourceName = getDisplaySourceLabel(article);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
     const selectedImage = getBestArticleImage(article);
     const shouldUseImage =
@@ -6633,7 +6731,7 @@ export default function Home() {
           ) : null}
           <div className="top-trending-list-copy">
             <div className="top-trending-list-meta">
-              <span className="top-trending-list-source">{safeSourceName}</span>
+              <span className="top-trending-list-source">{displaySourceName}</span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
@@ -7935,12 +8033,136 @@ export default function Home() {
               <span>Check back shortly for fresh weather coverage.</span>
             </div>
           ) : (
-            <div className="stack home-section-list">
-              {weatherTabArticles.map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
+            <div className="stack" style={{ gap: "20px" }}>
+              {weatherSectionContent.severeWeather.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Severe Weather</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    {weatherSectionContent.severeWeather.map((article) => (
+                      <div key={`weather-severe-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, {
+                          className: "weather-compact-card",
+                          imageFallbackLabel: "Severe",
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {weatherSectionContent.localWeather.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Local Weather</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    {weatherSectionContent.localWeather.map((article) => (
+                      <div key={`weather-local-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, {
+                          className: "weather-compact-card",
+                          imageFallbackLabel: "Local Weather",
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {weatherSectionContent.forecastRadar.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Forecast & Radar</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    {weatherSectionContent.forecastRadar.map((article) => (
+                      <div key={`weather-forecast-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, {
+                          className: "weather-compact-card",
+                          imageFallbackLabel: "Forecast",
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {weatherSectionContent.climateEnvironment.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Climate & Environment</strong>
+                    </div>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    {weatherSectionContent.climateEnvironment.map((article) => (
+                      <div key={`weather-climate-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, {
+                          className: "weather-compact-card",
+                          imageFallbackLabel: "Climate",
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {weatherPageVideos.length > 0 ? (
+                <section className="home-section-block home-section-plain quick-watch-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Weather Videos</strong>
+                    </div>
+                  </div>
+                  <div className="quick-watch-scroll" role="list" aria-label="Weather videos">
+                    {weatherPageVideos.map((video) => (
+                      <div key={`weather-video-${video.id}`} className="quick-watch-item" role="listitem">
+                        <VideoFeedCard
+                          video={video}
+                          isAutoplaying={
+                            autoplayTrendingVideoKeys.includes(`weather-videos:${video.id}`) && !video.fallback
+                          }
+                          onToggleLike={handleToggleVideoLike}
+                          onToggleSave={handleToggleVideoSave}
+                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                          onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                          frameRef={(node) => {
+                            trendingVideoFrameRefs.current[`weather-videos:${video.id}`] = node;
+                          }}
+                          autoplayKey={`weather-videos:${video.id}`}
+                          previewDurationMs={null}
+                          label="Weather Video"
+                          hideActions
+                          useRelativeTime
+                          className="video-card-inline quick-watch-video-card"
+                          variant="article"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="home-section-block home-section-plain">
+                <div className="home-section-header">
+                  <div className="stack" style={{ gap: "4px" }}>
+                    <strong className="profile-section-title home-section-title">National Weather Map</strong>
+                  </div>
                 </div>
-              ))}
+                <div className="section-card stack weather-map-placeholder-card">
+                  <strong>Radar coming soon</strong>
+                  <span className="muted">
+                    A live national weather map and radar view will appear here when the map feed is connected.
+                  </span>
+                </div>
+              </section>
             </div>
           )}
         </section>
