@@ -18,7 +18,16 @@ type PodcastShow = {
   slug: string;
   title: string;
   publisher: string;
-  category: "News" | "Sports" | "Business" | "Technology";
+  category:
+    | "World News"
+    | "Sports"
+    | "Celebrity"
+    | "Music"
+    | "Movies"
+    | "Business"
+    | "Technology"
+    | "Food"
+    | "Travel";
   coverArt: string | null;
   featured: boolean;
   latestEpisode: PodcastEpisode | null;
@@ -28,10 +37,15 @@ type PodcastDirectoryResponse = {
   shows: PodcastShow[];
   sections: {
     featured: PodcastShow[];
-    news: PodcastShow[];
+    worldNews: PodcastShow[];
     sports: PodcastShow[];
+    celebrity: PodcastShow[];
+    music: PodcastShow[];
+    movies: PodcastShow[];
     business: PodcastShow[];
     technology: PodcastShow[];
+    food: PodcastShow[];
+    travel: PodcastShow[];
   };
 };
 
@@ -127,10 +141,15 @@ export default function PodcastsPage() {
             shows: [],
             sections: {
               featured: [],
-              news: [],
+              worldNews: [],
               sports: [],
+              celebrity: [],
+              music: [],
+              movies: [],
               business: [],
               technology: [],
+              food: [],
+              travel: [],
             },
           });
         }
@@ -154,7 +173,6 @@ export default function PodcastsPage() {
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
             <strong className="profile-section-title home-section-title">Podcasts</strong>
-            <span className="muted">Latest episodes from trusted news and business shows.</span>
           </div>
         </div>
 
@@ -168,10 +186,15 @@ export default function PodcastsPage() {
         ) : (
           <div className="stack home-section-list">
             <PodcastSectionRow title="Featured Podcasts" shows={directory.sections.featured} />
-            <PodcastSectionRow title="News" shows={directory.sections.news} />
+            <PodcastSectionRow title="World News" shows={directory.sections.worldNews} />
             <PodcastSectionRow title="Sports" shows={directory.sections.sports} />
+            <PodcastSectionRow title="Celebrity" shows={directory.sections.celebrity} />
+            <PodcastSectionRow title="Music" shows={directory.sections.music} />
+            <PodcastSectionRow title="Movies" shows={directory.sections.movies} />
             <PodcastSectionRow title="Business" shows={directory.sections.business} />
             <PodcastSectionRow title="Technology" shows={directory.sections.technology} />
+            <PodcastSectionRow title="Food" shows={directory.sections.food} />
+            <PodcastSectionRow title="Travel" shows={directory.sections.travel} />
           </div>
         )}
       </section>

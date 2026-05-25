@@ -39,10 +39,10 @@ const SPORTS_REJECTED_PATTERN =
   /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/;
 
 const CELEBRITY_POSITIVE_PATTERN =
-  /(celebrity|entertainment|hollywood|red carpet|movie trailer|film premiere|tv show|streaming series|music video|billboard|tmz|people|e! news|entertainment tonight|variety|deadline|late show|album release|box office|festival|gossip|paparazzi|interview)/;
+  /(celebrity|celebrities|entertainment|e! news|entertainment tonight|tmz|people|red carpet|hollywood|actor|actress|singer|musician|movie star|tv star|billboard|variety|the hollywood reporter|film premiere|movie trailer|tv show|streaming series|album release|box office|festival|gossip|paparazzi|interview)/;
 
 const CELEBRITY_REJECTED_PATTERN =
-  /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|sportscenter|touchdown|dunk|home run|goal|nfl|nba|mlb|nhl|mls)/;
+  /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|sportscenter|touchdown|dunk|home run|goal|nfl|nba|mlb|nhl|mls|market|stocks|finance|policy|senate|president|breaking news|world news)/;
 
 const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCiWLfSweyRNmLpgEHekhoAg", name: "ESPN" },
@@ -378,8 +378,19 @@ function isStrictCelebrityVideo(
   video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
 ) {
   const haystack = getVideoSearchHaystack(video);
+  const creator = video.creator.toLowerCase();
+  const title = video.title.toLowerCase();
+  const approvedEntertainmentSource =
+    /(e! news|entertainment tonight|tmz|people|billboard|variety|the hollywood reporter|deadline)/.test(
+      creator
+    );
+  const approvedEntertainmentTitle =
+    /(celebrity|celebrities|entertainment|red carpet|hollywood|actor|actress|singer|musician|movie star|tv star|film premiere|movie trailer|tv show|streaming series|album release|box office|festival|gossip|paparazzi|interview)/.test(
+      title
+    );
   const hasCelebrityTerms =
-    CELEBRITY_POSITIVE_PATTERN.test(haystack) || video.category === "Entertainment";
+    CELEBRITY_POSITIVE_PATTERN.test(haystack) &&
+    (approvedEntertainmentSource || approvedEntertainmentTitle || video.category === "Entertainment");
   const hasRejectedTerms = CELEBRITY_REJECTED_PATTERN.test(haystack);
 
   return hasCelebrityTerms && !hasRejectedTerms;

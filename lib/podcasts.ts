@@ -183,10 +183,15 @@ export async function fetchPodcastDirectory() {
     shows,
     sections: {
       featured,
-      news: shows.filter((show) => show.category === "News"),
+      worldNews: shows.filter((show) => show.category === "World News"),
       sports: shows.filter((show) => show.category === "Sports"),
+      celebrity: shows.filter((show) => show.category === "Celebrity"),
+      music: shows.filter((show) => show.category === "Music"),
+      movies: shows.filter((show) => show.category === "Movies"),
       business: shows.filter((show) => show.category === "Business"),
       technology: shows.filter((show) => show.category === "Technology"),
+      food: shows.filter((show) => show.category === "Food"),
+      travel: shows.filter((show) => show.category === "Travel"),
     },
   };
 }

@@ -25,10 +25,15 @@ export async function GET(request: Request) {
         shows: [],
         sections: {
           featured: [],
-          news: [],
+          worldNews: [],
           sports: [],
+          celebrity: [],
+          music: [],
+          movies: [],
           business: [],
           technology: [],
+          food: [],
+          travel: [],
         },
       },
       { status: 200 }
