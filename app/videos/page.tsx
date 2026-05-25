@@ -31,7 +31,7 @@ const actionIconProps = {
   "aria-hidden": true,
 };
 
-type VideoTab = "news" | "sports";
+type VideoTab = "news" | "sports" | "celebrity";
 
 export default function VideosPage() {
   const router = useRouter();
@@ -40,6 +40,7 @@ export default function VideosPage() {
   const [videosByTab, setVideosByTab] = useState<Record<VideoTab, VideoItem[]>>({
     news: initialVideos,
     sports: [],
+    celebrity: [],
   });
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
@@ -51,16 +52,19 @@ export default function VideosPage() {
   const [tabLoading, setTabLoading] = useState<Record<VideoTab, boolean>>({
     news: true,
     sports: false,
+    celebrity: false,
   });
   const [statusMessages, setStatusMessages] = useState<Record<VideoTab, string>>({
     news: "",
     sports: "",
+    celebrity: "",
   });
   const videoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasLoadedOnceRef = useRef(false);
   const loadedTabsRef = useRef<Record<VideoTab, boolean>>({
     news: false,
     sports: false,
+    celebrity: false,
   });
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
@@ -68,7 +72,12 @@ export default function VideosPage() {
   const displayedVideos = videosByTab[activeTab];
   const statusMessage = statusMessages[activeTab];
   const isCurrentTabLoading = tabLoading[activeTab];
-  const requestedTab = searchParams.get("tab") === "sports" ? "sports" : "news";
+  const requestedTab =
+    searchParams.get("tab") === "sports"
+      ? "sports"
+      : searchParams.get("tab") === "celebrity"
+        ? "celebrity"
+        : "news";
   const requestedVideoId = searchParams.get("video");
   const [returnState, setReturnState] = useState<VideoReturnState | null>(null);
 
@@ -120,7 +129,9 @@ export default function VideosPage() {
         [tab]:
           tab === "sports"
             ? "Could not load live sports videos right now."
-            : "Could not load live videos, so the current feed is shown instead.",
+            : tab === "celebrity"
+              ? "Could not load live celebrity videos right now."
+              : "Could not load live videos, so the current feed is shown instead.",
       }));
     } finally {
       setTabLoading((prev) => ({ ...prev, [tab]: false }));
@@ -255,6 +266,7 @@ export default function VideosPage() {
     setVideosByTab((prev) => ({
       news: updateVideos(prev.news),
       sports: updateVideos(prev.sports),
+      celebrity: updateVideos(prev.celebrity),
     }));
   };
 
@@ -267,6 +279,7 @@ export default function VideosPage() {
     setVideosByTab((prev) => ({
       news: updateVideos(prev.news),
       sports: updateVideos(prev.sports),
+      celebrity: updateVideos(prev.celebrity),
     }));
   };
 
@@ -295,7 +308,12 @@ export default function VideosPage() {
       return;
     }
 
-    setActiveTab(diffX < 0 ? "sports" : "news");
+    const tabs: VideoTab[] = ["news", "sports", "celebrity"];
+    const currentIndex = tabs.indexOf(activeTab);
+    const nextTab = tabs[diffX < 0 ? currentIndex + 1 : currentIndex - 1];
+    if (nextTab) {
+      setActiveTab(nextTab);
+    }
   };
 
   const handleCloseViewer = useCallback(() => {
@@ -357,6 +375,15 @@ export default function VideosPage() {
         >
           Sports
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "celebrity"}
+          className={`videos-page-tab ${activeTab === "celebrity" ? "videos-page-tab-active" : ""}`}
+          onClick={() => setActiveTab("celebrity")}
+        >
+          Celebrity
+        </button>
       </div>
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
       {isCurrentTabLoading && hasLoadedOnce ? (
@@ -372,7 +399,13 @@ export default function VideosPage() {
 
       {displayedVideos.length === 0 && !isCurrentTabLoading ? (
         <div className="empty-state compact-empty-state">
-          <strong>{activeTab === "sports" ? "No sports videos yet" : "No news videos yet"}</strong>
+          <strong>
+            {activeTab === "sports"
+              ? "No sports videos yet"
+              : activeTab === "celebrity"
+                ? "No celebrity videos yet"
+                : "No news videos yet"}
+          </strong>
           <span>Check back shortly for a fresh vertical video feed.</span>
         </div>
       ) : null}

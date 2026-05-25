@@ -30,13 +30,19 @@ type VideoFeedItem = {
   fallback: boolean;
 };
 
-type VideoFeedTab = "all" | "news" | "sports";
+type VideoFeedTab = "all" | "news" | "sports" | "celebrity";
 
 const SPORTS_POSITIVE_PATTERN =
   /(sports|espn|sportscenter|nfl|nba|mlb|nhl|mls|soccer|football|basketball|baseball|hockey|golf|tennis|nascar|formula 1|formula1|f1|ufc|mma|highlights?|touchdown|dunk|home run|goals?|save|replay|top plays|bleacher report|fox sports|cbs sports|nbc sports|sports illustrated|pga|masters|grand prix|race winner)/;
 
 const SPORTS_REJECTED_PATTERN =
   /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/;
+
+const CELEBRITY_POSITIVE_PATTERN =
+  /(celebrity|entertainment|hollywood|red carpet|movie trailer|film premiere|tv show|streaming series|music video|billboard|tmz|people|e! news|entertainment tonight|variety|deadline|late show|album release|box office|festival|gossip|paparazzi|interview)/;
+
+const CELEBRITY_REJECTED_PATTERN =
+  /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|sportscenter|touchdown|dunk|home run|goal|nfl|nba|mlb|nhl|mls)/;
 
 const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCiWLfSweyRNmLpgEHekhoAg", name: "ESPN" },
@@ -368,6 +374,54 @@ function getNewsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "cat
   return score;
 }
 
+function isStrictCelebrityVideo(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+  const hasCelebrityTerms =
+    CELEBRITY_POSITIVE_PATTERN.test(haystack) || video.category === "Entertainment";
+  const hasRejectedTerms = CELEBRITY_REJECTED_PATTERN.test(haystack);
+
+  return hasCelebrityTerms && !hasRejectedTerms;
+}
+
+function getCelebrityVideoScore(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+  let score = 0;
+
+  if (!isStrictCelebrityVideo(video)) {
+    return -1000;
+  }
+
+  if (
+    /(e! news|entertainment tonight|people|tmz|billboard|variety|deadline|red carpet|movie trailer|celebrity interview|festival premiere|album release)/.test(
+      haystack
+    )
+  ) {
+    score += 160;
+  }
+
+  if (/(celebrity|hollywood|entertainment|music|movie|tv|gossip|interview)/.test(haystack)) {
+    score += 90;
+  }
+
+  if (video.category === "Entertainment") {
+    score += 72;
+  }
+
+  if (video.orientation === "vertical") {
+    score += 52;
+  }
+
+  if (/(podcast|debate|reaction|recap only|full press conference)/.test(haystack)) {
+    score -= 120;
+  }
+
+  return score;
+}
+
 function isStrictSportsVideo(
   video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
 ) {
@@ -517,6 +571,8 @@ function filterAndSortVideos(
   const tabFiltered =
     options.tab === "sports"
       ? categoryFiltered.filter((video) => isStrictSportsVideo(video))
+      : options.tab === "celebrity"
+        ? categoryFiltered.filter((video) => isStrictCelebrityVideo(video))
       : options.tab === "news"
         ? categoryFiltered.filter(
             (video) =>
@@ -543,6 +599,8 @@ function filterAndSortVideos(
     const scoreDelta =
       options.tab === "sports"
         ? getSportsVideoScore(b) - getSportsVideoScore(a)
+        : options.tab === "celebrity"
+          ? getCelebrityVideoScore(b) - getCelebrityVideoScore(a)
         : options.tab === "news"
           ? getNewsVideoScore(b) - getNewsVideoScore(a)
           : 0;
@@ -618,7 +676,7 @@ export async function GET(request: Request) {
     const videos = filterAndSortVideos(successfulEntries, {
       category,
       searchTerm,
-      tab: tab === "sports" || tab === "news" ? tab : "all",
+      tab: tab === "sports" || tab === "news" || tab === "celebrity" ? tab : "all",
     });
 
     if (videos.length === 0) {

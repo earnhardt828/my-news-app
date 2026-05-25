@@ -1328,6 +1328,7 @@ export default function Home() {
   const [activePollVoteId, setActivePollVoteId] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [sportsVideos, setSportsVideos] = useState<VideoItem[]>([]);
+  const [celebrityVideos, setCelebrityVideos] = useState<VideoItem[]>([]);
   const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
@@ -1385,8 +1386,10 @@ export default function Home() {
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const teamPickerPagesRef = useRef<HTMLDivElement | null>(null);
+  const moreSportsVideosSectionRef = useRef<HTMLElement | null>(null);
   const topTabButtonRefs = useRef<Partial<Record<SwipeableSortMode, HTMLButtonElement | null>>>({});
   const articleLongPressTimerRef = useRef<number | null>(null);
+  const [isMoreSportsVideosVisible, setIsMoreSportsVideosVisible] = useState(false);
   const teamPickerPanelRefs = useRef<Record<FavoriteLeagueKey, HTMLElement | null>>({
     MLB: null,
     NFL: null,
@@ -2240,11 +2243,11 @@ export default function Home() {
   useEffect(() => {
     async function loadTrendingVideos() {
       try {
-        const [newsResponse, sportsResponse] = await Promise.all([
+        const [newsResponse, sportsResponse, celebrityResponse] = await Promise.all([
           apiFetch("/api/videos?tab=news"),
           apiFetch("/api/videos?tab=sports"),
+          apiFetch("/api/videos?tab=celebrity"),
         ]);
-
         if (!newsResponse.ok) {
           const responseText = await newsResponse.text();
           throw new Error(`Trending news videos request failed (${newsResponse.status}): ${responseText}`);
@@ -2255,13 +2258,23 @@ export default function Home() {
           throw new Error(`Trending sports videos request failed (${sportsResponse.status}): ${responseText}`);
         }
 
-        const [newsData, sportsData] = await Promise.all([
+        if (!celebrityResponse.ok) {
+          const responseText = await celebrityResponse.text();
+          throw new Error(`Trending celebrity videos request failed (${celebrityResponse.status}): ${responseText}`);
+        }
+
+        const [newsData, sportsData, celebrityData] = await Promise.all([
           newsResponse.json() as Promise<{
             videos?: VideoApiItem[];
             fallback?: boolean;
             message?: string;
           }>,
           sportsResponse.json() as Promise<{
+            videos?: VideoApiItem[];
+            fallback?: boolean;
+            message?: string;
+          }>,
+          celebrityResponse.json() as Promise<{
             videos?: VideoApiItem[];
             fallback?: boolean;
             message?: string;
@@ -2277,6 +2290,12 @@ export default function Home() {
         if (sportsData.fallback) {
           console.error("Trending sports videos fallback used", {
             message: sportsData.message ?? "Unknown reason",
+          });
+        }
+
+        if (celebrityData.fallback) {
+          console.error("Trending celebrity videos fallback used", {
+            message: celebrityData.message ?? "Unknown reason",
           });
         }
 
@@ -2302,10 +2321,16 @@ export default function Home() {
         setSportsVideos(
           sortVerticalFirst(normalizeVideoFeedItems(sportsData.videos).filter((video) => !video.fallback))
         );
+        setCelebrityVideos(
+          sortVerticalFirst(
+            normalizeVideoFeedItems(celebrityData.videos).filter((video) => !video.fallback)
+          )
+        );
       } catch (error) {
         console.error("Error loading trending videos:", error);
         setVideos([]);
         setSportsVideos([]);
+        setCelebrityVideos([]);
       }
     }
 
@@ -2798,7 +2823,7 @@ export default function Home() {
   };
 
   const handleOpenFeedVideo = useCallback(
-    (videoId: string, tab: "news" | "sports") => {
+    (videoId: string, tab: "news" | "sports" | "celebrity") => {
       saveVideoReturnState({
         path: "/",
         scrollY: window.scrollY,
@@ -2910,7 +2935,12 @@ export default function Home() {
   }, [feedPage, hasMoreArticles, isLoading, isLoadingMoreArticles, loadFeedPage]);
 
   useEffect(() => {
-    if (sortMode !== "trending" && sortMode !== "sports" && sortMode !== "local") {
+    if (
+      sortMode !== "trending" &&
+      sortMode !== "sports" &&
+      sortMode !== "local" &&
+      sortMode !== "celebrity"
+    ) {
       return;
     }
 
@@ -2958,7 +2988,7 @@ export default function Home() {
     return () => {
       observer.disconnect();
     };
-  }, [articles.length, sortMode, sportsVideos, videos]);
+  }, [articles.length, celebrityVideos, sortMode, sportsVideos, videos]);
 
   useEffect(() => {
     if (sortMode !== "local") {
@@ -3369,6 +3399,42 @@ export default function Home() {
   }, []);
 
   useEffect(() => () => clearArticleLongPressTimer(), [clearArticleLongPressTimer]);
+
+  useEffect(() => {
+    if (sortMode !== "sports") {
+      setIsMoreSportsVideosVisible(false);
+      return;
+    }
+
+    const node = moreSportsVideosSectionRef.current;
+
+    if (!node) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        const isVisible = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.28);
+
+        if (isVisible) {
+          console.log("MORE VIDEOS VERTICAL AUTOPLAY ATTEMPT");
+        }
+
+        setIsMoreSportsVideosVisible(isVisible);
+      },
+      {
+        threshold: [0.16, 0.28, 0.45],
+        rootMargin: "0px 0px -10% 0px",
+      }
+    );
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [sortMode, sportsVideos.length]);
 
   const handleCommentInputChange = (articleId: number, value: string) => {
     setCommentComposerStatus(null);
@@ -5000,6 +5066,60 @@ export default function Home() {
     return selectSourceBalancedArticles(selectedArticles, 8);
   }, [favoriteTeams, sortMode, sportsStandardArticles, usedSportsSectionArticleKeys]);
 
+  const featuredCelebrityArticles = useMemo(
+    () => selectSourceBalancedArticles(celebrityTabArticles.slice(0, 18), 8),
+    [celebrityTabArticles]
+  );
+
+  const buildCelebritySection = useCallback(
+    (
+      pattern: RegExp,
+      limit: number,
+      usedKeys: Set<string>
+    ) => {
+      const matches = celebrityTabArticles.filter((article) => {
+        const haystack =
+          `${article.title} ${article.source} ${article.category} ${article.description ?? ""}`.toLowerCase();
+        return pattern.test(haystack) && !usedKeys.has(getArticleDeduplicationKey(article));
+      });
+      const selected = selectSourceBalancedArticles(matches, limit);
+      selected.forEach((article) => usedKeys.add(getArticleDeduplicationKey(article)));
+      return selected;
+    },
+    [celebrityTabArticles]
+  );
+
+  const celebritySectionContent = useMemo(() => {
+    const usedKeys = new Set(
+      featuredCelebrityArticles.map((article) => getArticleDeduplicationKey(article))
+    );
+
+    const movies = buildCelebritySection(
+      /\b(movie|film|box office|hollywood movie|trailer|deadline film|variety film|cinema)\b/i,
+      6,
+      usedKeys
+    );
+    const music = buildCelebritySection(
+      /\b(music|album|song|tour|billboard|concert|recording artist|grammy)\b/i,
+      6,
+      usedKeys
+    );
+    const tvShows = buildCelebritySection(
+      /\b(tv|television|streaming|series|episode|showrunner|season premiere|netflix|hulu|max)\b/i,
+      6,
+      usedKeys
+    );
+    const gossip = buildCelebritySection(
+      /\b(gossip|tmz|people|e news|red carpet|dating|celebrity style|paparazzi)\b/i,
+      6,
+      usedKeys
+    );
+
+    return { movies, music, tvShows, gossip };
+  }, [buildCelebritySection, featuredCelebrityArticles]);
+
+  const celebrityPageVideos = useMemo(() => celebrityVideos.slice(0, 8), [celebrityVideos]);
+
   const localSectionArticles = useMemo(() => {
     if (sortMode !== "local") {
       return {
@@ -5328,10 +5448,6 @@ export default function Home() {
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
-      const likeLabel = `${article.likes} like${article.likes === 1 ? "" : "s"}`;
-      const commentLabel = `${article.comments.length} comment${
-        article.comments.length === 1 ? "" : "s"
-      }`;
 
       const visualBoxNode = shouldUseLargeImage ? (
         <div className="article-thumb-shell article-card-visual-shell" aria-hidden="true">
@@ -5481,11 +5597,17 @@ export default function Home() {
               <span className="news-card-footer-separator" aria-hidden="true">
                 ·
               </span>
-              {likeLabel}
+              <span className="news-card-footer-icon" aria-hidden="true">
+                ♡
+              </span>
+              {article.likes}
               <span className="news-card-footer-separator" aria-hidden="true">
                 ·
               </span>
-              {commentLabel}
+              <span className="news-card-footer-icon" aria-hidden="true">
+                💬
+              </span>
+              {article.comments.length}
             </span>
           </div>
         </article>
@@ -5528,11 +5650,17 @@ export default function Home() {
               <span className="news-card-footer-separator" aria-hidden="true">
                 ·
               </span>
-              {article.likes} like{article.likes === 1 ? "" : "s"}
+              <span className="news-card-footer-icon" aria-hidden="true">
+                ♡
+              </span>
+              {article.likes}
               <span className="news-card-footer-separator" aria-hidden="true">
                 ·
               </span>
-              {article.comments.length} comment{article.comments.length === 1 ? "" : "s"}
+              <span className="news-card-footer-icon" aria-hidden="true">
+                💬
+              </span>
+              {article.comments.length}
             </span>
           </div>
         </article>
@@ -6085,12 +6213,15 @@ export default function Home() {
           </div>
         </div>
         <div className="quick-watch-scroll" role="list" aria-label={`${label} videos`}>
-          {leagueVideos.map((video) => (
+          {leagueVideos.map((video, index) => (
             <div key={`${sectionKey}-video-${video.id}`} className="quick-watch-item" role="listitem">
               <VideoFeedCard
                 video={video}
                 isAutoplaying={
-                  autoplayTrendingVideoKeys.includes(`sports-${sectionKey.toLowerCase()}-quickwatch:${video.id}`) &&
+                  (autoplayTrendingVideoKeys.includes(
+                    `sports-${sectionKey.toLowerCase()}-quickwatch:${video.id}`
+                  ) ||
+                    (sectionKey === "MORE" && isMoreSportsVideosVisible && index === 0)) &&
                   !video.fallback
                 }
                 onToggleLike={handleToggleVideoLike}
@@ -6290,13 +6421,13 @@ export default function Home() {
                 ·
               </span>
               <span className="top-trending-list-date">
-                {article.likes} like{article.likes === 1 ? "" : "s"}
+                ♡ {article.likes}
               </span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
               <span className="top-trending-list-date">
-                {article.comments.length} comment{article.comments.length === 1 ? "" : "s"}
+                💬 {article.comments.length}
               </span>
             </div>
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
@@ -6400,13 +6531,13 @@ export default function Home() {
                 ·
               </span>
               <span className="top-trending-list-date">
-                {article.likes} like{article.likes === 1 ? "" : "s"}
+                ♡ {article.likes}
               </span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
               <span className="top-trending-list-date">
-                {article.comments.length} comment{article.comments.length === 1 ? "" : "s"}
+                💬 {article.comments.length}
               </span>
             </div>
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
@@ -7500,11 +7631,161 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {celebrityTabArticles.map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
+              {featuredCelebrityArticles.length > 0 ? (
+                <section className="home-section-block home-section-plain featured-stories-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">
+                        Featured Celebrity
+                      </strong>
+                    </div>
+                  </div>
+                  <div className="featured-stories-scroll" role="list" aria-label="Featured celebrity stories">
+                    {featuredCelebrityArticles.map((article) => {
+                      const articleRouteId = getArticleRouteId(article);
+                      const imageSrc = getBestArticleImage(article).src;
+
+                      if (!articleRouteId) {
+                        return null;
+                      }
+
+                      return (
+                        <Link
+                          key={`featured-celebrity-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                          href={`/article/${articleRouteId}/`}
+                          className="featured-story-card"
+                          role="listitem"
+                          onClick={() => {
+                            persistArticleMetadata(article);
+                            saveArticleReturnState({
+                              path: "/",
+                              scrollY: window.scrollY,
+                              source: "home",
+                              sortMode,
+                              selectedLocalCity,
+                              localLocationLabel,
+                            });
+                          }}
+                        >
+                          {imageSrc ? (
+                            <img
+                              src={imageSrc}
+                              alt={cleanDisplayText(article.title)}
+                              className="featured-story-image"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <div className="featured-story-fallback-brand" aria-hidden="true">
+                              <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+                            </div>
+                          )}
+                          <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
+                          <div className="featured-story-copy">
+                            <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
+                            <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+
+              {celebritySectionContent.movies.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <strong className="profile-section-title home-section-title">Movies</strong>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail">
+                    {celebritySectionContent.movies.map((article) => (
+                      <div key={`celeb-movies-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, { imageFallbackLabel: "Movies" })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {celebritySectionContent.music.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <strong className="profile-section-title home-section-title">Music</strong>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail">
+                    {celebritySectionContent.music.map((article) => (
+                      <div key={`celeb-music-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, { imageFallbackLabel: "Music" })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {celebritySectionContent.tvShows.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <strong className="profile-section-title home-section-title">TV Shows</strong>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail">
+                    {celebritySectionContent.tvShows.map((article) => (
+                      <div key={`celeb-tv-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, { imageFallbackLabel: "TV" })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {celebritySectionContent.gossip.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <strong className="profile-section-title home-section-title">Gossip</strong>
+                  </div>
+                  <div className="stack home-section-list top-trending-card-rail">
+                    {celebritySectionContent.gossip.map((article) => (
+                      <div key={`celeb-gossip-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                        {renderCompactSideImageArticle(article, { imageFallbackLabel: "Gossip" })}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {celebrityPageVideos.length > 0 ? (
+                <section className="home-section-block home-section-plain quick-watch-row">
+                  <div className="home-section-header">
+                    <strong className="profile-section-title home-section-title">Celebrity Videos</strong>
+                  </div>
+                  <div className="quick-watch-scroll" role="list" aria-label="Celebrity videos">
+                    {celebrityPageVideos.map((video) => (
+                      <div key={`celeb-video-${video.id}`} className="quick-watch-item" role="listitem">
+                        <VideoFeedCard
+                          video={video}
+                          isAutoplaying={
+                            autoplayTrendingVideoKeys.includes(`celebrity-videos:${video.id}`) &&
+                            !video.fallback
+                          }
+                          onToggleLike={handleToggleVideoLike}
+                          onToggleSave={handleToggleVideoSave}
+                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                          onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "celebrity")}
+                          frameRef={(node) => {
+                            trendingVideoFrameRefs.current[`celebrity-videos:${video.id}`] = node;
+                          }}
+                          autoplayKey={`celebrity-videos:${video.id}`}
+                          previewDurationMs={4000}
+                          label="Celebrity Video"
+                          hideActions
+                          useRelativeTime
+                          className="video-card-inline quick-watch-video-card"
+                          variant="article"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </div>
           )}
         </section>

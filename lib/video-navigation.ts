@@ -18,7 +18,7 @@ export type VideoReturnState = {
     | "business";
   selectedLocalCity?: string | null;
   localLocationLabel?: string | null;
-  tab?: "news" | "sports";
+  tab?: "news" | "sports" | "celebrity";
   originLabel?: string | null;
 };
 

@@ -1529,6 +1529,18 @@ input {
   line-height: 1.4;
 }
 
+.news-card-footer-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  margin-right: 4px;
+}
+
+.news-card-footer-separator {
+  margin: 0 6px;
+}
+
 .trending-published-date-inline {
   display: inline-flex;
   width: fit-content;
