@@ -172,7 +172,11 @@ export function cleanVideoTitle(title: string | null | undefined) {
   return cleanedTitle;
 }
 
-export function buildVideoEmbedUrl(youtubeId: string, autoplay: boolean) {
+export function buildVideoEmbedUrl(
+  youtubeId: string,
+  autoplay: boolean,
+  options?: { startSeconds?: number }
+) {
   const url = new URL(`https://www.youtube-nocookie.com/embed/${youtubeId}`);
   url.searchParams.set("autoplay", autoplay ? "1" : "0");
   url.searchParams.set("mute", "1");
@@ -180,9 +184,13 @@ export function buildVideoEmbedUrl(youtubeId: string, autoplay: boolean) {
   url.searchParams.set("controls", "0");
   url.searchParams.set("rel", "0");
   url.searchParams.set("modestbranding", "1");
+  const previewStartSeconds = Math.max(0, Math.floor(options?.startSeconds ?? 0));
   if (autoplay) {
     url.searchParams.set("loop", "1");
     url.searchParams.set("playlist", youtubeId);
+    if (previewStartSeconds > 0) {
+      url.searchParams.set("start", String(previewStartSeconds));
+    }
   }
   return url.toString();
 }

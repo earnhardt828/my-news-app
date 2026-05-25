@@ -103,6 +103,10 @@ const BREAKING_NEWS_TRUSTED_SOURCES = [
   "USA Today",
   "Al Jazeera",
 ] as const;
+const BREAKING_NEWS_REQUIRED_PATTERN =
+  /\b(breaking|live updates?|developing|urgent|major|confirmed|emergency|killed|attack|court ruling|election|disaster|war|severe weather|government|economy)\b/i;
+const BREAKING_NEWS_SOFT_STORY_PATTERN =
+  /\b(ice cream|food|recipe|restaurant|travel|vacation|celebrity|hollywood|fashion|music awards|movie premiere|gossip|lifestyle|wellness|shopping)\b/i;
 const FEATURED_SOURCE_NAMES = [
   "CNN",
   "Reuters",
@@ -1138,6 +1142,30 @@ function getBreakingNewsSourcePriority(article: Article) {
   }
 
   return 0;
+}
+
+function getBreakingNewsRelevanceScore(article: Article) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${article.category} ${article.source}`;
+  let score = getBreakingNewsSourcePriority(article) * 100;
+
+  if (BREAKING_NEWS_REQUIRED_PATTERN.test(haystack)) {
+    score += 180;
+  }
+
+  if (/\b(breaking news|live blog|live updates|developing story|just in)\b/i.test(haystack)) {
+    score += 120;
+  }
+
+  if (BREAKING_NEWS_SOFT_STORY_PATTERN.test(haystack)) {
+    score -= 220;
+  }
+
+  score += Math.max(
+    0,
+    72 - Math.floor((Date.now() - getPublishedAtTimestamp(article.publishedAt)) / (1000 * 60 * 60))
+  );
+
+  return score;
 }
 
 function buildNationalWeatherMapEmbedHtml(
@@ -5379,19 +5407,34 @@ export default function Home() {
         getSafeSourceLabel(article.source).toLowerCase().includes(source.toLowerCase())
       )
     );
+    const highSignalTrustedArticles = trustedBreakingArticles.filter((article) =>
+      BREAKING_NEWS_REQUIRED_PATTERN.test(
+        `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${article.category}`
+      )
+    );
 
     const candidateArticles =
-      trustedBreakingArticles.length >= 5 ? trustedBreakingArticles : breakingPreviewArticles;
+      highSignalTrustedArticles.length >= 3
+        ? highSignalTrustedArticles
+        : trustedBreakingArticles.length >= 5
+          ? trustedBreakingArticles
+          : breakingPreviewArticles;
 
     return selectSourceBalancedArticles(
       candidateArticles
-        .filter((article) => !topTrendingKeys.has(getArticleDeduplicationKey(article)))
-        .sort((leftArticle, rightArticle) => {
-          const sourcePriorityDelta =
-            getBreakingNewsSourcePriority(rightArticle) - getBreakingNewsSourcePriority(leftArticle);
+        .filter((article) => {
+          if (topTrendingKeys.has(getArticleDeduplicationKey(article))) {
+            return false;
+          }
 
-          if (sourcePriorityDelta !== 0) {
-            return sourcePriorityDelta;
+          return getBreakingNewsRelevanceScore(article) > 0;
+        })
+        .sort((leftArticle, rightArticle) => {
+          const relevanceDelta =
+            getBreakingNewsRelevanceScore(rightArticle) - getBreakingNewsRelevanceScore(leftArticle);
+
+          if (relevanceDelta !== 0) {
+            return relevanceDelta;
           }
 
           const leftTime = leftArticle.publishedAt
@@ -7601,7 +7644,6 @@ export default function Home() {
         ) : null}
 
         {renderFeaturedStoriesRow()}
-        {renderNewsClipsRow()}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
@@ -8056,6 +8098,29 @@ export default function Home() {
                     <strong>{source.likes}</strong>
                   </div>
                 </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Food</strong>
+            </div>
+          </div>
+
+          {foodTabArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No food stories yet</strong>
+              <span>Check back shortly for fresh food coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {foodTabArticles.slice(0, 6).map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
               ))}
             </div>
           )}

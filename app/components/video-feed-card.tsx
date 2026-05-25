@@ -222,7 +222,7 @@ export default function VideoFeedCard({
           {shouldAutoplayFrame && !video.fallback ? (
             <>
               <iframe
-                src={buildVideoEmbedUrl(video.youtubeId, true)}
+                src={buildVideoEmbedUrl(video.youtubeId, true, { startSeconds: 5 })}
                 title={video.title}
                 className="video-player-frame"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -353,7 +353,7 @@ export default function VideoFeedCard({
         >
           {isAutoplaying && !video.fallback ? (
             <iframe
-              src={buildVideoEmbedUrl(video.youtubeId, true)}
+              src={buildVideoEmbedUrl(video.youtubeId, true, { startSeconds: 5 })}
               title={video.title}
               className="video-player-frame"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
