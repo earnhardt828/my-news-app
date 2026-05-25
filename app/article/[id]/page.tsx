@@ -765,7 +765,7 @@ function buildSummaryParagraphs(
     if (
       !alreadyIncluded &&
       cleanedSentence.length >= 24 &&
-      uniquePoints.length < 4
+      uniquePoints.length < 6
     ) {
       uniquePoints.push(cleanedSentence);
     }
@@ -789,7 +789,7 @@ function buildSummaryParagraphs(
       (existing) => existing.toLowerCase() === candidate.toLowerCase()
     );
 
-    if (!alreadyIncluded && uniquePoints.length < 4) {
+    if (!alreadyIncluded && uniquePoints.length < 6) {
       uniquePoints.push(candidate);
     }
   });
@@ -803,16 +803,12 @@ function buildSummaryParagraphs(
 
   const groupedPoints: string[] = [];
 
-  if (uniquePoints.length > 0) {
-    groupedPoints.push(uniquePoints.slice(0, 2).join(" ").trim());
-  }
+  for (let index = 0; index < uniquePoints.length; index += 2) {
+    const paragraph = uniquePoints.slice(index, index + 2).join(" ").trim();
 
-  if (uniquePoints.length > 2 && groupedPoints.length < 3) {
-    groupedPoints.push(uniquePoints[2].trim());
-  }
-
-  if (uniquePoints.length > 3 && groupedPoints.length < 4) {
-    groupedPoints.push(uniquePoints[3].trim());
+    if (paragraph) {
+      groupedPoints.push(paragraph);
+    }
   }
 
   const normalizedSource = cleanDisplayText(source ?? "").trim();
@@ -1024,12 +1020,14 @@ export default function ArticleDetailPage() {
       const commentSelectFields =
         "id, article_id, article_key, article_title, article_source, article_image, article_url, user_id, username, text, created_at";
 
+      let commentsUseArticleKeyOnly = true;
       commentsRes = await supabase
         .from("comments")
         .select(commentSelectFields)
         .eq("article_key", resolvedArticleKey);
 
       if (commentsRes.error && isMissingCommentKeyColumnError(commentsRes.error.message)) {
+        commentsUseArticleKeyOnly = false;
         commentsRes = await supabase
           .from("comments")
           .select(
@@ -1037,6 +1035,7 @@ export default function ArticleDetailPage() {
           )
           .in("article_id", articleIdCandidates);
       }
+      console.log("ARTICLE COMMENT KEY", resolvedArticleKey);
 
       if (
         commentsRes.error &&
@@ -1093,6 +1092,15 @@ export default function ArticleDetailPage() {
       }
 
       const rawComments = (commentsRes.data ?? []) as DbComment[];
+      console.log(
+        "COMMENTS FETCHED FOR KEY",
+        resolvedArticleKey,
+        rawComments.filter((comment) =>
+          commentsUseArticleKeyOnly
+            ? comment.article_key === resolvedArticleKey
+            : articleIdCandidates.includes(normalizeArticleId(comment.article_id) ?? Number.NaN)
+        ).length
+      );
       const storedBookmarkRows = (storedBookmarksRes.data ?? []) as DbSavedArticle[];
       const storedCommentMetadata =
         rawComments.find(
@@ -1219,8 +1227,8 @@ export default function ArticleDetailPage() {
               const normalizedCommentArticleId = normalizeArticleId(comment.article_id);
 
               return (
-                (comment.article_key?.trim()
-                  ? comment.article_key === resolvedArticleKey
+                (commentsUseArticleKeyOnly
+                  ? comment.article_key?.trim() === resolvedArticleKey
                   : normalizedCommentArticleId !== null &&
                     articleIdCandidates.includes(normalizedCommentArticleId)) &&
                 (!comment.user_id || !blockedIds.has(comment.user_id))

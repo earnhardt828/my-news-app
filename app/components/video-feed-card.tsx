@@ -170,7 +170,7 @@ export default function VideoFeedCard({
     }
 
     if (isAutoplaying && autoplayKey?.includes("sports-more-quickwatch")) {
-      console.log("MORE SPORTS VIDEO AUTOPLAY ATTEMPT", autoplayKey, video.id);
+      console.log("MORE VIDEOS AUTOPLAY ATTEMPT", autoplayKey, video.id);
     }
   }, [autoplayKey, isAutoplaying, video.id]);
 

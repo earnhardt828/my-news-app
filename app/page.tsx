@@ -7,7 +7,7 @@ import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type MouseEvent, type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createBlockedUser,
   listBlockedUsers,
@@ -1317,6 +1317,7 @@ export default function Home() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [longPressMenuArticle, setLongPressMenuArticle] = useState<Article | null>(null);
   const [commentSortMode, setCommentSortMode] = useState<
     "top" | "controversial" | "newest"
   >("top");
@@ -1385,8 +1386,7 @@ export default function Home() {
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const teamPickerPagesRef = useRef<HTMLDivElement | null>(null);
   const topTabButtonRefs = useRef<Partial<Record<SwipeableSortMode, HTMLButtonElement | null>>>({});
-  const pageSwipeStartXRef = useRef<number | null>(null);
-  const pageSwipeStartYRef = useRef<number | null>(null);
+  const articleLongPressTimerRef = useRef<number | null>(null);
   const teamPickerPanelRefs = useRef<Record<FavoriteLeagueKey, HTMLElement | null>>({
     MLB: null,
     NFL: null,
@@ -1937,6 +1937,7 @@ export default function Home() {
 
       const likes = (readSettledData("likes", likesResult) ?? []) as DbLike[];
       let comments = (readSettledData("comments", commentsResult) ?? []) as DbComment[];
+      let commentsUseArticleKeyOnly = true;
       const commentsError =
         commentsResult.status === "fulfilled" ? commentsResult.value.error : null;
       if (
@@ -1944,6 +1945,7 @@ export default function Home() {
         commentsError &&
         isMissingCommentKeyColumnError(commentsError.message)
       ) {
+        commentsUseArticleKeyOnly = false;
         const legacyCommentsResult = await supabase
           .from("comments")
           .select("id, article_id, text, username, user_id, created_at");
@@ -1989,7 +1991,9 @@ export default function Home() {
         const articleComments = comments
           .filter(
             (comment) =>
-              ((comment.article_key?.trim() ? comment.article_key === stableArticleKey : comment.article_id === item.id)) &&
+              (commentsUseArticleKeyOnly
+                ? comment.article_key?.trim() === stableArticleKey
+                : comment.article_id === item.id) &&
               (!comment.user_id || !blockedIds.has(comment.user_id))
           )
           .map((comment) => {
@@ -3263,6 +3267,109 @@ export default function Home() {
     }
   };
 
+  const handleCardSave = useCallback(
+    async (article: Article) => {
+      if (!userId) {
+        alert("Log in to save articles");
+        return;
+      }
+
+      const targetArticleId = article.id;
+      const nextSaved = !article.saved;
+
+      applyArticleUpdateAcrossCollections(targetArticleId, (currentArticle) => ({
+        ...currentArticle,
+        saved: nextSaved,
+      }));
+
+      if (article.saved) {
+        const { error } = await supabase
+          .from("saved_articles")
+          .delete()
+          .eq("user_id", userId)
+          .eq("article_id", targetArticleId);
+
+        if (error) {
+          console.error("Error removing saved article:", error);
+          applyArticleUpdateAcrossCollections(targetArticleId, (currentArticle) => ({
+            ...currentArticle,
+            saved: true,
+          }));
+          return;
+        }
+
+        return;
+      }
+
+      const { error } = await supabase.from("saved_articles").upsert(
+        {
+          user_id: userId,
+          article_id: targetArticleId,
+          title: cleanDisplayText(article.title),
+          source: article.source,
+          category: article.category,
+          time: article.time,
+          url: article.url ?? null,
+          image: getBestArticleImage(article).src,
+          published_at: article.publishedAt ?? null,
+        },
+        {
+          onConflict: "user_id,article_id",
+        }
+      );
+
+      if (error) {
+        console.error("Error saving article:", error);
+        applyArticleUpdateAcrossCollections(targetArticleId, (currentArticle) => ({
+          ...currentArticle,
+          saved: false,
+        }));
+      }
+    },
+    [applyArticleUpdateAcrossCollections, userId]
+  );
+
+  const handleCardShare = useCallback(async (article: Article) => {
+    const shareUrl =
+      article.url?.trim() ||
+      (typeof window !== "undefined" && typeof article.id === "number"
+        ? `${window.location.origin}/article/${article.id}/`
+        : "");
+
+    if (!shareUrl) {
+      return;
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: cleanDisplayText(article.title),
+          text: cleanDisplayText(article.title),
+          url: shareUrl,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(shareUrl);
+      alert("Link copied to clipboard.");
+    } catch (error) {
+      console.error("ARTICLE SHARE FAILED", error);
+    }
+  }, []);
+
+  const openLongPressMenu = useCallback((article: Article) => {
+    setLongPressMenuArticle(article);
+  }, []);
+
+  const clearArticleLongPressTimer = useCallback(() => {
+    if (articleLongPressTimerRef.current !== null) {
+      window.clearTimeout(articleLongPressTimerRef.current);
+      articleLongPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearArticleLongPressTimer(), [clearArticleLongPressTimer]);
+
   const handleCommentInputChange = (articleId: number, value: string) => {
     setCommentComposerStatus(null);
     setCommentInputs((prev) => ({
@@ -4198,55 +4305,6 @@ export default function Home() {
       inline: "center",
       block: "nearest",
     });
-  }, [sortMode]);
-
-  const handlePageSwipeStart = useCallback((touchEvent: TouchEvent<HTMLElement>) => {
-    const interactiveTarget = touchEvent.target as HTMLElement | null;
-
-    if (
-      interactiveTarget?.closest(
-        ".quick-watch-scroll, .featured-stories-scroll, .source-rankings-list, .category-swipe-row, .polls-carousel, .sports-scores-scroll, .favorite-team-updates-row, .favorite-teams-pages"
-      )
-    ) {
-      pageSwipeStartXRef.current = null;
-      pageSwipeStartYRef.current = null;
-      return;
-    }
-
-    const touch = touchEvent.touches[0];
-    pageSwipeStartXRef.current = touch.clientX;
-    pageSwipeStartYRef.current = touch.clientY;
-  }, []);
-
-  const handlePageSwipeEnd = useCallback((touchEvent: TouchEvent<HTMLElement>) => {
-    const startX = pageSwipeStartXRef.current;
-    const startY = pageSwipeStartYRef.current;
-    pageSwipeStartXRef.current = null;
-    pageSwipeStartYRef.current = null;
-
-    if (
-      startX === null ||
-      startY === null ||
-      !SWIPEABLE_SORT_MODES.includes(sortMode as SwipeableSortMode)
-    ) {
-      return;
-    }
-
-    const touch = touchEvent.changedTouches[0];
-    const diffX = touch.clientX - startX;
-    const diffY = touch.clientY - startY;
-
-    if (Math.abs(diffX) < 60 || Math.abs(diffX) <= Math.abs(diffY)) {
-      return;
-    }
-
-    const currentIndex = SWIPEABLE_SORT_MODES.indexOf(sortMode as SwipeableSortMode);
-    const nextMode = SWIPEABLE_SORT_MODES[diffX < 0 ? currentIndex + 1 : currentIndex - 1];
-
-    if (nextMode) {
-      setSortMode(nextMode);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
   }, [sortMode]);
 
   const localCitySuggestions = useMemo(() => {
@@ -5270,6 +5328,10 @@ export default function Home() {
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
+      const likeLabel = `${article.likes} like${article.likes === 1 ? "" : "s"}`;
+      const commentLabel = `${article.comments.length} comment${
+        article.comments.length === 1 ? "" : "s"
+      }`;
 
       const visualBoxNode = shouldUseLargeImage ? (
         <div className="article-thumb-shell article-card-visual-shell" aria-hidden="true">
@@ -5322,6 +5384,19 @@ export default function Home() {
       return (
         <article
           className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            openLongPressMenu(article);
+          }}
+          onTouchStart={() => {
+            clearArticleLongPressTimer();
+            articleLongPressTimerRef.current = window.setTimeout(() => {
+              openLongPressMenu(article);
+            }, 420);
+          }}
+          onTouchEnd={clearArticleLongPressTimer}
+          onTouchCancel={clearArticleLongPressTimer}
+          onTouchMove={clearArticleLongPressTimer}
         >
           <div className="news-card-top-row news-card-top-row-brand">
             <div className="trending-source-stack trending-source-stack-primary">
@@ -5401,7 +5476,17 @@ export default function Home() {
             </div>
           </Link>
           <div className="news-card-footer">
-            <span className="trending-published-date news-card-footer-date">{publishedLabel}</span>
+            <span className="trending-published-date news-card-footer-date">
+              {publishedLabel}
+              <span className="news-card-footer-separator" aria-hidden="true">
+                ·
+              </span>
+              {likeLabel}
+              <span className="news-card-footer-separator" aria-hidden="true">
+                ·
+              </span>
+              {commentLabel}
+            </span>
           </div>
         </article>
       );
@@ -5440,6 +5525,14 @@ export default function Home() {
               {options?.showFreshnessTime
                 ? formatFreshnessTime(article.publishedAt, article.time)
                 : formatPublishedDate(article.publishedAt, article.time)}
+              <span className="news-card-footer-separator" aria-hidden="true">
+                ·
+              </span>
+              {article.likes} like{article.likes === 1 ? "" : "s"}
+              <span className="news-card-footer-separator" aria-hidden="true">
+                ·
+              </span>
+              {article.comments.length} comment{article.comments.length === 1 ? "" : "s"}
             </span>
           </div>
         </article>
@@ -6150,7 +6243,22 @@ export default function Home() {
       isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
 
     return (
-      <article className="top-trending-list-card">
+      <article
+        className="top-trending-list-card"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openLongPressMenu(article);
+        }}
+        onTouchStart={() => {
+          clearArticleLongPressTimer();
+          articleLongPressTimerRef.current = window.setTimeout(() => {
+            openLongPressMenu(article);
+          }, 420);
+        }}
+        onTouchEnd={clearArticleLongPressTimer}
+        onTouchCancel={clearArticleLongPressTimer}
+        onTouchMove={clearArticleLongPressTimer}
+      >
         <Link
           href={`/article/${articleRouteId}/`}
           className="top-trending-list-link"
@@ -6177,6 +6285,18 @@ export default function Home() {
               </span>
               <span className="top-trending-list-date">
                 {formatPublishedDate(article.publishedAt, article.time)}
+              </span>
+              <span className="top-trending-list-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="top-trending-list-date">
+                {article.likes} like{article.likes === 1 ? "" : "s"}
+              </span>
+              <span className="top-trending-list-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="top-trending-list-date">
+                {article.comments.length} comment{article.comments.length === 1 ? "" : "s"}
               </span>
             </div>
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
@@ -6233,6 +6353,19 @@ export default function Home() {
         className={`top-trending-list-card ${
           typeof options?.showRank === "number" ? "top-trending-list-card-ranked" : ""
         } ${options?.className ?? ""}`.trim()}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openLongPressMenu(article);
+        }}
+        onTouchStart={() => {
+          clearArticleLongPressTimer();
+          articleLongPressTimerRef.current = window.setTimeout(() => {
+            openLongPressMenu(article);
+          }, 420);
+        }}
+        onTouchEnd={clearArticleLongPressTimer}
+        onTouchCancel={clearArticleLongPressTimer}
+        onTouchMove={clearArticleLongPressTimer}
       >
         <Link
           href={`/article/${articleRouteId}/`}
@@ -6262,6 +6395,18 @@ export default function Home() {
               </span>
               <span className="top-trending-list-date">
                 {formatPublishedDate(article.publishedAt, article.time)}
+              </span>
+              <span className="top-trending-list-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="top-trending-list-date">
+                {article.likes} like{article.likes === 1 ? "" : "s"}
+              </span>
+              <span className="top-trending-list-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="top-trending-list-date">
+                {article.comments.length} comment{article.comments.length === 1 ? "" : "s"}
               </span>
             </div>
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
@@ -6424,11 +6569,7 @@ export default function Home() {
       "/Users/erniewilson/my-news-app/app/page.tsx"
     );
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation(
           sortMode === "local"
             ? "local"
@@ -6497,11 +6638,7 @@ export default function Home() {
 
   if (sortMode === "trending") {
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
         {renderQuickWatchRow(true)}
@@ -7098,11 +7235,7 @@ export default function Home() {
 
   if (sortMode === "sports") {
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("sports")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7349,11 +7482,7 @@ export default function Home() {
 
   if (sortMode === "celebrity") {
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("celebrity")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7385,11 +7514,7 @@ export default function Home() {
 
   if (sortMode === "weather") {
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("weather")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7421,11 +7546,7 @@ export default function Home() {
 
   if (sortMode === "technology") {
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("technology")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7457,11 +7578,7 @@ export default function Home() {
 
   if (sortMode === "travel") {
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("travel")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7493,11 +7610,7 @@ export default function Home() {
 
   if (sortMode === "food") {
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("food")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -7529,11 +7642,7 @@ export default function Home() {
 
   if (sortMode === "business") {
     return (
-      <section
-        className="page-shell home-sections-shell"
-        onTouchStart={handlePageSwipeStart}
-        onTouchEnd={handlePageSwipeEnd}
-      >
+      <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("business")}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
@@ -8108,6 +8217,57 @@ export default function Home() {
                 disabled={isSavingCategories || !userId}
               >
                 {isSavingCategories ? "Saving..." : "Save categories"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {longPressMenuArticle ? (
+        <div
+          className="bottom-sheet-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Article actions"
+          onClick={() => setLongPressMenuArticle(null)}
+        >
+          <div className="bottom-sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="bottom-sheet-handle" aria-hidden="true" />
+            <div className="bottom-sheet-header">
+              <div className="stack" style={{ gap: "6px" }}>
+                <h3 className="modal-title">Article actions</h3>
+                <p className="muted bottom-sheet-title">
+                  {cleanDisplayText(longPressMenuArticle.title)}
+                </p>
+              </div>
+              <button
+                className="button button-secondary"
+                onClick={() => setLongPressMenuArticle(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="stack" style={{ gap: "12px" }}>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={async () => {
+                  await handleCardShare(longPressMenuArticle);
+                  setLongPressMenuArticle(null);
+                }}
+              >
+                Share
+              </button>
+              <button
+                type="button"
+                className="button button-accent"
+                onClick={async () => {
+                  await handleCardSave(longPressMenuArticle);
+                  setLongPressMenuArticle(null);
+                }}
+              >
+                {longPressMenuArticle.saved ? "Remove bookmark" : "Bookmark / Save"}
               </button>
             </div>
           </div>

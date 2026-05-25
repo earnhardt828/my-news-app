@@ -50,10 +50,6 @@ function hashValue(value: string) {
 }
 
 export function buildStableArticleKey(article: ArticleIdentityInput) {
-  if (typeof article.id === "number" && Number.isFinite(article.id) && article.id > 0) {
-    return `id:${article.id}`;
-  }
-
   const normalizedUrl = normalizeArticleUrl(article.url);
 
   if (normalizedUrl) {
