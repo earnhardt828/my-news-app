@@ -124,6 +124,19 @@ const QUICK_WATCH_COMBINED_LIMITED_SOURCES = new Set(["al jazeera", "al jazeera 
 const WEATHER_SOURCE_RENAME_PATTERN = /\bweather news\b/i;
 const WEATHER_LIKE_ARTICLE_PATTERN =
   /\b(weather|storm|tornado|hurricane|rain|snow|forecast|radar|climate|flood|wildfire|local weather|severe weather)\b/i;
+const WEATHER_SOURCE_INFERENCE_RULES: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\bthe weather channel\b/i, label: "The Weather Channel" },
+  { pattern: /\bfox weather\b/i, label: "Fox Weather" },
+  { pattern: /\baccuweather\b/i, label: "AccuWeather" },
+  { pattern: /\bweathernation\b/i, label: "WeatherNation" },
+  { pattern: /\bnational weather service\b/i, label: "National Weather Service" },
+  { pattern: /\bnoaa\b/i, label: "NOAA" },
+  { pattern: /\bcnn weather\b/i, label: "CNN Weather" },
+  { pattern: /\bnbc weather\b/i, label: "NBC Weather" },
+  { pattern: /\bwbtv weather\b/i, label: "WBTV Weather" },
+  { pattern: /\bwcnc weather\b/i, label: "WCNC Weather" },
+  { pattern: /\bwsb-tv weather\b/i, label: "WSB-TV Weather" },
+];
 const FEED_META_ICON_PROPS = {
   viewBox: "0 0 24 24",
   width: 14,
@@ -990,6 +1003,99 @@ function buildTopQuickWatchRow(videos: VideoItem[], limit: number) {
   return selected;
 }
 
+function buildNationalWeatherMapEmbedHtml(radarFrameUrls: string[]) {
+  const serializedFrames = JSON.stringify(radarFrameUrls);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      crossorigin=""
+    />
+    <style>
+      html, body, #map { margin: 0; height: 100%; width: 100%; background: #07111f; }
+      body { overflow: hidden; }
+      .leaflet-control-attribution { display: none; }
+      .leaflet-container {
+        background:
+          radial-gradient(circle at top, rgba(56, 189, 248, 0.10), transparent 40%),
+          linear-gradient(180deg, #08111f, #0b1728);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .map-badge {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        z-index: 999;
+        padding: 8px 10px;
+        border-radius: 999px;
+        color: rgba(226, 232, 240, 0.95);
+        background: rgba(7, 17, 31, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        backdrop-filter: blur(12px);
+        font-size: 12px;
+        letter-spacing: 0.01em;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div class="map-badge">National radar</div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+      const frames = ${serializedFrames};
+      const map = L.map("map", {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        tap: false
+      }).setView([39.8283, -98.5795], 4);
+
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        maxZoom: 6
+      }).addTo(map);
+
+      const bounds = L.latLngBounds(
+        L.latLng(24.396308, -125.0),
+        L.latLng(49.384358, -66.93457)
+      );
+      map.fitBounds(bounds, { padding: [0, 0] });
+
+      if (frames.length > 0) {
+        const overlays = frames.map((frame) =>
+          L.tileLayer(frame, {
+            tileSize: 256,
+            opacity: 0.58,
+            updateWhenIdle: true,
+            crossOrigin: true
+          })
+        );
+
+        let activeIndex = overlays.length - 1;
+        overlays[activeIndex].addTo(map);
+
+        if (overlays.length > 1) {
+          window.setInterval(() => {
+            map.removeLayer(overlays[activeIndex]);
+            activeIndex = (activeIndex + 1) % overlays.length;
+            overlays[activeIndex].addTo(map);
+          }, 900);
+        }
+      }
+    </script>
+  </body>
+</html>`;
+}
+
 function selectSourceBalancedArticles<T extends { source: string }>(articles: T[], limit: number) {
   const prioritizedArticles = [...articles].sort((leftArticle, rightArticle) => {
     const rightScore = getArticlePriorityScore(rightArticle as unknown as Article);
@@ -1366,6 +1472,14 @@ function getDisplaySourceLabel(
     article.description ?? ""
   } ${article.url ?? ""}`;
 
+  const inferredWeatherSource = WEATHER_SOURCE_INFERENCE_RULES.find((rule) =>
+    rule.pattern.test(haystack)
+  );
+
+  if (inferredWeatherSource) {
+    return inferredWeatherSource.label;
+  }
+
   if (WEATHER_SOURCE_RENAME_PATTERN.test(safeSource) && WEATHER_LIKE_ARTICLE_PATTERN.test(haystack)) {
     return "Local Weather";
   }
@@ -1487,7 +1601,7 @@ export default function Home() {
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const [weatherNewsArticles, setWeatherNewsArticles] = useState<Article[]>([]);
   const [isWeatherNewsLoading, setIsWeatherNewsLoading] = useState(false);
-  const [nationalWeatherMapUrl, setNationalWeatherMapUrl] = useState<string | null>(null);
+  const [nationalWeatherMapEmbedHtml, setNationalWeatherMapEmbedHtml] = useState<string | null>(null);
   const [isNationalWeatherMapLoading, setIsNationalWeatherMapLoading] = useState(false);
   const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
   const [isBreakingPreviewLoading, setIsBreakingPreviewLoading] = useState(false);
@@ -2492,23 +2606,28 @@ export default function Home() {
 
         const payload = (await response.json()) as RainViewerWeatherMapsResponse;
         const host = payload.host?.trim() ?? "";
-        const latestFrame = payload.radar?.past?.at(-1);
-        const framePath = latestFrame?.path?.trim() ?? "";
+        const framePaths = (payload.radar?.past ?? [])
+          .map((frame) => frame.path?.trim() ?? "")
+          .filter(Boolean)
+          .slice(-6);
 
-        if (!host || !framePath) {
-          throw new Error("RainViewer payload missing host or frame path");
+        if (!host || framePaths.length === 0) {
+          throw new Error("RainViewer payload missing host or frame paths");
         }
 
-        const nationalMapUrl = `${host}${framePath}/512/3/39.8283/-98.5795/2/1_1.png`;
+        const radarFrameUrls = framePaths.map(
+          (framePath) => `${host}${framePath}/256/{z}/{x}/{y}/2/1_1.png`
+        );
+        const embedHtml = buildNationalWeatherMapEmbedHtml(radarFrameUrls);
 
         if (!cancelled) {
-          setNationalWeatherMapUrl(nationalMapUrl);
+          setNationalWeatherMapEmbedHtml(embedHtml);
         }
       } catch (error) {
         console.error("NATIONAL WEATHER MAP LOAD ERROR", error);
 
         if (!cancelled) {
-          setNationalWeatherMapUrl(null);
+          setNationalWeatherMapEmbedHtml(null);
         }
       } finally {
         if (!cancelled) {
@@ -8216,21 +8335,29 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="section-card stack weather-map-placeholder-card">
-                  {nationalWeatherMapUrl ? (
+                  {nationalWeatherMapEmbedHtml ? (
                     <>
-                      <img
-                        src={nationalWeatherMapUrl}
-                        alt="National U.S. weather radar map"
-                        className="national-weather-map-image"
+                      <iframe
+                        title="National U.S. weather radar map"
+                        srcDoc={nationalWeatherMapEmbedHtml}
+                        className="national-weather-map-frame"
                         loading="lazy"
-                        decoding="async"
+                        sandbox="allow-scripts allow-same-origin"
                       />
                       <div className="stack" style={{ gap: "4px" }}>
                         <strong>Current U.S. radar</strong>
                         <span className="muted">
-                          Live radar image powered by RainViewer.
+                          Dark basemap with live RainViewer radar overlay across the U.S.
                         </span>
                       </div>
+                      <a
+                        href="https://radar.weather.gov/"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="button button-secondary"
+                      >
+                        Open NWS Radar
+                      </a>
                     </>
                   ) : isNationalWeatherMapLoading ? (
                     <>

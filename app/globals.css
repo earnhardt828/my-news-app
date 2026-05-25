@@ -667,11 +667,12 @@ input {
   justify-content: center;
 }
 
-.national-weather-map-image {
+.national-weather-map-frame {
   width: 100%;
   max-width: 100%;
+  min-height: 280px;
   border-radius: 18px;
-  object-fit: cover;
+  border: 0;
   background: rgba(148, 163, 184, 0.12);
 }
 
