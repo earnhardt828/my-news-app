@@ -75,7 +75,7 @@ const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 const SPORTS_UNIFIED_QUERY =
   "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | NBA latest | ESPN NBA | NBA.com | Bleacher Report NBA | Yahoo Sports NBA | CBS Sports NBA | NBC Sports NBA | MLS news | Major League Soccer news | MLSsoccer.com | ESPN MLS | The Athletic soccer | CBS Sports soccer | NBC Sports soccer | Yahoo Sports soccer | local MLS team news | ESPN | Bleacher Report | AP News Sports | BBC Sport | MMA Fighting | NHL.com | MLB.com | NFL.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest";
 const CELEBRITY_FEED_QUERY =
-  "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
+  "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TECHNOLOGY_FEED_QUERY =
   "technology news | AI news | tech startups | Apple news | Google news | Microsoft news | cybersecurity news | social media news | The Verge | TechCrunch | Wired | Ars Technica | Engadget | CNET | CNBC Tech | Bloomberg Technology";
 const TRAVEL_FEED_QUERY =
@@ -116,6 +116,22 @@ const FEATURED_SOURCE_NAMES = [
 ] as const;
 const MY_NEWS_FEATURED_SPORTS_PATTERN =
   /\b(sports?|espn|cbs sports|sports illustrated|bleacher report|mlb|nba|nfl|nhl|mls|soccer|football|basketball|baseball|hockey)\b/i;
+const TOP_QUICK_WATCH_PREFERRED_SOURCE_PATTERN =
+  /\b(cnn|nbc news|cbs news|abc news|reuters|associated press|ap news|bbc news|pbs newshour|cnbc|bloomberg|usa today|the guardian|guardian)\b/i;
+const TOP_QUICK_WATCH_DEPRIORITIZED_SOURCE_PATTERN =
+  /\b(al jazeera|al jazeera english|fox news)\b/i;
+const FEED_META_ICON_PROPS = {
+  viewBox: "0 0 24 24",
+  width: 14,
+  height: 14,
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  focusable: false,
+  "aria-hidden": true,
+};
 
 type SportsSectionKey = FavoriteLeagueKey | "NFL" | "MMA" | "MORE";
 
@@ -861,7 +877,11 @@ function mergeArticlesByIdentity(existing: Article[], incoming: Article[]) {
   return merged;
 }
 
-function selectSourceBalancedVideos(videos: VideoItem[], limit: number) {
+function selectSourceBalancedVideos(
+  videos: VideoItem[],
+  limit: number,
+  maxPerSourceOverride?: number
+) {
   if (videos.length <= limit) {
     return videos;
   }
@@ -870,7 +890,8 @@ function selectSourceBalancedVideos(videos: VideoItem[], limit: number) {
   const normalizedSources = new Set(
     videos.map((video) => cleanDisplayText(video.creator).trim().toLowerCase()).filter(Boolean)
   );
-  const maxPerSource = normalizedSources.size > 1 ? 2 : limit;
+  const maxPerSource =
+    maxPerSourceOverride ?? (normalizedSources.size > 1 ? 2 : limit);
   const selected: VideoItem[] = [];
   const deferred: VideoItem[] = [];
 
@@ -889,6 +910,37 @@ function selectSourceBalancedVideos(videos: VideoItem[], limit: number) {
 
   const remainingSlots = Math.max(0, limit - selected.length);
   return [...selected, ...deferred.slice(0, remainingSlots)].slice(0, limit);
+}
+
+function prioritizeTopQuickWatchVideos(videos: VideoItem[]) {
+  return [...videos].sort((leftVideo, rightVideo) => {
+    const scoreVideo = (video: VideoItem) => {
+      const source = cleanDisplayText(video.creator).trim().toLowerCase();
+      const title = cleanDisplayText(video.title).trim().toLowerCase();
+      let score = 0;
+
+      if (TOP_QUICK_WATCH_PREFERRED_SOURCE_PATTERN.test(source)) {
+        score += 120;
+      }
+
+      if (TOP_QUICK_WATCH_DEPRIORITIZED_SOURCE_PATTERN.test(source)) {
+        score -= 48;
+      }
+
+      if (/(overlay|info card|end screen|subscribe)/i.test(title)) {
+        score -= 40;
+      }
+
+      if (video.orientation === "vertical") {
+        score += 28;
+      }
+
+      const publishedAt = video.publishedAt ? new Date(video.publishedAt).getTime() : 0;
+      return score * 1_000_000 + publishedAt;
+    };
+
+    return scoreVideo(rightVideo) - scoreVideo(leftVideo);
+  });
 }
 
 function selectSourceBalancedArticles<T extends { source: string }>(articles: T[], limit: number) {
@@ -4527,11 +4579,11 @@ export default function Home() {
     );
 
     const preferredPool = preferredVertical.length > 0 ? preferredVertical : playableVideos;
-    return selectSourceBalancedVideos(preferredPool, 24);
+    return selectSourceBalancedVideos(prioritizeTopQuickWatchVideos(preferredPool), 24);
   }, [videos]);
 
   const myNewsQuickWatchVideos = useMemo(
-    () => myNewsVideoPool.slice(0, 5),
+    () => selectSourceBalancedVideos(prioritizeTopQuickWatchVideos(myNewsVideoPool), 5, 1),
     [myNewsVideoPool]
   );
   const myNewsFeaturedVideos = useMemo(
@@ -5592,22 +5644,20 @@ export default function Home() {
             </div>
           </Link>
           <div className="news-card-footer">
-            <span className="trending-published-date news-card-footer-date">
-              {publishedLabel}
-              <span className="news-card-footer-separator" aria-hidden="true">
-                ·
+            <span className="trending-published-date news-card-footer-date feed-meta-inline">
+              <span>{publishedLabel}</span>
+              <span className="feed-meta-inline-group">
+                <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                  <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
+                </svg>
+                <span>{article.likes}</span>
               </span>
-              <span className="news-card-footer-icon" aria-hidden="true">
-                ♡
+              <span className="feed-meta-inline-group">
+                <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                  <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                </svg>
+                <span>{article.comments.length}</span>
               </span>
-              {article.likes}
-              <span className="news-card-footer-separator" aria-hidden="true">
-                ·
-              </span>
-              <span className="news-card-footer-icon" aria-hidden="true">
-                💬
-              </span>
-              {article.comments.length}
             </span>
           </div>
         </article>
@@ -5643,24 +5693,24 @@ export default function Home() {
             </div>
           </Link>
           <div className="news-card-footer">
-            <span className="trending-published-date">
-              {options?.showFreshnessTime
-                ? formatFreshnessTime(article.publishedAt, article.time)
-                : formatPublishedDate(article.publishedAt, article.time)}
-              <span className="news-card-footer-separator" aria-hidden="true">
-                ·
+            <span className="trending-published-date feed-meta-inline">
+              <span>
+                {options?.showFreshnessTime
+                  ? formatFreshnessTime(article.publishedAt, article.time)
+                  : formatPublishedDate(article.publishedAt, article.time)}
               </span>
-              <span className="news-card-footer-icon" aria-hidden="true">
-                ♡
+              <span className="feed-meta-inline-group">
+                <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                  <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
+                </svg>
+                <span>{article.likes}</span>
               </span>
-              {article.likes}
-              <span className="news-card-footer-separator" aria-hidden="true">
-                ·
+              <span className="feed-meta-inline-group">
+                <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                  <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                </svg>
+                <span>{article.comments.length}</span>
               </span>
-              <span className="news-card-footer-icon" aria-hidden="true">
-                💬
-              </span>
-              {article.comments.length}
             </span>
           </div>
         </article>
@@ -6421,13 +6471,23 @@ export default function Home() {
                 ·
               </span>
               <span className="top-trending-list-date">
-                ♡ {article.likes}
+                <span className="feed-meta-inline-group">
+                  <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                    <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
+                  </svg>
+                  <span>{article.likes}</span>
+                </span>
               </span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
               <span className="top-trending-list-date">
-                💬 {article.comments.length}
+                <span className="feed-meta-inline-group">
+                  <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                    <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                  </svg>
+                  <span>{article.comments.length}</span>
+                </span>
               </span>
             </div>
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
@@ -6531,13 +6591,23 @@ export default function Home() {
                 ·
               </span>
               <span className="top-trending-list-date">
-                ♡ {article.likes}
+                <span className="feed-meta-inline-group">
+                  <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                    <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
+                  </svg>
+                  <span>{article.likes}</span>
+                </span>
               </span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
               <span className="top-trending-list-date">
-                💬 {article.comments.length}
+                <span className="feed-meta-inline-group">
+                  <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                    <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                  </svg>
+                  <span>{article.comments.length}</span>
+                </span>
               </span>
             </div>
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>

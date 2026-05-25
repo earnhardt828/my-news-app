@@ -39,10 +39,13 @@ const SPORTS_REJECTED_PATTERN =
   /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/;
 
 const CELEBRITY_POSITIVE_PATTERN =
-  /(celebrity|celebrities|entertainment|e! news|entertainment tonight|tmz|people|red carpet|hollywood|actor|actress|singer|musician|movie star|tv star|billboard|variety|the hollywood reporter|film premiere|movie trailer|tv show|streaming series|album release|box office|festival|gossip|paparazzi|interview)/;
+  /(celebrity|celebrities|entertainment|e! news|entertainment tonight|tmz|people|page six|access hollywood|extra|red carpet|hollywood|actor|actress|singer|musician|movie star|tv star|billboard|variety|the hollywood reporter|deadline|film premiere|movie trailer|tv show|streaming series|album release|box office|festival|gossip|paparazzi|interview)/;
 
 const CELEBRITY_REJECTED_PATTERN =
-  /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|sportscenter|touchdown|dunk|home run|goal|nfl|nba|mlb|nhl|mls|market|stocks|finance|policy|senate|president|breaking news|world news)/;
+  /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|sportscenter|touchdown|dunk|home run|goal|nfl|nba|mlb|nhl|mls|market|stocks|finance|policy|senate|president|breaking news|world news|flood|earthquake|shooting|inflation|tariffs)/;
+
+const BLOCKED_VIDEO_SOURCE_PATTERN = /\b(kanak news|kanak news odisha)\b/i;
+const BLOCKED_VIDEO_URL_PATTERN = /kanaknews\.com/i;
 
 const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCiWLfSweyRNmLpgEHekhoAg", name: "ESPN" },
@@ -357,8 +360,16 @@ function getNewsVideoScore(video: Pick<VideoFeedItem, "title" | "creator" | "cat
     score += 48;
   }
 
-  if (/(bbc news|cnn|fox news|reuters|associated press|ap news|abc news|nbc news|cbs news|pbs newshour|sky news|al jazeera|bloomberg|cnbc|guardian|usa today)/.test(haystack)) {
-    score += 56;
+  if (/(cnn|reuters|associated press|ap news|abc news|nbc news|cbs news|pbs newshour|bbc news|bloomberg|cnbc|guardian|usa today)/.test(haystack)) {
+    score += 84;
+  }
+
+  if (/(al jazeera|fox news)/.test(haystack)) {
+    score -= 24;
+  }
+
+  if (/(overlay|end screen|info card|subscribe)/.test(haystack)) {
+    score -= 40;
   }
 
   if (video.category !== "Sports") {
@@ -381,19 +392,33 @@ function isStrictCelebrityVideo(
   const creator = video.creator.toLowerCase();
   const title = video.title.toLowerCase();
   const approvedEntertainmentSource =
-    /(e! news|entertainment tonight|tmz|people|billboard|variety|the hollywood reporter|deadline)/.test(
+    /(e! news|entertainment tonight|tmz|people|page six|billboard|variety|the hollywood reporter|deadline|access hollywood|extra|us weekly|entertainment weekly)/.test(
       creator
     );
-  const approvedEntertainmentTitle =
-    /(celebrity|celebrities|entertainment|red carpet|hollywood|actor|actress|singer|musician|movie star|tv star|film premiere|movie trailer|tv show|streaming series|album release|box office|festival|gossip|paparazzi|interview)/.test(
+  const generalNewsSource =
+    /(cnn|fox news|reuters|associated press|ap news|abc news|nbc news|cbs news|pbs newshour|sky news|al jazeera|bloomberg|cnbc|guardian|usa today|bbc news)/.test(
+      creator
+    );
+  const titleHasClearCelebrityTerms =
+    /(celebrity|celebrities|red carpet|hollywood|actor|actress|singer|musician|movie star|tv star|film premiere|movie trailer|tv show|streaming series|album release|box office|festival|gossip|paparazzi|celebrity interview|entertainment tonight)/.test(
       title
     );
-  const hasCelebrityTerms =
-    CELEBRITY_POSITIVE_PATTERN.test(haystack) &&
-    (approvedEntertainmentSource || approvedEntertainmentTitle || video.category === "Entertainment");
+  const hasCelebrityTerms = CELEBRITY_POSITIVE_PATTERN.test(haystack);
   const hasRejectedTerms = CELEBRITY_REJECTED_PATTERN.test(haystack);
 
-  return hasCelebrityTerms && !hasRejectedTerms;
+  if (hasRejectedTerms || !hasCelebrityTerms) {
+    return false;
+  }
+
+  if (approvedEntertainmentSource) {
+    return true;
+  }
+
+  if (generalNewsSource) {
+    return titleHasClearCelebrityTerms;
+  }
+
+  return titleHasClearCelebrityTerms || video.category === "Entertainment";
 }
 
 function getCelebrityVideoScore(
@@ -407,7 +432,7 @@ function getCelebrityVideoScore(
   }
 
   if (
-    /(e! news|entertainment tonight|people|tmz|billboard|variety|deadline|red carpet|movie trailer|celebrity interview|festival premiere|album release)/.test(
+    /(e! news|entertainment tonight|people|tmz|page six|access hollywood|extra|billboard|variety|deadline|the hollywood reporter|red carpet|movie trailer|celebrity interview|festival premiere|album release)/.test(
       haystack
     )
   ) {
@@ -431,6 +456,13 @@ function getCelebrityVideoScore(
   }
 
   return score;
+}
+
+function isBlockedVideo(video: Pick<VideoFeedItem, "title" | "creator" | "watchUrl">) {
+  const haystack = `${video.title} ${video.creator} ${video.watchUrl}`;
+  return (
+    BLOCKED_VIDEO_SOURCE_PATTERN.test(haystack) || BLOCKED_VIDEO_URL_PATTERN.test(video.watchUrl)
+  );
 }
 
 function isStrictSportsVideo(
@@ -564,15 +596,16 @@ function filterAndSortVideos(
       fallback: false,
     } satisfies VideoFeedItem;
   });
+  const nonBlockedVideos = mappedVideos.filter((video) => !isBlockedVideo(video));
 
   const searchFiltered = normalizedSearch
-    ? mappedVideos.filter((video) => {
+    ? nonBlockedVideos.filter((video) => {
         const haystack = normalizeForSearch(
           `${video.title} ${video.creator} ${video.category}`
         );
         return haystack.includes(normalizedSearch);
       })
-    : mappedVideos;
+    : nonBlockedVideos;
 
   const categoryFiltered =
     options.category !== "Trending"
@@ -624,7 +657,7 @@ function filterAndSortVideos(
   });
 
   if (isTrendingFeed) {
-    return diversifyVideoSources(deduped);
+    return diversifyVideoSources(deduped, 1);
   }
 
   const sevenDayCutoff = new Date(getPublishedAfterIso(7)).getTime();

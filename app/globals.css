@@ -641,6 +641,23 @@ input {
   min-width: 0;
 }
 
+.feed-meta-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.feed-meta-inline-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.feed-meta-inline-icon {
+  flex: 0 0 auto;
+}
+
 .top-trending-list-title {
   margin: 0;
   font-size: 1rem;

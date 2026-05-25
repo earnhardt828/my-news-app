@@ -247,6 +247,10 @@ const SPORTS_SOURCE_SEARCHES = [
 const CELEBRITY_SOURCE_NAMES = [
   "TMZ",
   "People",
+  "Entertainment Tonight",
+  "Access Hollywood",
+  "Extra",
+  "Deadline",
   "Entertainment Weekly",
   "E! News",
   "Variety",
@@ -263,6 +267,10 @@ const CELEBRITY_QUERY_TERMS = [
   "music celebrity news",
   "TMZ",
   "People",
+  "Entertainment Tonight",
+  "Access Hollywood",
+  "Extra",
+  "Deadline",
   "Entertainment Weekly",
   "E! News",
   "Variety",
@@ -271,6 +279,9 @@ const CELEBRITY_QUERY_TERMS = [
   "Us Weekly",
   "Billboard",
 ] as const;
+const BLOCKED_FEED_SOURCE_PATTERN =
+  /\b(kanak news|kanak news odisha)\b/i;
+const BLOCKED_FEED_URL_PATTERN = /kanaknews\.com/i;
 const TRUMP_QUERY_TERMS = [
   "Donald Trump news",
   "Trump administration news",
@@ -1338,6 +1349,21 @@ function normalizeSourceName(sourceName: string | null | undefined, url?: string
   return candidate;
 }
 
+function isBlockedFeedArticleCandidate(candidate: {
+  source?: string | null;
+  url?: string | null;
+  title?: string | null;
+  description?: string | null;
+}) {
+  const source = candidate.source?.trim() ?? "";
+  const url = candidate.url?.trim() ?? "";
+  const title = candidate.title?.trim() ?? "";
+  const description = candidate.description?.trim() ?? "";
+  const haystack = `${source} ${title} ${description} ${url}`;
+
+  return BLOCKED_FEED_SOURCE_PATTERN.test(haystack) || BLOCKED_FEED_URL_PATTERN.test(url);
+}
+
 function buildTitleFingerprint(title: string) {
   return normalizeTitle(title)
     .split(" ")
@@ -1423,6 +1449,16 @@ function buildNormalizedArticle(
     raw.source_id?.trim() ||
     fallback.source;
   const sourceName = normalizeSourceName(rawSourceName, normalizedUrl);
+  if (
+    isBlockedFeedArticleCandidate({
+      source: sourceName,
+      url: normalizedUrl,
+      title,
+      description: raw.description ?? null,
+    })
+  ) {
+    return null;
+  }
   const category =
     Array.isArray(raw.category) && raw.category[0]
       ? raw.category[0]
@@ -1523,7 +1559,7 @@ function getEffectiveQuery(params: Pick<ProviderFetchParams, "mode" | "query" | 
   if (params.mode === "celebrity") {
     return (
       params.query.trim() ||
-      "celebrity news OR celebrity gossip OR entertainment news OR hollywood news OR music celebrity news OR TMZ OR People OR Entertainment Weekly OR E! News OR Variety OR The Hollywood Reporter OR Page Six OR Us Weekly OR Billboard"
+      "celebrity news OR celebrity gossip OR entertainment news OR hollywood news OR music celebrity news OR TMZ OR People OR Entertainment Tonight OR Access Hollywood OR Extra OR Deadline OR Entertainment Weekly OR E! News OR Variety OR The Hollywood Reporter OR Page Six OR Us Weekly OR Billboard"
     );
   }
 
@@ -3088,7 +3124,7 @@ async function fetchCelebrityArticles(params: ProviderFetchParams): Promise<News
   );
   const combined = dedupeArticles([...rssArticles, ...queryArticles]);
   const celebrityPattern =
-    /(celebrity|gossip|hollywood|entertainment|music|tmz|people|ew|e!\s*news|variety|hollywood reporter|page six|us weekly|billboard)/i;
+    /(celebrity|celebrities|gossip|hollywood|entertainment|music|tmz|people|entertainment tonight|access hollywood|extra|deadline|ew|e!\s*news|variety|hollywood reporter|page six|us weekly|billboard|red carpet|actor|actress|singer|movie star|tv star)/i;
   const celebrityArticles = sortArticlesForMode(combined, params).filter((article) => {
     const source = article.source.toLowerCase();
     const text = `${article.title} ${article.description ?? ""} ${article.category}`.toLowerCase();
