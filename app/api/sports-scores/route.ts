@@ -47,6 +47,10 @@ type SportsScoreGame = {
   };
   shortDetail: string | null;
   scheduledAt: string | null;
+  statusDetail?: string | null;
+  venue?: string | null;
+  boxScoreAvailable?: boolean;
+  playByPlayAvailable?: boolean;
 };
 
 function isLeagueKey(value: string): value is ScoreLeagueKey {
@@ -159,6 +163,10 @@ async function fetchTheSportsDbLeagueScores(league: ScoreLeagueKey): Promise<Spo
         scheduledAt: event.dateEvent
           ? new Date(`${event.dateEvent} ${event.strTime ?? "00:00:00"}`).toISOString()
           : null,
+        statusDetail: event.strStatus ?? event.strProgress ?? null,
+        venue: event.strVenue ?? null,
+        boxScoreAvailable: false,
+        playByPlayAvailable: false,
       } satisfies SportsScoreGame;
     })
     .filter((game) => game.homeTeam.name && game.awayTeam.name);
@@ -240,6 +248,18 @@ async function fetchApiSportsLeagueScores(league: ScoreLeagueKey): Promise<Sport
                 null
               ),
         scheduledAt: typeof fixture.date === "string" ? fixture.date : null,
+        statusDetail:
+          typeof status.long === "string"
+            ? status.long
+            : typeof status.short === "string"
+              ? status.short
+              : null,
+        venue:
+          typeof fixture.venue === "object" && fixture.venue && "name" in fixture.venue
+            ? String((fixture.venue as { name?: unknown }).name ?? "")
+            : null,
+        boxScoreAvailable: false,
+        playByPlayAvailable: false,
       } satisfies SportsScoreGame;
     })
     .filter((game) => game.homeTeam.name && game.awayTeam.name);

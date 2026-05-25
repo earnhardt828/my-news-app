@@ -4824,6 +4824,13 @@ input {
   scroll-snap-align: start;
 }
 
+.sports-score-card-button {
+  width: min(82vw, 312px);
+  text-align: left;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
 .sports-score-card-top {
   display: flex;
   align-items: center;
@@ -4865,6 +4872,58 @@ input {
 .sports-score-status-upcoming {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   color: var(--accent-strong);
+}
+
+.sports-game-detail-sheet {
+  display: grid;
+  gap: 16px;
+}
+
+.sports-game-detail-scoreboard {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.sports-game-detail-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.sports-game-detail-team-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sports-game-detail-team-mark {
+  width: 40px;
+  height: 40px;
+}
+
+.sports-game-detail-score {
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.sports-game-detail-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.sports-game-detail-section {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
 }
 
 .sports-score-team-row {

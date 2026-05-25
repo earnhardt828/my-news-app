@@ -65,7 +65,7 @@ const INITIAL_FEED_TIMEOUT_MS = 5000;
 const DIRECT_ROUTE_TIMEOUT_MS = 10000;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 const SPORTS_UNIFIED_QUERY =
-  "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | ESPN | Bleacher Report | AP News Sports | BBC Sport | MMA Fighting | NHL.com | MLB.com | NBA.com | NFL.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest";
+  "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | NBA latest | ESPN NBA | NBA.com | Bleacher Report NBA | Yahoo Sports NBA | CBS Sports NBA | NBC Sports NBA | MLS news | Major League Soccer news | MLSsoccer.com | ESPN MLS | The Athletic soccer | CBS Sports soccer | NBC Sports soccer | Yahoo Sports soccer | local MLS team news | ESPN | Bleacher Report | AP News Sports | BBC Sport | MMA Fighting | NHL.com | MLB.com | NFL.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest";
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TECHNOLOGY_FEED_QUERY =
@@ -282,6 +282,10 @@ type SportsScoreGame = {
   };
   shortDetail: string | null;
   scheduledAt: string | null;
+  statusDetail?: string | null;
+  venue?: string | null;
+  boxScoreAvailable?: boolean;
+  playByPlayAvailable?: boolean;
 };
 
 function formatTopRankLabel(rank: number) {
@@ -1041,9 +1045,18 @@ function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function isSportsPromotionalArticle(article: Article) {
+function isSportsBettingAd(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
-  return /(betmgm|bonus code|promo code|sportsbook|odds boost|sign up bonus|bet365|fanduel|draftkings|caesars sportsbook|wagering|parlay)/i.test(
+  const hasLegitimateReportingContext =
+    /(sports betting legislation|gambling investigation|betting scandal|sportsbook revenue|state betting law)/i.test(
+      haystack
+    );
+
+  if (hasLegitimateReportingContext) {
+    return false;
+  }
+
+  return /(betmgm bonus code|bonus code|promo code|sportsbook promo|sign up bonus|get \$1,500|draftkings promo|fanduel promo|caesars promo|bet365 promo|odds boost|parlay picks)/i.test(
     haystack
   );
 }
@@ -1060,6 +1073,24 @@ function isSportsVideo(video: VideoItem) {
     );
 
   return hasSportsTerms && !hasRejectedTerms;
+}
+
+function isStrictNflVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  const hasNflTerms =
+    /(nfl|national football league|nfl network|espn nfl|monday night football|sunday night football|football highlights|touchdown|quarterback|super bowl|nfl films)/.test(
+      haystack
+    );
+  const hasPreferredSource =
+    /(nfl network|nfl\.com|espn|cbs sports nfl|nbc sports nfl|fox sports nfl|bleacher report nfl)/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/.test(
+      haystack
+    );
+
+  return !hasRejectedTerms && (hasNflTerms || hasPreferredSource);
 }
 
 function matchesFavoriteLeagueTeamName(text: string, league: FavoriteLeagueKey) {
@@ -1100,6 +1131,10 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
 
 function matchesSportsSectionVideo(video: VideoItem, section: SportsSectionConfig) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+
+  if (section.key === "NFL") {
+    return isStrictNflVideo(video);
+  }
 
   if (section.key === "MLB" && matchesFavoriteLeagueTeamName(haystack, "MLB")) {
     return true;
@@ -1285,6 +1320,7 @@ export default function Home() {
   });
   const [isSportsScoresLoading, setIsSportsScoresLoading] = useState(false);
   const [areSportsScoresAvailable, setAreSportsScoresAvailable] = useState(true);
+  const [selectedSportsGame, setSelectedSportsGame] = useState<SportsScoreGame | null>(null);
   const [autoplayTrendingVideoKeys, setAutoplayTrendingVideoKeys] = useState<string[]>([]);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
@@ -3951,7 +3987,7 @@ export default function Home() {
     }
 
     const filteredSportsArticles = rawSportsArticles.filter(
-      (article) => !isSportsPromotionalArticle(article)
+      (article) => !isSportsBettingAd(article)
     );
 
     if (sortMode === "sports") {
@@ -4385,6 +4421,10 @@ export default function Home() {
                 score += 140;
               }
 
+              if (/(nfl network|nfl films|monday night football|sunday night football|espn nfl|cbs sports nfl|nbc sports nfl|fox sports nfl|bleacher report nfl)/.test(haystack)) {
+                score += 120;
+              }
+
               if (/(sportscenter|espn highlights|nfl highlights|nba highlights|mlb highlights|nhl highlights|mls highlights|soccer goals|cbs sports highlights|bleacher report highlights|fox sports highlights|formula 1 highlights|f1 highlights)/.test(haystack)) {
                 score += 130;
               }
@@ -4406,7 +4446,7 @@ export default function Home() {
 
             return scoreVideo(right) - scoreVideo(left);
           }),
-        16
+        24
       ),
     [sportsVideos, videos]
   );
@@ -4419,12 +4459,26 @@ export default function Home() {
     return sportsTabArticles;
   }, [sortMode, sportsTabArticles]);
 
-  const sportsFeaturedArticle = useMemo(() => {
+  const sportsFeaturedArticles = useMemo(() => {
     if (sortMode !== "sports") {
-      return null;
+      return [] as Article[];
     }
 
-    return sportsStandardArticles[0] ?? null;
+    const seenKeys = new Set<string>();
+
+    return selectSourceBalancedArticles(
+      sportsStandardArticles.filter((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+
+        if (seenKeys.has(dedupeKey)) {
+          return false;
+        }
+
+        seenKeys.add(dedupeKey);
+        return true;
+      }),
+      8
+    );
   }, [sortMode, sportsStandardArticles]);
 
   const favoriteTeamGames = useMemo(() => {
@@ -4485,9 +4539,9 @@ export default function Home() {
     const usedArticleKeys = new Set<string>();
     const usedVideoKeys = new Set<string>();
 
-    if (sportsFeaturedArticle) {
-      usedArticleKeys.add(getArticleDeduplicationKey(sportsFeaturedArticle));
-    }
+    sportsFeaturedArticles.forEach((article) => {
+      usedArticleKeys.add(getArticleDeduplicationKey(article));
+    });
 
     return SPORTS_SECTION_CONFIGS.map((section) => {
       const favoriteLeagueTeams =
@@ -4530,7 +4584,8 @@ export default function Home() {
         return getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle);
       });
 
-      const selectedArticles = selectSourceBalancedArticles(sortedArticles, 5);
+      const sectionArticleLimit = section.key === "NBA" || section.key === "MLS" ? 6 : 5;
+      const selectedArticles = selectSourceBalancedArticles(sortedArticles, sectionArticleLimit);
       selectedArticles.forEach((article) => {
         usedArticleKeys.add(getArticleDeduplicationKey(article));
       });
@@ -4549,7 +4604,8 @@ export default function Home() {
         return matchesSportsSectionVideo(video, section);
       });
 
-      const selectedVideos = selectSourceBalancedVideos(candidateVideos, 5);
+      const sectionVideoLimit = section.key === "NFL" ? 6 : 5;
+      const selectedVideos = selectSourceBalancedVideos(candidateVideos, sectionVideoLimit);
       selectedVideos.forEach((video) => {
         usedVideoKeys.add(video.id);
       });
@@ -4586,7 +4642,7 @@ export default function Home() {
         videos: selectedVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, sortMode, sportsFeaturedArticle, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -5528,7 +5584,13 @@ export default function Home() {
     return (
       <div className="sports-scores-scroll" role="list" aria-label={`${leagueLabel} scores`}>
         {games.map((game) => (
-          <article key={game.id} className="sports-score-card" role="listitem">
+          <button
+            key={game.id}
+            type="button"
+            className="sports-score-card sports-score-card-button"
+            role="listitem"
+            onClick={() => setSelectedSportsGame(game)}
+          >
             <div className="sports-score-card-top">
               <span className="sports-score-league">{game.league}</span>
               <span className={`sports-score-status sports-score-status-${game.status.toLowerCase()}`}>
@@ -5552,8 +5614,101 @@ export default function Home() {
             <div className="sports-score-meta">
               <span>{game.shortDetail ?? "Upcoming game"}</span>
             </div>
-          </article>
+          </button>
         ))}
+      </div>
+    );
+  };
+
+  const renderSportsGameDetailModal = () => {
+    if (!selectedSportsGame) {
+      return null;
+    }
+
+    return (
+      <div
+        className="source-sheet-overlay"
+        role="presentation"
+        onClick={() => setSelectedSportsGame(null)}
+      >
+        <div
+          className="bottom-sheet source-sheet sports-game-detail-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sports-game-detail-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="sheet-handle" />
+          <div className="bottom-sheet-header source-sheet-header">
+            <div className="stack" style={{ gap: "6px" }}>
+              <strong id="sports-game-detail-title" className="bottom-sheet-title">
+                {selectedSportsGame.awayTeam.name} at {selectedSportsGame.homeTeam.name}
+              </strong>
+              <span className="muted">{selectedSportsGame.league} game detail</span>
+            </div>
+            <button
+              type="button"
+              className="icon-button source-sheet-close"
+              onClick={() => setSelectedSportsGame(null)}
+              aria-label="Close game detail"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="sports-game-detail-scoreboard">
+            <div className="sports-game-detail-team-row">
+              <div className="sports-game-detail-team-copy">
+                {renderScoreTeamMark(selectedSportsGame.awayTeam, "sports-game-detail-team-mark")}
+                <strong>{selectedSportsGame.awayTeam.name}</strong>
+              </div>
+              <strong className="sports-game-detail-score">{selectedSportsGame.awayTeam.score ?? "—"}</strong>
+            </div>
+            <div className="sports-game-detail-team-row">
+              <div className="sports-game-detail-team-copy">
+                {renderScoreTeamMark(selectedSportsGame.homeTeam, "sports-game-detail-team-mark")}
+                <strong>{selectedSportsGame.homeTeam.name}</strong>
+              </div>
+              <strong className="sports-game-detail-score">{selectedSportsGame.homeTeam.score ?? "—"}</strong>
+            </div>
+          </div>
+
+          <div className="sports-game-detail-meta">
+            <span className={`sports-score-status sports-score-status-${selectedSportsGame.status.toLowerCase()}`}>
+              {selectedSportsGame.status}
+            </span>
+            <span>{selectedSportsGame.statusDetail ?? selectedSportsGame.shortDetail ?? "Status unavailable"}</span>
+            <span>
+              {selectedSportsGame.scheduledAt
+                ? new Intl.DateTimeFormat("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  }).format(new Date(selectedSportsGame.scheduledAt))
+                : "Scheduled time unavailable"}
+            </span>
+            {selectedSportsGame.venue ? <span>{selectedSportsGame.venue}</span> : null}
+          </div>
+
+          <div className="sports-game-detail-section">
+            <strong>Box Score</strong>
+            <span>
+              {selectedSportsGame.boxScoreAvailable
+                ? "Box score available."
+                : "Box score/play-by-play unavailable for this game."}
+            </span>
+          </div>
+          <div className="sports-game-detail-section">
+            <strong>Play-by-Play</strong>
+            <span>
+              {selectedSportsGame.playByPlayAvailable
+                ? "Play-by-play available."
+                : "Box score/play-by-play unavailable for this game."}
+            </span>
+          </div>
+        </div>
       </div>
     );
   };
@@ -6726,15 +6881,61 @@ export default function Home() {
                 )}
               </section>
 
-              {sportsFeaturedArticle ? (
+              {sportsFeaturedArticles.length > 0 ? (
                 <section className="home-section-block home-section-plain featured-stories-row">
                   <div className="home-section-header">
                     <div className="stack" style={{ gap: "4px" }}>
                       <strong className="profile-section-title home-section-title">Featured Sports</strong>
                     </div>
                   </div>
-                  <div className="stack home-section-list">
-                    <div>{renderArticleFeedCard(sportsFeaturedArticle)}</div>
+                  <div className="featured-stories-scroll" role="list" aria-label="Featured sports stories">
+                    {sportsFeaturedArticles.map((article) => {
+                      const articleRouteId = getArticleRouteId(article);
+                      const imageSrc = getBestArticleImage(article).src;
+
+                      if (!articleRouteId) {
+                        return null;
+                      }
+
+                      return (
+                        <Link
+                          key={`featured-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                          href={`/article/${articleRouteId}/`}
+                          className="featured-story-card"
+                          role="listitem"
+                          onClick={() => {
+                            persistArticleMetadata(article);
+                            saveArticleReturnState({
+                              path: "/",
+                              scrollY: window.scrollY,
+                              source: "home",
+                              sortMode,
+                              selectedLocalCity,
+                              localLocationLabel,
+                            });
+                          }}
+                        >
+                          {imageSrc ? (
+                            <img
+                              src={imageSrc}
+                              alt={cleanDisplayText(article.title)}
+                              className="featured-story-image"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <div className="featured-story-fallback-brand" aria-hidden="true">
+                              <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+                            </div>
+                          )}
+                          <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
+                          <div className="featured-story-copy">
+                            <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
+                            <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 </section>
               ) : null}
@@ -6787,6 +6988,7 @@ export default function Home() {
             </div>
           )}
         </section>
+        {renderSportsGameDetailModal()}
         {renderTeamPickerModal()}
       </section>
     );
