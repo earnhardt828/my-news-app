@@ -625,6 +625,17 @@ input {
   text-transform: uppercase;
 }
 
+.top-trending-list-source-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.top-trending-list-source-mark .source-header-logo {
+  height: 22px;
+}
+
 .top-trending-list-source,
 .top-trending-list-date {
   min-width: 0;
@@ -1392,6 +1403,22 @@ input {
   min-width: 0;
 }
 
+.source-header-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.source-header-logo {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: 84px;
+  object-fit: contain;
+}
+
 .trending-source-category-separator {
   color: var(--text-soft);
   font-weight: 700;
@@ -1969,6 +1996,24 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+.article-detail-source-wrap .source-header-logo {
+  height: 26px;
+}
+
+.article-detail-inline-image-wrap-fallback {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top left, rgba(255, 190, 118, 0.14), transparent 38%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(245, 247, 252, 0.95));
+}
+
+.article-detail-inline-image-wrap-fallback .source-avatar {
+  width: 92px;
+  height: 92px;
+  border-radius: 24px;
 }
 
 .my-feed-source-trigger {

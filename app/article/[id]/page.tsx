@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
 import SourceBadge from "../../components/source-badge";
+import SourceHeaderMark from "../../components/source-header-mark";
 import { apiFetch } from "../../../lib/api-base";
 import {
   getBestArticleImage,
@@ -16,7 +17,7 @@ import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { cleanDisplayText } from "../../../lib/display-text";
 import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
-import { slugifySourceName } from "../../../lib/source-logos";
+import { hasMappedSourceLogo, slugifySourceName } from "../../../lib/source-logos";
 import { supabase } from "../../../lib/supabase";
 
 type ArticleRecord = {
@@ -25,11 +26,14 @@ type ArticleRecord = {
   source: string;
   category: string;
   time: string;
+  cardImage?: string | null;
   image?: string | null;
   imageUrl?: string | null;
   urlToImage?: string | null;
   mediaContent?: string | null;
   enclosureUrl?: string | null;
+  ogImage?: string | null;
+  twitterImage?: string | null;
   thumbnail?: string | null;
   description?: string | null;
   url?: string | null;
@@ -256,11 +260,14 @@ function readStoredArticleMetadata(articleId: number) {
       source: cachedArticle.source,
       category: cachedArticle.category ?? "News",
       time: cachedArticle.time ?? "Recent story",
+      cardImage: (cachedArticle.cardImage as string | null | undefined) ?? null,
       image: cachedArticle.image ?? null,
       imageUrl: cachedArticle.imageUrl ?? null,
       urlToImage: cachedArticle.urlToImage ?? null,
       mediaContent: cachedArticle.mediaContent ?? null,
       enclosureUrl: cachedArticle.enclosureUrl ?? null,
+      ogImage: (cachedArticle.ogImage as string | null | undefined) ?? null,
+      twitterImage: (cachedArticle.twitterImage as string | null | undefined) ?? null,
       thumbnail: cachedArticle.thumbnail ?? null,
       description: cachedArticle.description ?? null,
       url: cachedArticle.url ?? null,
@@ -415,6 +422,37 @@ function normalizeNewsPayload(payload: ArticleRecord[] | PaginatedNewsResponse) 
   }
 
   return payload.articles ?? [];
+}
+
+function mergeArticleImageMetadata(
+  primaryArticle: ArticleRecord | null,
+  fallbackArticle: ArticleRecord | null
+) {
+  if (!primaryArticle) {
+    return fallbackArticle;
+  }
+
+  if (!fallbackArticle) {
+    return primaryArticle;
+  }
+
+  return {
+    ...fallbackArticle,
+    ...primaryArticle,
+    cardImage: primaryArticle.cardImage ?? fallbackArticle.cardImage ?? null,
+    image: primaryArticle.image ?? fallbackArticle.image ?? null,
+    imageUrl: primaryArticle.imageUrl ?? fallbackArticle.imageUrl ?? null,
+    urlToImage: primaryArticle.urlToImage ?? fallbackArticle.urlToImage ?? null,
+    mediaContent: primaryArticle.mediaContent ?? fallbackArticle.mediaContent ?? null,
+    enclosureUrl: primaryArticle.enclosureUrl ?? fallbackArticle.enclosureUrl ?? null,
+    ogImage: primaryArticle.ogImage ?? fallbackArticle.ogImage ?? null,
+    twitterImage: primaryArticle.twitterImage ?? fallbackArticle.twitterImage ?? null,
+    thumbnail: primaryArticle.thumbnail ?? fallbackArticle.thumbnail ?? null,
+    description: primaryArticle.description ?? fallbackArticle.description ?? null,
+    content: primaryArticle.content ?? fallbackArticle.content ?? null,
+    publishedAt: primaryArticle.publishedAt ?? fallbackArticle.publishedAt ?? null,
+    url: primaryArticle.url ?? fallbackArticle.url ?? null,
+  } satisfies ArticleRecord;
 }
 
 function normalizeCompareText(value: string | null | undefined) {
@@ -921,7 +959,8 @@ export default function ArticleDetailPage() {
       });
 
       targetArticle = targetArticle ?? newsData.find((item) => item.id === articleId) ?? null;
-      const clientStoredArticle = targetArticle ? null : readStoredArticleMetadata(articleId);
+      const clientStoredArticle = readStoredArticleMetadata(articleId);
+      targetArticle = mergeArticleImageMetadata(targetArticle, clientStoredArticle);
       console.log("COMPARE TOTAL CANDIDATES", newsData.length);
       console.log("ARTICLE LIVE MATCH", targetArticle);
       console.log("ARTICLE CLIENT CACHE MATCH", clientStoredArticle);
@@ -1039,11 +1078,9 @@ export default function ArticleDetailPage() {
             Boolean(comment.article_url?.trim())
         ) ?? null;
       const storedBookmarkMetadata = storedBookmarkRows[0] ?? null;
-      const storedArticle =
-        targetArticle ??
-        clientStoredArticle ??
-        (storedCommentMetadata || storedBookmarkMetadata
-          ? {
+      const bookmarkFallbackArticle =
+        storedCommentMetadata || storedBookmarkMetadata
+          ? ({
               id: articleId,
               title:
                 storedCommentMetadata?.article_title?.trim() ||
@@ -1057,6 +1094,10 @@ export default function ArticleDetailPage() {
               time:
                 storedBookmarkMetadata?.time?.trim() ||
                 (storedBookmarkMetadata?.published_at ? "Archived story" : "Stored story"),
+              cardImage:
+                storedCommentMetadata?.article_image?.trim() ||
+                storedBookmarkMetadata?.image?.trim() ||
+                null,
               image:
                 storedCommentMetadata?.article_image?.trim() ||
                 storedBookmarkMetadata?.image?.trim() ||
@@ -1076,8 +1117,10 @@ export default function ArticleDetailPage() {
               publishedAt: storedBookmarkMetadata?.published_at?.trim() || null,
               description: null,
               content: null,
-            }
-          : null);
+            } satisfies ArticleRecord)
+          : null;
+      const storedArticle =
+        targetArticle ?? mergeArticleImageMetadata(bookmarkFallbackArticle, clientStoredArticle);
       console.log("ARTICLE STORED FALLBACK", storedArticle);
       const commentIds = rawComments.map((comment) => comment.id);
       const [reactionsRes, repliesRes] = commentIds.length
@@ -1898,9 +1941,11 @@ export default function ArticleDetailPage() {
     Boolean(articleImageSrc) &&
     !failedArticleImages[articleImageFailureKey] &&
     !looksLikeLowQualityImageUrl(articleImageSrc as string) &&
-    ["urlToImage", "imageUrl", "image", "mediaContent", "enclosureUrl", "ogImage", "twitterImage"].includes(
+    ["urlToImage", "imageUrl", "image", "cardImage", "mediaContent", "enclosureUrl", "ogImage", "twitterImage", "thumbnail"].includes(
       selectedArticleImage?.source ?? ""
     );
+  const shouldShowSourceLogoFallback =
+    !shouldShowArticleImage && hasMappedSourceLogo(compareArticle.source);
   const rawContent = compareArticle.content?.trim() ?? "";
   const rawDescription = compareArticle.description?.trim() ?? "";
   const cleanedContent = rawContent
@@ -1981,7 +2026,7 @@ export default function ArticleDetailPage() {
                   event.stopPropagation();
                 }}
               >
-                <SourceBadge sourceName={compareArticle.source} />
+                <SourceHeaderMark sourceName={compareArticle.source} />
                 <span className="article-detail-source">{compareArticle.source}</span>
               </Link>
               <span className="chip chip-accent">{compareArticle.category}</span>
@@ -2013,6 +2058,10 @@ export default function ArticleDetailPage() {
                     });
                   }}
                 />
+              </div>
+            ) : shouldShowSourceLogoFallback ? (
+              <div className="article-detail-inline-image-wrap article-detail-inline-image-wrap-fallback">
+                <SourceBadge sourceName={compareArticle.source} showInitialFallback={false} />
               </div>
             ) : null}
           </div>

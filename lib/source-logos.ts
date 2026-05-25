@@ -125,6 +125,28 @@ export const sourceLogoMap: Record<string, string> = {
   "Times of San Diego": "/source-logos/times-of-san-diego.png",
 };
 
+export const sourceHeaderLogoMap: Record<string, string> = {
+  CNN: "/news-logo-head/cnn.png",
+  "ABC News": "/news-logo-head/abc-news.png",
+  "Al Jazeera": "/news-logo-head/al-jazeera.png",
+  "Al Jazeera English": "/news-logo-head/al-jazeera.png",
+  AP: "/news-logo-head/ap-news.png",
+  "AP News": "/news-logo-head/ap-news.png",
+  "Associated Press": "/news-logo-head/ap-news.png",
+  BBC: "/news-logo-head/bbc-news.png",
+  "BBC News": "/news-logo-head/bbc-news.png",
+  "CBS News": "/news-logo-head/cbs-news.png",
+  "CBS Sports": "/news-logo-head/cbs-sports.png",
+  "Fox News": "/news-logo-head/fox-news.png",
+  "NBC News": "/news-logo-head/nbc-news.png",
+  NPR: "/news-logo-head/npr.png",
+  "Sports Illustrated": "/news-logo-head/sports-illustrated.png",
+  "The New York Times": "/news-logo-head/the-new-york-times.png",
+  "New York Times": "/news-logo-head/the-new-york-times.png",
+  "The Washington Post": "/news-logo-head/the-washington-post.png",
+  "Washington Post": "/news-logo-head/the-washington-post.png",
+};
+
 export function normalizeSourceLogoName(sourceName: string) {
   return sourceName
     .trim()
@@ -177,6 +199,10 @@ export function getSourceLogoUrl(sourceName: string) {
   // fall back to a normalized filename guess. If the file is missing, the UI
   // falls back to the in-app letter badge so Reflekt never renders a broken image box.
   return `/source-logos/${normalized}.png`;
+}
+
+export function getSourceHeaderLogoUrl(sourceName: string) {
+  return sourceHeaderLogoMap[sourceName.trim()] ?? null;
 }
 
 export function hasMappedSourceLogo(sourceName: string) {

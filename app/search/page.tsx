@@ -182,6 +182,7 @@ function persistSearchArticleMetadata(article: NewsArticle) {
   }
 
   try {
+    const cardImage = getBestArticleImage(article).src;
     const existingRaw = window.localStorage.getItem(ARTICLE_METADATA_STORAGE_KEY);
     const existingCache = existingRaw
       ? (JSON.parse(existingRaw) as Record<string, Record<string, unknown>>)
@@ -193,6 +194,7 @@ function persistSearchArticleMetadata(article: NewsArticle) {
       source: article.source,
       category: article.category,
       time: article.time,
+      cardImage: cardImage ?? null,
       image: article.image ?? null,
       imageUrl: article.imageUrl ?? null,
       urlToImage: article.urlToImage ?? null,

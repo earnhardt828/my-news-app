@@ -1,4 +1,5 @@
 export type ArticleImageFields = {
+  cardImage?: string | null;
   urlToImage?: string | null;
   imageUrl?: string | null;
   image?: string | null;
@@ -10,6 +11,7 @@ export type ArticleImageFields = {
 };
 
 export type ArticleImageSource =
+  | "cardImage"
   | "urlToImage"
   | "imageUrl"
   | "image"
@@ -102,6 +104,7 @@ export function looksLikeLowQualityImageUrl(url: string) {
 export function getBestArticleImage(article: ArticleImageFields) {
   const candidates: Array<[ArticleImageSource, string | null]> = [
     ["image", normalizeImageValue(article.image)],
+    ["cardImage", normalizeImageValue(article.cardImage)],
     ["ogImage", normalizeImageValue(article.ogImage)],
     ["thumbnail", normalizeImageValue(article.thumbnail)],
     ["mediaContent", normalizeImageValue(article.mediaContent)],
@@ -138,6 +141,7 @@ export function isLikelyHighQualityArticleImage(
 
   return (
     source === "thumbnail" ||
+    source === "cardImage" ||
     source === "enclosureUrl" ||
     source === "urlToImage" ||
     source === "imageUrl" ||

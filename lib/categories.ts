@@ -68,6 +68,22 @@ export const CATEGORY_LABELS: Record<NewsCategory, string> = {
   "Breaking News": "Breaking News",
 };
 
+export const CATEGORY_IMAGE_MAP: Partial<Record<NewsCategory, string>> = {
+  Politics: "/category-images/politics.png",
+  World: "/category-images/world.png",
+  Business: "/category-images/business.png",
+  Tech: "/category-images/tech.png",
+  Sports: "/category-images/sports.png",
+  MLB: "/category-images/mlb.png",
+  NFL: "/category-images/nfl.png",
+  NHL: "/category-images/nhl.png",
+  MLS: "/category-images/mls.png",
+  "College Football": "/category-images/college-football.png",
+  "College Basketball": "/category-images/college-basketball.png",
+  Golf: "/category-images/golf.png",
+  NASCAR: "/category-images/nascar.png",
+};
+
 export const VIDEO_CATEGORIES = ["Trending", ...CATEGORY_OPTIONS] as const;
 
 const UUID_LIKE_PATTERN =
@@ -145,4 +161,8 @@ export function getDisplayCategory(
 
 export function getCategoryLabel(category: string) {
   return CATEGORY_LABELS[category as NewsCategory] ?? category;
+}
+
+export function getCategoryImageUrl(category: string) {
+  return CATEGORY_IMAGE_MAP[category as NewsCategory] ?? null;
 }

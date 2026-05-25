@@ -1,7 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useState } from "react";
-import { CATEGORY_OPTIONS, getCategoryLabel } from "../../../lib/categories";
+import { CATEGORY_OPTIONS, getCategoryImageUrl, getCategoryLabel } from "../../../lib/categories";
 import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
 import { supabase } from "../../../lib/supabase";
 
@@ -17,14 +17,14 @@ const CATEGORY_GRADIENTS = [
 ] as const;
 
 function getCategoryArtStyle(category: string, index: number) {
-  const slug = category.toLowerCase().replace(/\s+/g, "-");
+  const categoryImageUrl = getCategoryImageUrl(category);
 
   return {
-    backgroundImage: CATEGORY_GRADIENTS[index % CATEGORY_GRADIENTS.length],
+    backgroundImage: categoryImageUrl
+      ? `linear-gradient(135deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url(${categoryImageUrl}), ${CATEGORY_GRADIENTS[index % CATEGORY_GRADIENTS.length]}`
+      : CATEGORY_GRADIENTS[index % CATEGORY_GRADIENTS.length],
     backgroundSize: "cover",
     backgroundPosition: "center",
-    // Easy future swap: replace this gradient with `url(/category-images/${slug}.jpg)`.
-    "--category-image-slug": slug,
   } as CSSProperties;
 }
 

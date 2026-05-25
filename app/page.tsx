@@ -3,6 +3,7 @@
 import LoadingScreen from "./components/loading-screen";
 import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
+import SourceHeaderMark from "./components/source-header-mark";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
@@ -51,7 +52,12 @@ import { isCommentAllowed } from "../lib/moderation";
 import { hasMappedSourceLogo, slugifySourceName } from "../lib/source-logos";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
-import { CATEGORY_OPTIONS, getCategoryLabel, getDisplayCategory } from "../lib/categories";
+import {
+  CATEGORY_OPTIONS,
+  getCategoryImageUrl,
+  getCategoryLabel,
+  getDisplayCategory,
+} from "../lib/categories";
 import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../lib/video-feed";
 
 const FEED_PAGE_SIZE = 25;
@@ -101,6 +107,8 @@ const FEATURED_SOURCE_NAMES = [
   "AP News",
   "Fox News",
 ] as const;
+const MY_NEWS_FEATURED_SPORTS_PATTERN =
+  /\b(sports?|espn|cbs sports|sports illustrated|bleacher report|mlb|nba|nfl|nhl|mls|soccer|football|basketball|baseball|hockey)\b/i;
 
 type SportsSectionKey = FavoriteLeagueKey | "MMA" | "MORE";
 
@@ -333,6 +341,7 @@ function persistArticleMetadata(article: Article) {
   }
 
   try {
+    const cardImage = getBestArticleImage(article).src;
     const existingRaw = window.localStorage.getItem(ARTICLE_METADATA_STORAGE_KEY);
     const existingCache = existingRaw
       ? (JSON.parse(existingRaw) as Record<string, Record<string, unknown>>)
@@ -344,6 +353,7 @@ function persistArticleMetadata(article: Article) {
       source: article.source,
       category: article.category,
       time: article.time,
+      cardImage: cardImage ?? null,
       image: article.image ?? null,
       imageUrl: article.imageUrl ?? null,
       urlToImage: article.urlToImage ?? null,
@@ -361,6 +371,15 @@ function persistArticleMetadata(article: Article) {
   } catch (error) {
     console.error("ARTICLE METADATA CACHE WRITE FAILED", error);
   }
+}
+
+function isSportsFeaturedCandidate(article: Pick<Article, "title" | "source" | "category">) {
+  const categoryLabel = getDisplayCategory(article.category, {
+    source: article.source,
+    title: article.title,
+  });
+  const haystack = `${article.title} ${article.source} ${categoryLabel}`.toLowerCase();
+  return MY_NEWS_FEATURED_SPORTS_PATTERN.test(haystack);
 }
 
 const LOCAL_CITY_COORDINATES: Record<string, { latitude: number; longitude: number }> = {
@@ -4272,6 +4291,10 @@ export default function Home() {
           return false;
         }
 
+        if (isSportsFeaturedCandidate(article)) {
+          return false;
+        }
+
         const image = getBestArticleImage(article);
         return Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src);
       })
@@ -4290,6 +4313,10 @@ export default function Home() {
       .filter((article) => {
         const dedupeKey = getArticleDeduplicationKey(article);
         if (usedKeys.has(dedupeKey)) {
+          return false;
+        }
+
+        if (isSportsFeaturedCandidate(article)) {
           return false;
         }
 
@@ -4330,8 +4357,7 @@ export default function Home() {
           return false;
         }
 
-        const categoryKey = getSafeCategoryLabel(article.category, article).toLowerCase();
-        if (categoryKey === "sports") {
+        if (isSportsFeaturedCandidate(article)) {
           return false;
         }
 
@@ -4793,6 +4819,22 @@ export default function Home() {
     []
   );
 
+  const getCategorySwipeArtStyle = useCallback(
+    (category: string, index: number) => {
+      const imageUrl = getCategoryImageUrl(category);
+
+      return {
+        backgroundImage: imageUrl
+          ? `linear-gradient(135deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url(${imageUrl})`
+          : undefined,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundColor: imageUrl ? undefined : undefined,
+      } as const;
+    },
+    []
+  );
+
   const topLocalStories = useMemo(() => {
     if (sortMode !== "local" || !selectedLocalCity) {
       return [];
@@ -4956,7 +4998,7 @@ export default function Home() {
             <div className="trending-source-stack trending-source-stack-primary">
               {sortMode === "local" ? (
                 <div className="trending-source-brand trending-source-brand-static">
-                  <SourceBadge sourceName={safeSourceName} />
+                  <SourceHeaderMark sourceName={safeSourceName} />
                   <span className="trending-source-name">{safeSourceName}</span>
                   <span className="trending-source-category-separator" aria-hidden="true">
                     ·
@@ -4974,7 +5016,7 @@ export default function Home() {
                   }}
                 >
                   <div className="trending-source-brand">
-                    <SourceBadge sourceName={safeSourceName} />
+                    <SourceHeaderMark sourceName={safeSourceName} />
                     <span className="trending-source-name">{safeSourceName}</span>
                     <span className="trending-source-category-separator" aria-hidden="true">
                       ·
@@ -5042,7 +5084,7 @@ export default function Home() {
           <div className="news-card-top-row news-card-top-row-brand">
             <div className="trending-source-stack trending-source-stack-primary">
               <div className="trending-source-brand">
-                <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+                <SourceHeaderMark sourceName={getSafeSourceLabel(article.source)} />
                 <span className="trending-source-name">{getSafeSourceLabel(article.source)}</span>
               </div>
             </div>
@@ -5595,7 +5637,8 @@ export default function Home() {
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <path d="m15 18-6-6 6-6" />
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
               </svg>
             </button>
             <h3 id="favorite-teams-picker-title" className="favorite-teams-page-title">
@@ -5709,7 +5752,10 @@ export default function Home() {
           </div>
           <div className="top-trending-list-copy">
             <div className="top-trending-list-meta">
-              <span className="top-trending-list-source">{safeSourceName}</span>
+              <span className="top-trending-list-source-wrap">
+                <SourceHeaderMark sourceName={safeSourceName} className="top-trending-list-source-mark" />
+                <span className="top-trending-list-source">{safeSourceName}</span>
+              </span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
@@ -5794,7 +5840,10 @@ export default function Home() {
           ) : null}
           <div className="top-trending-list-copy">
             <div className="top-trending-list-meta">
-              <span className="top-trending-list-source">{safeSourceName}</span>
+              <span className="top-trending-list-source-wrap">
+                <SourceHeaderMark sourceName={safeSourceName} className="top-trending-list-source-mark" />
+                <span className="top-trending-list-source">{safeSourceName}</span>
+              </span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
@@ -6374,6 +6423,7 @@ export default function Home() {
                     className={`category-swipe-card-art category-art-${index % 8} ${
                       isSelected ? "category-swipe-card-art-active" : ""
                     }`}
+                    style={getCategorySwipeArtStyle(category, index)}
                     aria-hidden="true"
                   />
                   <span className="category-swipe-card-label">{label}</span>
