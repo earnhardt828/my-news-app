@@ -3,7 +3,6 @@
 import LoadingScreen from "./components/loading-screen";
 import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
-import SourceHeaderMark from "./components/source-header-mark";
 import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
@@ -4998,7 +4997,7 @@ export default function Home() {
             <div className="trending-source-stack trending-source-stack-primary">
               {sortMode === "local" ? (
                 <div className="trending-source-brand trending-source-brand-static">
-                  <SourceHeaderMark sourceName={safeSourceName} />
+                  <SourceBadge sourceName={safeSourceName} />
                   <span className="trending-source-name">{safeSourceName}</span>
                   <span className="trending-source-category-separator" aria-hidden="true">
                     ·
@@ -5016,7 +5015,7 @@ export default function Home() {
                   }}
                 >
                   <div className="trending-source-brand">
-                    <SourceHeaderMark sourceName={safeSourceName} />
+                    <SourceBadge sourceName={safeSourceName} />
                     <span className="trending-source-name">{safeSourceName}</span>
                     <span className="trending-source-category-separator" aria-hidden="true">
                       ·
@@ -5084,7 +5083,7 @@ export default function Home() {
           <div className="news-card-top-row news-card-top-row-brand">
             <div className="trending-source-stack trending-source-stack-primary">
               <div className="trending-source-brand">
-                <SourceHeaderMark sourceName={getSafeSourceLabel(article.source)} />
+                <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
                 <span className="trending-source-name">{getSafeSourceLabel(article.source)}</span>
               </div>
             </div>
@@ -5752,10 +5751,7 @@ export default function Home() {
           </div>
           <div className="top-trending-list-copy">
             <div className="top-trending-list-meta">
-              <span className="top-trending-list-source-wrap">
-                <SourceHeaderMark sourceName={safeSourceName} className="top-trending-list-source-mark" />
-                <span className="top-trending-list-source">{safeSourceName}</span>
-              </span>
+              <span className="top-trending-list-source">{safeSourceName}</span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
@@ -5840,10 +5836,7 @@ export default function Home() {
           ) : null}
           <div className="top-trending-list-copy">
             <div className="top-trending-list-meta">
-              <span className="top-trending-list-source-wrap">
-                <SourceHeaderMark sourceName={safeSourceName} className="top-trending-list-source-mark" />
-                <span className="top-trending-list-source">{safeSourceName}</span>
-              </span>
+              <span className="top-trending-list-source">{safeSourceName}</span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
