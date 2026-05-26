@@ -6543,7 +6543,6 @@ export default function Home() {
       }
 
       const safeSourceName = getSafeSourceLabel(article.source);
-      const displaySourceName = getDisplaySourceLabel(article);
       const safeCategoryName = getSafeCategoryLabel(article.category, article);
       const selectedImage = getBestArticleImage(article);
       const imageSrc = selectedImage.src;
@@ -6629,8 +6628,8 @@ export default function Home() {
                   <SourceHeaderMark
                     sourceName={safeSourceName}
                     className="trending-source-header-mark"
+                    fallbackMode="text"
                   />
-                  <span className="trending-source-name">{displaySourceName}</span>
                   <span className="trending-source-category-separator" aria-hidden="true">
                     ·
                   </span>
@@ -6650,8 +6649,8 @@ export default function Home() {
                     <SourceHeaderMark
                       sourceName={safeSourceName}
                       className="trending-source-header-mark"
+                      fallbackMode="text"
                     />
-                    <span className="trending-source-name">{displaySourceName}</span>
                     <span className="trending-source-category-separator" aria-hidden="true">
                       ·
                     </span>
@@ -7591,7 +7590,6 @@ export default function Home() {
     }
 
     const safeSourceName = getSafeSourceLabel(article.source);
-    const displaySourceName = getDisplaySourceLabel(article);
     const selectedImage = getBestArticleImage(article);
     const shouldUseImage =
       Boolean(selectedImage.src) &&
@@ -7634,10 +7632,11 @@ export default function Home() {
           </div>
           <div className="top-trending-list-copy">
             <div className="top-trending-list-meta">
-              <span className="top-trending-list-source-wrap">
-                <SourceHeaderMark sourceName={safeSourceName} className="top-trending-list-source-mark" />
-                <span className="top-trending-list-source">{displaySourceName}</span>
-              </span>
+              <SourceHeaderMark
+                sourceName={safeSourceName}
+                className="top-trending-list-source-mark"
+                fallbackMode="text"
+              />
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
@@ -7710,7 +7709,6 @@ export default function Home() {
     }
 
     const safeSourceName = getSafeSourceLabel(article.source);
-    const displaySourceName = getDisplaySourceLabel(article);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
     const selectedImage = getBestArticleImage(article);
     const shouldUseImage =
@@ -7758,10 +7756,11 @@ export default function Home() {
           ) : null}
           <div className="top-trending-list-copy">
             <div className="top-trending-list-meta">
-              <span className="top-trending-list-source-wrap">
-                <SourceHeaderMark sourceName={safeSourceName} className="top-trending-list-source-mark" />
-                <span className="top-trending-list-source">{displaySourceName}</span>
-              </span>
+              <SourceHeaderMark
+                sourceName={safeSourceName}
+                className="top-trending-list-source-mark"
+                fallbackMode="text"
+              />
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
@@ -8041,6 +8040,8 @@ export default function Home() {
 
         {renderBreakingNewsRow()}
 
+        {renderQuickWatchRow(true)}
+
         <section id="my-news-section" className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
@@ -8089,7 +8090,74 @@ export default function Home() {
           )}
         </section>
 
-        {renderQuickWatchRow(true)}
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Source Rankings</strong>
+              <span className="muted">News companies people are hearting right now.</span>
+            </div>
+            <Link href="/source-rankings/" className="button button-secondary">
+              See all
+            </Link>
+          </div>
+
+          {isHomeSourceRankingsLoading ? (
+            <div className="muted">Loading source rankings...</div>
+          ) : homeSourceRankings.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No source hearts yet</strong>
+              <span>Heart a source from Search or its profile to build the rankings.</span>
+            </div>
+          ) : (
+            <div className="source-rankings-carousel" role="list" aria-label="Source rankings">
+              {homeSourceRankings.map((source, index) => (
+                <Link
+                  key={source.sourceName}
+                  href={`/source/${slugifySourceName(source.sourceName)}/`}
+                  className="source-rankings-card"
+                  role="listitem"
+                >
+                  <div className="source-rankings-card-art-shell">
+                    <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
+                    <span className="source-rankings-rank">#{index + 1}</span>
+                  </div>
+                  <div className="source-rankings-card-copy">
+                    <span className="source-rankings-name">{source.sourceName}</span>
+                    <span className="source-rankings-card-meta">News Source</span>
+                  </div>
+                  <div className="source-rankings-card-actions">
+                    <button
+                      type="button"
+                      className={`icon-action-pill icon-action-pill-icon-only ${
+                        source.heartedByCurrentUser ? "icon-action-pill-active" : ""
+                      }`}
+                      aria-label={
+                        userId ? `Open ${source.sourceName} source profile` : "Log in to heart sources"
+                      }
+                      onClick={(event) => handlePromptSourceHeart(event, source.sourceName)}
+                    >
+                      <span className="icon-action-glyph" aria-hidden="true">
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill={source.heartedByCurrentUser ? "currentColor" : "none"}
+                          stroke="currentColor"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
+                        </svg>
+                      </span>
+                    </button>
+                    <strong>{source.likes}</strong>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
 
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
@@ -8106,7 +8174,7 @@ export default function Home() {
           </div>
         </section>
 
-        {renderFeaturedStoriesRow()}
+        {renderFeaturedVideosBreak()}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
@@ -8439,75 +8507,6 @@ export default function Home() {
                 <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                   {renderArticleFeedCard(article)}
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Source Rankings</strong>
-              <span className="muted">News companies people are hearting right now.</span>
-            </div>
-            <Link href="/source-rankings/" className="button button-secondary">
-              See all
-            </Link>
-          </div>
-
-          {isHomeSourceRankingsLoading ? (
-            <div className="muted">Loading source rankings...</div>
-          ) : homeSourceRankings.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No source hearts yet</strong>
-              <span>Heart a source from Search or its profile to build the rankings.</span>
-            </div>
-          ) : (
-            <div className="source-rankings-carousel" role="list" aria-label="Source rankings">
-              {homeSourceRankings.map((source, index) => (
-                <Link
-                  key={source.sourceName}
-                  href={`/source/${slugifySourceName(source.sourceName)}/`}
-                  className="source-rankings-card"
-                  role="listitem"
-                >
-                  <div className="source-rankings-card-art-shell">
-                    <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
-                    <span className="source-rankings-rank">#{index + 1}</span>
-                  </div>
-                  <div className="source-rankings-card-copy">
-                    <span className="source-rankings-name">{source.sourceName}</span>
-                    <span className="source-rankings-card-meta">News Source</span>
-                  </div>
-                  <div className="source-rankings-card-actions">
-                    <button
-                      type="button"
-                      className={`icon-action-pill icon-action-pill-icon-only ${
-                        source.heartedByCurrentUser ? "icon-action-pill-active" : ""
-                      }`}
-                      aria-label={
-                        userId ? `Open ${source.sourceName} source profile` : "Log in to heart sources"
-                      }
-                      onClick={(event) => handlePromptSourceHeart(event, source.sourceName)}
-                    >
-                      <span className="icon-action-glyph" aria-hidden="true">
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill={source.heartedByCurrentUser ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          strokeWidth="1.9"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
-                        </svg>
-                      </span>
-                    </button>
-                    <strong>{source.likes}</strong>
-                  </div>
-                </Link>
               ))}
             </div>
           )}

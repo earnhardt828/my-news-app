@@ -179,7 +179,19 @@ export function normalizeSourceLogoName(sourceName: string) {
   return sourceName
     .trim()
     .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, "-");
+}
+
+function normalizeSourceLookupKey(sourceName: string) {
+  return sourceName
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^\w\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function slugifySourceName(sourceName: string) {
@@ -230,11 +242,33 @@ export function getSourceLogoUrl(sourceName: string) {
 }
 
 export function getSourceHeaderLogoUrl(sourceName: string) {
-  return sourceHeaderLogoMap[sourceName.trim()] ?? null;
+  const trimmedSourceName = sourceName.trim();
+
+  if (sourceHeaderLogoMap[trimmedSourceName]) {
+    return sourceHeaderLogoMap[trimmedSourceName];
+  }
+
+  const normalizedLookupKey = normalizeSourceLookupKey(trimmedSourceName);
+  const matchedEntry = Object.entries(sourceHeaderLogoMap).find(
+    ([candidate]) => normalizeSourceLookupKey(candidate) === normalizedLookupKey
+  );
+
+  return matchedEntry?.[1] ?? null;
 }
 
 export function getSourceHeaderDarkLogoUrl(sourceName: string) {
-  return sourceHeaderDarkLogoMap[sourceName.trim()] ?? null;
+  const trimmedSourceName = sourceName.trim();
+
+  if (sourceHeaderDarkLogoMap[trimmedSourceName]) {
+    return sourceHeaderDarkLogoMap[trimmedSourceName];
+  }
+
+  const normalizedLookupKey = normalizeSourceLookupKey(trimmedSourceName);
+  const matchedEntry = Object.entries(sourceHeaderDarkLogoMap).find(
+    ([candidate]) => normalizeSourceLookupKey(candidate) === normalizedLookupKey
+  );
+
+  return matchedEntry?.[1] ?? null;
 }
 
 export function hasMappedSourceLogo(sourceName: string) {

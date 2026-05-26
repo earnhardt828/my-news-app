@@ -2066,7 +2066,6 @@ export default function ArticleDetailPage() {
                 }}
               >
                 <SourceHeaderMark sourceName={compareArticle.source} fallbackMode="text" />
-                <span className="article-detail-source">{compareArticle.source}</span>
               </Link>
               <span className="chip chip-accent">{compareArticle.category}</span>
             </div>
