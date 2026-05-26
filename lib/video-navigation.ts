@@ -6,6 +6,7 @@ export type VideoReturnState = {
   scrollY: number;
   sortMode?:
     | "trending"
+    | "mynews"
     | "polls"
     | "latest"
     | "local"

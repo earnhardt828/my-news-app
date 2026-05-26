@@ -7,6 +7,7 @@ export type ArticleReturnState = {
   source?: "home" | "search";
   sortMode?:
     | "trending"
+    | "mynews"
     | "polls"
     | "latest"
     | "local"

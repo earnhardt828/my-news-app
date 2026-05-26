@@ -73,7 +73,7 @@ const INITIAL_FEED_TIMEOUT_MS = 5000;
 const DIRECT_ROUTE_TIMEOUT_MS = 10000;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 const SPORTS_UNIFIED_QUERY =
-  "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | NBA latest | ESPN NBA | NBA.com | Bleacher Report NBA | Yahoo Sports NBA | CBS Sports NBA | NBC Sports NBA | MLS news | Major League Soccer news | MLSsoccer.com | ESPN MLS | The Athletic soccer | CBS Sports soccer | NBC Sports soccer | Yahoo Sports soccer | local MLS team news | ESPN | Bleacher Report | AP News Sports | BBC Sport | MMA Fighting | NHL.com | MLB.com | NFL.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest";
+  "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | NBA latest | ESPN NBA | NBA.com | Bleacher Report NBA | Yahoo Sports NBA | CBS Sports NBA | NBC Sports NBA | MLS news | Major League Soccer news | MLSsoccer.com | FC Cincinnati | ESPN MLS | The Athletic soccer | CBS Sports soccer | NBC Sports soccer | Yahoo Sports soccer | local MLS team news | ESPN | Bleacher Report | AP News Sports | AP Sports | Reuters Sports | BBC Sport | Motorsport.com | MMA Fighting | NHL.com | MLB.com | NFL.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest";
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TECHNOLOGY_FEED_QUERY =
@@ -84,6 +84,20 @@ const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
 const BUSINESS_FEED_QUERY =
   "business news | finance news | stock market news | economy news | Wall Street news | CNBC | Bloomberg | Reuters Business | MarketWatch | Yahoo Finance";
+const MAJOR_WEATHER_CITY_SUGGESTIONS = [
+  "Charlotte, NC",
+  "New York, NY",
+  "Los Angeles, CA",
+  "Chicago, IL",
+  "Houston, TX",
+  "Miami, FL",
+  "Atlanta, GA",
+  "Dallas, TX",
+  "Phoenix, AZ",
+  "San Diego, CA",
+  "Philadelphia, PA",
+  "Austin, TX",
+] as const;
 const BREAKING_NEWS_FEED_QUERY =
   "breaking news | live updates | just in | developing story | urgent | latest news";
 const BREAKING_NEWS_TRUSTED_SOURCES = [
@@ -154,6 +168,8 @@ const SELECTED_CATEGORY_MATCHERS: Record<string, RegExp> = {
   Opinion: /\b(opinion|editorial|column|analysis|commentary)\b/i,
   "Breaking News": /\b(breaking|live updates|developing|urgent|just in|alert)\b/i,
 };
+const BROAD_SPORTS_SOURCE_PATTERN =
+  /\b(motorsport\.com|motorsport|bleacher report|mlb\.com|nhl\.com|nba\.com|nfl\.com|mlssoccer\.com|espn|yahoo sports|fox sports|nbc sports|cbs sports|sports illustrated|ap sports|ap news sports|reuters sports|fc cincinnati|sports|athletics|sporting)\b/i;
 const MY_NEWS_FEATURED_SPORTS_PATTERN =
   /\b(sports?|espn|cbs sports|sports illustrated|bleacher report|mlb|nba|nfl|nhl|mls|soccer|football|basketball|baseball|hockey)\b/i;
 const TOP_QUICK_WATCH_PREFERRED_SOURCE_PATTERN =
@@ -202,6 +218,7 @@ type SportsSectionConfig = {
 
 const SWIPEABLE_SORT_MODES = [
   "trending",
+  "mynews",
   "local",
   "sports",
   "celebrity",
@@ -541,6 +558,17 @@ function articleMatchesSelectedCategory(article: Article, selectedCategory: stri
 
   const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${displayCategory}`.toLowerCase();
   return matcher.test(haystack);
+}
+
+function isBroadSportsArticle(article: Pick<Article, "title" | "description" | "source" | "category">) {
+  const displayCategory = getDisplayCategory(article.category, {
+    source: article.source,
+    title: article.title,
+  });
+  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${displayCategory}`;
+  return (
+    SELECTED_CATEGORY_MATCHERS.Sports.test(haystack) || BROAD_SPORTS_SOURCE_PATTERN.test(haystack)
+  );
 }
 
 function filterArticlesBySelectedCategories(articles: Article[], selectedCategories: string[]) {
@@ -1689,7 +1717,36 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
     return true;
   }
 
-  return section.articlePattern.test(haystack);
+  const sourceMatchedBySection =
+    section.key === "MLB"
+      ? /\b(mlb\.com|major league baseball|baseball america|athletic mlb|mlb news|baseball)\b/i.test(
+          haystack
+        )
+      : section.key === "NBA"
+        ? /\b(nba\.com|basketball|espn nba|bleacher report nba|yahoo sports nba|cbs sports nba|nbc sports nba)\b/i.test(
+            haystack
+          )
+        : section.key === "NFL"
+          ? /\b(nfl\.com|football|nfl network|espn nfl|yahoo sports nfl|cbs sports nfl|nbc sports nfl|fox sports nfl)\b/i.test(
+              haystack
+            )
+          : section.key === "NHL"
+            ? /\b(nhl\.com|hockey|nhl news|bleacher report nhl|espn nhl|yahoo sports nhl)\b/i.test(
+                haystack
+              )
+            : section.key === "MLS"
+              ? /\b(mlssoccer\.com|soccer|football club|fc cincinnati|inter miami|charlotte fc|atlanta united|premier league|champions league|bbc sport)\b/i.test(
+                  haystack
+                )
+              : section.key === "MMA"
+                ? /\b(mma|ufc|boxing|mma fighting|bellator|octagon|fight night)\b/i.test(
+                    haystack
+                  )
+                : /\b(motorsport\.com|motorsport|nascar|formula 1|formula1|f1|indycar|golf|tennis|olympics|sports car|grand prix|race)\b/i.test(
+                    haystack
+                  );
+
+  return section.articlePattern.test(haystack) || sourceMatchedBySection;
 }
 
 function matchesSportsSectionVideo(video: VideoItem, section: SportsSectionConfig) {
@@ -1724,7 +1781,7 @@ function getArticlePriorityScore(article: Article) {
   const source = getSafeSourceLabel(article.source).toLowerCase();
 
   if (
-    /(ap news|associated press|reuters|bbc news|bbc sport|cnn|new york times|washington post|politico|npr|espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report|bloomberg|wall street journal|the weather channel|mma fighting|mlb\.com|nba\.com|nfl\.com|nhl\.com)/.test(
+    /(ap news|ap sports|associated press|reuters|reuters sports|bbc news|bbc sport|cnn|new york times|washington post|politico|npr|espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report|bloomberg|wall street journal|the weather channel|mma fighting|mlb\.com|nba\.com|nfl\.com|nhl\.com|mlssoccer\.com|motorsport\.com|fc cincinnati)/.test(
       source
     )
   ) {
@@ -1835,6 +1892,7 @@ export default function Home() {
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
     | "trending"
+    | "mynews"
     | "polls"
     | "latest"
     | "local"
@@ -2103,6 +2161,10 @@ export default function Home() {
     | "travel"
     | "food"
     | "business" = useMemo(() => {
+    if (sortMode === "mynews") {
+      return "trending";
+    }
+
     if (sortMode === "latest") {
       return "latest";
     }
@@ -5296,6 +5358,14 @@ export default function Home() {
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [foodPreviewArticles, sortMode, visibleArticles]);
 
+  const personalizedMyNewsArticles = useMemo(() => {
+    if (categories.length === 0) {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(categorySectionArticles.slice(0, 60), 25);
+  }, [categories.length, categorySectionArticles]);
+
   useEffect(() => {
     if (sortMode === "sports") {
       console.log("SPORTS ARTICLE COUNT", sportsTabArticles.length);
@@ -5341,7 +5411,7 @@ export default function Home() {
   }, [sortMode]);
 
   const localCitySuggestions = useMemo(() => {
-    if (sortMode !== "local") {
+    if (sortMode !== "local" && sortMode !== "trending") {
       return [] as string[];
     }
 
@@ -5364,6 +5434,30 @@ export default function Home() {
 
     return [...startsWithMatches, ...includesMatches];
   }, [cityOptions, localQueryDraft, sortMode]);
+
+  const weatherCitySuggestions = useMemo(() => {
+    const suggestionPool = Array.from(
+      new Set([
+        ...MAJOR_WEATHER_CITY_SUGGESTIONS,
+        ...cityOptions.map((city) => city.displayName),
+      ])
+    );
+    const normalizedDraft = cleanDisplayText(weatherSearchDraft).trim().toLowerCase();
+
+    if (normalizedDraft.length === 0) {
+      return suggestionPool.slice(0, 8);
+    }
+
+    const startsWithMatches = suggestionPool.filter((city) =>
+      city.toLowerCase().startsWith(normalizedDraft)
+    );
+    const includesMatches = suggestionPool.filter(
+      (city) =>
+        !startsWithMatches.includes(city) && city.toLowerCase().includes(normalizedDraft)
+    );
+
+    return [...startsWithMatches, ...includesMatches].slice(0, 8);
+  }, [cityOptions, weatherSearchDraft]);
 
   const balancedTrendingArticles = useMemo(() => {
     if (sortMode !== "trending") {
@@ -7558,6 +7652,7 @@ export default function Home() {
   const renderHomeTopNavigation = (
     activeMode:
       | "trending"
+      | "mynews"
       | "local"
       | "sports"
       | "celebrity"
@@ -7576,6 +7671,16 @@ export default function Home() {
           className={`toolbar-pill ${activeMode === "trending" ? "toolbar-pill-active" : ""}`}
           type="button"
           onClick={() => setSortMode("trending")}
+        >
+          Trending
+        </button>
+        <button
+          ref={(node) => {
+            topTabButtonRefs.current.mynews = node;
+          }}
+          className={`toolbar-pill ${activeMode === "mynews" ? "toolbar-pill-active" : ""}`}
+          type="button"
+          onClick={() => setSortMode("mynews")}
         >
           My News
         </button>
@@ -7665,6 +7770,7 @@ export default function Home() {
 
   if (
     (sortMode === "trending" ||
+      sortMode === "mynews" ||
       sortMode === "local" ||
       sortMode === "sports" ||
       sortMode === "celebrity" ||
@@ -7686,6 +7792,8 @@ export default function Home() {
         {renderHomeTopNavigation(
           sortMode === "local"
             ? "local"
+            : sortMode === "mynews"
+              ? "mynews"
             : sortMode === "sports"
               ? "sports"
               : sortMode === "celebrity"
@@ -7708,6 +7816,8 @@ export default function Home() {
               <strong className="profile-section-title home-section-title">
                 {sortMode === "local"
                   ? "Local"
+                  : sortMode === "mynews"
+                    ? "My News"
                   : sortMode === "sports"
                     ? "Sports"
                     : sortMode === "celebrity"
@@ -7852,22 +7962,32 @@ export default function Home() {
           <div className="stack local-feed-shell">
             <div className="home-weather-card">
               <div className="stack" style={{ gap: "4px" }}>
-                <span className="home-weather-city">{selectedLocalCity ?? localLocationLabel}</span>
+                <span className="home-weather-city">
+                  {weatherPageCard?.cityLabel ?? selectedWeatherLocation ?? selectedLocalCity ?? localLocationLabel}
+                </span>
                 <div className="home-weather-temp-row">
                   <span className="home-weather-icon-shell">
-                    {renderWeatherConditionIcon(weatherCard?.weatherLabel)}
+                    {renderWeatherConditionIcon((weatherPageCard ?? weatherCard)?.weatherLabel)}
                   </span>
                   <strong className="home-weather-temp">
-                    {weatherCard ? `${Math.round(weatherCard.temperature)}°` : "—"}
+                    {weatherPageCard ?? weatherCard
+                      ? `${Math.round((weatherPageCard ?? weatherCard)?.temperature ?? 0)}°`
+                      : "—"}
                   </strong>
                 </div>
                 <span className="muted">
-                  {weatherCard ? weatherCard.weatherLabel : isWeatherLoading ? "Loading forecast..." : "Forecast unavailable"}
+                  {weatherPageCard ?? weatherCard
+                    ? (weatherPageCard ?? weatherCard)?.weatherLabel
+                    : isWeatherPageLoading || isWeatherLoading
+                      ? "Loading forecast..."
+                      : "Forecast unavailable"}
                 </span>
               </div>
               <div className="stack home-weather-meta" style={{ gap: "6px" }}>
                 <span className="muted">
-                  {weatherCard?.windMph ? `Wind ${Math.round(weatherCard.windMph)} mph` : "Local outlook"}
+                  {(weatherPageCard ?? weatherCard)?.windMph
+                    ? `Wind ${Math.round((weatherPageCard ?? weatherCard)?.windMph ?? 0)} mph`
+                    : "Local outlook"}
                 </span>
               </div>
             </div>
@@ -7878,7 +7998,7 @@ export default function Home() {
                   className="search-input local-feed-input"
                   type="text"
                   placeholder="Enter a major city"
-                  value={localQueryDraft}
+                  value={weatherSearchDraft}
                   onFocus={() => setIsLocalAutocompleteOpen(true)}
                   onBlur={() => {
                     window.setTimeout(() => {
@@ -7886,32 +8006,32 @@ export default function Home() {
                     }, 120);
                   }}
                   onChange={(event) => {
-                    setLocalQueryDraft(event.target.value);
-                    setLocalSearchStatus(null);
+                    setWeatherSearchDraft(event.target.value);
                     setIsLocalAutocompleteOpen(true);
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
                       setIsLocalAutocompleteOpen(false);
-                      void handleUpdateLocalQuery();
+                      handleUpdateWeatherLocation();
                     }
                   }}
                 />
-                {isLocalAutocompleteOpen && localCitySuggestions.length > 0 ? (
+                {isLocalAutocompleteOpen && weatherCitySuggestions.length > 0 ? (
                   <div
                     className="local-city-dropdown"
                     role="listbox"
                     aria-label="Suggested cities"
                   >
-                    {localCitySuggestions.map((city) => (
+                    {weatherCitySuggestions.map((city) => (
                       <button
                         key={city}
                         type="button"
                         className="local-city-dropdown-item"
                         onMouseDown={(event) => {
                           event.preventDefault();
-                          applyLocalCitySelection(city);
+                          setWeatherSearchDraft(city);
+                          setSelectedWeatherLocation(city);
                           setIsLocalAutocompleteOpen(false);
                         }}
                       >
@@ -7926,7 +8046,7 @@ export default function Home() {
                 className="button button-secondary local-feed-button"
                 onClick={() => {
                   setIsLocalAutocompleteOpen(false);
-                  void handleUpdateLocalQuery();
+                  handleUpdateWeatherLocation();
                 }}
               >
                 Update
@@ -8346,6 +8466,69 @@ export default function Home() {
             </div>
           </div>
         ) : null}
+      </section>
+    );
+  }
+
+  if (sortMode === "mynews") {
+    return (
+      <section className="page-shell home-sections-shell">
+        {renderHomeTopNavigation("mynews")}
+
+        <section className="home-section-block home-section-plain home-top-trending-block">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">My News</strong>
+              <span className="home-section-date">{todayLabel}</span>
+            </div>
+          </div>
+
+          {!userId ? (
+            <div className="empty-state compact-empty-state">
+              <strong>Log in to personalize My News</strong>
+              <span>Follow categories and sources to build your own feed here.</span>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => setSortMode("trending")}
+              >
+                Browse Trending
+              </button>
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>Choose categories for My News</strong>
+              <span>Add categories to build a personalized feed, or keep Trending for a balanced mix.</span>
+              <div className="modal-actions">
+                <button type="button" className="button button-secondary" onClick={openCategorySheet}>
+                  Add categories
+                </button>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => setSortMode("trending")}
+                >
+                  See Trending
+                </button>
+              </div>
+            </div>
+          ) : isCategorySectionLoading ? (
+            <div className="muted">Loading your selected categories...</div>
+          ) : personalizedMyNewsArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No stories matched your selected categories yet.</strong>
+              <span>Try adding more categories or check back shortly.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list">
+              {personalizedMyNewsArticles.map((article) => (
+                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                  {renderArticleFeedCard(article)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </section>
     );
   }
