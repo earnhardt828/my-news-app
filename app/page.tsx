@@ -561,6 +561,17 @@ function articleMatchesSelectedCategory(article: Article, selectedCategory: stri
   return matcher.test(haystack);
 }
 
+function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string) {
+  const matcher = SELECTED_CATEGORY_MATCHERS[selectedCategory];
+
+  if (!matcher) {
+    return false;
+  }
+
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  return matcher.test(haystack);
+}
+
 function isBroadSportsArticle(article: Pick<Article, "title" | "description" | "source" | "category">) {
   const displayCategory = getDisplayCategory(article.category, {
     source: article.source,
@@ -3891,6 +3902,7 @@ export default function Home() {
   useEffect(() => {
     if (
       sortMode !== "trending" &&
+      sortMode !== "mynews" &&
       sortMode !== "sports" &&
       sortMode !== "local" &&
       sortMode !== "celebrity" &&
@@ -5398,9 +5410,7 @@ export default function Home() {
     }
 
     const recommendedArticles = selectSourceBalancedArticles(categorySectionArticles.slice(0, 18), 8);
-    const usedKeys = new Set(
-      recommendedArticles.map((article) => getArticleDeduplicationKey(article))
-    );
+    const usedKeys = new Set<string>();
 
     const sections = categories
       .map((category) => {
@@ -5424,13 +5434,60 @@ export default function Home() {
       .filter((section) => section.articles.length > 0);
 
     return [
+      ...sections,
       {
         category: "Recommended for You",
-        articles: recommendedArticles,
+        articles: recommendedArticles.filter(
+          (article) => !usedKeys.has(getArticleDeduplicationKey(article))
+        ),
       },
-      ...sections,
     ];
   }, [categories, categorySectionArticles]);
+
+  const myNewsCategoryVideoSections = useMemo(() => {
+    if (categories.length === 0) {
+      return {} as Record<string, VideoItem[]>;
+    }
+
+    const candidateVideos = dedupeVideosBySourceTitleAndUrl([
+      ...sportsVideos,
+      ...celebrityVideos,
+      ...weatherVideos,
+      ...videos,
+    ]);
+    const usedVideoIds = new Set<string>();
+    const sectionVideos: Record<string, VideoItem[]> = {};
+
+    categories.forEach((category) => {
+      const matchingVideos = candidateVideos.filter((video) => {
+        if (usedVideoIds.has(video.id)) {
+          return false;
+        }
+
+        return videoMatchesSelectedCategory(video, category);
+      });
+
+      const selectedVideos = selectSourceBalancedVideos(
+        matchingVideos.sort((left, right) => {
+          const leftVerticalBoost = left.orientation === "vertical" ? 1 : 0;
+          const rightVerticalBoost = right.orientation === "vertical" ? 1 : 0;
+
+          if (rightVerticalBoost !== leftVerticalBoost) {
+            return rightVerticalBoost - leftVerticalBoost;
+          }
+
+          return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+        }),
+        5,
+        1
+      );
+
+      selectedVideos.forEach((video) => usedVideoIds.add(video.id));
+      sectionVideos[category] = selectedVideos;
+    });
+
+    return sectionVideos;
+  }, [categories, celebrityVideos, sportsVideos, videos, weatherVideos]);
 
   useEffect(() => {
     if (sortMode === "sports") {
@@ -6924,6 +6981,104 @@ export default function Home() {
                 variant="article"
               />
             </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  const renderMyNewsCategoryVideosRow = (category: string, categoryVideos: VideoItem[]) => {
+    if (categoryVideos.length === 0) {
+      return null;
+    }
+
+    const label = `${getCategoryLabel(category)} Videos`;
+    const normalizedCategoryKey = category.toLowerCase().replace(/\s+/g, "-");
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">{label}</strong>
+          </div>
+        </div>
+        <div className="quick-watch-scroll" role="list" aria-label={label}>
+          {categoryVideos.map((video) => (
+            <div
+              key={`mynews-category-video-${normalizedCategoryKey}-${video.id}`}
+              className="quick-watch-item"
+              role="listitem"
+            >
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(
+                    `mynews-category-${normalizedCategoryKey}:${video.id}`
+                  ) && !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[
+                    `mynews-category-${normalizedCategoryKey}:${video.id}`
+                  ] = node;
+                }}
+                autoplayKey={`mynews-category-${normalizedCategoryKey}:${video.id}`}
+                previewDurationMs={null}
+                label={label}
+                hideActions
+                useRelativeTime
+                className="video-card-inline quick-watch-video-card"
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  const renderAddMoreCategoriesRow = () => {
+    const availableCategories = CATEGORY_OPTIONS.filter((category) => !categories.includes(category)).slice(
+      0,
+      10
+    );
+
+    if (availableCategories.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Add More Categories</strong>
+            <span className="muted">Tap categories to expand your personalized feed.</span>
+          </div>
+        </div>
+
+        <div className="category-swipe-row" role="list" aria-label="Add more categories">
+          {availableCategories.map((category, index) => (
+            <button
+              key={`mynews-extra-${category}`}
+              type="button"
+              role="listitem"
+              className="category-swipe-card"
+              onClick={() => void handleQuickToggleCategory(category)}
+              disabled={isSavingCategories}
+            >
+              <span
+                className={`category-swipe-card-art category-art-${index % 8}`}
+                style={getCategorySwipeArtStyle(category, index)}
+                aria-hidden="true"
+              />
+              <span className="category-swipe-card-label">{getCategoryLabel(category)}</span>
+              <span className="category-swipe-card-meta">
+                {userId ? "Tap to add" : "Log in to add"}
+              </span>
+            </button>
           ))}
         </div>
       </section>
@@ -8818,36 +8973,73 @@ export default function Home() {
             </div>
           ) : isCategorySectionLoading ? (
             <div className="muted">Loading your selected categories...</div>
-          ) : personalizedMyNewsArticles.length === 0 ? (
+          ) : myNewsCategorySections.filter(
+              (section) => section.category !== "Recommended for You" && section.articles.length > 0
+            ).length === 0 ? (
             <div className="empty-state compact-empty-state">
               <strong>No stories matched your selected categories yet.</strong>
               <span>Try adding more categories or check back shortly.</span>
             </div>
           ) : (
             <div className="stack" style={{ gap: "22px" }}>
-              {myNewsCategorySections.map((section) => (
-                <section
-                  key={`mynews-section-${section.category}`}
-                  className="home-section-block home-section-plain"
-                >
+              {myNewsCategorySections
+                .filter((section) => section.category !== "Recommended for You")
+                .map((section, index, filteredSections) => (
+                  <div key={`mynews-section-wrap-${section.category}`} className="stack" style={{ gap: "18px" }}>
+                    <section
+                      key={`mynews-section-${section.category}`}
+                      className="home-section-block home-section-plain"
+                    >
+                      <div className="home-section-header">
+                        <div className="stack" style={{ gap: "4px" }}>
+                          <strong className="profile-section-title home-section-title">
+                            {getCategoryLabel(section.category)}
+                          </strong>
+                        </div>
+                      </div>
+                      <div className="stack home-section-list">
+                        {section.articles.map((article) => (
+                          <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                            {renderArticleFeedCard(article)}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    {renderMyNewsCategoryVideosRow(
+                      section.category,
+                      myNewsCategoryVideoSections[section.category] ?? []
+                    )}
+
+                    {index < filteredSections.length - 1 && index % 2 === 0
+                      ? renderAddMoreCategoriesRow()
+                      : null}
+                  </div>
+                ))}
+
+              {myNewsCategorySections.find((section) => section.category === "Recommended for You")?.articles
+                .length ? (
+                <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
                     <div className="stack" style={{ gap: "4px" }}>
                       <strong className="profile-section-title home-section-title">
-                        {section.category === "Recommended for You"
-                          ? section.category
-                          : getCategoryLabel(section.category)}
+                        Recommended for You
                       </strong>
                     </div>
                   </div>
                   <div className="stack home-section-list">
-                    {section.articles.map((article) => (
+                    {(
+                      myNewsCategorySections.find(
+                        (section) => section.category === "Recommended for You"
+                      )?.articles ?? []
+                    ).map((article) => (
                       <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                         {renderArticleFeedCard(article)}
                       </div>
                     ))}
                   </div>
                 </section>
-              ))}
+              ) : null}
             </div>
           )}
         </section>
