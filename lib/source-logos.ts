@@ -147,6 +147,34 @@ export const sourceHeaderLogoMap: Record<string, string> = {
   "Washington Post": "/news-logo-head/the-washington-post.png",
 };
 
+export const sourceHeaderDarkLogoMap: Record<string, string> = {
+  CNN: "/news-logo-head-dark/cnn.png",
+  "ABC News": "/news-logo-head-dark/abc-news.png",
+  AP: "/news-logo-head-dark/ap-news.png",
+  "AP News": "/news-logo-head-dark/ap-news.png",
+  "Associated Press": "/news-logo-head-dark/ap-news.png",
+  BBC: "/news-logo-head-dark/bbc-news.png",
+  "BBC News": "/news-logo-head-dark/bbc-news.png",
+  Billboard: "/news-logo-head-dark/billboard.png",
+  "CBS News": "/news-logo-head-dark/cbs-news.png",
+  "CBS Sports": "/news-logo-head-dark/cbs-sports.png",
+  CNBC: "/news-logo-head-dark/cnbc.png",
+  ESPN: "/news-logo-head-dark/espn.png",
+  "Fox News": "/news-logo-head-dark/fox-news.png",
+  "NBC News": "/news-logo-head-dark/nbc-news.png",
+  "NBC Sports": "/news-logo-head-dark/nbc-sports.png",
+  NPR: "/news-logo-head-dark/npr.png",
+  Reuters: "/news-logo-head-dark/reuters.png",
+  "Sports Illustrated": "/news-logo-head-dark/sports-illustrated.png",
+  TMZ: "/news-logo-head-dark/tmz.png",
+  Variety: "/news-logo-head-dark/variety.png",
+  "The New York Times": "/news-logo-head-dark/the-new-york-times.png",
+  "New York Times": "/news-logo-head-dark/the-new-york-times.png",
+  "The Washington Post": "/news-logo-head-dark/the-washington-post.png",
+  "Washington Post": "/news-logo-head-dark/the-washington-post.png",
+  "Yahoo Sports": "/news-logo-head-dark/yahoo-sports.png",
+};
+
 export function normalizeSourceLogoName(sourceName: string) {
   return sourceName
     .trim()
@@ -203,6 +231,10 @@ export function getSourceLogoUrl(sourceName: string) {
 
 export function getSourceHeaderLogoUrl(sourceName: string) {
   return sourceHeaderLogoMap[sourceName.trim()] ?? null;
+}
+
+export function getSourceHeaderDarkLogoUrl(sourceName: string) {
+  return sourceHeaderDarkLogoMap[sourceName.trim()] ?? null;
 }
 
 export function hasMappedSourceLogo(sourceName: string) {

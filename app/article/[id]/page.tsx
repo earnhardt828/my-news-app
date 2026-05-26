@@ -2065,7 +2065,7 @@ export default function ArticleDetailPage() {
                   event.stopPropagation();
                 }}
               >
-                <SourceHeaderMark sourceName={compareArticle.source} />
+                <SourceHeaderMark sourceName={compareArticle.source} fallbackMode="text" />
                 <span className="article-detail-source">{compareArticle.source}</span>
               </Link>
               <span className="chip chip-accent">{compareArticle.category}</span>

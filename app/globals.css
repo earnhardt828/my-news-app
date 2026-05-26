@@ -1563,6 +1563,29 @@ input {
   object-fit: contain;
 }
 
+.source-header-text-fallback {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.trending-source-header-mark .source-header-logo,
+.top-trending-list-source-mark .source-header-logo {
+  height: 24px;
+  max-width: 74px;
+}
+
+.top-trending-list-source-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .trending-source-category-separator {
   color: var(--text-soft);
   font-weight: 700;

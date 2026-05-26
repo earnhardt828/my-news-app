@@ -1,34 +1,54 @@
 "use client";
 
 import { useState } from "react";
-import { getSourceHeaderLogoUrl } from "../../lib/source-logos";
+import {
+  getSourceHeaderDarkLogoUrl,
+  getSourceHeaderLogoUrl,
+} from "../../lib/source-logos";
 import SourceBadge from "./source-badge";
 
 type SourceHeaderMarkProps = {
   sourceName: string;
   className?: string;
+  fallbackMode?: "badge" | "text";
 };
 
 export default function SourceHeaderMark({
   sourceName,
   className = "",
+  fallbackMode = "badge",
 }: SourceHeaderMarkProps) {
   const [logoFailed, setLogoFailed] = useState(false);
-  const logoUrl = getSourceHeaderLogoUrl(sourceName);
+  const lightLogoUrl = getSourceHeaderLogoUrl(sourceName);
+  const darkLogoUrl = getSourceHeaderDarkLogoUrl(sourceName);
 
-  if (logoUrl && !logoFailed) {
+  if (lightLogoUrl && !logoFailed) {
     return (
       <span className={`source-header-mark ${className}`.trim()} aria-hidden="true">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={logoUrl}
+          src={lightLogoUrl}
           alt={`${sourceName} header logo`}
-          className="source-header-logo"
+          className={`source-header-logo ${darkLogoUrl ? "branding-image-light" : ""}`.trim()}
           loading="lazy"
           onError={() => setLogoFailed(true)}
         />
+        {darkLogoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={darkLogoUrl}
+            alt={`${sourceName} dark header logo`}
+            className="source-header-logo branding-image-dark"
+            loading="lazy"
+            onError={() => setLogoFailed(true)}
+          />
+        ) : null}
       </span>
     );
+  }
+
+  if (fallbackMode === "text") {
+    return <span className={`source-header-text-fallback ${className}`.trim()}>{sourceName}</span>;
   }
 
   return (
