@@ -7281,7 +7281,7 @@ export default function Home() {
     }
 
     return (
-      <section className="home-section-block home-section-plain featured-stories-row">
+      <section className="home-section-block home-section-plain">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
             <strong className="profile-section-title home-section-title breaking-news-title">
@@ -7289,55 +7289,15 @@ export default function Home() {
             </strong>
           </div>
         </div>
-        <div className="featured-stories-scroll" role="list" aria-label="Breaking news">
-          {breakingNewsPreviewArticles.map((article) => {
-            const routeId = getArticleRouteId(article);
-            const selectedImage = getBestArticleImage(article);
-            const imageSrc = selectedImage.src;
-
-            if (!routeId) {
-              return null;
-            }
-
-            return (
-              <Link
-                key={`breaking-${routeId}`}
-                href={`/article/${routeId}/`}
-                className="featured-story-card"
-                role="listitem"
-                onClick={() => {
-                  persistArticleMetadata(article);
-                  saveArticleReturnState({
-                    path: "/",
-                    scrollY: window.scrollY,
-                    source: "home",
-                    sortMode,
-                    selectedLocalCity,
-                    localLocationLabel,
-                  });
-                }}
-              >
-                {imageSrc ? (
-                  <img
-                    src={imageSrc}
-                    alt={cleanDisplayText(article.title)}
-                    className="featured-story-image"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className="featured-story-fallback-brand" aria-hidden="true">
-                    <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                  </div>
-                )}
-                <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
-                <div className="featured-story-copy">
-                  <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
-                  <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                </div>
-              </Link>
-            );
-          })}
+        <div className="stack home-section-list" role="list" aria-label="Breaking news">
+          {breakingNewsPreviewArticles.map((article) => (
+            <div
+              key={`breaking-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+              role="listitem"
+            >
+              {renderArticleFeedCard(article)}
+            </div>
+          ))}
         </div>
       </section>
     );
@@ -8389,54 +8349,23 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
+        {renderQuickWatchRow(true)}
+
         {renderBreakingNewsRow()}
 
-        <section id="my-news-section" className="home-section-block home-section-plain">
+        <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">My News</strong>
+              <strong className="profile-section-title home-section-title">Trending Top 10</strong>
             </div>
           </div>
-
-          {!userId ? (
-            <div className="empty-state compact-empty-state">
-              <strong>Log in to personalize My News</strong>
-              <span>Follow categories and sources to build your own feed here.</span>
-            </div>
-          ) : categories.length === 0 ? (
-            <div className="stack" style={{ gap: "12px" }}>
-              <div className="category-grid">
-                {CATEGORY_OPTIONS.slice(0, 8).map((category) => (
-                  <button
-                    key={category}
-                    className="category-pill"
-                    onClick={() => {
-                      setCategoryDraft([category]);
-                      setCategorySheetStatus(null);
-                      setIsCategorySheetOpen(true);
-                    }}
-                  >
-                    {getCategoryLabel(category)}
-                  </button>
-                ))}
+          <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
+            {topTenTrendingArticles.map((article, index) => (
+              <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                {renderCompactSideImageArticle(article, { showRank: index + 1 })}
               </div>
-            </div>
-          ) : isCategorySectionLoading ? (
-            <div className="muted">Loading category stories...</div>
-          ) : categorySectionArticles.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No category stories yet</strong>
-              <span>Try updating your interests or check back shortly.</span>
-            </div>
-          ) : (
-            <div className="stack home-section-list">
-              {categorySectionArticles.slice(0, 6).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
         </section>
 
         <section className="home-section-block home-section-plain">
@@ -8506,23 +8435,6 @@ export default function Home() {
               ))}
             </div>
           )}
-        </section>
-
-        {renderQuickWatchRow(true)}
-
-        <section className="home-section-block home-section-plain home-top-trending-block">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Trending Top 10</strong>
-            </div>
-          </div>
-          <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
-            {topTenTrendingArticles.map((article, index) => (
-              <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                {renderCompactSideImageArticle(article, { showRank: index + 1 })}
-              </div>
-            ))}
-          </div>
         </section>
 
         {renderFeaturedVideosBreak()}
