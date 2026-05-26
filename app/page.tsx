@@ -8,7 +8,15 @@ import VideoFeedCard from "./components/video-feed-card";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   createBlockedUser,
   listBlockedUsers,
@@ -178,6 +186,8 @@ const TOP_QUICK_WATCH_PREFERRED_SOURCE_PATTERN =
 const TOP_QUICK_WATCH_DEPRIORITIZED_SOURCE_PATTERN =
   /\b(al jazeera|al jazeera english|fox news)\b/i;
 const QUICK_WATCH_COMBINED_LIMITED_SOURCES = new Set(["al jazeera", "al jazeera english", "fox news"]);
+const RECIPE_PREFERRED_SOURCE_PATTERN =
+  /\b(nyt cooking|allrecipes|food network|delish|bon appétit|bon appetit|serious eats|epicurious|taste of home|food & wine|food and wine|eater)\b/i;
 const WEATHER_SOURCE_RENAME_PATTERN = /\bweather news\b/i;
 const WEATHER_LIKE_ARTICLE_PATTERN =
   /\b(weather|storm|tornado|hurricane|rain|snow|forecast|radar|climate|flood|wildfire|local weather|severe weather)\b/i;
@@ -570,6 +580,28 @@ function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string
 
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
   return matcher.test(haystack);
+}
+
+function isRecipeArticle(article: Pick<Article, "title" | "description" | "source" | "category">) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
+  return /(recipe|recipes|how to make|chef|cook|cooking|bake|baking|dinner|dessert|meal prep|nyt cooking|allrecipes|food network|delish|bon appétit|serious eats|epicurious|taste of home|food & wine|eater)/.test(
+    haystack
+  );
+}
+
+function isRecipeVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  return /(recipe|recipes|how to make|chef|cook|cooking|bake|baking|dinner|dessert|meal prep|nyt cooking|allrecipes|food network|delish|bon appétit|serious eats|epicurious|taste of home|food & wine|eater)/.test(
+    haystack
+  );
+}
+
+function getRecipeSourcePriority(value: string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+
+  return RECIPE_PREFERRED_SOURCE_PATTERN.test(value) ? 2 : 0;
 }
 
 function isBroadSportsArticle(article: Pick<Article, "title" | "description" | "source" | "category">) {
@@ -2046,6 +2078,9 @@ export default function Home() {
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const teamPickerPagesRef = useRef<HTMLDivElement | null>(null);
   const moreSportsVideosSectionRef = useRef<HTMLElement | null>(null);
+  const foodRecipesSectionRef = useRef<HTMLElement | null>(null);
+  const foodRecipeVideosSectionRef = useRef<HTMLElement | null>(null);
+  const foodLatestSectionRef = useRef<HTMLElement | null>(null);
   const topTabButtonRefs = useRef<Partial<Record<SwipeableSortMode, HTMLButtonElement | null>>>({});
   const articleLongPressTimerRef = useRef<number | null>(null);
   const [isMoreSportsVideosVisible, setIsMoreSportsVideosVisible] = useState(false);
@@ -3906,7 +3941,8 @@ export default function Home() {
       sortMode !== "sports" &&
       sortMode !== "local" &&
       sortMode !== "celebrity" &&
-      sortMode !== "weather"
+      sortMode !== "weather" &&
+      sortMode !== "food"
     ) {
       return;
     }
@@ -5395,6 +5431,76 @@ export default function Home() {
 
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [foodPreviewArticles, sortMode, visibleArticles]);
+
+  const foodSectionArticles = useMemo(() => {
+    if (sortMode !== "food") {
+      return {
+        recipes: [] as Article[],
+        latest: [] as Article[],
+      };
+    }
+
+    const recipeArticles = selectSourceBalancedArticles(
+      [...foodTabArticles.filter((article) => isRecipeArticle(article))].sort((left, right) => {
+        const sourceDelta =
+          getRecipeSourcePriority(right.source) - getRecipeSourcePriority(left.source);
+
+        if (sourceDelta !== 0) {
+          return sourceDelta;
+        }
+
+        const leftImage = getBestArticleImage(left);
+        const rightImage = getBestArticleImage(right);
+        const leftHasImage = isLikelyHighQualityArticleImage(leftImage.source, leftImage.src) ? 1 : 0;
+        const rightHasImage = isLikelyHighQualityArticleImage(rightImage.source, rightImage.src) ? 1 : 0;
+
+        if (rightHasImage !== leftHasImage) {
+          return rightHasImage - leftHasImage;
+        }
+
+        return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+      }),
+      10
+    );
+    const recipeKeys = new Set(recipeArticles.map((article) => getArticleDeduplicationKey(article)));
+    const latestArticles = selectSourceBalancedArticles(
+      foodTabArticles.filter((article) => !recipeKeys.has(getArticleDeduplicationKey(article))),
+      18
+    );
+
+    return {
+      recipes: recipeArticles,
+      latest: latestArticles,
+    };
+  }, [foodTabArticles, sortMode]);
+
+  const foodPageVideos = useMemo(() => {
+    if (sortMode !== "food") {
+      return [] as VideoItem[];
+    }
+
+    const foodVideos = dedupeVideosBySourceTitleAndUrl(
+      videos.filter((video) => !isSportsVideo(video) && isRecipeVideo(video))
+    ).sort((left, right) => {
+      const sourceDelta =
+        getRecipeSourcePriority(right.creator) - getRecipeSourcePriority(left.creator);
+
+      if (sourceDelta !== 0) {
+        return sourceDelta;
+      }
+
+      const leftVertical = left.orientation === "vertical" ? 1 : 0;
+      const rightVertical = right.orientation === "vertical" ? 1 : 0;
+
+      if (rightVertical !== leftVertical) {
+        return rightVertical - leftVertical;
+      }
+
+      return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+    });
+
+    return selectSourceBalancedVideos(foodVideos, 8, 2);
+  }, [sortMode, videos]);
 
   const personalizedMyNewsArticles = useMemo(() => {
     if (categories.length === 0) {
@@ -7038,6 +7144,13 @@ export default function Home() {
         </div>
       </section>
     );
+  };
+
+  const scrollSectionIntoView = (sectionRef: RefObject<HTMLElement | null>) => {
+    sectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   };
 
   const renderAddMoreCategoriesRow = () => {
@@ -9892,21 +10005,184 @@ export default function Home() {
               <span className="home-section-date">{todayLabel}</span>
             </div>
           </div>
+          <div className="category-swipe-row food-section-nav-row" role="list" aria-label="Food sections">
+            {[
+              {
+                key: "recipes",
+                label: "Recipes",
+                meta: "Cooking picks",
+                onClick: () => scrollSectionIntoView(foodRecipesSectionRef),
+              },
+              {
+                key: "videos",
+                label: "Recipe Videos",
+                meta: "Watch & cook",
+                onClick: () => scrollSectionIntoView(foodRecipeVideosSectionRef),
+              },
+              {
+                key: "latest",
+                label: "Food News",
+                meta: "Latest stories",
+                onClick: () => scrollSectionIntoView(foodLatestSectionRef),
+              },
+            ].map((item, index) => (
+              <button
+                key={item.key}
+                type="button"
+                role="listitem"
+                className="category-swipe-card food-section-nav-card"
+                onClick={item.onClick}
+              >
+                <span
+                  className={`category-swipe-card-art category-art-${index % 8}`}
+                  style={getCategorySwipeArtStyle(item.label, index)}
+                  aria-hidden="true"
+                />
+                <span className="category-swipe-card-label">{item.label}</span>
+                <span className="category-swipe-card-meta">{item.meta}</span>
+              </button>
+            ))}
+          </div>
 
-          {foodTabArticles.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No food stories yet</strong>
-              <span>Check back shortly for fresh food coverage.</span>
+          <section
+            ref={foodRecipesSectionRef}
+            className="home-section-block home-section-plain featured-stories-row food-recipes-row"
+          >
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Recipes</strong>
+                <span className="muted">Recipe-focused picks from cooking sources you know.</span>
+              </div>
             </div>
-          ) : (
-            <div className="stack home-section-list">
-              {foodTabArticles.map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
+
+            {foodSectionArticles.recipes.length === 0 ? (
+              <div className="empty-state compact-empty-state">
+                <strong>Recipes loading…</strong>
+              </div>
+            ) : (
+              <div className="featured-stories-scroll" role="list" aria-label="Recipes">
+                {foodSectionArticles.recipes.map((article) => {
+                  const routeId = getArticleRouteId(article);
+                  const selectedImage = getBestArticleImage(article);
+                  const imageSrc = selectedImage.src;
+
+                  if (!routeId) {
+                    return null;
+                  }
+
+                  return (
+                    <Link
+                      key={`recipe-${routeId}`}
+                      href={`/article/${routeId}/`}
+                      className="featured-story-card food-recipe-card"
+                      role="listitem"
+                      onClick={() => {
+                        persistArticleMetadata(article);
+                        saveArticleReturnState({
+                          path: "/",
+                          scrollY: window.scrollY,
+                          source: "home",
+                          sortMode,
+                          selectedLocalCity,
+                          localLocationLabel,
+                        });
+                      }}
+                    >
+                      {imageSrc ? (
+                        <img
+                          src={imageSrc}
+                          alt={cleanDisplayText(article.title)}
+                          className="featured-story-image"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="featured-story-fallback-brand" aria-hidden="true">
+                          <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+                        </div>
+                      )}
+                      <div
+                        className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`}
+                      />
+                      <div className="featured-story-copy">
+                        <span className="featured-story-source">
+                          {getDisplaySourceLabel(article)}
+                        </span>
+                        <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section
+            ref={foodRecipeVideosSectionRef}
+            className="home-section-block home-section-plain quick-watch-row"
+          >
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Recipe Videos</strong>
+              </div>
             </div>
-          )}
+            {foodPageVideos.length === 0 ? (
+              <div className="empty-state compact-empty-state">
+                <strong>Videos loading…</strong>
+              </div>
+            ) : (
+              <div className="quick-watch-scroll" role="list" aria-label="Recipe videos">
+                {foodPageVideos.map((video) => (
+                  <div key={`food-videos-${video.id}`} className="quick-watch-item" role="listitem">
+                    <VideoFeedCard
+                      video={video}
+                      isAutoplaying={
+                        autoplayTrendingVideoKeys.includes(`food-recipes:${video.id}`) &&
+                        !video.fallback
+                      }
+                      onToggleLike={handleToggleVideoLike}
+                      onToggleSave={handleToggleVideoSave}
+                      onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                      onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                      frameRef={(node) => {
+                        trendingVideoFrameRefs.current[`food-recipes:${video.id}`] = node;
+                      }}
+                      autoplayKey={`food-recipes:${video.id}`}
+                      previewDurationMs={null}
+                      label="Recipe Video"
+                      hideActions
+                      useRelativeTime
+                      className="video-card-inline quick-watch-video-card"
+                      variant="article"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section ref={foodLatestSectionRef} className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Food News</strong>
+              </div>
+            </div>
+
+            {foodSectionArticles.latest.length === 0 ? (
+              <div className="empty-state compact-empty-state">
+                <strong>No food stories yet</strong>
+                <span>Check back shortly for fresh food coverage.</span>
+              </div>
+            ) : (
+              <div className="stack home-section-list">
+                {foodSectionArticles.latest.map((article) => (
+                  <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+                    {renderArticleFeedCard(article)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </section>
       </section>
     );

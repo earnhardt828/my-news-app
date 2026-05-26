@@ -2987,6 +2987,19 @@ input {
   box-shadow: 0 18px 42px rgba(20, 33, 61, 0.14);
 }
 
+.food-section-nav-row {
+  margin-bottom: 18px;
+}
+
+.food-section-nav-card {
+  min-height: 148px;
+}
+
+.food-recipe-card {
+  flex-basis: min(84vw, 356px);
+  min-height: 246px;
+}
+
 .featured-story-fallback-brand {
   position: absolute;
   inset: 0;
