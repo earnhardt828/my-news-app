@@ -5894,6 +5894,70 @@ export default function Home() {
     [myNewsQuickWatchVideos.length, myNewsFeaturedVideos.length, myNewsVideoPool]
   );
 
+  const trendingBreakingFeaturedVideos = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as VideoItem[];
+    }
+
+    const usedVideoIds = new Set(myNewsQuickWatchVideos.map((video) => video.id));
+    const sportsFirstPool = selectSourceBalancedVideos(
+      ensureMinimumVideoCount(
+        [...sportsVideos, ...videos]
+          .filter((video) => {
+            return (
+              !usedVideoIds.has(video.id) &&
+              (isSportsVideo(video) ||
+                (video.fallback &&
+                  /\b(sports|football|basketball|baseball|hockey|soccer|highlights?|top plays)\b/i.test(
+                    `${video.category} ${video.title} ${video.creator}`
+                  )))
+            );
+          })
+          .sort((left, right) => {
+            const leftVertical = left.orientation === "vertical" ? 1 : 0;
+            const rightVertical = right.orientation === "vertical" ? 1 : 0;
+
+            if (rightVertical !== leftVertical) {
+              return rightVertical - leftVertical;
+            }
+
+            return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+          }),
+        [...sportsVideos, ...videos].filter((video) => video.fallback && !usedVideoIds.has(video.id)),
+        3
+      ),
+      10,
+      1
+    );
+
+    const prioritizedSportsVideos = selectSourceBalancedVideos(
+      sportsFirstPool.sort((left, right) => {
+        const leftVertical = left.orientation === "vertical" ? 1 : 0;
+        const rightVertical = right.orientation === "vertical" ? 1 : 0;
+
+        if (rightVertical !== leftVertical) {
+          return rightVertical - leftVertical;
+        }
+
+        return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+      }),
+      5,
+      1
+    );
+
+    if (prioritizedSportsVideos.length >= 3) {
+      return prioritizedSportsVideos;
+    }
+
+    const fallbackPool = myNewsVideoPool.filter(
+      (video) =>
+        !usedVideoIds.has(video.id) &&
+        !prioritizedSportsVideos.some((selectedVideo) => selectedVideo.id === video.id)
+    );
+
+    return dedupeVideosBySourceTitleAndUrl([...prioritizedSportsVideos, ...fallbackPool]).slice(0, 5);
+  }, [myNewsQuickWatchVideos, myNewsVideoPool, sortMode, sportsVideos, videos]);
+
   const topTenTrendingArticles = useMemo(
     () => balancedTrendingArticles.slice(0, 10),
     [balancedTrendingArticles]
@@ -7025,7 +7089,7 @@ export default function Home() {
     }
   };
 
-  const renderQuickWatchRow = (compact = false) => {
+  const renderQuickWatchRow = (compact = false, useUniformTallFrame = false) => {
     if (myNewsQuickWatchVideos.length === 0) {
       return (
         <section
@@ -7082,8 +7146,11 @@ export default function Home() {
                 hideActions
                 useRelativeTime
                 className={`video-card-inline quick-watch-video-card ${
+                  useUniformTallFrame ? "quick-watch-video-card-unified" : ""
+                } ${
                   compact ? "quick-watch-video-card-compact" : ""
                 }`.trim()}
+                useUniformTallFrame={useUniformTallFrame}
                 variant="article"
               />
             </div>
@@ -7355,6 +7422,61 @@ export default function Home() {
     );
   };
 
+  const renderBreakingFeaturedVideosRow = () => {
+    if (trendingBreakingFeaturedVideos.length === 0) {
+      return (
+        <section className="home-section-block home-section-plain quick-watch-row">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Featured Videos</strong>
+            </div>
+          </div>
+          <div className="empty-state compact-empty-state">
+            <strong>Videos loading…</strong>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Featured Videos</strong>
+          </div>
+        </div>
+        <div className="quick-watch-scroll" role="list" aria-label="Featured videos under breaking news">
+          {trendingBreakingFeaturedVideos.map((video) => (
+            <div key={`breaking-featured-videos-${video.id}`} className="quick-watch-item" role="listitem">
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`breaking-featured-videos:${video.id}`) &&
+                  !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "sports")}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[`breaking-featured-videos:${video.id}`] = node;
+                }}
+                autoplayKey={`breaking-featured-videos:${video.id}`}
+                previewDurationMs={null}
+                label="Featured Video"
+                hideActions
+                useRelativeTime
+                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
+                useUniformTallFrame
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   const renderFeaturedVideosBreak = () => {
     if (myNewsFeaturedVideos.length === 0) {
       return (
@@ -7403,7 +7525,8 @@ export default function Home() {
                 autoplayKey={`featured-videos:${video.id}`}
                 previewDurationMs={null}
                 label="Featured Video"
-                className="video-card-inline featured-video-single-card"
+                className="video-card-inline featured-video-single-card quick-watch-video-card-unified"
+                useUniformTallFrame
                 variant="article"
               />
             </div>
@@ -7438,7 +7561,8 @@ export default function Home() {
                 autoplayKey={`featured-videos:${video.id}`}
                 previewDurationMs={null}
                 label="Featured Video"
-                className="video-card-inline quick-watch-video-card"
+                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
+                useUniformTallFrame
                 variant="article"
               />
             </div>
@@ -8349,9 +8473,11 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        {renderQuickWatchRow(true)}
+        {renderQuickWatchRow(false, true)}
 
         {renderBreakingNewsRow()}
+
+        {renderBreakingFeaturedVideosRow()}
 
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
@@ -9656,46 +9782,6 @@ export default function Home() {
                 </section>
               ) : null}
 
-              <section className="home-section-block home-section-plain quick-watch-row">
-                <div className="home-section-header">
-                  <div className="stack" style={{ gap: "4px" }}>
-                    <strong className="profile-section-title home-section-title">Weather Videos</strong>
-                  </div>
-                </div>
-                {weatherPageVideos.length > 0 ? (
-                  <div className="quick-watch-scroll" role="list" aria-label="Weather videos">
-                    {weatherPageVideos.map((video) => (
-                      <div key={`weather-video-${video.id}`} className="quick-watch-item" role="listitem">
-                        <VideoFeedCard
-                          video={video}
-                          isAutoplaying={
-                            autoplayTrendingVideoKeys.includes(`weather-videos:${video.id}`) && !video.fallback
-                          }
-                          onToggleLike={handleToggleVideoLike}
-                          onToggleSave={handleToggleVideoSave}
-                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                          onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
-                          frameRef={(node) => {
-                            trendingVideoFrameRefs.current[`weather-videos:${video.id}`] = node;
-                          }}
-                          autoplayKey={`weather-videos:${video.id}`}
-                          previewDurationMs={null}
-                          label="Weather Video"
-                          hideActions
-                          useRelativeTime
-                          className="video-card-inline quick-watch-video-card"
-                          variant="article"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="empty-state compact-empty-state">
-                    <strong>Videos loading…</strong>
-                  </div>
-                )}
-              </section>
-
               {weatherSectionContent.localWeather.length > 0 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
@@ -9834,6 +9920,47 @@ export default function Home() {
                   </div>
                 </section>
               ) : null}
+
+              <section className="home-section-block home-section-plain quick-watch-row">
+                <div className="home-section-header">
+                  <div className="stack" style={{ gap: "4px" }}>
+                    <strong className="profile-section-title home-section-title">Weather Videos</strong>
+                  </div>
+                </div>
+                {weatherPageVideos.length > 0 ? (
+                  <div className="quick-watch-scroll" role="list" aria-label="Weather videos">
+                    {weatherPageVideos.map((video) => (
+                      <div key={`weather-video-${video.id}`} className="quick-watch-item" role="listitem">
+                        <VideoFeedCard
+                          video={video}
+                          isAutoplaying={
+                            autoplayTrendingVideoKeys.includes(`weather-videos:${video.id}`) && !video.fallback
+                          }
+                          onToggleLike={handleToggleVideoLike}
+                          onToggleSave={handleToggleVideoSave}
+                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                          onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                          frameRef={(node) => {
+                            trendingVideoFrameRefs.current[`weather-videos:${video.id}`] = node;
+                          }}
+                          autoplayKey={`weather-videos:${video.id}`}
+                          previewDurationMs={null}
+                          label="Weather Video"
+                          hideActions
+                          useRelativeTime
+                          className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
+                          useUniformTallFrame
+                          variant="article"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state compact-empty-state">
+                    <strong>Videos loading…</strong>
+                  </div>
+                )}
+              </section>
             </div>
           )}
         </section>

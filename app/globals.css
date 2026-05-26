@@ -3203,6 +3203,15 @@ input {
   min-height: 0;
 }
 
+.quick-watch-video-card-unified .video-frame-article,
+.video-card-article-uniform-tall .video-frame-article {
+  aspect-ratio: 9 / 16;
+  width: 100%;
+  max-width: none;
+  min-height: 252px;
+  margin: 0;
+}
+
 .local-city-dropdown {
   position: absolute;
   top: calc(100% + 8px);
@@ -6566,6 +6575,11 @@ input {
 }
 
 .video-card-article-horizontal .video-frame-article {
+  max-width: none;
+}
+
+.video-card-article-uniform-tall.video-card-article-horizontal .video-frame-article,
+.video-card-article-uniform-tall.video-card-article-vertical .video-frame-article {
   max-width: none;
 }
 

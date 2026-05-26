@@ -28,6 +28,7 @@ type VideoFeedCardProps = {
   previewDurationMs?: number | null;
   hideActions?: boolean;
   useRelativeTime?: boolean;
+  useUniformTallFrame?: boolean;
 };
 
 const actionIconProps = {
@@ -58,6 +59,7 @@ export default function VideoFeedCard({
   previewDurationMs = null,
   hideActions = false,
   useRelativeTime = false,
+  useUniformTallFrame = false,
 }: VideoFeedCardProps) {
   const isArticleVariant = variant === "article";
   const defaultTrendingOrientation = inferVideoOrientation(undefined, undefined, {
@@ -172,6 +174,10 @@ export default function VideoFeedCard({
     if (isAutoplaying && autoplayKey?.includes("sports-more-quickwatch")) {
       console.log("MORE VIDEOS AUTOPLAY ATTEMPT", autoplayKey, video.id);
     }
+
+    if (isAutoplaying && autoplayKey?.includes("weather-videos")) {
+      console.log("WEATHER VIDEOS AUTOPLAY ATTEMPT", autoplayKey, video.id);
+    }
   }, [autoplayKey, isAutoplaying, video.id]);
 
   const articleFrameClass =
@@ -205,7 +211,7 @@ export default function VideoFeedCard({
         id={`video-${video.id}`}
         className={`video-card video-card-article ${
           rankBadgeLabel ? "news-card-has-rank" : ""
-        } ${articleOrientationClass} ${className}`.trim()}
+        } ${articleOrientationClass} ${useUniformTallFrame ? "video-card-article-uniform-tall" : ""} ${className}`.trim()}
       >
         {rankBadgeLabel ? (
           <span className="chip trending-rank-badge news-card-rank-badge">
