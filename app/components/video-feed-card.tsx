@@ -186,6 +186,18 @@ export default function VideoFeedCard({
   const publishedLabel = useRelativeTime
     ? formatRelativeTimestamp(video.publishedAt)
     : formatVideoPublishedDate(video.publishedAt);
+  let previewEmbedUrl: string | null = null;
+
+  try {
+    previewEmbedUrl = buildVideoEmbedUrl(video.youtubeId, true, { startSeconds: 5 });
+  } catch (error) {
+    console.error("VIDEO RENDER ERROR", {
+      videoId: video.id,
+      title: video.title,
+      error,
+    });
+    previewEmbedUrl = null;
+  }
 
   if (isArticleVariant) {
     return (
@@ -219,10 +231,10 @@ export default function VideoFeedCard({
             video.theme ?? "video-card-theme-rose"
           }`}
         >
-          {shouldAutoplayFrame && !video.fallback ? (
+          {shouldAutoplayFrame && !video.fallback && previewEmbedUrl ? (
             <>
               <iframe
-                src={buildVideoEmbedUrl(video.youtubeId, true, { startSeconds: 5 })}
+                src={previewEmbedUrl}
                 title={video.title}
                 className="video-player-frame"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -351,9 +363,9 @@ export default function VideoFeedCard({
             isAutoplaying ? "video-frame-live" : ""
           }`}
         >
-          {isAutoplaying && !video.fallback ? (
+          {isAutoplaying && !video.fallback && previewEmbedUrl ? (
             <iframe
-              src={buildVideoEmbedUrl(video.youtubeId, true, { startSeconds: 5 })}
+              src={previewEmbedUrl}
               title={video.title}
               className="video-player-frame"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

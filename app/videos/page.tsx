@@ -105,8 +105,8 @@ export default function VideosPage() {
         message?: string;
       };
 
-      const normalizedVideos = normalizeVideoFeedItems(data.videos).filter(
-        (video) => !video.fallback && Boolean(video.youtubeId)
+      const normalizedVideos = normalizeVideoFeedItems(data.videos).filter((video) =>
+        Boolean(video.youtubeId)
       );
 
       setVideosByTab((prev) => ({

@@ -1122,6 +1122,19 @@ function selectSourceBalancedVideos(
   return [...selected, ...deferred.slice(0, remainingSlots)].slice(0, limit);
 }
 
+function ensureMinimumVideoCount(
+  primaryVideos: VideoItem[],
+  fallbackVideos: VideoItem[],
+  minimumCount: number
+) {
+  if (primaryVideos.length >= minimumCount) {
+    return primaryVideos;
+  }
+
+  const merged = dedupeVideosBySourceTitleAndUrl([...primaryVideos, ...fallbackVideos]);
+  return merged.slice(0, Math.max(minimumCount, merged.length));
+}
+
 function prioritizeTopQuickWatchVideos(videos: VideoItem[]) {
   return [...videos].sort((leftVideo, rightVideo) => {
     const scoreVideo = (video: VideoItem) => {
@@ -2971,28 +2984,28 @@ export default function Home() {
             return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
           });
 
-        setVideos(
-          sortVerticalFirst(normalizeVideoFeedItems(newsData.videos).filter((video) => !video.fallback))
-        );
-        setSportsVideos(
-          sortVerticalFirst(normalizeVideoFeedItems(sportsData.videos).filter((video) => !video.fallback))
-        );
-        setCelebrityVideos(
-          sortVerticalFirst(
-            normalizeVideoFeedItems(celebrityData.videos).filter((video) => !video.fallback)
-          )
-        );
-        setWeatherVideos(
-          sortVerticalFirst(
-            normalizeVideoFeedItems(weatherData.videos).filter((video) => !video.fallback)
-          )
-        );
+        const normalizedNewsVideos = sortVerticalFirst(normalizeVideoFeedItems(newsData.videos));
+        const normalizedSportsVideos = sortVerticalFirst(normalizeVideoFeedItems(sportsData.videos));
+        const normalizedCelebrityVideos = sortVerticalFirst(normalizeVideoFeedItems(celebrityData.videos));
+        const normalizedWeatherVideos = sortVerticalFirst(normalizeVideoFeedItems(weatherData.videos));
+
+        console.log("VIDEO FETCH COUNT", {
+          news: normalizedNewsVideos.length,
+          sports: normalizedSportsVideos.length,
+          celebrity: normalizedCelebrityVideos.length,
+          weather: normalizedWeatherVideos.length,
+        });
+
+        setVideos(normalizedNewsVideos);
+        setSportsVideos(normalizedSportsVideos);
+        setCelebrityVideos(normalizedCelebrityVideos);
+        setWeatherVideos(normalizedWeatherVideos);
       } catch (error) {
         console.error("Error loading trending videos:", error);
-        setVideos([]);
-        setSportsVideos([]);
-        setCelebrityVideos([]);
-        setWeatherVideos([]);
+        setVideos(normalizeVideoFeedItems());
+        setSportsVideos(normalizeVideoFeedItems());
+        setCelebrityVideos(normalizeVideoFeedItems());
+        setWeatherVideos(normalizeVideoFeedItems());
       }
     }
 
@@ -5300,7 +5313,19 @@ export default function Home() {
     };
   }, [localLocationLabel, selectedLocalCity, sortMode, weatherTabArticles]);
 
-  const weatherPageVideos = useMemo(() => selectSourceBalancedVideos(weatherVideos, 8, 2), [weatherVideos]);
+  const weatherPageVideos = useMemo(
+    () =>
+      selectSourceBalancedVideos(
+        ensureMinimumVideoCount(
+          weatherVideos.filter((video) => !video.fallback),
+          weatherVideos.filter((video) => video.fallback),
+          3
+        ),
+        8,
+        2
+      ),
+    [weatherVideos]
+  );
 
   const technologyTabArticles = useMemo(() => {
     if (sortMode === "trending") {
@@ -5578,8 +5603,13 @@ export default function Home() {
   }, [balancedTrendingArticles, sortMode, videos]);
 
   const myNewsVideoPool = useMemo(() => {
-    const playableVideos = videos.filter((video) => !video.fallback && !isSportsVideo(video));
-    const preferredVertical = playableVideos.filter(
+    const playableVideos = videos.filter((video) => !isSportsVideo(video));
+    const effectivePlayableVideos = ensureMinimumVideoCount(
+      playableVideos.filter((video) => !video.fallback),
+      playableVideos.filter((video) => video.fallback),
+      5
+    );
+    const preferredVertical = effectivePlayableVideos.filter(
       (video) =>
         video.orientation === "vertical" ||
         /shorts?|reels?|vertical|portrait/i.test(
@@ -5589,9 +5619,11 @@ export default function Home() {
 
     const mergedPreferredPool = dedupeVideosBySourceTitleAndUrl([
       ...preferredVertical,
-      ...playableVideos,
+      ...effectivePlayableVideos,
     ]);
-    return selectSourceBalancedVideos(prioritizeTopQuickWatchVideos(mergedPreferredPool), 24);
+    const finalPool = selectSourceBalancedVideos(prioritizeTopQuickWatchVideos(mergedPreferredPool), 24);
+    console.log("VIDEO FINAL COUNT", { section: "my-news-pool", count: finalPool.length });
+    return finalPool;
   }, [videos]);
 
   const myNewsQuickWatchVideos = useMemo(
@@ -5745,13 +5777,16 @@ export default function Home() {
   const sportsVideoPool = useMemo(
     () =>
       selectSourceBalancedVideos(
-        [...sportsVideos, ...videos]
+        ensureMinimumVideoCount(
+          [...sportsVideos, ...videos]
           .filter((video) => {
-            if (video.fallback) {
-              return false;
-            }
-
-            return isSportsVideo(video);
+            return (
+              isSportsVideo(video) ||
+              (video.fallback &&
+                /\b(sports|football|basketball|baseball|hockey|soccer|highlights?|top plays)\b/i.test(
+                  `${video.category} ${video.title} ${video.creator}`
+                ))
+            );
           })
           .sort((left, right) => {
             const scoreVideo = (video: VideoItem) => {
@@ -5787,6 +5822,9 @@ export default function Home() {
 
             return scoreVideo(right) - scoreVideo(left);
           }),
+          [...sportsVideos, ...videos].filter((video) => video.fallback),
+          3
+        ),
         24
       ),
     [sportsVideos, videos]
@@ -6178,7 +6216,15 @@ export default function Home() {
     return { movies, music, tvShows, gossip };
   }, [buildCelebritySection, featuredCelebrityArticles]);
 
-  const celebrityPageVideos = useMemo(() => celebrityVideos.slice(0, 8), [celebrityVideos]);
+  const celebrityPageVideos = useMemo(
+    () =>
+      ensureMinimumVideoCount(
+        celebrityVideos.filter((video) => !video.fallback).slice(0, 8),
+        celebrityVideos.filter((video) => video.fallback),
+        3
+      ),
+    [celebrityVideos]
+  );
 
   const localSectionArticles = useMemo(() => {
     if (sortMode !== "local") {
@@ -6729,7 +6775,22 @@ export default function Home() {
 
   const renderQuickWatchRow = (compact = false) => {
     if (myNewsQuickWatchVideos.length === 0) {
-      return null;
+      return (
+        <section
+          className={`home-section-block home-section-plain quick-watch-row ${
+            compact ? "quick-watch-row-compact" : ""
+          }`.trim()}
+        >
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Quick Watch</strong>
+            </div>
+          </div>
+          <div className="empty-state compact-empty-state">
+            <strong>Videos loading…</strong>
+          </div>
+        </section>
+      );
     }
 
     return (
@@ -6859,7 +6920,18 @@ export default function Home() {
 
   const renderNewsClipsRow = () => {
     if (primaryNewsClipVideos.length === 0) {
-      return null;
+      return (
+        <section className="home-section-block home-section-plain quick-watch-row">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">News Clips</strong>
+            </div>
+          </div>
+          <div className="empty-state compact-empty-state">
+            <strong>Videos loading…</strong>
+          </div>
+        </section>
+      );
     }
 
     return (
@@ -6900,7 +6972,18 @@ export default function Home() {
 
   const renderFeaturedVideosBreak = () => {
     if (myNewsFeaturedVideos.length === 0) {
-      return null;
+      return (
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Featured Video</strong>
+            </div>
+          </div>
+          <div className="empty-state compact-empty-state">
+            <strong>Videos loading…</strong>
+          </div>
+        </section>
+      );
     }
 
     if (myNewsFeaturedVideos.length < 3) {
@@ -7256,7 +7339,18 @@ export default function Home() {
     leagueVideos: VideoItem[]
   ) => {
     if (leagueVideos.length === 0) {
-      return null;
+      return (
+        <section className="home-section-block home-section-plain quick-watch-row">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">{label}</strong>
+            </div>
+          </div>
+          <div className="empty-state compact-empty-state">
+            <strong>Videos loading…</strong>
+          </div>
+        </section>
+      );
     }
 
     return (
@@ -8921,11 +9015,11 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {celebrityPageVideos.length > 0 ? (
-                <section className="home-section-block home-section-plain quick-watch-row">
-                  <div className="home-section-header">
-                    <strong className="profile-section-title home-section-title">Celebrity Videos</strong>
-                  </div>
+              <section className="home-section-block home-section-plain quick-watch-row">
+                <div className="home-section-header">
+                  <strong className="profile-section-title home-section-title">Celebrity Videos</strong>
+                </div>
+                {celebrityPageVideos.length > 0 ? (
                   <div className="quick-watch-scroll" role="list" aria-label="Celebrity videos">
                     {celebrityPageVideos.map((video) => (
                       <div key={`celeb-video-${video.id}`} className="quick-watch-item" role="listitem">
@@ -8953,8 +9047,12 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                </section>
-              ) : null}
+                ) : (
+                  <div className="empty-state compact-empty-state">
+                    <strong>Videos loading…</strong>
+                  </div>
+                )}
+              </section>
             </div>
           )}
         </section>
@@ -9113,13 +9211,13 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {weatherPageVideos.length > 0 ? (
-                <section className="home-section-block home-section-plain quick-watch-row">
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong className="profile-section-title home-section-title">Weather Videos</strong>
-                    </div>
+              <section className="home-section-block home-section-plain quick-watch-row">
+                <div className="home-section-header">
+                  <div className="stack" style={{ gap: "4px" }}>
+                    <strong className="profile-section-title home-section-title">Weather Videos</strong>
                   </div>
+                </div>
+                {weatherPageVideos.length > 0 ? (
                   <div className="quick-watch-scroll" role="list" aria-label="Weather videos">
                     {weatherPageVideos.map((video) => (
                       <div key={`weather-video-${video.id}`} className="quick-watch-item" role="listitem">
@@ -9146,8 +9244,12 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                </section>
-              ) : null}
+                ) : (
+                  <div className="empty-state compact-empty-state">
+                    <strong>Videos loading…</strong>
+                  </div>
+                )}
+              </section>
 
               {weatherSectionContent.localWeather.length > 0 ? (
                 <section className="home-section-block home-section-plain">

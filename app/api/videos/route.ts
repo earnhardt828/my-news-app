@@ -33,6 +33,166 @@ type VideoFeedItem = {
 type VideoFeedTab = "all" | "news" | "sports" | "celebrity";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
 
+function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedItem[] {
+  const common = {
+    views: 0,
+    likes: 0,
+    comments: 0,
+    thumbnailUrl: null,
+    publishedAt: null,
+    watchUrl: "",
+    embedUrl: "",
+    fallback: true,
+  } satisfies Pick<
+    VideoFeedItem,
+    "views" | "likes" | "comments" | "thumbnailUrl" | "publishedAt" | "watchUrl" | "embedUrl" | "fallback"
+  >;
+
+  if (tab === "sports") {
+    return [
+      {
+        id: "sports-fallback-1",
+        youtubeId: "sports-fallback-1",
+        title: "Top sports highlights roundup",
+        creator: "ESPN",
+        category: "Sports",
+        orientation: "vertical",
+        ...common,
+      },
+      {
+        id: "sports-fallback-2",
+        youtubeId: "sports-fallback-2",
+        title: "Game-winning plays from around the leagues",
+        creator: "Bleacher Report",
+        category: "Sports",
+        orientation: "vertical",
+        ...common,
+      },
+      {
+        id: "sports-fallback-3",
+        youtubeId: "sports-fallback-3",
+        title: "Latest scores and sports updates",
+        creator: "Yahoo Sports",
+        category: "Sports",
+        orientation: "horizontal",
+        ...common,
+      },
+    ];
+  }
+
+  if (tab === "celebrity") {
+    return [
+      {
+        id: "celeb-fallback-1",
+        youtubeId: "celeb-fallback-1",
+        title: "Celebrity headlines and entertainment updates",
+        creator: "People",
+        category: "Entertainment",
+        orientation: "vertical",
+        ...common,
+      },
+      {
+        id: "celeb-fallback-2",
+        youtubeId: "celeb-fallback-2",
+        title: "Hollywood red carpet recap",
+        creator: "Entertainment Tonight",
+        category: "Entertainment",
+        orientation: "vertical",
+        ...common,
+      },
+      {
+        id: "celeb-fallback-3",
+        youtubeId: "celeb-fallback-3",
+        title: "Music, movies, and TV buzz",
+        creator: "Variety",
+        category: "Entertainment",
+        orientation: "horizontal",
+        ...common,
+      },
+    ];
+  }
+
+  if (tab === "weather") {
+    return [
+      {
+        id: "weather-fallback-1",
+        youtubeId: "weather-fallback-1",
+        title: "National weather forecast update",
+        creator: "The Weather Channel",
+        category: "Weather",
+        orientation: "horizontal",
+        ...common,
+      },
+      {
+        id: "weather-fallback-2",
+        youtubeId: "weather-fallback-2",
+        title: "Storm tracker and radar outlook",
+        creator: "Fox Weather",
+        category: "Weather",
+        orientation: "horizontal",
+        ...common,
+      },
+      {
+        id: "weather-fallback-3",
+        youtubeId: "weather-fallback-3",
+        title: "Forecast and severe weather watch",
+        creator: "AccuWeather",
+        category: "Weather",
+        orientation: "horizontal",
+        ...common,
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "news-fallback-1",
+      youtubeId: "news-fallback-1",
+      title: "Top headlines right now",
+      creator: "Reuters",
+      category: "Trending",
+      orientation: "vertical",
+      ...common,
+    },
+    {
+      id: "news-fallback-2",
+      youtubeId: "news-fallback-2",
+      title: "Latest world and U.S. news roundup",
+      creator: "NBC News",
+      category: "Trending",
+      orientation: "vertical",
+      ...common,
+    },
+    {
+      id: "news-fallback-3",
+      youtubeId: "news-fallback-3",
+      title: "Business, politics, and breaking updates",
+      creator: "CBS News",
+      category: "Trending",
+      orientation: "horizontal",
+      ...common,
+    },
+    {
+      id: "news-fallback-4",
+      youtubeId: "news-fallback-4",
+      title: "Evening headlines in under a minute",
+      creator: "ABC News",
+      category: "Trending",
+      orientation: "vertical",
+      ...common,
+    },
+    {
+      id: "news-fallback-5",
+      youtubeId: "news-fallback-5",
+      title: "Fast news briefing",
+      creator: "PBS NewsHour",
+      category: "Trending",
+      orientation: "horizontal",
+      ...common,
+    },
+  ];
+}
+
 const SPORTS_POSITIVE_PATTERN =
   /(sports|espn|sportscenter|nfl|nba|mlb|nhl|mls|soccer|football|basketball|baseball|hockey|golf|tennis|nascar|formula 1|formula1|f1|ufc|mma|highlights?|touchdown|dunk|home run|goals?|save|replay|top plays|bleacher report|fox sports|cbs sports|nbc sports|sports illustrated|pga|masters|grand prix|race winner)/;
 
@@ -557,6 +717,22 @@ function diversifyVideoSources(videos: VideoFeedItem[], maxPerSource = 2) {
   return [...selected, ...overflow];
 }
 
+function dedupeVideoItems(videos: VideoFeedItem[]) {
+  return Array.from(
+    new Map(
+      videos.map((video) => [
+        [
+          video.youtubeId,
+          normalizeVideoTitleKey(video.title),
+          normalizeVideoSourceName(video.creator),
+          video.watchUrl,
+        ].join("::"),
+        video,
+      ])
+    ).values()
+  );
+}
+
 function getPublishedAfterIso(daysAgo: number) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - daysAgo);
@@ -616,6 +792,12 @@ function filterAndSortVideos(
     tab: WeatherCapableVideoFeedTab;
   }
 ) {
+  console.log("VIDEO FETCH COUNT", {
+    tab: options.tab,
+    category: options.category,
+    count: entries.length,
+  });
+
   const normalizedSearch = normalizeForSearch(options.searchTerm);
   const isTrendingFeed = options.category === "Trending" && normalizedSearch.length === 0;
 
@@ -683,18 +865,48 @@ function filterAndSortVideos(
         ? categoryFiltered.filter((video) => isStrictWeatherVideo(video))
       : categoryFiltered;
 
-  const deduped = Array.from(
-    new Map(
-      tabFiltered.map((video) => [
-        [
-          video.youtubeId,
-          normalizeVideoTitleKey(video.title),
-          normalizeVideoSourceName(video.creator),
-          video.watchUrl,
-        ].join("::"),
-        video,
-      ])
-    ).values()
+  console.log("VIDEO FILTERED COUNT", {
+    tab: options.tab,
+    strictCount: tabFiltered.length,
+  });
+
+  const minimumTargetCount = options.tab === "news" ? 5 : options.tab === "all" ? 5 : 3;
+  const relaxedTabFiltered =
+    tabFiltered.length >= minimumTargetCount
+      ? tabFiltered
+      : categoryFiltered.filter((video) => {
+          const haystack = getVideoSearchHaystack(video);
+
+          if (options.tab === "sports") {
+            return !SPORTS_REJECTED_PATTERN.test(haystack) &&
+              /(sports|espn|bleacher report|mlb|nhl|nba|nfl|mls|soccer|football|basketball|baseball|hockey|motorsport|nascar|formula 1|golf|tennis|ufc|mma|highlights?|top plays|touchdown|dunk|home run|goal|save|replay)/.test(
+                haystack
+              );
+          }
+
+          if (options.tab === "celebrity") {
+            return !CELEBRITY_REJECTED_PATTERN.test(haystack) &&
+              /(celebrity|entertainment|hollywood|red carpet|actor|actress|singer|musician|movie|tv|gossip|variety|people|tmz|page six|access hollywood|extra|billboard|deadline)/.test(
+                haystack
+              );
+          }
+
+          if (options.tab === "weather") {
+            return !WEATHER_REJECTED_PATTERN.test(haystack) &&
+              /(weather|storm|tornado|hurricane|rain|snow|flood|wildfire|radar|forecast|climate|the weather channel|fox weather|accuweather|noaa|national weather service)/.test(
+                haystack
+              );
+          }
+
+          if (options.tab === "news") {
+            return !isStrictSportsVideo(video) && !isStrictCelebrityVideo(video) && !isStrictWeatherVideo(video);
+          }
+
+          return true;
+        });
+
+  const deduped = dedupeVideoItems(
+    tabFiltered.length >= minimumTargetCount ? tabFiltered : [...tabFiltered, ...relaxedTabFiltered]
   );
 
   deduped.sort((a, b) => {
@@ -717,7 +929,13 @@ function filterAndSortVideos(
   });
 
   if (isTrendingFeed) {
-    return diversifyVideoSources(deduped, 1);
+    const finalVideos = diversifyVideoSources(deduped, 1);
+    console.log("VIDEO FINAL COUNT", {
+      tab: options.tab,
+      finalCount: finalVideos.length,
+      usedFallback: false,
+    });
+    return finalVideos;
   }
 
   const sevenDayCutoff = new Date(getPublishedAfterIso(7)).getTime();
@@ -727,14 +945,35 @@ function filterAndSortVideos(
   );
 
   if (withinSevenDays.length >= 6) {
-    return diversifyVideoSources(withinSevenDays);
+    const finalVideos = diversifyVideoSources(withinSevenDays);
+    console.log("VIDEO FINAL COUNT", {
+      tab: options.tab,
+      finalCount: finalVideos.length,
+      usedFallback: false,
+    });
+    return finalVideos;
   }
 
   const withinFourteenDays = deduped.filter(
     (video) => getVideoTimestamp(video.publishedAt) >= fourteenDayCutoff
   );
 
-  return diversifyVideoSources(withinFourteenDays);
+  const finalCandidateVideos = diversifyVideoSources(withinFourteenDays);
+  const finalVideos =
+    finalCandidateVideos.length >= minimumTargetCount
+      ? finalCandidateVideos
+      : dedupeVideoItems([
+          ...finalCandidateVideos,
+          ...buildFallbackVideosForTab(options.tab),
+        ]);
+
+  console.log("VIDEO FINAL COUNT", {
+    tab: options.tab,
+    finalCount: finalVideos.length,
+    usedFallback: finalCandidateVideos.length < minimumTargetCount,
+  });
+
+  return finalVideos;
 }
 
 export async function GET(request: Request) {
@@ -771,7 +1010,7 @@ export async function GET(request: Request) {
 
     if (successfulEntries.length === 0) {
       return Response.json({
-        videos: FALLBACK_VIDEOS,
+        videos: buildFallbackVideosForTab(tab),
         fallback: true,
         message: "Falling back to placeholder videos because the YouTube RSS feeds failed.",
       });
@@ -788,7 +1027,7 @@ export async function GET(request: Request) {
 
     if (videos.length === 0) {
       return Response.json({
-        videos: FALLBACK_VIDEOS,
+        videos: buildFallbackVideosForTab(tab),
         fallback: true,
         message: "No recent videos were returned by the trusted channel feeds.",
       });
@@ -802,7 +1041,7 @@ export async function GET(request: Request) {
     console.error("Error loading RSS news videos:", error);
 
     return Response.json({
-      videos: FALLBACK_VIDEOS,
+      videos: buildFallbackVideosForTab(tab),
       fallback: true,
       message: "Falling back to placeholder videos because the RSS feeds failed.",
     });
