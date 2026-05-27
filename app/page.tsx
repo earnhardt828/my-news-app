@@ -6857,6 +6857,67 @@ export default function Home() {
     };
   }, [balancedLocalArticles, selectedLocalCity, sortMode]);
 
+  const localLifestyleSections = useMemo(() => {
+    if (sortMode !== "local") {
+      return {
+        bestRestaurants: [] as Article[],
+        thingsToDo: [] as Article[],
+        localEvents: [] as Article[],
+        neighborhoods: [] as Article[],
+        foodDrink: [] as Article[],
+      };
+    }
+
+    const cityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
+    const cityName = cityLabel.split(",")[0]?.trim().toLowerCase() ?? "";
+    const cityAwareArticles = balancedLocalArticles.filter((article) => {
+      const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
+      return cityName ? haystack.includes(cityName) || haystack.includes("local") : true;
+    });
+    const usedKeys = new Set<string>();
+
+    const pickSection = (pattern: RegExp, limit: number) => {
+      const selected = selectSourceBalancedArticles(
+        cityAwareArticles.filter((article) => {
+          const dedupeKey = getArticleDeduplicationKey(article);
+          if (usedKeys.has(dedupeKey)) {
+            return false;
+          }
+
+          const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
+          return pattern.test(haystack);
+        }),
+        limit
+      );
+
+      selected.forEach((article) => usedKeys.add(getArticleDeduplicationKey(article)));
+      return selected;
+    };
+
+    return {
+      bestRestaurants: pickSection(
+        /\b(best restaurants?|restaurants?|food scene|chef|dining|eater|axios charlotte|charlotte observer restaurants|queen city nerve food|food and drink|bar|brunch|cafe)\b/i,
+        8
+      ),
+      thingsToDo: pickSection(
+        /\b(things to do|weekend|tonight|arts|museum|show|festival|concert|market|family fun|date night)\b/i,
+        5
+      ),
+      localEvents: pickSection(
+        /\b(events?|festival|concert|fair|community event|market|parade|game day)\b/i,
+        5
+      ),
+      neighborhoods: pickSection(
+        /\b(neighborhood|neighborhoods|uptown|south end|plaza midwood|noDa|dilworth|ballantyne|optimist park)\b/i,
+        4
+      ),
+      foodDrink: pickSection(
+        /\b(food and drink|cocktail|brewery|coffee|dessert|menu|restaurant opening|food hall|wine|beer)\b/i,
+        4
+      ),
+    };
+  }, [balancedLocalArticles, selectedLocalCity, sortMode]);
+
   const localVideoItems = useMemo(() => {
     if (sortMode !== "local") {
       return [] as VideoItem[];
@@ -6923,7 +6984,7 @@ export default function Home() {
       count: combinedVideoPool.length,
     });
 
-    const finalLocalVideos = selectSourceBalancedVideos(localMatches, 6, 2);
+    const finalLocalVideos = selectSourceBalancedVideos(localMatches, 16, 2);
 
     console.log("LOCAL VIDEO FINAL COUNT", {
       city: cityLabel,
@@ -6950,7 +7011,23 @@ export default function Home() {
     }
 
     return finalLocalVideos;
-  }, [localVideos, selectedLocalCity, sortMode, videos]);
+  }, [localVideos, selectedLocalCity, sortMode, videos, weatherVideos]);
+
+  const localVideoRows = useMemo(() => {
+    if (sortMode !== "local" || localVideoItems.length === 0) {
+      return [] as VideoItem[][];
+    }
+
+    const rows: VideoItem[][] = [];
+    for (let index = 0; index < localVideoItems.length; index += 4) {
+      const nextRow = localVideoItems.slice(index, index + 4);
+      if (nextRow.length > 0) {
+        rows.push(nextRow);
+      }
+    }
+
+    return rows;
+  }, [localVideoItems, sortMode]);
 
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
@@ -10727,6 +10804,50 @@ export default function Home() {
   if (sortMode === "local") {
     const localCityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
     const localEmptyLabel = localCityLabel.split(",")[0]?.trim() || "Charlotte";
+    const renderLocalVideoRow = (rowIndex: number) => {
+      const videoRow = localVideoRows[rowIndex];
+
+      if (!videoRow || videoRow.length === 0) {
+        return null;
+      }
+
+      return (
+        <section className="home-section-block home-section-plain quick-watch-row">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Local Videos</strong>
+            </div>
+          </div>
+          <div className="quick-watch-scroll" role="list" aria-label="Local videos">
+            {videoRow.map((video) => (
+              <div key={`local-video-${rowIndex}-${video.id}`} className="quick-watch-item" role="listitem">
+                <VideoFeedCard
+                  video={video}
+                  isAutoplaying={
+                    autoplayTrendingVideoKeys.includes(`local-videos:${rowIndex}:${video.id}`) &&
+                    !video.fallback
+                  }
+                  onToggleLike={handleToggleVideoLike}
+                  onToggleSave={handleToggleVideoSave}
+                  onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                  onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                  frameRef={(node) => {
+                    trendingVideoFrameRefs.current[`local-videos:${rowIndex}:${video.id}`] = node;
+                  }}
+                  autoplayKey={`local-videos:${rowIndex}:${video.id}`}
+                  previewDurationMs={null}
+                  label="Local Videos"
+                  hideActions
+                  useRelativeTime
+                  className="video-card-inline quick-watch-video-card"
+                  variant="article"
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    };
 
     return (
       <section className="page-shell home-sections-shell local-page-shell">
@@ -10865,41 +10986,7 @@ export default function Home() {
           )}
         </section>
 
-        {localVideoItems.length > 0 ? (
-          <section className="home-section-block home-section-plain quick-watch-row">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Local Videos</strong>
-              </div>
-            </div>
-            <div className="quick-watch-scroll" role="list" aria-label="Local videos">
-              {localVideoItems.map((video) => (
-                <div key={`local-video-${video.id}`} className="quick-watch-item" role="listitem">
-                  <VideoFeedCard
-                    video={video}
-                    isAutoplaying={
-                      autoplayTrendingVideoKeys.includes(`local-videos:${video.id}`) && !video.fallback
-                    }
-                    onToggleLike={handleToggleVideoLike}
-                    onToggleSave={handleToggleVideoSave}
-                    onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                    onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
-                    frameRef={(node) => {
-                      trendingVideoFrameRefs.current[`local-videos:${video.id}`] = node;
-                    }}
-                    autoplayKey={`local-videos:${video.id}`}
-                    previewDurationMs={null}
-                    label="Local Videos"
-                    hideActions
-                    useRelativeTime
-                    className="video-card-inline quick-watch-video-card"
-                    variant="article"
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
+        {renderLocalVideoRow(0)}
 
         {localSectionArticles.localSports.length > 0 ? (
           <section className="home-section-block home-section-plain">
@@ -10921,6 +11008,8 @@ export default function Home() {
           </section>
         ) : null}
 
+        {renderLocalVideoRow(1)}
+
         {localSectionArticles.developmentBusiness.length > 0 ? (
           <section className="home-section-block home-section-plain">
             <div className="home-section-header">
@@ -10941,6 +11030,8 @@ export default function Home() {
           </section>
         ) : null}
 
+        {renderLocalVideoRow(2)}
+
         {localSectionArticles.eventsThingsToDo.length > 0 ? (
           <section className="home-section-block home-section-plain">
             <div className="home-section-header">
@@ -10954,6 +11045,153 @@ export default function Home() {
                   {renderCompactSideImageArticle(article, {
                     className: "sports-league-compact-card",
                     imageFallbackLabel: "Events",
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {renderLocalVideoRow(3)}
+
+        {localLifestyleSections.bestRestaurants.length > 0 ? (
+          <section className="home-section-block home-section-plain featured-stories-row">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Best Restaurants</strong>
+              </div>
+            </div>
+
+            <div className="featured-stories-scroll" role="list" aria-label="Best restaurants">
+              {localLifestyleSections.bestRestaurants.map((article) => {
+                const routeId = getArticleRouteId(article);
+                const selectedImage = getBestArticleImage(article);
+                const imageSrc = selectedImage.src;
+
+                if (!routeId) {
+                  return null;
+                }
+
+                return (
+                  <Link
+                    key={`local-restaurant-${routeId}`}
+                    href={`/article/${routeId}/`}
+                    className="featured-story-card food-recipe-card"
+                    role="listitem"
+                    onClick={() => {
+                      persistArticleMetadata(article);
+                      saveArticleReturnState({
+                        path: "/",
+                        scrollY: window.scrollY,
+                        source: "home",
+                        sortMode,
+                        selectedLocalCity,
+                        localLocationLabel,
+                      });
+                    }}
+                  >
+                    {imageSrc ? (
+                      <img
+                        src={imageSrc}
+                        alt={cleanDisplayText(article.title)}
+                        className="featured-story-image"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="featured-story-fallback-brand" aria-hidden="true">
+                        <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
+                      </div>
+                    )}
+                    <div
+                      className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`}
+                    />
+                    <div className="featured-story-copy">
+                      <span className="featured-story-source">
+                        {getDisplaySourceLabel(article)}
+                      </span>
+                      <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {localLifestyleSections.thingsToDo.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Things To Do</strong>
+              </div>
+            </div>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localLifestyleSections.thingsToDo.map((article) => (
+                <div key={`local-things-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Things To Do",
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {localLifestyleSections.localEvents.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Local Events</strong>
+              </div>
+            </div>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localLifestyleSections.localEvents.map((article) => (
+                <div key={`local-lifestyle-events-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Events",
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {localLifestyleSections.neighborhoods.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Neighborhoods</strong>
+              </div>
+            </div>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localLifestyleSections.neighborhoods.map((article) => (
+                <div key={`local-neighborhoods-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Neighborhoods",
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {localLifestyleSections.foodDrink.length > 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Food & Drink</strong>
+              </div>
+            </div>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localLifestyleSections.foodDrink.map((article) => (
+                <div key={`local-food-drink-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Food & Drink",
                   })}
                 </div>
               ))}
