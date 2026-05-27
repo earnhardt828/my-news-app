@@ -65,7 +65,11 @@ import {
   SUPPORTED_LOCAL_CITIES,
 } from "../lib/local-news";
 import { isCommentAllowed } from "../lib/moderation";
-import { hasMappedSourceLogo, slugifySourceName } from "../lib/source-logos";
+import {
+  getSourceBoxLogoUrl,
+  hasMappedSourceLogo,
+  slugifySourceName,
+} from "../lib/source-logos";
 import { supabase } from "../lib/supabase";
 import { rankArticlesWithSourcePreferences } from "../lib/feed-ranking";
 import {
@@ -209,6 +213,18 @@ const WEATHER_SOURCE_INFERENCE_RULES: Array<{ pattern: RegExp; label: string }> 
 const LOCAL_VIDEO_SOURCE_HINTS: Record<string, RegExp> = {
   charlotte:
     /\b(wcnc|wcnc charlotte|wbtv|wbtv charlotte|wsoc|wsoc charlotte|queen city news|spectrum news charlotte)\b/i,
+};
+const LOCAL_VIDEO_QUERY_HINTS: Record<string, string[]> = {
+  charlotte: [
+    "WCNC Charlotte video",
+    "WBTV Charlotte video",
+    "WSOC Charlotte video",
+    "Queen City News video",
+    "Spectrum News Charlotte video",
+    "Charlotte local news video",
+    "Charlotte weather video",
+    "Charlotte sports video",
+  ],
 };
 const FEED_META_ICON_PROPS = {
   viewBox: "0 0 24 24",
@@ -2017,6 +2033,7 @@ export default function Home() {
   const [sportsVideos, setSportsVideos] = useState<VideoItem[]>([]);
   const [celebrityVideos, setCelebrityVideos] = useState<VideoItem[]>([]);
   const [weatherVideos, setWeatherVideos] = useState<VideoItem[]>([]);
+  const [localVideos, setLocalVideos] = useState<VideoItem[]>([]);
   const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
@@ -2042,6 +2059,7 @@ export default function Home() {
   } | null>(null);
   const [isSavingCategories, setIsSavingCategories] = useState(false);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
+  const [failedArticleBoxImages, setFailedArticleBoxImages] = useState<Record<string, true>>({});
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
@@ -3069,6 +3087,74 @@ export default function Home() {
 
     void loadTrendingVideos();
   }, []);
+
+  useEffect(() => {
+    async function loadLocalVideos() {
+      const cityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
+      const cityName = cityLabel.split(",")[0]?.trim();
+
+      if (!cityName) {
+        setLocalVideos([]);
+        return;
+      }
+
+      const queryHints = LOCAL_VIDEO_QUERY_HINTS[cityName.toLowerCase()] ?? [
+        `${cityName} local news video`,
+        `${cityName} weather video`,
+        `${cityName} sports video`,
+        `${cityName} breaking news video`,
+      ];
+
+      try {
+        const responses = await Promise.all(
+          queryHints.map((query) =>
+            apiFetch(`/api/videos?tab=news&q=${encodeURIComponent(query)}`)
+          )
+        );
+
+        const payloads = await Promise.all(
+          responses.map(async (response) => {
+            if (!response.ok) {
+              const responseText = await response.text();
+              throw new Error(
+                `Local videos request failed (${response.status}): ${responseText}`
+              );
+            }
+
+            return response.json() as Promise<{
+              videos?: VideoApiItem[];
+              fallback?: boolean;
+              message?: string;
+            }>;
+          })
+        );
+
+        const mergedVideos = dedupeVideosBySourceTitleAndUrl(
+          payloads.flatMap((payload) => normalizeVideoFeedItems(payload.videos))
+        ).sort((left, right) => {
+          const leftHint = `${left.title} ${left.watchUrl} ${left.thumbnailUrl ?? ""}`.toLowerCase();
+          const rightHint = `${right.title} ${right.watchUrl} ${right.thumbnailUrl ?? ""}`.toLowerCase();
+          const leftVerticalScore =
+            (left.orientation === "vertical" ? 2 : 0) + (/shorts?/i.test(leftHint) ? 1 : 0);
+          const rightVerticalScore =
+            (right.orientation === "vertical" ? 2 : 0) + (/shorts?/i.test(rightHint) ? 1 : 0);
+
+          if (rightVerticalScore !== leftVerticalScore) {
+            return rightVerticalScore - leftVerticalScore;
+          }
+
+          return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+        });
+
+        setLocalVideos(mergedVideos);
+      } catch (error) {
+        console.error("Error loading local videos:", error);
+        setLocalVideos([]);
+      }
+    }
+
+    void loadLocalVideos();
+  }, [selectedLocalCity]);
 
   useEffect(() => {
     let cancelled = false;
@@ -6657,8 +6743,16 @@ export default function Home() {
       `\\b(${cityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b`,
       "i"
     );
-    const localMatches = dedupeVideosBySourceTitleAndUrl(
-      videos.filter((video) => {
+    const fallbackCityPattern = new RegExp(
+      `\\b(${cityName.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      )})\\s+(video|news|latest|weather|sports|traffic|breaking)\\b`,
+      "i"
+    );
+    const combinedVideoPool = dedupeVideosBySourceTitleAndUrl([...localVideos, ...videos]);
+    const strictMatches = dedupeVideosBySourceTitleAndUrl(
+      combinedVideoPool.filter((video) => {
         const haystack =
           `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
 
@@ -6674,7 +6768,20 @@ export default function Home() {
           "i"
         ).test(haystack);
       })
-    ).sort((left, right) => {
+    );
+    const relaxedMatches = dedupeVideosBySourceTitleAndUrl(
+      combinedVideoPool.filter((video) => {
+        const haystack =
+          `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+
+        if (!cityQueryPattern.test(haystack)) {
+          return false;
+        }
+
+        return fallbackCityPattern.test(haystack) || /\b(local|station|community|forecast)\b/i.test(haystack);
+      })
+    );
+    const localMatches = (strictMatches.length > 0 ? strictMatches : relaxedMatches).sort((left, right) => {
       const scoreVideo = (video: VideoItem) => {
         const haystack =
           `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
@@ -6708,7 +6815,7 @@ export default function Home() {
     });
 
     return selectSourceBalancedVideos(localMatches, 6, 2);
-  }, [selectedLocalCity, sortMode, videos]);
+  }, [localVideos, selectedLocalCity, sortMode, videos]);
 
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
@@ -6953,12 +7060,18 @@ export default function Home() {
       const safeCategoryName = getSafeCategoryLabel(article.category, article);
       const selectedImage = getBestArticleImage(article);
       const imageSrc = selectedImage.src;
+      const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
       const hasSourceLogoFallback = hasMappedSourceLogo(safeSourceName);
       const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
+      const boxLogoFailureKey = boxLogoUrl
+        ? `${safeSourceName}:${boxLogoUrl}`
+        : `${safeSourceName}:none`;
       const shouldUseLargeImage =
         Boolean(imageSrc) &&
         !failedArticleImages[imageFailureKey] &&
         isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
+      const shouldUseBoxLogoFallback =
+        Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
@@ -6980,6 +7093,31 @@ export default function Home() {
                 return {
                   ...prev,
                   [imageFailureKey]: true,
+                };
+              });
+            }}
+          />
+        </div>
+      ) : shouldUseBoxLogoFallback && boxLogoUrl ? (
+        <div
+          className="article-thumb-shell article-card-visual-shell article-card-visual-placeholder"
+          aria-hidden="true"
+        >
+          <img
+            src={boxLogoUrl}
+            alt={`${safeSourceName} logo`}
+            className="article-card-visual-image article-card-box-logo-image"
+            loading="lazy"
+            decoding="async"
+            onError={() => {
+              setFailedArticleBoxImages((prev) => {
+                if (prev[boxLogoFailureKey]) {
+                  return prev;
+                }
+
+                return {
+                  ...prev,
+                  [boxLogoFailureKey]: true,
                 };
               });
             }}
@@ -8308,9 +8446,13 @@ export default function Home() {
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
     const selectedImage = getBestArticleImage(article);
+    const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
+    const boxLogoFailureKey = boxLogoUrl ? `${safeSourceName}:${boxLogoUrl}` : `${safeSourceName}:none`;
     const shouldUseImage =
       Boolean(selectedImage.src) &&
       isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
+    const shouldUseBoxLogoFallback =
+      Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
 
     return (
       <article
@@ -8397,6 +8539,26 @@ export default function Home() {
                 className="top-trending-list-image"
                 loading="lazy"
                 decoding="async"
+              />
+            ) : shouldUseBoxLogoFallback && boxLogoUrl ? (
+              <img
+                src={boxLogoUrl}
+                alt={`${safeSourceName} logo`}
+                className="top-trending-list-image top-trending-list-box-logo-image"
+                loading="lazy"
+                decoding="async"
+                onError={() => {
+                  setFailedArticleBoxImages((prev) => {
+                    if (prev[boxLogoFailureKey]) {
+                      return prev;
+                    }
+
+                    return {
+                      ...prev,
+                      [boxLogoFailureKey]: true,
+                    };
+                  });
+                }}
               />
             ) : hasMappedSourceLogo(safeSourceName) ? (
               <div className="top-trending-list-logo-fallback">

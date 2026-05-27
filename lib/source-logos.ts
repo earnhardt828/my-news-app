@@ -175,6 +175,25 @@ export const sourceHeaderDarkLogoMap: Record<string, string> = {
   "Yahoo Sports": "/news-logo-head-dark/yahoo-sports.png",
 };
 
+export const sourceBoxLogoMap: Record<string, string> = {
+  "ABC News": "/logos-for-boxes/abc-news.png",
+  AP: "/logos-for-boxes/ap-news.png",
+  "AP News": "/logos-for-boxes/ap-news.png",
+  "Associated Press": "/logos-for-boxes/ap-news.png",
+  BBC: "/logos-for-boxes/bbc-news.png",
+  "BBC News": "/logos-for-boxes/bbc-news.png",
+  "CBS News": "/logos-for-boxes/cbs-news.png",
+  CNN: "/logos-for-boxes/cnn.png",
+  "Fox News": "/logos-for-boxes/fox-news.png",
+  "NBC News": "/logos-for-boxes/nbc-news.png",
+  NPR: "/logos-for-boxes/npr.png",
+  Reuters: "/logos-for-boxes/reuters.png",
+  "The New York Times": "/logos-for-boxes/the-new-york-times.png",
+  "New York Times": "/logos-for-boxes/the-new-york-times.png",
+  "The Washington Post": "/logos-for-boxes/the-washington-post.png",
+  "Washington Post": "/logos-for-boxes/the-washington-post.png",
+};
+
 export function normalizeSourceLogoName(sourceName: string) {
   return sourceName
     .trim()
@@ -192,6 +211,21 @@ function normalizeSourceLookupKey(sourceName: string) {
     .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function findMappedLogoUrl(map: Record<string, string>, sourceName: string) {
+  const trimmedSourceName = sourceName.trim();
+
+  if (map[trimmedSourceName]) {
+    return map[trimmedSourceName];
+  }
+
+  const normalizedLookupKey = normalizeSourceLookupKey(trimmedSourceName);
+  const matchedEntry = Object.entries(map).find(
+    ([candidate]) => normalizeSourceLookupKey(candidate) === normalizedLookupKey
+  );
+
+  return matchedEntry?.[1] ?? null;
 }
 
 export function slugifySourceName(sourceName: string) {
@@ -222,7 +256,7 @@ export function getSourceNameFromSlug(sourceSlug: string) {
 
 export function getSourceLogoUrl(sourceName: string) {
   const trimmedSourceName = sourceName.trim();
-  const mappedLogo = sourceLogoMap[trimmedSourceName];
+  const mappedLogo = findMappedLogoUrl(sourceLogoMap, trimmedSourceName);
 
   if (mappedLogo) {
     return mappedLogo;
@@ -242,37 +276,23 @@ export function getSourceLogoUrl(sourceName: string) {
 }
 
 export function getSourceHeaderLogoUrl(sourceName: string) {
-  const trimmedSourceName = sourceName.trim();
-
-  if (sourceHeaderLogoMap[trimmedSourceName]) {
-    return sourceHeaderLogoMap[trimmedSourceName];
-  }
-
-  const normalizedLookupKey = normalizeSourceLookupKey(trimmedSourceName);
-  const matchedEntry = Object.entries(sourceHeaderLogoMap).find(
-    ([candidate]) => normalizeSourceLookupKey(candidate) === normalizedLookupKey
-  );
-
-  return matchedEntry?.[1] ?? null;
+  return findMappedLogoUrl(sourceHeaderLogoMap, sourceName);
 }
 
 export function getSourceHeaderDarkLogoUrl(sourceName: string) {
-  const trimmedSourceName = sourceName.trim();
-
-  if (sourceHeaderDarkLogoMap[trimmedSourceName]) {
-    return sourceHeaderDarkLogoMap[trimmedSourceName];
-  }
-
-  const normalizedLookupKey = normalizeSourceLookupKey(trimmedSourceName);
-  const matchedEntry = Object.entries(sourceHeaderDarkLogoMap).find(
-    ([candidate]) => normalizeSourceLookupKey(candidate) === normalizedLookupKey
-  );
-
-  return matchedEntry?.[1] ?? null;
+  return findMappedLogoUrl(sourceHeaderDarkLogoMap, sourceName);
 }
 
 export function hasMappedSourceLogo(sourceName: string) {
-  return Boolean(sourceLogoMap[sourceName.trim()]);
+  return Boolean(findMappedLogoUrl(sourceLogoMap, sourceName));
+}
+
+export function getSourceBoxLogoUrl(sourceName: string) {
+  return findMappedLogoUrl(sourceBoxLogoMap, sourceName);
+}
+
+export function hasMappedSourceBoxLogo(sourceName: string) {
+  return Boolean(findMappedLogoUrl(sourceBoxLogoMap, sourceName));
 }
 
 export function getSourceInitial(sourceName: string) {
