@@ -4828,9 +4828,14 @@ input {
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: var(--surface);
+  background: var(--background);
   padding-top: calc(env(safe-area-inset-top) + 14px);
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.sports-scores-page-shell {
+  background: var(--background);
+  padding-top: calc(env(safe-area-inset-top) + 22px);
 }
 
 .favorite-teams-page {
@@ -4847,6 +4852,10 @@ input {
   gap: 10px;
   padding: 18px 16px 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.sports-scores-page-shell .favorite-teams-page-header {
+  padding-top: 22px;
 }
 
 .favorite-teams-close,
@@ -4954,16 +4963,15 @@ input {
   width: 82px;
   height: 82px;
   border-radius: 999px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--surface-strong) 82%, transparent));
+  background: #fff;
   overflow: hidden;
+  padding: 10px;
 }
 
 .favorite-team-logo {
-  position: absolute;
-  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   z-index: 1;
 }
 
@@ -5216,16 +5224,15 @@ input {
   height: 34px;
   border-radius: 999px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--surface-muted) 86%, white);
+  background: #fff;
+  padding: 5px;
   flex-shrink: 0;
 }
 
 .sports-score-team-logo {
-  position: absolute;
-  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   z-index: 1;
 }
 

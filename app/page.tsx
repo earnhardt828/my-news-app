@@ -114,6 +114,68 @@ const MLB_SECTION_VIDEO_QUERIES = [
   "Rangers highlights",
   "home run highlights",
 ] as const;
+
+function buildMlbFallbackVideos(): VideoItem[] {
+  return [
+    {
+      id: "mlb-fallback-1",
+      youtubeId: "mlb-fallback-1",
+      title: "MLB highlights and home run roundup",
+      creator: "MLB.com",
+      category: "Sports",
+      orientation: "vertical",
+      views: 0,
+      likes: 0,
+      comments: 0,
+      thumbnailUrl: null,
+      publishedAt: null,
+      watchUrl: "https://www.mlb.com/video",
+      embedUrl: "",
+      fallback: true,
+      saved: false,
+      liked: false,
+      theme: "video-card-theme-rose",
+    },
+    {
+      id: "mlb-fallback-2",
+      youtubeId: "mlb-fallback-2",
+      title: "Baseball highlights from around the league",
+      creator: "ESPN MLB",
+      category: "Sports",
+      orientation: "vertical",
+      views: 0,
+      likes: 0,
+      comments: 0,
+      thumbnailUrl: null,
+      publishedAt: null,
+      watchUrl: "https://www.espn.com/mlb/",
+      embedUrl: "",
+      fallback: true,
+      saved: false,
+      liked: false,
+      theme: "video-card-theme-ink",
+    },
+    {
+      id: "mlb-fallback-3",
+      youtubeId: "mlb-fallback-3",
+      title: "Yankees, Dodgers, Braves, Astros, and Rangers top plays",
+      creator: "MLB Network",
+      category: "Sports",
+      orientation: "vertical",
+      views: 0,
+      likes: 0,
+      comments: 0,
+      thumbnailUrl: null,
+      publishedAt: null,
+      watchUrl: "https://www.mlb.com/video",
+      embedUrl: "",
+      fallback: true,
+      saved: false,
+      liked: false,
+      theme: "video-card-theme-sunset",
+    },
+  ];
+}
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TECHNOLOGY_FEED_QUERY =
@@ -6160,17 +6222,32 @@ export default function Home() {
 
           return dedupeVideosBySourceTitleAndUrl([...accumulator, ...result.value]);
         }, []);
+        console.log("MLB VIDEO RAW COUNT", mergedVideos.length);
 
         const strictMlbVideos = mergedVideos.filter((video) => isStrictMlbVideo(video));
+        console.log("MLB VIDEO FILTERED COUNT", strictMlbVideos.length);
         const relaxedMlbVideos =
           strictMlbVideos.length > 0
             ? strictMlbVideos
             : mergedVideos.filter((video) =>
-                /(mlb|baseball|home run|walk off|pitcher|bullpen|yankees|dodgers|braves|astros|rangers)/i.test(
+                /(mlb|baseball|highlights?|home run|walk off|pitcher|bullpen|yankees|dodgers|braves|astros|rangers|mlb network|mlb\.com)/i.test(
                   `${video.title} ${video.creator} ${video.category}`
                 )
               );
-        const filteredMlbVideos = selectSourceBalancedVideos(relaxedMlbVideos, 10);
+        const filteredMlbVideos = selectSourceBalancedVideos(
+          relaxedMlbVideos.length > 0 ? relaxedMlbVideos : buildMlbFallbackVideos(),
+          10
+        );
+        console.log("MLB VIDEO FINAL COUNT", filteredMlbVideos.length);
+        console.log(
+          "MLB VIDEO SAMPLE",
+          filteredMlbVideos.slice(0, 5).map((video) => ({
+            id: video.id,
+            title: video.title,
+            creator: video.creator,
+            fallback: video.fallback,
+          }))
+        );
 
         setMlbSectionArticles(filteredMlbArticles);
         setMlbSectionVideos(filteredMlbVideos);
@@ -8766,7 +8843,13 @@ export default function Home() {
     }, {});
 
     return (
-      <div className="favorite-teams-page-shell" role="dialog" aria-modal="true" aria-labelledby="scores-page-title">
+      <div
+        className="favorite-teams-page-shell sports-scores-page-shell"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="scores-page-title"
+      >
+        <div className="favorite-teams-page favorite-teams-page-full">
         <div className="favorite-teams-page-header">
           <button
             type="button"
@@ -8795,6 +8878,7 @@ export default function Home() {
               </div>
             </section>
           ))}
+        </div>
         </div>
       </div>
     );
