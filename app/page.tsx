@@ -87,6 +87,33 @@ const DIRECT_ROUTE_TIMEOUT_MS = 10000;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 const SPORTS_UNIFIED_QUERY =
   "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | NBA latest | ESPN NBA | NBA.com | Bleacher Report NBA | Yahoo Sports NBA | CBS Sports NBA | NBC Sports NBA | MLS news | Major League Soccer news | MLSsoccer.com | FC Cincinnati | ESPN MLS | The Athletic soccer | CBS Sports soccer | NBC Sports soccer | Yahoo Sports soccer | local MLS team news | ESPN | Bleacher Report | AP News Sports | AP Sports | Reuters Sports | BBC Sport | Motorsport.com | NASCAR.com | Big 12 Conference | HERO Sports | Dallas Cowboys official site | NHL.com | MLB.com | NFL.com | NBA.com | MLSsoccer.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest | team official sports site | conference sports news";
+const MLB_SECTION_ARTICLE_QUERIES = [
+  "MLB news",
+  "baseball news",
+  "MLB.com latest",
+  "ESPN MLB",
+  "AP MLB",
+  "Reuters MLB",
+  "CBS Sports MLB",
+  "NBC Sports MLB",
+  "Fox Sports MLB",
+  "Yahoo Sports MLB",
+  "Bleacher Report MLB",
+  "The Athletic MLB",
+] as const;
+const MLB_SECTION_VIDEO_QUERIES = [
+  "MLB highlights",
+  "baseball highlights",
+  "MLB.com highlights",
+  "ESPN MLB highlights",
+  "MLB Network highlights",
+  "Yankees highlights",
+  "Dodgers highlights",
+  "Braves highlights",
+  "Astros highlights",
+  "Rangers highlights",
+  "home run highlights",
+] as const;
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TECHNOLOGY_FEED_QUERY =
@@ -1970,6 +1997,24 @@ function isStrictNflVideo(video: VideoItem) {
   return !hasRejectedTerms && (hasNflTerms || hasPreferredSource);
 }
 
+function isStrictMlbVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  const hasMlbTerms =
+    /(mlb|major league baseball|baseball|mlb network|mlb\.com|baseball highlights|home run|walk off|pitcher|bullpen|yankees|dodgers|braves|astros|rangers|mets|red sox|cubs|phillies|orioles|tigers|guardians|mariners|giants|cardinals|brewers|diamondbacks|blue jays|royals|twins|reds|pirates|rays|marlins|rockies|athletics|angels|nationals|white sox)/.test(
+      haystack
+    );
+  const hasPreferredSource =
+    /(mlb\.com|mlb network|espn|fox sports mlb|cbs sports mlb|nbc sports mlb|yahoo sports mlb|bleacher report mlb|ap mlb|reuters mlb)/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/.test(
+      haystack
+    );
+
+  return !hasRejectedTerms && (hasMlbTerms || hasPreferredSource);
+}
+
 function matchesFavoriteLeagueTeamName(text: string, league: FavoriteLeagueKey) {
   const regexByLeague = {
     MLB: MLB_TEAM_REGEX,
@@ -2269,6 +2314,8 @@ export default function Home() {
   const [celebrityVideos, setCelebrityVideos] = useState<VideoItem[]>([]);
   const [weatherVideos, setWeatherVideos] = useState<VideoItem[]>([]);
   const [localVideos, setLocalVideos] = useState<VideoItem[]>([]);
+  const [mlbSectionArticles, setMlbSectionArticles] = useState<Article[]>([]);
+  const [mlbSectionVideos, setMlbSectionVideos] = useState<VideoItem[]>([]);
   const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
@@ -6039,6 +6086,111 @@ export default function Home() {
   }, [sortMode, sportsTabArticles.length]);
 
   useEffect(() => {
+    let isCancelled = false;
+
+    async function loadMlbSectionSupplements() {
+      if (sortMode !== "sports") {
+        if (!isCancelled) {
+          setMlbSectionArticles([]);
+          setMlbSectionVideos([]);
+        }
+        return;
+      }
+
+      try {
+        const [articleResponses, videoResponses] = await Promise.all([
+          Promise.allSettled(
+            MLB_SECTION_ARTICLE_QUERIES.map(async (query) => {
+              const response = await apiFetch(
+                `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=6`
+              );
+
+              if (!response.ok) {
+                throw new Error(`MLB article request failed (${response.status})`);
+              }
+
+              return hydrateFeedArticles(
+                normalizeNewsPayload(
+                  (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+                ).articles
+              );
+            })
+          ),
+          Promise.allSettled(
+            MLB_SECTION_VIDEO_QUERIES.map(async (query) => {
+              const response = await apiFetch(`/api/videos?tab=sports&q=${encodeURIComponent(query)}`);
+
+              if (!response.ok) {
+                throw new Error(`MLB video request failed (${response.status})`);
+              }
+
+              const payload = (await response.json()) as { videos?: VideoApiItem[] };
+              return normalizeVideoFeedItems(payload.videos ?? []);
+            })
+          ),
+        ]);
+
+        if (isCancelled) {
+          return;
+        }
+
+        const mergedArticles = articleResponses.reduce<Article[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("MLB article fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return mergeArticlesByIdentity(accumulator, result.value);
+        }, []);
+
+        const filteredMlbArticles = selectSourceBalancedArticles(
+          mergedArticles.filter(
+            (article) =>
+              matchesSportsSectionArticle(article, SPORTS_SECTION_CONFIGS.find((section) => section.key === "MLB")!) &&
+              !isSportsBettingAd(article)
+          ),
+          14
+        );
+
+        const mergedVideos = videoResponses.reduce<VideoItem[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("MLB video fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return dedupeVideosBySourceTitleAndUrl([...accumulator, ...result.value]);
+        }, []);
+
+        const strictMlbVideos = mergedVideos.filter((video) => isStrictMlbVideo(video));
+        const relaxedMlbVideos =
+          strictMlbVideos.length > 0
+            ? strictMlbVideos
+            : mergedVideos.filter((video) =>
+                /(mlb|baseball|home run|walk off|pitcher|bullpen|yankees|dodgers|braves|astros|rangers)/i.test(
+                  `${video.title} ${video.creator} ${video.category}`
+                )
+              );
+        const filteredMlbVideos = selectSourceBalancedVideos(relaxedMlbVideos, 10);
+
+        setMlbSectionArticles(filteredMlbArticles);
+        setMlbSectionVideos(filteredMlbVideos);
+      } catch (error) {
+        console.error("Error loading MLB section supplements:", error);
+        if (!isCancelled) {
+          setMlbSectionArticles([]);
+          setMlbSectionVideos([]);
+        }
+      }
+    }
+
+    void loadMlbSectionSupplements();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [sortMode]);
+
+  useEffect(() => {
     if (sortMode === "local") {
       console.log("LOCAL SELECTED CITY", selectedLocalCity ?? localLocationLabel);
       console.log(
@@ -6772,8 +6924,10 @@ export default function Home() {
       const favoriteLeagueTeams = isFavoriteLeagueSectionKey(section.key)
         ? favoriteTeams.filter((team) => team.league === section.key)
         : [];
+      const supplementalArticles = section.key === "MLB" ? mlbSectionArticles : [];
+      const supplementalVideos = section.key === "MLB" ? mlbSectionVideos : [];
 
-      const candidateArticles = sportsStandardArticles.filter((article) => {
+      const candidateArticles = mergeArticlesByIdentity(sportsStandardArticles, supplementalArticles).filter((article) => {
         if (usedArticleKeys.has(getArticleDeduplicationKey(article))) {
           return false;
         }
@@ -6814,7 +6968,10 @@ export default function Home() {
         usedArticleKeys.add(getArticleDeduplicationKey(article));
       });
 
-      const candidateVideos = sportsVideoPool.filter((video) => {
+      const candidateVideos = dedupeVideosBySourceTitleAndUrl([
+        ...sportsVideoPool,
+        ...supplementalVideos,
+      ]).filter((video) => {
         if (usedVideoKeys.has(video.id)) {
           return false;
         }
@@ -6828,7 +6985,7 @@ export default function Home() {
         return matchesSportsSectionVideo(video, section);
       });
 
-      const sectionVideoLimit = section.key === "NFL" ? 6 : 5;
+      const sectionVideoLimit = section.key === "NFL" ? 6 : section.key === "MLB" ? 6 : 5;
       const selectedVideos = selectSourceBalancedVideos(candidateVideos, sectionVideoLimit);
       selectedVideos.forEach((video) => {
         usedVideoKeys.add(video.id);
@@ -6866,7 +7023,7 @@ export default function Home() {
         videos: selectedVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {

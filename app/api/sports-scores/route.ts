@@ -54,6 +54,8 @@ type SportsScoreGame = {
 };
 
 const APP_TIME_ZONE = "America/New_York";
+const MLB_TEAM_NAME_PATTERN =
+  /\b(yankees|dodgers|braves|mets|red sox|cubs|phillies|astros|rangers|padres|orioles|tigers|guardians|mariners|giants|cardinals|brewers|diamondbacks|blue jays|royals|twins|reds|pirates|rays|marlins|rockies|athletics|angels|nationals|white sox)\b/i;
 
 function isLeagueKey(value: string): value is ScoreLeagueKey {
   return value in SPORTS_SCORE_LEAGUES;
@@ -144,41 +146,84 @@ function normalizeTheSportsDbStatus(
   return "Today" as const;
 }
 
+function getEasternDateOffsetIso(offsetDays: number) {
+  const now = new Date();
+  const easternString = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(now.getTime() + offsetDays * 24 * 60 * 60 * 1000));
+  return easternString;
+}
+
+async function fetchSportsDbEventsByPath(apiKey: string, path: string) {
+  const response = await fetch(`https://www.thesportsdb.com/api/v1/json/${apiKey}/${path}`, {
+    next: { revalidate: 300 },
+  });
+
+  if (!response.ok) {
+    return [] as Array<Record<string, string | null>>;
+  }
+
+  const payload = (await response.json()) as { events?: Array<Record<string, string | null>> };
+  return payload.events ?? [];
+}
+
+function isLikelyMlbEvent(event: Record<string, string | null>) {
+  const haystack = `${event.strLeague ?? ""} ${event.strSport ?? ""} ${event.strHomeTeam ?? ""} ${
+    event.strAwayTeam ?? ""
+  } ${event.strSeason ?? ""}`;
+  return /\bmlb\b/i.test(haystack) || MLB_TEAM_NAME_PATTERN.test(haystack);
+}
+
 async function fetchTheSportsDbLeagueScores(league: ScoreLeagueKey): Promise<SportsScoreGame[]> {
   const config = SPORTS_SCORE_LEAGUES[league];
   const apiKey = process.env.THESPORTSDB_API_KEY || "123";
   console.log("SPORTS DB API KEY USED", apiKey);
-  const [nextResponse, pastResponse] = await Promise.all([
-    fetch(
-      `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsnextleague.php?id=${config.theSportsDbLeagueId}`,
-      { next: { revalidate: 300 } }
-    ),
-    fetch(
-      `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventspastleague.php?id=${config.theSportsDbLeagueId}`,
-      { next: { revalidate: 300 } }
-    ),
-  ]);
+  const todayEastern = getEasternDateOffsetIso(0);
+  const tomorrowEastern = getEasternDateOffsetIso(1);
+  const yesterdayEastern = getEasternDateOffsetIso(-1);
 
-  if (!nextResponse.ok && !pastResponse.ok) {
-    throw new Error(`TheSportsDB score requests failed for ${league}`);
-  }
+  const [nextLeagueEvents, pastLeagueEvents, todaySportEvents, tomorrowSportEvents, yesterdaySportEvents] =
+    await Promise.all([
+      fetchSportsDbEventsByPath(apiKey, `eventsnextleague.php?id=${config.theSportsDbLeagueId}`),
+      fetchSportsDbEventsByPath(apiKey, `eventspastleague.php?id=${config.theSportsDbLeagueId}`),
+      league === "MLB"
+        ? fetchSportsDbEventsByPath(apiKey, `eventsday.php?d=${todayEastern}&s=Baseball`)
+        : Promise.resolve([] as Array<Record<string, string | null>>),
+      league === "MLB"
+        ? fetchSportsDbEventsByPath(apiKey, `eventsday.php?d=${tomorrowEastern}&s=Baseball`)
+        : Promise.resolve([] as Array<Record<string, string | null>>),
+      league === "MLB"
+        ? fetchSportsDbEventsByPath(apiKey, `eventsday.php?d=${yesterdayEastern}&s=Baseball`)
+        : Promise.resolve([] as Array<Record<string, string | null>>),
+    ]);
 
-  const nextPayload = nextResponse.ok
-    ? ((await nextResponse.json()) as { events?: Array<Record<string, string | null>> })
-    : { events: [] };
-  const pastPayload = pastResponse.ok
-    ? ((await pastResponse.json()) as { events?: Array<Record<string, string | null>> })
-    : { events: [] };
+  const combined = [
+    ...pastLeagueEvents,
+    ...nextLeagueEvents,
+    ...(league === "MLB" ? todaySportEvents.filter(isLikelyMlbEvent) : []),
+    ...(league === "MLB" ? tomorrowSportEvents.filter(isLikelyMlbEvent) : []),
+    ...(league === "MLB" ? yesterdaySportEvents.filter(isLikelyMlbEvent) : []),
+  ];
 
   console.log("SCORES RAW RESPONSE", {
     league,
-    nextOk: nextResponse.ok,
-    pastOk: pastResponse.ok,
-    nextCount: nextPayload.events?.length ?? 0,
-    pastCount: pastPayload.events?.length ?? 0,
+    nextCount: nextLeagueEvents.length,
+    pastCount: pastLeagueEvents.length,
+    todaySportCount: todaySportEvents.length,
+    tomorrowSportCount: tomorrowSportEvents.length,
+    yesterdaySportCount: yesterdaySportEvents.length,
   });
-
-  const combined = [...(pastPayload.events ?? []), ...(nextPayload.events ?? [])];
+  if (league === "MLB") {
+    console.log("MLB SCORES RAW COUNT", combined.length);
+    console.log("MLB SCORES DATE RANGE", {
+      yesterdayEastern,
+      todayEastern,
+      tomorrowEastern,
+    });
+  }
 
   const normalizedGames = combined
     .map((event) => {
@@ -236,6 +281,21 @@ async function fetchTheSportsDbLeagueScores(league: ScoreLeagueKey): Promise<Spo
 
       return Math.abs(leftTime - now) - Math.abs(rightTime - now);
     });
+
+  if (league === "MLB") {
+    console.log("MLB SCORES FINAL COUNT", normalizedGames.length);
+    console.log(
+      "MLB SCORES SAMPLE",
+      normalizedGames.slice(0, 5).map((game) => ({
+        id: game.id,
+        away: game.awayTeam.name,
+        home: game.homeTeam.name,
+        status: game.status,
+        shortDetail: game.shortDetail,
+        scheduledAt: game.scheduledAt,
+      }))
+    );
+  }
 
   console.log("SCORES FINAL COUNT", league, normalizedGames.length);
   return normalizedGames;

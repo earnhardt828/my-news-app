@@ -745,6 +745,28 @@ function normalizeForSearch(value: string) {
   return value.trim().toLowerCase();
 }
 
+function matchesSearchTerm(haystack: string, searchTerm: string) {
+  const normalizedHaystack = normalizeForSearch(haystack);
+  const normalizedSearch = normalizeForSearch(searchTerm);
+
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  if (normalizedHaystack.includes(normalizedSearch)) {
+    return true;
+  }
+
+  const tokens = normalizedSearch.split(/\s+/).filter(Boolean);
+
+  if (tokens.length === 0) {
+    return true;
+  }
+
+  const matchingTokenCount = tokens.filter((token) => normalizedHaystack.includes(token)).length;
+  return matchingTokenCount >= Math.max(2, Math.ceil(tokens.length * 0.6));
+}
+
 function buildRssFeedUrl(channelId: string) {
   return `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
 }
@@ -839,10 +861,8 @@ function filterAndSortVideos(
 
   const searchFiltered = normalizedSearch
     ? nonBlockedVideos.filter((video) => {
-        const haystack = normalizeForSearch(
-          `${video.title} ${video.creator} ${video.category}`
-        );
-        return haystack.includes(normalizedSearch);
+        const haystack = `${video.title} ${video.creator} ${video.category}`;
+        return matchesSearchTerm(haystack, normalizedSearch);
       })
     : nonBlockedVideos;
 
