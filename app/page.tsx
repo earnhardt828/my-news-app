@@ -114,6 +114,30 @@ const MLB_SECTION_VIDEO_QUERIES = [
   "Rangers highlights",
   "home run highlights",
 ] as const;
+const NHL_SECTION_ARTICLE_QUERIES = [
+  "NHL news",
+  "hockey news",
+  "NHL.com latest",
+  "ESPN NHL",
+  "Sportsnet NHL",
+  "The Hockey News",
+  "TSN Hockey",
+  "AP NHL",
+  "Reuters NHL",
+  "CBS Sports NHL",
+  "NBC Sports NHL",
+  "Yahoo Sports NHL",
+  "Bleacher Report NHL",
+] as const;
+const NHL_SECTION_VIDEO_QUERIES = [
+  "NHL highlights today",
+  "NHL playoff highlights",
+  "NHL.com highlights",
+  "ESPN NHL highlights",
+  "hockey highlights",
+  "Stanley Cup highlights",
+  "NHL Network highlights",
+] as const;
 
 function buildMlbFallbackVideos(): VideoItem[] {
   return [
@@ -173,6 +197,49 @@ function buildMlbFallbackVideos(): VideoItem[] {
       saved: false,
       liked: false,
       theme: "video-card-theme-sunset",
+    },
+  ];
+}
+
+function buildNhlFallbackVideos(): VideoItem[] {
+  return [
+    {
+      id: "nhl-fallback-1",
+      youtubeId: "nhl-fallback-1",
+      title: "NHL highlights and top goals",
+      creator: "NHL.com",
+      category: "Sports",
+      orientation: "vertical",
+      views: 0,
+      likes: 0,
+      comments: 0,
+      thumbnailUrl: null,
+      publishedAt: null,
+      watchUrl: "https://www.nhl.com/video/",
+      embedUrl: "",
+      fallback: true,
+      saved: false,
+      liked: false,
+      theme: "video-card-theme-rose",
+    },
+    {
+      id: "nhl-fallback-2",
+      youtubeId: "nhl-fallback-2",
+      title: "Stanley Cup playoff highlights",
+      creator: "ESPN NHL",
+      category: "Sports",
+      orientation: "vertical",
+      views: 0,
+      likes: 0,
+      comments: 0,
+      thumbnailUrl: null,
+      publishedAt: null,
+      watchUrl: "https://www.espn.com/nhl/",
+      embedUrl: "",
+      fallback: true,
+      saved: false,
+      liked: false,
+      theme: "video-card-theme-ink",
     },
   ];
 }
@@ -2077,6 +2144,24 @@ function isStrictMlbVideo(video: VideoItem) {
   return !hasRejectedTerms && (hasMlbTerms || hasPreferredSource);
 }
 
+function isStrictNhlVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  const hasNhlTerms =
+    /(nhl|hockey|stanley cup|goal|save|overtime|playoff|nhl network|nhl\.com|rangers|bruins|maple leafs|oilers|panthers|hurricanes|stars|avalanche|golden knights|devils|islanders|flyers|penguins|red wings|blackhawks|kraken|kings|ducks|sharks|canucks|flames|senators|canadiens|jets|wild|predators|blues|blue jackets|sabres|utah hockey club)/.test(
+      haystack
+    );
+  const hasPreferredSource =
+    /(nhl\.com|nhl network|espn nhl|sportsnet nhl|the hockey news|tsn hockey|ap nhl|reuters nhl|cbs sports nhl|nbc sports nhl|yahoo sports nhl|bleacher report nhl)/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|mlb|baseball|nfl|nba|mls)/.test(
+      haystack
+    );
+
+  return !hasRejectedTerms && (hasNhlTerms || hasPreferredSource);
+}
+
 function matchesFavoriteLeagueTeamName(text: string, league: FavoriteLeagueKey) {
   const regexByLeague = {
     MLB: MLB_TEAM_REGEX,
@@ -2121,7 +2206,7 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
 
   const sourceMatchedBySection =
     section.key === "MLB"
-      ? /\b(mlb\.com|major league baseball|baseball america|athletic mlb|mlb news|baseball)\b/i.test(
+      ? /\b(mlb\.com|major league baseball|baseball america|athletic mlb|the athletic mlb|mlb news|baseball|espn mlb|ap mlb|reuters mlb|cbs sports mlb|nbc sports mlb|fox sports mlb|yahoo sports mlb|bleacher report mlb)\b/i.test(
           haystack
         )
       : section.key === "NBA"
@@ -2133,7 +2218,7 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
               haystack
             )
           : section.key === "NHL"
-            ? /\b(nhl\.com|hockey|nhl news|bleacher report nhl|espn nhl|yahoo sports nhl)\b/i.test(
+            ? /\b(nhl\.com|hockey|nhl news|bleacher report nhl|espn nhl|yahoo sports nhl|sportsnet nhl|the hockey news|tsn hockey|ap nhl|reuters nhl|cbs sports nhl|nbc sports nhl)\b/i.test(
                 haystack
               )
             : section.key === "MLS"
@@ -2378,6 +2463,8 @@ export default function Home() {
   const [localVideos, setLocalVideos] = useState<VideoItem[]>([]);
   const [mlbSectionArticles, setMlbSectionArticles] = useState<Article[]>([]);
   const [mlbSectionVideos, setMlbSectionVideos] = useState<VideoItem[]>([]);
+  const [nhlSectionArticles, setNhlSectionArticles] = useState<Article[]>([]);
+  const [nhlSectionVideos, setNhlSectionVideos] = useState<VideoItem[]>([]);
   const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
@@ -6155,12 +6242,14 @@ export default function Home() {
         if (!isCancelled) {
           setMlbSectionArticles([]);
           setMlbSectionVideos([]);
+          setNhlSectionArticles([]);
+          setNhlSectionVideos([]);
         }
         return;
       }
 
       try {
-        const [articleResponses, videoResponses] = await Promise.all([
+        const [mlbArticleResponses, mlbVideoResponses, nhlArticleResponses, nhlVideoResponses] = await Promise.all([
           Promise.allSettled(
             MLB_SECTION_ARTICLE_QUERIES.map(async (query) => {
               const response = await apiFetch(
@@ -6190,13 +6279,42 @@ export default function Home() {
               return normalizeVideoFeedItems(payload.videos ?? []);
             })
           ),
+          Promise.allSettled(
+            NHL_SECTION_ARTICLE_QUERIES.map(async (query) => {
+              const response = await apiFetch(
+                `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=6`
+              );
+
+              if (!response.ok) {
+                throw new Error(`NHL article request failed (${response.status})`);
+              }
+
+              return hydrateFeedArticles(
+                normalizeNewsPayload(
+                  (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+                ).articles
+              );
+            })
+          ),
+          Promise.allSettled(
+            NHL_SECTION_VIDEO_QUERIES.map(async (query) => {
+              const response = await apiFetch(`/api/videos?tab=sports&q=${encodeURIComponent(query)}`);
+
+              if (!response.ok) {
+                throw new Error(`NHL video request failed (${response.status})`);
+              }
+
+              const payload = (await response.json()) as { videos?: VideoApiItem[] };
+              return normalizeVideoFeedItems(payload.videos ?? []);
+            })
+          ),
         ]);
 
         if (isCancelled) {
           return;
         }
 
-        const mergedArticles = articleResponses.reduce<Article[]>((accumulator, result) => {
+        const mergedArticles = mlbArticleResponses.reduce<Article[]>((accumulator, result) => {
           if (result.status !== "fulfilled") {
             console.error("MLB article fetch failed:", result.reason);
             return accumulator;
@@ -6214,7 +6332,7 @@ export default function Home() {
           14
         );
 
-        const mergedVideos = videoResponses.reduce<VideoItem[]>((accumulator, result) => {
+        const mergedVideos = mlbVideoResponses.reduce<VideoItem[]>((accumulator, result) => {
           if (result.status !== "fulfilled") {
             console.error("MLB video fetch failed:", result.reason);
             return accumulator;
@@ -6238,6 +6356,14 @@ export default function Home() {
           relaxedMlbVideos.length > 0 ? relaxedMlbVideos : buildMlbFallbackVideos(),
           10
         );
+        console.log(
+          "MLB PLAYABLE COUNT",
+          filteredMlbVideos.filter((video) => !video.fallback && Boolean(video.youtubeId)).length
+        );
+        console.log(
+          "MLB THUMBNAIL FALLBACK COUNT",
+          filteredMlbVideos.filter((video) => video.fallback).length
+        );
         console.log("MLB VIDEO FINAL COUNT", filteredMlbVideos.length);
         console.log(
           "MLB VIDEO SAMPLE",
@@ -6251,11 +6377,50 @@ export default function Home() {
 
         setMlbSectionArticles(filteredMlbArticles);
         setMlbSectionVideos(filteredMlbVideos);
+
+        const mergedNhlArticles = nhlArticleResponses.reduce<Article[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("NHL article fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return mergeArticlesByIdentity(accumulator, result.value);
+        }, []);
+
+        const filteredNhlArticles = selectSourceBalancedArticles(
+          mergedNhlArticles.filter(
+            (article) =>
+              matchesSportsSectionArticle(article, SPORTS_SECTION_CONFIGS.find((section) => section.key === "NHL")!) &&
+              !isSportsBettingAd(article)
+          ),
+          14
+        );
+
+        const mergedNhlVideos = nhlVideoResponses.reduce<VideoItem[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("NHL video fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return dedupeVideosBySourceTitleAndUrl([...accumulator, ...result.value]);
+        }, []);
+        console.log("NHL VIDEO RAW COUNT", mergedNhlVideos.length);
+
+        const strictNhlVideos = mergedNhlVideos.filter((video) => isStrictNhlVideo(video));
+        console.log("NHL VIDEO FILTERED COUNT", strictNhlVideos.length);
+        const finalNhlVideos =
+          strictNhlVideos.length > 0 ? selectSourceBalancedVideos(strictNhlVideos, 10) : [];
+        console.log("NHL VIDEO FINAL COUNT", finalNhlVideos.length);
+
+        setNhlSectionArticles(filteredNhlArticles);
+        setNhlSectionVideos(finalNhlVideos.length > 0 ? finalNhlVideos : buildNhlFallbackVideos());
       } catch (error) {
         console.error("Error loading MLB section supplements:", error);
         if (!isCancelled) {
           setMlbSectionArticles([]);
           setMlbSectionVideos([]);
+          setNhlSectionArticles([]);
+          setNhlSectionVideos([]);
         }
       }
     }
@@ -7001,8 +7166,10 @@ export default function Home() {
       const favoriteLeagueTeams = isFavoriteLeagueSectionKey(section.key)
         ? favoriteTeams.filter((team) => team.league === section.key)
         : [];
-      const supplementalArticles = section.key === "MLB" ? mlbSectionArticles : [];
-      const supplementalVideos = section.key === "MLB" ? mlbSectionVideos : [];
+      const supplementalArticles =
+        section.key === "MLB" ? mlbSectionArticles : section.key === "NHL" ? nhlSectionArticles : [];
+      const supplementalVideos =
+        section.key === "MLB" ? mlbSectionVideos : section.key === "NHL" ? nhlSectionVideos : [];
 
       const candidateArticles = mergeArticlesByIdentity(sportsStandardArticles, supplementalArticles).filter((article) => {
         if (usedArticleKeys.has(getArticleDeduplicationKey(article))) {
@@ -7100,7 +7267,7 @@ export default function Home() {
         videos: selectedVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -8710,8 +8877,9 @@ export default function Home() {
             event.currentTarget.style.visibility = "hidden";
           }}
         />
-      ) : null}
-      <span className="favorite-team-logo-fallback">{getFavoriteTeamInitials(team.team_name)}</span>
+      ) : (
+        <span className="favorite-team-logo-fallback">{getFavoriteTeamInitials(team.team_name)}</span>
+      )}
     </span>
   );
 
@@ -8731,8 +8899,9 @@ export default function Home() {
             event.currentTarget.style.display = "none";
           }}
         />
-      ) : null}
-      <span className="sports-score-team-fallback">{getFavoriteTeamInitials(team.name)}</span>
+      ) : (
+        <span className="sports-score-team-fallback">{getFavoriteTeamInitials(team.name)}</span>
+      )}
     </span>
   );
 

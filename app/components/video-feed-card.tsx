@@ -202,6 +202,18 @@ export default function VideoFeedCard({
   const publishedLabel = useRelativeTime
     ? formatRelativeTimestamp(video.publishedAt)
     : formatVideoPublishedDate(video.publishedAt);
+  const handleOpenVideo = () => {
+    if (
+      video.fallback &&
+      video.watchUrl &&
+      typeof window !== "undefined"
+    ) {
+      window.open(video.watchUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    onOpenPlayer(video.id);
+  };
   let previewEmbedUrl: string | null = null;
 
   try {
@@ -261,7 +273,7 @@ export default function VideoFeedCard({
               <button
                 type="button"
                 className="video-frame-hitbox"
-                onClick={() => onOpenPlayer(video.id)}
+                onClick={handleOpenVideo}
                 aria-label={`Open ${video.title}`}
               />
               <div className="video-card-title-overlay" aria-hidden="true">
@@ -271,7 +283,7 @@ export default function VideoFeedCard({
           ) : (
             <button
               className="video-frame-button"
-              onClick={() => onOpenPlayer(video.id)}
+              onClick={handleOpenVideo}
               aria-label={`Play ${video.title}`}
             >
               {video.thumbnailUrl ? (
@@ -392,7 +404,7 @@ export default function VideoFeedCard({
           ) : (
             <button
               className="video-frame-button"
-              onClick={() => onOpenPlayer(video.id)}
+              onClick={handleOpenVideo}
               aria-label={`Play ${video.title}`}
             >
               {video.thumbnailUrl ? (
