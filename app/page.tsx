@@ -10493,12 +10493,6 @@ export default function Home() {
   if (sortMode === "local") {
     const localCityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
     const localEmptyLabel = localCityLabel.split(",")[0]?.trim() || "Charlotte";
-    const localHeroRouteId = localPageContent.heroStory
-      ? getArticleRouteId(localPageContent.heroStory)
-      : null;
-    const localHeroImage = localPageContent.heroStory
-      ? getBestArticleImage(localPageContent.heroStory)
-      : { src: null, source: null as null };
 
     return (
       <section className="page-shell home-sections-shell local-page-shell">
@@ -10575,7 +10569,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="section-card home-section-block local-rhythm-section local-rhythm-section-sunrise">
+        <section className="section-card home-section-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Weather</strong>
@@ -10609,120 +10603,7 @@ export default function Home() {
           </div>
         </section>
 
-        {localPageContent.heroStory && localHeroRouteId ? (
-          <section className="home-section-block home-section-plain featured-stories-row local-rhythm-section local-rhythm-section-night">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Top Local Story</strong>
-                <span className="muted">A bigger picture of what is shaping {localEmptyLabel} right now.</span>
-              </div>
-            </div>
-            <div className="featured-stories-scroll" role="list" aria-label="Top local story">
-              <Link
-                href={`/article/${localHeroRouteId}/`}
-                className="featured-story-card local-hero-story-card"
-                role="listitem"
-                onClick={() => {
-                  if (!localPageContent.heroStory) {
-                    return;
-                  }
-
-                  persistArticleMetadata(localPageContent.heroStory);
-                  saveArticleReturnState({
-                    path: "/",
-                    scrollY: window.scrollY,
-                    source: "home",
-                    sortMode,
-                    selectedLocalCity,
-                    localLocationLabel,
-                  });
-                }}
-              >
-                {localHeroImage.src ? (
-                  <img
-                    src={localHeroImage.src}
-                    alt={cleanDisplayText(localPageContent.heroStory.title)}
-                    className="featured-story-image"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className="featured-story-fallback-brand" aria-hidden="true">
-                    <SourceBadge sourceName={getSafeSourceLabel(localPageContent.heroStory.source)} />
-                  </div>
-                )}
-                <div className={`featured-story-overlay ${localHeroImage.src ? "" : "featured-story-overlay-solid"}`} />
-                <div className="featured-story-copy">
-                  <span className="featured-story-source">
-                    {getDisplaySourceLabel(localPageContent.heroStory)}
-                  </span>
-                  <h3 className="featured-story-title">
-                    {cleanDisplayText(localPageContent.heroStory.title)}
-                  </h3>
-                </div>
-              </Link>
-            </div>
-          </section>
-        ) : null}
-
-        {localPageContent.trendingNearYou.length > 0 ? (
-          <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-frost">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Trending Near You</strong>
-              </div>
-            </div>
-            <div className="stack home-section-list top-trending-card-rail">
-              {localPageContent.trendingNearYou.map((article) => (
-                <div key={`local-trending-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                  {renderCompactSideImageArticle(article, {
-                    className: "sports-league-compact-card",
-                    imageFallbackLabel: "Local",
-                  })}
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {localPageContent.leadVideos.length > 0 ? (
-          <section className="home-section-block home-section-plain quick-watch-row local-rhythm-section local-rhythm-section-night">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Local Quick Watch</strong>
-              </div>
-            </div>
-            <div className="quick-watch-scroll" role="list" aria-label="Local quick watch videos">
-              {localPageContent.leadVideos.map((video) => (
-                <div key={`local-lead-video-${video.id}`} className="quick-watch-item" role="listitem">
-                  <VideoFeedCard
-                    video={video}
-                    isAutoplaying={
-                      autoplayTrendingVideoKeys.includes(`local-videos:${video.id}`) && !video.fallback
-                    }
-                    onToggleLike={handleToggleVideoLike}
-                    onToggleSave={handleToggleVideoSave}
-                    onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                    onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
-                    frameRef={(node) => {
-                      trendingVideoFrameRefs.current[`local-videos:${video.id}`] = node;
-                    }}
-                    autoplayKey={`local-videos:${video.id}`}
-                    previewDurationMs={null}
-                    label="Local Videos"
-                    hideActions
-                    useRelativeTime
-                    className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
-                    useUniformTallFrame
-                    variant="article"
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-paper">
+        <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">In Your Area</strong>
@@ -10730,7 +10611,49 @@ export default function Home() {
             </div>
           </div>
           <div className="category-swipe-row local-module-row" role="list" aria-label="In your area">
-            {localPageContent.localAreaModules.map((module, index) => (
+            {[
+              {
+                label: "Traffic",
+                headline:
+                  localSectionArticles.developmentBusiness[0]?.title ??
+                  "Road closures and commuter updates",
+                meta: "In Your Area",
+              },
+              {
+                label: "Crime",
+                headline:
+                  balancedLocalArticles.find((article) =>
+                    /\b(crime|police|shooting|arrest|investigation|sheriff|suspect|court)\b/i.test(
+                      `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`
+                    )
+                  )?.title ?? "Safety and police updates near you",
+                meta: "In Your Area",
+              },
+              {
+                label: "Events",
+                headline:
+                  localSectionArticles.eventsThingsToDo[0]?.title ?? "Concerts, festivals, and weekend plans",
+                meta: "Tonight",
+              },
+              {
+                label: "Food",
+                headline:
+                  localSectionArticles.foodRestaurants[0]?.title ?? "Restaurants and dining buzz",
+                meta: "Trending",
+              },
+              {
+                label: "Weather Alerts",
+                headline:
+                  weatherNewsArticles[0]?.title ?? "Storms, advisories, and forecast changes",
+                meta: "Forecast",
+              },
+              {
+                label: "Local Sports",
+                headline:
+                  localSectionArticles.localSports[0]?.title ?? "Hometown teams and big local games",
+                meta: "Game Day",
+              },
+            ].map((module, index) => (
               <article
                 key={`local-module-${module.label}`}
                 role="listitem"
@@ -10748,7 +10671,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-frost">
+        <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Top Local Stories</strong>
@@ -10763,7 +10686,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="stack home-section-list">
-              {navigableTopLocalStories.slice(0, 4).map((article) => {
+              {navigableTopLocalStories.map((article) => {
                 const articleKey =
                   article.id || article.url || getArticleDeduplicationKey(article);
                 return (
@@ -10777,7 +10700,7 @@ export default function Home() {
         </section>
 
         {localSectionArticles.localSports.length > 0 ? (
-          <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-night">
+          <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
                 <strong className="profile-section-title home-section-title">Local Sports</strong>
@@ -10797,19 +10720,15 @@ export default function Home() {
         ) : null}
 
         {localSectionArticles.developmentBusiness.length > 0 ? (
-          <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-paper">
+          <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
                 <strong className="profile-section-title home-section-title">Development & Business</strong>
               </div>
             </div>
-            <div className="featured-stories-scroll" role="list" aria-label="Development and business">
+            <div className="stack home-section-list top-trending-card-rail">
               {localSectionArticles.developmentBusiness.map((article) => (
-                <div
-                  key={`local-development-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                  className="section-card local-swipe-article-card"
-                  role="listitem"
-                >
+                <div key={`local-development-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                   {renderCompactSideImageArticle(article, {
                     className: "sports-league-compact-card",
                     imageFallbackLabel: "Business",
@@ -10820,197 +10739,55 @@ export default function Home() {
           </section>
         ) : null}
 
-        {localPageContent.happeningTonight.length > 0 ? (
-          <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-sunrise">
+        {localSectionArticles.eventsThingsToDo.length > 0 ? (
+          <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Happening Tonight</strong>
+                <strong className="profile-section-title home-section-title">Events & Things To Do</strong>
               </div>
             </div>
-            <div className="featured-stories-scroll" role="list" aria-label="Happening tonight">
-              {localPageContent.happeningTonight.map((article) => (
-                <Link
-                  key={`local-tonight-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                  href={`/article/${getArticleRouteId(article)}/`}
-                  className="featured-story-card local-event-card"
-                  role="listitem"
-                  onClick={() => {
-                    persistArticleMetadata(article);
-                    saveArticleReturnState({
-                      path: "/",
-                      scrollY: window.scrollY,
-                      source: "home",
-                      sortMode,
-                      selectedLocalCity,
-                      localLocationLabel,
-                    });
-                  }}
-                >
-                  {getBestArticleImage(article).src ? (
-                    <img
-                      src={getBestArticleImage(article).src ?? ""}
-                      alt={cleanDisplayText(article.title)}
-                      className="featured-story-image"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <div className="featured-story-fallback-brand" aria-hidden="true">
-                      <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                    </div>
-                  )}
-                  <div className="featured-story-overlay" />
-                  <div className="featured-story-copy">
-                    <span className="featured-story-source">{getDisplaySourceLabel(article)}</span>
-                    <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {topPollsSection.length > 0 ? (
-          <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-paper">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Most Discussed</strong>
-              </div>
-            </div>
-            <div className="polls-carousel" role="list" aria-label="Local discussion poll">
-              <div className="polls-carousel-item" role="listitem">
-                <PollCard
-                  poll={topPollsSection[0]}
-                  onVote={handleVoteOnPoll}
-                  isVoting={activePollVoteId === topPollsSection[0]?.id}
-                  className="poll-card-featured"
-                />
-              </div>
-            </div>
-            {localPageContent.mostDiscussed.length > 0 ? (
-              <div className="stack home-section-list top-trending-card-rail">
-                {localPageContent.mostDiscussed.map((article) => (
-                  <div key={`local-discussed-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                    {renderCompactSideImageArticle(article, {
-                      className: "sports-league-compact-card",
-                      imageFallbackLabel: "Discussed",
-                    })}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        ) : null}
-
-        {localPageContent.thisWeekend.length > 0 ? (
-          <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-frost">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">This Weekend</strong>
-              </div>
-            </div>
-            <div className="featured-stories-scroll" role="list" aria-label="This weekend">
-              {localPageContent.thisWeekend.map((article) => (
-                <Link
-                  key={`local-weekend-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                  href={`/article/${getArticleRouteId(article)}/`}
-                  className="featured-story-card local-event-card"
-                  role="listitem"
-                  onClick={() => {
-                    persistArticleMetadata(article);
-                    saveArticleReturnState({
-                      path: "/",
-                      scrollY: window.scrollY,
-                      source: "home",
-                      sortMode,
-                      selectedLocalCity,
-                      localLocationLabel,
-                    });
-                  }}
-                >
-                  {getBestArticleImage(article).src ? (
-                    <img
-                      src={getBestArticleImage(article).src ?? ""}
-                      alt={cleanDisplayText(article.title)}
-                      className="featured-story-image"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <div className="featured-story-fallback-brand" aria-hidden="true">
-                      <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                    </div>
-                  )}
-                  <div className="featured-story-overlay" />
-                  <div className="featured-story-copy">
-                    <span className="featured-story-source">{getDisplaySourceLabel(article)}</span>
-                    <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                  </div>
-                </Link>
+            <div className="stack home-section-list top-trending-card-rail">
+              {localSectionArticles.eventsThingsToDo.map((article) => (
+                <div key={`local-events-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Events",
+                  })}
+                </div>
               ))}
             </div>
           </section>
         ) : null}
 
         {localSectionArticles.foodRestaurants.length > 0 ? (
-          <section className="home-section-block home-section-plain local-rhythm-section local-rhythm-section-sunrise">
+          <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
                 <strong className="profile-section-title home-section-title">Food & Restaurants</strong>
               </div>
             </div>
-            <div className="featured-stories-scroll" role="list" aria-label="Local food and restaurants">
+            <div className="stack home-section-list top-trending-card-rail">
               {localSectionArticles.foodRestaurants.map((article) => (
-                <Link
-                  key={`local-food-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                  href={`/article/${getArticleRouteId(article)}/`}
-                  className="featured-story-card local-food-card"
-                  role="listitem"
-                  onClick={() => {
-                    persistArticleMetadata(article);
-                    saveArticleReturnState({
-                      path: "/",
-                      scrollY: window.scrollY,
-                      source: "home",
-                      sortMode,
-                      selectedLocalCity,
-                      localLocationLabel,
-                    });
-                  }}
-                >
-                  {getBestArticleImage(article).src ? (
-                    <img
-                      src={getBestArticleImage(article).src ?? ""}
-                      alt={cleanDisplayText(article.title)}
-                      className="featured-story-image"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <div className="featured-story-fallback-brand" aria-hidden="true">
-                      <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                    </div>
-                  )}
-                  <div className="featured-story-overlay" />
-                  <div className="featured-story-copy">
-                    <span className="featured-story-source">{getDisplaySourceLabel(article)}</span>
-                    <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                  </div>
-                </Link>
+                <div key={`local-food-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                  {renderCompactSideImageArticle(article, {
+                    className: "sports-league-compact-card",
+                    imageFallbackLabel: "Food",
+                  })}
+                </div>
               ))}
             </div>
           </section>
         ) : null}
 
-        {localPageContent.followUpVideos.length > 0 ? (
-          <section className="home-section-block home-section-plain quick-watch-row local-rhythm-section local-rhythm-section-night">
+        {localVideoItems.length > 0 ? (
+          <section className="home-section-block home-section-plain quick-watch-row">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
                 <strong className="profile-section-title home-section-title">Local Videos</strong>
               </div>
             </div>
             <div className="quick-watch-scroll" role="list" aria-label="Local videos">
-              {localPageContent.followUpVideos.map((video) => (
+              {localVideoItems.map((video) => (
                 <div key={`local-video-${video.id}`} className="quick-watch-item" role="listitem">
                   <VideoFeedCard
                     video={video}
@@ -11029,8 +10806,7 @@ export default function Home() {
                     label="Local Videos"
                     hideActions
                     useRelativeTime
-                    className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
-                    useUniformTallFrame
+                    className="video-card-inline quick-watch-video-card"
                     variant="article"
                   />
                 </div>
