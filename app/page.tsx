@@ -216,16 +216,16 @@ const LOCAL_VIDEO_SOURCE_HINTS: Record<string, RegExp> = {
 };
 const LOCAL_VIDEO_QUERY_HINTS: Record<string, string[]> = {
   charlotte: [
-    "WCNC Charlotte",
-    "WBTV Charlotte",
-    "WSOC Charlotte",
-    "Queen City News",
-    "Spectrum News Charlotte",
-    "WFAE Charlotte",
-    "Charlotte local news",
-    "Charlotte breaking news",
-    "Charlotte weather",
-    "Charlotte sports",
+    "WCNC Charlotte latest video",
+    "WBTV Charlotte latest video",
+    "WSOC Charlotte latest video",
+    "Queen City News latest video",
+    "Spectrum News Charlotte latest video",
+    "WFAE Charlotte video",
+    "Charlotte NC news video",
+    "Charlotte breaking news video",
+    "Charlotte weather video",
+    "Charlotte sports video",
   ],
 };
 const LOCAL_VIDEO_BROAD_FALLBACK_QUERY_HINTS: Record<string, string[]> = {
@@ -2493,6 +2493,7 @@ export default function Home() {
       let newsPayload: PaginatedNewsResponse | null = null;
 
       if (feedMode === "local") {
+        console.log("LOCAL FETCH CITY", selectedLocalCity ?? localLocationLabel ?? DEFAULT_LOCAL_CITY);
         newsPath =
           selectedLocalCityKey === "new-york-ny"
             ? "/api/local/new-york"
@@ -2584,6 +2585,9 @@ export default function Home() {
 
       const newsData = newsPayload?.articles ?? [];
       hasLiveNewsResponse = true;
+      if (feedMode === "local") {
+        console.log("LOCAL FETCH ARTICLE COUNT", newsData.length);
+      }
       console.log("NEWS API ARTICLE COUNT", newsData.length);
       console.log("FIRST ARTICLE IMAGE FIELDS", {
         title: newsData[0]?.title,
@@ -2885,31 +2889,6 @@ export default function Home() {
   ]);
 
   useEffect(() => {
-    if (isMyFeedWithoutCategories) {
-      const timeoutId = window.setTimeout(() => {
-        setArticles([]);
-        setFeedPage(1);
-        setHasMoreArticles(false);
-        setFeedLoadError(null);
-        setIsLoading(false);
-        setIsInitialFeedLoading(false);
-      }, 0);
-
-      return () => {
-        window.clearTimeout(timeoutId);
-      };
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void loadFeedPage(1, { replace: true });
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [categoryReloadKey, isMyFeedWithoutCategories, loadFeedPage, sortMode]);
-
-  useEffect(() => {
     async function loadPolls() {
       const { data: followRowsData, error: followRowsError } = userId
         ? await supabase
@@ -3153,6 +3132,9 @@ export default function Home() {
           queries: queryHints,
           count: mergedVideos.length,
         });
+        if (cityKey === "charlotte") {
+          console.log("CHARLOTTE LOCAL VIDEO RAW COUNT", mergedVideos.length);
+        }
 
         if (mergedVideos.length === 0) {
           const relaxedPayloads = await loadQueryBatch(relaxedQueryHints);
@@ -3176,6 +3158,13 @@ export default function Home() {
           return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
         });
 
+        if (cityKey === "charlotte") {
+          console.log("CHARLOTTE LOCAL VIDEO SAMPLE", mergedVideos.slice(0, 3).map((video) => ({
+            title: video.title,
+            creator: video.creator,
+            category: video.category,
+          })));
+        }
         setLocalVideos(mergedVideos);
       } catch (error) {
         console.error("Error loading local videos:", error);
@@ -4010,6 +3999,63 @@ export default function Home() {
     }
   }, [savedLocalCity, savedLocalState, sortMode, userEmail, userId]);
 
+  useEffect(() => {
+    if (isMyFeedWithoutCategories) {
+      const timeoutId = window.setTimeout(() => {
+        setArticles([]);
+        setFeedPage(1);
+        setHasMoreArticles(false);
+        setFeedLoadError(null);
+        setIsLoading(false);
+        setIsInitialFeedLoading(false);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
+    }
+
+    if (sortMode === "local" && !selectedLocalCityKey && !localLocationLabel.trim()) {
+      const savedCityLabel =
+        savedLocalCity && savedLocalState ? `${savedLocalCity}, ${savedLocalState}` : "";
+      const nextCityLabel = getLocalCityConfigByName(savedCityLabel)
+        ? savedCityLabel
+        : DEFAULT_LOCAL_CITY;
+
+      console.log("LOCAL FETCH ON MOUNT", {
+        initialized: false,
+        city: nextCityLabel,
+      });
+      applyLocalCitySelection(nextCityLabel);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (sortMode === "local") {
+        console.log("LOCAL FETCH ON MOUNT", {
+          initialized: true,
+          city: selectedLocalCity ?? localLocationLabel ?? DEFAULT_LOCAL_CITY,
+        });
+      }
+      void loadFeedPage(1, { replace: true });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    applyLocalCitySelection,
+    categoryReloadKey,
+    isMyFeedWithoutCategories,
+    loadFeedPage,
+    localLocationLabel,
+    savedLocalCity,
+    savedLocalState,
+    selectedLocalCity,
+    selectedLocalCityKey,
+    sortMode,
+  ]);
+
   const handleUpdateWeatherLocation = useCallback(() => {
     const nextLocation = cleanDisplayText(weatherSearchDraft).trim();
 
@@ -4136,6 +4182,7 @@ export default function Home() {
         ? savedCityLabel
         : DEFAULT_LOCAL_CITY;
 
+      console.log("LOCAL INITIAL CITY", nextCityLabel);
       applyLocalCitySelection(nextCityLabel);
     }, 0);
 
@@ -4149,6 +4196,28 @@ export default function Home() {
     savedLocalState,
     selectedLocalCity,
     sortMode,
+  ]);
+
+  useEffect(() => {
+    if (selectedLocalCityKey || localLocationLabel.trim() || localQuery.trim()) {
+      return;
+    }
+
+    const savedCityLabel =
+      savedLocalCity && savedLocalState ? `${savedLocalCity}, ${savedLocalState}` : "";
+    const nextCityLabel = getLocalCityConfigByName(savedCityLabel)
+      ? savedCityLabel
+      : DEFAULT_LOCAL_CITY;
+
+    console.log("LOCAL INITIAL CITY", nextCityLabel);
+    applyLocalCitySelection(nextCityLabel);
+  }, [
+    applyLocalCitySelection,
+    localLocationLabel,
+    localQuery,
+    savedLocalCity,
+    savedLocalState,
+    selectedLocalCityKey,
   ]);
 
   useEffect(() => {
@@ -6869,6 +6938,17 @@ export default function Home() {
         category: video.category,
       }))
     );
+    if (cityName === "charlotte") {
+      console.log("CHARLOTTE LOCAL VIDEO FINAL COUNT", finalLocalVideos.length);
+      console.log(
+        "CHARLOTTE LOCAL VIDEO SAMPLE",
+        finalLocalVideos.slice(0, 3).map((video) => ({
+          title: video.title,
+          creator: video.creator,
+          category: video.category,
+        }))
+      );
+    }
 
     return finalLocalVideos;
   }, [localVideos, selectedLocalCity, sortMode, videos]);

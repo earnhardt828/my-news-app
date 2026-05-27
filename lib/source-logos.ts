@@ -213,6 +213,35 @@ function normalizeSourceLookupKey(sourceName: string) {
     .trim();
 }
 
+function buildArticleHeaderLogoCandidates(sourceName: string) {
+  const trimmed = sourceName.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const normalized = normalizeSourceLogoName(trimmed);
+  const withoutLeadingThe = normalized.replace(/^the-/, "");
+  const lookupKey = normalizeSourceLookupKey(trimmed);
+  const candidates = new Set<string>([normalized, withoutLeadingThe]);
+
+  if (lookupKey === "washington post" || lookupKey === "the washington post") {
+    candidates.add("washington-post");
+    candidates.add("the-washington-post");
+  }
+
+  if (lookupKey === "new york times" || lookupKey === "the new york times") {
+    candidates.add("new-york-times");
+    candidates.add("the-new-york-times");
+  }
+
+  if (lookupKey === "ap news" || lookupKey === "associated press" || lookupKey === "ap") {
+    candidates.add("ap-news");
+    candidates.add("ap");
+  }
+
+  return Array.from(candidates).filter(Boolean);
+}
+
 function findMappedLogoUrl(map: Record<string, string>, sourceName: string) {
   const trimmedSourceName = sourceName.trim();
 
@@ -276,7 +305,14 @@ export function getSourceLogoUrl(sourceName: string) {
 }
 
 export function getSourceHeaderLogoUrl(sourceName: string) {
-  return findMappedLogoUrl(sourceHeaderLogoMap, sourceName);
+  const mappedLogo = findMappedLogoUrl(sourceHeaderLogoMap, sourceName);
+
+  if (mappedLogo) {
+    return mappedLogo;
+  }
+
+  const candidates = buildArticleHeaderLogoCandidates(sourceName);
+  return candidates[0] ? `/news-logo-head/${candidates[0]}.png` : null;
 }
 
 export function getSourceHeaderDarkLogoUrl(sourceName: string) {
@@ -286,8 +322,17 @@ export function getSourceHeaderDarkLogoUrl(sourceName: string) {
     return mappedLogo;
   }
 
-  const normalized = normalizeSourceLogoName(sourceName);
-  return normalized ? `/news-logo-head-dark/${normalized}.png` : null;
+  const candidates = buildArticleHeaderLogoCandidates(sourceName);
+  return candidates[0] ? `/news-logo-head-dark/${candidates[0]}.png` : null;
+}
+
+export function getArticleHeaderLogo(
+  sourceName: string,
+  theme: "light" | "dark"
+) {
+  return theme === "dark"
+    ? getSourceHeaderDarkLogoUrl(sourceName)
+    : getSourceHeaderLogoUrl(sourceName);
 }
 
 export function hasMappedSourceLogo(sourceName: string) {
