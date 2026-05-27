@@ -3212,6 +3212,14 @@ input {
   margin: 0;
 }
 
+.video-card-article-uniform-wide .video-frame-article {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: none;
+  min-height: 180px;
+  margin: 0;
+}
+
 .local-city-dropdown {
   position: absolute;
   top: calc(100% + 8px);

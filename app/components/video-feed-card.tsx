@@ -29,6 +29,7 @@ type VideoFeedCardProps = {
   hideActions?: boolean;
   useRelativeTime?: boolean;
   useUniformTallFrame?: boolean;
+  useUniformWideFrame?: boolean;
 };
 
 const actionIconProps = {
@@ -60,6 +61,7 @@ export default function VideoFeedCard({
   hideActions = false,
   useRelativeTime = false,
   useUniformTallFrame = false,
+  useUniformWideFrame = false,
 }: VideoFeedCardProps) {
   const isArticleVariant = variant === "article";
   const defaultTrendingOrientation = inferVideoOrientation(undefined, undefined, {
@@ -178,6 +180,10 @@ export default function VideoFeedCard({
     if (isAutoplaying && autoplayKey?.includes("weather-videos")) {
       console.log("WEATHER VIDEOS AUTOPLAY ATTEMPT", autoplayKey, video.id);
     }
+
+    if (isAutoplaying && autoplayKey?.includes("featured-videos")) {
+      console.log("SOURCE RANKINGS FEATURED VIDEOS AUTOPLAY ATTEMPT", autoplayKey, video.id);
+    }
   }, [autoplayKey, isAutoplaying, video.id]);
 
   const articleFrameClass =
@@ -211,7 +217,9 @@ export default function VideoFeedCard({
         id={`video-${video.id}`}
         className={`video-card video-card-article ${
           rankBadgeLabel ? "news-card-has-rank" : ""
-        } ${articleOrientationClass} ${useUniformTallFrame ? "video-card-article-uniform-tall" : ""} ${className}`.trim()}
+        } ${articleOrientationClass} ${
+          useUniformTallFrame ? "video-card-article-uniform-tall" : ""
+        } ${useUniformWideFrame ? "video-card-article-uniform-wide" : ""} ${className}`.trim()}
       >
         {rankBadgeLabel ? (
           <span className="chip trending-rank-badge news-card-rank-badge">

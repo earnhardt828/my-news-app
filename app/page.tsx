@@ -7132,7 +7132,11 @@ export default function Home() {
     }
   };
 
-  const renderQuickWatchRow = (compact = false, useUniformTallFrame = false) => {
+  const renderQuickWatchRow = (
+    compact = false,
+    useUniformTallFrame = false,
+    useUniformWideFrame = false
+  ) => {
     if (myNewsQuickWatchVideos.length === 0) {
       return (
         <section
@@ -7194,6 +7198,7 @@ export default function Home() {
                   compact ? "quick-watch-video-card-compact" : ""
                 }`.trim()}
                 useUniformTallFrame={useUniformTallFrame}
+                useUniformWideFrame={useUniformWideFrame}
                 variant="article"
               />
             </div>
@@ -8576,7 +8581,7 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        {renderQuickWatchRow()}
+        {renderQuickWatchRow(false, false, true)}
 
         {renderBreakingNewsRow()}
 
@@ -8820,13 +8825,10 @@ export default function Home() {
                         <strong className="profile-section-title home-section-title">Local Weather</strong>
                       </div>
                     </div>
-                    <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    <div className="stack home-section-list">
                       {trendingWeatherSections.localWeather.map((article) => (
                         <div key={`trending-local-weather-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                          {renderCompactSideImageArticle(article, {
-                            className: "weather-compact-card",
-                            imageFallbackLabel: "Local Weather",
-                          })}
+                          {renderArticleFeedCard(article)}
                         </div>
                       ))}
                     </div>
@@ -8840,13 +8842,10 @@ export default function Home() {
                         <strong className="profile-section-title home-section-title">National Weather</strong>
                       </div>
                     </div>
-                    <div className="stack home-section-list top-trending-card-rail weather-story-list">
+                    <div className="stack home-section-list">
                       {trendingWeatherSections.nationalWeather.map((article) => (
                         <div key={`trending-national-weather-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                          {renderCompactSideImageArticle(article, {
-                            className: "weather-compact-card",
-                            imageFallbackLabel: "National Weather",
-                          })}
+                          {renderArticleFeedCard(article)}
                         </div>
                       ))}
                     </div>
