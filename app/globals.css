@@ -4991,17 +4991,29 @@ input {
 }
 
 .favorite-team-updates-row {
-  display: grid;
-  gap: 12px;
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.favorite-team-updates-row::-webkit-scrollbar {
+  display: none;
 }
 
 .favorite-team-update-card {
+  flex: 0 0 min(82vw, 300px);
   display: grid;
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--surface-elevated);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 86%, white 4%), var(--surface-elevated));
+  scroll-snap-align: start;
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--shadow-color) 14%, transparent);
 }
 
 .favorite-team-update-top {
@@ -5029,6 +5041,12 @@ input {
   font-size: 0.9rem;
   line-height: 1.45;
   color: var(--foreground);
+}
+
+.favorite-team-update-meta {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-soft);
 }
 
 .sports-scores-tabs {

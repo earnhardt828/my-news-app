@@ -86,7 +86,7 @@ const INITIAL_FEED_TIMEOUT_MS = 5000;
 const DIRECT_ROUTE_TIMEOUT_MS = 10000;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
 const SPORTS_UNIFIED_QUERY =
-  "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | NBA latest | ESPN NBA | NBA.com | Bleacher Report NBA | Yahoo Sports NBA | CBS Sports NBA | NBC Sports NBA | MLS news | Major League Soccer news | MLSsoccer.com | FC Cincinnati | ESPN MLS | The Athletic soccer | CBS Sports soccer | NBC Sports soccer | Yahoo Sports soccer | local MLS team news | ESPN | Bleacher Report | AP News Sports | AP Sports | Reuters Sports | BBC Sport | Motorsport.com | MMA Fighting | NHL.com | MLB.com | NFL.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest";
+  "sports news | ESPN top headlines | NFL NBA MLB NHL MLS MMA sports news | NBA latest | ESPN NBA | NBA.com | Bleacher Report NBA | Yahoo Sports NBA | CBS Sports NBA | NBC Sports NBA | MLS news | Major League Soccer news | MLSsoccer.com | FC Cincinnati | ESPN MLS | The Athletic soccer | CBS Sports soccer | NBC Sports soccer | Yahoo Sports soccer | local MLS team news | ESPN | Bleacher Report | AP News Sports | AP Sports | Reuters Sports | BBC Sport | Motorsport.com | NASCAR.com | Big 12 Conference | HERO Sports | Dallas Cowboys official site | NHL.com | MLB.com | NFL.com | NBA.com | MLSsoccer.com | Yahoo Sports | NBC Sports | Fox Sports | CBS Sports latest | team official sports site | conference sports news";
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
 const TECHNOLOGY_FEED_QUERY =
@@ -131,9 +131,9 @@ const BREAKING_NEWS_TRUSTED_SOURCES = [
   "Al Jazeera",
 ] as const;
 const BREAKING_NEWS_REQUIRED_PATTERN =
-  /\b(breaking|live updates?|developing|urgent|major|confirmed|emergency|killed|attack|court ruling|election|disaster|war|severe weather|government|economy)\b/i;
+  /\b(breaking|live updates?|developing|urgent|major|confirmed|emergency|shooting|killed|dead|attack|court ruling|government|election|war|disaster|emergency|severe weather|economy)\b/i;
 const BREAKING_NEWS_SOFT_STORY_PATTERN =
-  /\b(ice cream|food|recipe|restaurant|travel|vacation|celebrity|hollywood|fashion|music awards|movie premiere|gossip|lifestyle|wellness|shopping)\b/i;
+  /\b(ice cream|food|recipe|restaurant|travel|vacation|celebrity|hollywood|fashion|music awards|movie premiere|gossip|lifestyle|wellness|shopping|matchup|preview|recap|rankings|odds|sports betting|betting line|parlay|spread pick|over\/under|entertainment)\b/i;
 const BREAKING_NEWS_SPORTS_PATTERN =
   /\b(sports?|nfl|nba|mlb|nhl|mls|espn|cbs sports|sports illustrated|bleacher report|football|basketball|baseball|hockey|soccer)\b/i;
 const FEATURED_SOURCE_NAMES = [
@@ -184,7 +184,7 @@ const SELECTED_CATEGORY_MATCHERS: Record<string, RegExp> = {
   "Breaking News": /\b(breaking|live updates|developing|urgent|just in|alert)\b/i,
 };
 const BROAD_SPORTS_SOURCE_PATTERN =
-  /\b(motorsport\.com|motorsport|bleacher report|mlb\.com|nhl\.com|nba\.com|nfl\.com|mlssoccer\.com|espn|yahoo sports|fox sports|nbc sports|cbs sports|sports illustrated|ap sports|ap news sports|reuters sports|fc cincinnati|sports|athletics|sporting)\b/i;
+  /\b(motorsport\.com|motorsport|nascar\.com|nascar|bleacher report|mlb\.com|nhl\.com|nba\.com|nfl\.com|mlssoccer\.com|espn|yahoo sports|fox sports|nbc sports|cbs sports|sports illustrated|ap sports|ap news sports|reuters sports|fc cincinnati|hero sports|big 12|big 12 conference|dallas cowboys|official site|team site|conference site|sports|athletics|sporting)\b/i;
 const MY_NEWS_FEATURED_SPORTS_PATTERN =
   /\b(sports?|espn|cbs sports|sports illustrated|bleacher report|mlb|nba|nfl|nhl|mls|soccer|football|basketball|baseball|hockey)\b/i;
 const TOP_QUICK_WATCH_PREFERRED_SOURCE_PATTERN =
@@ -280,7 +280,14 @@ const FEED_META_ICON_PROPS = {
   "aria-hidden": true,
 };
 
-type SportsSectionKey = FavoriteLeagueKey | "NFL" | "MMA" | "MORE";
+type SportsSectionKey =
+  | FavoriteLeagueKey
+  | "NFL"
+  | "COLLEGE_FOOTBALL"
+  | "COLLEGE_BASKETBALL"
+  | "MOTORSPORTS"
+  | "MMA"
+  | "MORE";
 
 type SportsSectionConfig = {
   key: SportsSectionKey;
@@ -289,6 +296,10 @@ type SportsSectionConfig = {
   articlePattern: RegExp;
   videoPattern: RegExp;
 };
+
+function isFavoriteLeagueSectionKey(key: SportsSectionKey): key is FavoriteLeagueKey {
+  return key === "MLB" || key === "NFL" || key === "NBA" || key === "MLS" || key === "NHL";
+}
 
 const SWIPEABLE_SORT_MODES = [
   "trending",
@@ -1366,11 +1377,30 @@ function getBreakingNewsSourcePriority(article: Article) {
   return 0;
 }
 
+function isBreakingNewsEligible(article: Article) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
+    article.category ?? ""
+  } ${article.source}`;
+
+  if (BREAKING_NEWS_SPORTS_PATTERN.test(haystack)) {
+    return false;
+  }
+
+  if (BREAKING_NEWS_SOFT_STORY_PATTERN.test(haystack)) {
+    return false;
+  }
+
+  return (
+    BREAKING_NEWS_REQUIRED_PATTERN.test(haystack) ||
+    /\b(breaking news|live blog|live updates|developing story|just in)\b/i.test(haystack)
+  );
+}
+
 function getBreakingNewsRelevanceScore(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${article.category} ${article.source}`;
 
   if (BREAKING_NEWS_SPORTS_PATTERN.test(haystack)) {
-    return -500;
+    return -5000;
   }
 
   let score = getBreakingNewsSourcePriority(article) * 100;
@@ -1384,7 +1414,7 @@ function getBreakingNewsRelevanceScore(article: Article) {
   }
 
   if (BREAKING_NEWS_SOFT_STORY_PATTERN.test(haystack)) {
-    score -= 220;
+    return -2500;
   }
 
   score += Math.max(
@@ -1777,6 +1807,30 @@ const SPORTS_SECTION_CONFIGS: SportsSectionConfig[] = [
       /(mls|soccer|goal|assist|save|replay|soccer highlights|mls highlights|football highlights)/i,
   },
   {
+    key: "COLLEGE_FOOTBALL",
+    label: "College Football",
+    articlePattern:
+      /(college football|ncaa football|cfb|big 12|big ten|sec|acc|pac-12|american athletic|sun belt|mountain west|hero sports|bowl game|playoff rankings|heisman|spring game|transfer portal football)/i,
+    videoPattern:
+      /(college football|ncaa football|cfb|big 12|big ten|sec|acc|touchdown|football highlights|spring game|heisman|college gameday)/i,
+  },
+  {
+    key: "COLLEGE_BASKETBALL",
+    label: "College Basketball",
+    articlePattern:
+      /(college basketball|ncaa basketball|march madness|final four|sweet 16|elite eight|big east|big 12 basketball|sec basketball|acc basketball|big ten basketball|hero sports|transfer portal basketball)/i,
+    videoPattern:
+      /(college basketball|ncaa basketball|march madness|final four|dunk|buzzer beater|basketball highlights|one shining moment)/i,
+  },
+  {
+    key: "MOTORSPORTS",
+    label: "Motorsports",
+    articlePattern:
+      /(motorsport|motorsport\.com|nascar|nascar\.com|formula 1|formula1|f1|indycar|stock car|daytona|cup series|grand prix|pole position|pit stop|race winner)/i,
+    videoPattern:
+      /(motorsport|nascar|formula 1|formula1|f1|indycar|race highlights|grand prix|pit stop|top finish|onboard)/i,
+  },
+  {
     key: "MMA",
     label: "MMA",
     articlePattern:
@@ -1878,6 +1932,18 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
   if (section.key === "NHL" && matchesFavoriteLeagueTeamName(haystack, "NHL")) {
     return true;
   }
+  if (section.key === "COLLEGE_FOOTBALL" && articleMatchesSelectedCategory(article, "College Football")) {
+    return true;
+  }
+  if (
+    section.key === "COLLEGE_BASKETBALL" &&
+    articleMatchesSelectedCategory(article, "College Basketball")
+  ) {
+    return true;
+  }
+  if (section.key === "MOTORSPORTS" && articleMatchesSelectedCategory(article, "NASCAR")) {
+    return true;
+  }
 
   const sourceMatchedBySection =
     section.key === "MLB"
@@ -1900,10 +1966,22 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
               ? /\b(mlssoccer\.com|soccer|football club|fc cincinnati|inter miami|charlotte fc|atlanta united|premier league|champions league|bbc sport)\b/i.test(
                   haystack
                 )
-              : section.key === "MMA"
-                ? /\b(mma|ufc|boxing|mma fighting|bellator|octagon|fight night)\b/i.test(
+              : section.key === "COLLEGE_FOOTBALL"
+                ? /\b(college football|ncaa football|cfb|hero sports|big 12|big ten|sec|acc|conference usa|american athletic|sun belt|mountain west|bowl season|college gameday)\b/i.test(
                     haystack
                   )
+                : section.key === "COLLEGE_BASKETBALL"
+                  ? /\b(college basketball|ncaa basketball|march madness|final four|sweet 16|elite eight|big east|big 12 basketball|sec basketball|acc basketball|big ten basketball|bracketology)\b/i.test(
+                      haystack
+                    )
+                  : section.key === "MOTORSPORTS"
+                    ? /\b(motorsport\.com|motorsport|nascar\.com|nascar|formula 1|formula1|f1|indycar|grand prix|cup series|race day)\b/i.test(
+                        haystack
+                      )
+                : section.key === "MMA"
+                  ? /\b(mma|ufc|boxing|mma fighting|bellator|octagon|fight night)\b/i.test(
+                      haystack
+                    )
                 : /\b(motorsport\.com|motorsport|nascar|formula 1|formula1|f1|indycar|golf|tennis|olympics|sports car|grand prix|race)\b/i.test(
                     haystack
                   );
@@ -1943,11 +2021,23 @@ function getArticlePriorityScore(article: Article) {
   const source = getSafeSourceLabel(article.source).toLowerCase();
 
   if (
-    /(ap news|ap sports|associated press|reuters|reuters sports|bbc news|bbc sport|cnn|new york times|washington post|politico|npr|espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report|bloomberg|wall street journal|the weather channel|mma fighting|mlb\.com|nba\.com|nfl\.com|nhl\.com|mlssoccer\.com|motorsport\.com|fc cincinnati)/.test(
+    /(ap news|ap sports|associated press|reuters|reuters sports|bbc news|bbc sport|cnn|new york times|washington post|politico|npr|espn|cbs sports|nbc sports|fox sports|yahoo sports|sports illustrated|bleacher report|bloomberg|wall street journal|the weather channel|mma fighting|mlb\.com|nba\.com|nfl\.com|nhl\.com|mlssoccer\.com|motorsport\.com|nascar\.com|hero sports|big 12|big 12 conference|fc cincinnati|dallas cowboys)/.test(
       source
     )
   ) {
     score += 120;
+  }
+
+  if (
+    /(motorsport\.com|nascar\.com|hero sports|big 12|big 12 conference|mlb\.com|nba\.com|nfl\.com|nhl\.com|mlssoccer\.com|fc cincinnati|dallas cowboys|official site|team site|conference site)/.test(
+      source
+    )
+  ) {
+    score += 50;
+  }
+
+  if (/(yahoo sports|nbc sports)/.test(source)) {
+    score -= 18;
   }
 
   if (/(breaking|urgent|developing|just in|live updates?|exclusive|major|top story|alert)/.test(haystack)) {
@@ -5528,9 +5618,9 @@ export default function Home() {
   const sportsTabArticles = useMemo(() => {
     const rawSportsArticles =
       sortMode === "sports"
-        ? visibleArticles.slice(0, 40)
+        ? visibleArticles.slice(0, 90)
         : sortMode === "trending"
-          ? sportsPreviewArticles.slice(0, 40)
+          ? sportsPreviewArticles.slice(0, 60)
           : ([] as Article[]);
 
     if (rawSportsArticles.length === 0) {
@@ -5538,11 +5628,11 @@ export default function Home() {
     }
 
     const filteredSportsArticles = rawSportsArticles.filter(
-      (article) => !isSportsBettingAd(article)
+      (article) => isBroadSportsArticle(article) && !isSportsBettingAd(article)
     );
 
     if (sortMode === "sports") {
-      return selectSourceBalancedArticles(filteredSportsArticles, 25);
+      return selectSourceBalancedArticles(filteredSportsArticles, 42);
     }
 
     if (sortMode === "trending") {
@@ -6348,10 +6438,11 @@ export default function Home() {
       topTenTrendingArticles.map((article) => getArticleDeduplicationKey(article))
     );
 
-    const trustedBreakingArticles = breakingPreviewArticles.filter((article) =>
-      BREAKING_NEWS_TRUSTED_SOURCES.some((source) =>
-        getSafeSourceLabel(article.source).toLowerCase().includes(source.toLowerCase())
-      )
+    const trustedBreakingArticles = breakingPreviewArticles.filter(
+      (article) =>
+        BREAKING_NEWS_TRUSTED_SOURCES.some((source) =>
+          getSafeSourceLabel(article.source).toLowerCase().includes(source.toLowerCase())
+        ) && isBreakingNewsEligible(article)
     );
     const highSignalTrustedArticles = trustedBreakingArticles.filter((article) =>
       BREAKING_NEWS_REQUIRED_PATTERN.test(
@@ -6364,7 +6455,7 @@ export default function Home() {
         ? highSignalTrustedArticles
         : trustedBreakingArticles.length >= 5
           ? trustedBreakingArticles
-          : breakingPreviewArticles;
+          : breakingPreviewArticles.filter((article) => isBreakingNewsEligible(article));
 
     return selectSourceBalancedArticles(
       candidateArticles
@@ -6610,10 +6701,9 @@ export default function Home() {
     });
 
     return SPORTS_SECTION_CONFIGS.map((section) => {
-      const favoriteLeagueTeams =
-        section.key === "MMA" || section.key === "MORE"
-          ? []
-          : favoriteTeams.filter((team) => team.league === section.key);
+      const favoriteLeagueTeams = isFavoriteLeagueSectionKey(section.key)
+        ? favoriteTeams.filter((team) => team.league === section.key)
+        : [];
 
       const candidateArticles = sportsStandardArticles.filter((article) => {
         if (usedArticleKeys.has(getArticleDeduplicationKey(article))) {
