@@ -184,6 +184,10 @@ export default function VideoFeedCard({
     if (isAutoplaying && autoplayKey?.includes("featured-videos")) {
       console.log("SOURCE RANKINGS FEATURED VIDEOS AUTOPLAY ATTEMPT", autoplayKey, video.id);
     }
+
+    if (isAutoplaying && autoplayKey?.includes("featured-videos-above-weather")) {
+      console.log("FEATURED VIDEOS ABOVE WEATHER AUTOPLAY ATTEMPT", autoplayKey, video.id);
+    }
   }, [autoplayKey, isAutoplaying, video.id]);
 
   const articleFrameClass =

@@ -1693,6 +1693,43 @@ const NBA_TEAM_REGEX = buildLeagueTeamRegex("NBA");
 const MLS_TEAM_REGEX = buildLeagueTeamRegex("MLS");
 const NHL_TEAM_REGEX = buildLeagueTeamRegex("NHL");
 
+function buildFavoriteTeamNewsQueries(team: FavoriteTeamOption) {
+  const teamName = team.team_name.trim();
+  const tokens = teamName.split(/\s+/);
+  const shortName = tokens[tokens.length - 1] ?? teamName;
+  const marketName = tokens.slice(0, -1).join(" ").trim();
+
+  const queries = [
+    `${teamName} news`,
+    `${shortName} latest`,
+    `ESPN ${teamName}`,
+    `AP ${teamName}`,
+  ];
+
+  if (team.league === "MLB") {
+    queries.push(`MLB.com ${teamName}`);
+    if (/atlanta braves/i.test(teamName)) {
+      queries.push("Battery Power Braves");
+      queries.push("local Atlanta sports Braves");
+    }
+  }
+
+  if (team.league === "MLS") {
+    queries.push(`MLS ${teamName}`);
+    if (/charlotte fc/i.test(teamName)) {
+      queries.push("Queen City News Charlotte FC");
+      queries.push("local Charlotte sports Charlotte FC");
+    }
+  }
+
+  if (marketName) {
+    queries.push(`${marketName} sports ${teamName}`);
+    queries.push(`${marketName} local sports ${shortName}`);
+  }
+
+  return Array.from(new Set(queries));
+}
+
 const SPORTS_SECTION_CONFIGS: SportsSectionConfig[] = [
   {
     key: "MLB",
@@ -2125,6 +2162,7 @@ export default function Home() {
   const [weatherForecastDays, setWeatherForecastDays] = useState<WeatherForecastDay[]>([]);
   const [weatherForecastError, setWeatherForecastError] = useState<string | null>(null);
   const [isWeatherPageLoading, setIsWeatherPageLoading] = useState(false);
+  const [teamSpecificNewsArticles, setTeamSpecificNewsArticles] = useState<Article[]>([]);
   const [nationalWeatherMapEmbedHtml, setNationalWeatherMapEmbedHtml] = useState<string | null>(null);
   const [nationalWeatherMapFullscreenHtml, setNationalWeatherMapFullscreenHtml] = useState<string | null>(
     null
@@ -3433,6 +3471,20 @@ export default function Home() {
       cancelled = true;
     };
   }, [selectedWeatherLocation, weatherLocationStorageKey]);
+
+  useEffect(() => {
+    if (sortMode !== "local" || !selectedLocalCity) {
+      return;
+    }
+
+    const normalizedLocalLocation = selectedLocalCity.trim();
+    if (!normalizedLocalLocation || selectedWeatherLocation.trim() === normalizedLocalLocation) {
+      return;
+    }
+
+    setSelectedWeatherLocation(normalizedLocalLocation);
+    setWeatherSearchDraft(normalizedLocalLocation);
+  }, [selectedLocalCity, selectedWeatherLocation, sortMode]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -5844,6 +5896,67 @@ export default function Home() {
   }, [localLocationLabel, selectedLocalCity, selectedLocalCityKey, sortMode, visibleArticles]);
 
   useEffect(() => {
+    let isCancelled = false;
+
+    async function loadTeamSpecificNews() {
+      if (favoriteTeams.length === 0) {
+        if (!isCancelled) {
+          setTeamSpecificNewsArticles([]);
+        }
+        return;
+      }
+
+      try {
+        const responses = await Promise.allSettled(
+          favoriteTeams.flatMap((team) =>
+            buildFavoriteTeamNewsQueries(team).map(async (query) => {
+              const response = await apiFetch(
+                `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=6`
+              );
+
+              if (!response.ok) {
+                throw new Error(`Favorite team news request failed (${response.status})`);
+              }
+
+              return hydrateFeedArticles(
+                normalizeNewsPayload(
+                  (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+                ).articles
+              );
+            })
+          )
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        const mergedArticles = responses.reduce<Article[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("Favorite team news fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return mergeArticlesByIdentity(accumulator, result.value);
+        }, []);
+
+        setTeamSpecificNewsArticles(mergedArticles);
+      } catch (error) {
+        console.error("Error loading favorite team news:", error);
+        if (!isCancelled) {
+          setTeamSpecificNewsArticles([]);
+        }
+      }
+    }
+
+    void loadTeamSpecificNews();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [favoriteTeams]);
+
+  useEffect(() => {
     topTabsRef.current?.scrollTo({ left: 0, behavior: "auto" });
   }, []);
 
@@ -6691,6 +6804,10 @@ export default function Home() {
           return homeTeam === normalizedTeamName || awayTeam === normalizedTeamName;
         }) ?? null;
       const article =
+        teamSpecificNewsArticles.find((candidate) => {
+          const haystack = `${candidate.title} ${candidate.description ?? ""} ${candidate.source}`.toLowerCase();
+          return haystack.includes(normalizedTeamName);
+        }) ??
         sportsTabArticles.find((candidate) => {
           const haystack = `${candidate.title} ${candidate.description ?? ""}`.toLowerCase();
           return haystack.includes(normalizedTeamName);
@@ -6702,7 +6819,7 @@ export default function Home() {
         game,
       };
     });
-  }, [favoriteTeams, sportsScoresByLeague, sportsTabArticles]);
+  }, [favoriteTeams, sportsScoresByLeague, sportsTabArticles, teamSpecificNewsArticles]);
 
   const usedSportsSectionArticleKeys = useMemo(() => {
     const usedKeys = new Set<string>();
@@ -6725,7 +6842,10 @@ export default function Home() {
       return [] as Article[];
     }
 
-    const selectedArticles = sportsStandardArticles.filter((article) => {
+    const selectedArticles = mergeArticlesByIdentity(
+      teamSpecificNewsArticles,
+      sportsStandardArticles
+    ).filter((article) => {
       const dedupeKey = getArticleDeduplicationKey(article);
       if (usedSportsSectionArticleKeys.has(dedupeKey)) {
         return false;
@@ -6736,7 +6856,13 @@ export default function Home() {
     });
 
     return selectSourceBalancedArticles(selectedArticles, 8);
-  }, [favoriteTeams, sortMode, sportsStandardArticles, usedSportsSectionArticleKeys]);
+  }, [
+    favoriteTeams,
+    sortMode,
+    sportsStandardArticles,
+    teamSpecificNewsArticles,
+    usedSportsSectionArticleKeys,
+  ]);
 
   const featuredCelebrityArticles = useMemo(
     () => selectSourceBalancedArticles(celebrityTabArticles.slice(0, 18), 8),
@@ -7989,13 +8115,23 @@ export default function Home() {
     );
   };
 
-  const renderFeaturedVideosBreak = () => {
+  const renderFeaturedVideosBreak = (
+    options?: {
+      title?: string;
+      keyPrefix?: string;
+      playerTab?: "news" | "sports";
+    }
+  ) => {
+    const title = options?.title ?? "Featured Videos";
+    const keyPrefix = options?.keyPrefix ?? "featured-videos";
+    const playerTab = options?.playerTab ?? "news";
+
     if (myNewsFeaturedVideos.length === 0) {
       return (
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Featured Video</strong>
+              <strong className="profile-section-title home-section-title">{title}</strong>
             </div>
           </div>
           <div className="empty-state compact-empty-state">
@@ -8016,7 +8152,7 @@ export default function Home() {
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Featured Video</strong>
+              <strong className="profile-section-title home-section-title">{title}</strong>
             </div>
           </div>
           <div className="stack home-section-list">
@@ -8024,19 +8160,19 @@ export default function Home() {
               <VideoFeedCard
                 video={video}
                 isAutoplaying={
-                  autoplayTrendingVideoKeys.includes(`featured-videos:${video.id}`) &&
+                  autoplayTrendingVideoKeys.includes(`${keyPrefix}:${video.id}`) &&
                   !video.fallback
                 }
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, playerTab)}
                 frameRef={(node) => {
-                  trendingVideoFrameRefs.current[`featured-videos:${video.id}`] = node;
+                  trendingVideoFrameRefs.current[`${keyPrefix}:${video.id}`] = node;
                 }}
-                autoplayKey={`featured-videos:${video.id}`}
+                autoplayKey={`${keyPrefix}:${video.id}`}
                 previewDurationMs={null}
-                label="Featured Video"
+                label={title}
                 className="video-card-inline featured-video-single-card quick-watch-video-card-unified"
                 useUniformTallFrame
                 variant="article"
@@ -8051,28 +8187,28 @@ export default function Home() {
       <section className="home-section-block home-section-plain quick-watch-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">Featured Videos</strong>
+            <strong className="profile-section-title home-section-title">{title}</strong>
           </div>
         </div>
         <div className="quick-watch-scroll" role="list" aria-label="Featured videos">
           {myNewsFeaturedVideos.map((video) => (
-            <div key={`featured-videos-${video.id}`} className="quick-watch-item" role="listitem">
+            <div key={`${keyPrefix}-${video.id}`} className="quick-watch-item" role="listitem">
               <VideoFeedCard
                 video={video}
                 isAutoplaying={
-                  autoplayTrendingVideoKeys.includes(`featured-videos:${video.id}`) &&
+                  autoplayTrendingVideoKeys.includes(`${keyPrefix}:${video.id}`) &&
                   !video.fallback
                 }
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, playerTab)}
                 frameRef={(node) => {
-                  trendingVideoFrameRefs.current[`featured-videos:${video.id}`] = node;
+                  trendingVideoFrameRefs.current[`${keyPrefix}:${video.id}`] = node;
                 }}
-                autoplayKey={`featured-videos:${video.id}`}
+                autoplayKey={`${keyPrefix}:${video.id}`}
                 previewDurationMs={null}
-                label="Featured Video"
+                label={title}
                 className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
                 useUniformTallFrame
                 variant="article"
@@ -9099,7 +9235,11 @@ export default function Home() {
           )}
         </section>
 
-        {renderFeaturedVideosBreak()}
+        {renderFeaturedVideosBreak({
+          title: "Featured Videos",
+          keyPrefix: "featured-videos-above-weather",
+          playerTab: "news",
+        })}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
@@ -10956,6 +11096,38 @@ export default function Home() {
               </span>
             </div>
           </div>
+
+          {weatherForecastDays.length > 0 ? (
+            <div className="weather-forecast-scroll" role="list" aria-label="Local 10-day weather forecast">
+              {weatherForecastDays.map((day) => (
+                <div
+                  key={`local-forecast-${day.label}-${day.dateLabel}`}
+                  className="weather-forecast-item"
+                  role="listitem"
+                >
+                  <article className="section-card weather-forecast-card">
+                    <div className="stack" style={{ gap: "10px" }}>
+                      <div className="stack" style={{ gap: "2px" }}>
+                        <strong>{day.label}</strong>
+                        <span className="muted">{day.dateLabel}</span>
+                      </div>
+                      <div className="home-weather-temp-row">
+                        <span className="home-weather-icon-shell weather-forecast-icon">
+                          {renderWeatherConditionIcon(day.weatherLabel)}
+                        </span>
+                        <strong>{`H ${Math.round(day.highTemp ?? 0)}° / L ${Math.round(
+                          day.lowTemp ?? 0
+                        )}°`}</strong>
+                      </div>
+                      <span className="muted weather-forecast-label">{day.weatherLabel}</span>
+                    </div>
+                  </article>
+                </div>
+              ))}
+            </div>
+          ) : weatherForecastError ? (
+            <div className="muted local-inline-placeholder">{weatherForecastError}</div>
+          ) : null}
         </section>
 
         <section className="home-section-block home-section-plain">

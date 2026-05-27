@@ -192,6 +192,8 @@ export const sourceBoxLogoMap: Record<string, string> = {
   "New York Times": "/logos-for-boxes/the-new-york-times.png",
   "The Washington Post": "/logos-for-boxes/the-washington-post.png",
   "Washington Post": "/logos-for-boxes/the-washington-post.png",
+  "Weather News": "/logos-for-boxes/weather-news.png",
+  "Local Weather": "/logos-for-boxes/weather-news.png",
 };
 
 export function normalizeSourceLogoName(sourceName: string) {
