@@ -235,6 +235,38 @@ const LOCAL_VIDEO_BROAD_FALLBACK_QUERY_HINTS: Record<string, string[]> = {
     "Charlotte NC news",
   ],
 };
+
+function buildSelectedCityVideoMatcher(cityLabel: string) {
+  const cityName = cityLabel.split(",")[0]?.trim().toLowerCase() ?? "";
+  const escapedCity = cityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const cityPattern = cityName ? new RegExp(`\\b${escapedCity}\\b`, "i") : null;
+  const citySourcePattern = cityName ? LOCAL_VIDEO_SOURCE_HINTS[cityName] ?? null : null;
+  const localStationPattern =
+    cityName === "charlotte"
+      ? /\b(charlotte|mecklenburg|queen city|wcnc|wbtv|wsoc|queen city news|spectrum news|wfae)\b/i
+      : cityPattern;
+
+  return (video: VideoItem) => {
+    const haystack =
+      `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${video.thumbnailUrl ?? ""}`.toLowerCase();
+
+    if (citySourcePattern?.test(haystack)) {
+      return true;
+    }
+
+    if (localStationPattern?.test(haystack)) {
+      return true;
+    }
+
+    if (!cityPattern?.test(haystack)) {
+      return false;
+    }
+
+    return /\b(news|weather|storm|forecast|sports|traffic|community|breaking|local|latest|update)\b/i.test(
+      haystack
+    );
+  };
+}
 const FEED_META_ICON_PROPS = {
   viewBox: "0 0 24 24",
   width: 14,
@@ -3089,7 +3121,6 @@ export default function Home() {
       const cityKey = cityName.toLowerCase();
       const queryHints = LOCAL_VIDEO_QUERY_HINTS[cityKey] ?? [
         `${cityName} local news`,
-        `${cityName} breaking news`,
         `${cityName} weather`,
         `${cityName} sports`,
       ];
@@ -6832,74 +6863,39 @@ export default function Home() {
     }
 
     const cityLabel = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
-    const cityName = cityLabel.split(",")[0]?.trim().toLowerCase() ?? "";
-    if (!cityName) {
+    const cityMatcher = buildSelectedCityVideoMatcher(cityLabel);
+    if (!cityLabel.trim()) {
       return [] as VideoItem[];
     }
 
-    const citySourcePattern = LOCAL_VIDEO_SOURCE_HINTS[cityName];
-    const cityQueryPattern = new RegExp(
-      `\\b(${cityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b`,
-      "i"
+    const trendingLocalCandidatePool = dedupeVideosBySourceTitleAndUrl([...videos, ...weatherVideos]).filter(
+      (video) => cityMatcher(video)
     );
-    const charlotteLocalPattern =
-      cityName === "charlotte"
-        ? /\b(charlotte|mecklenburg|queen city|wcnc|wbtv|wsoc|queen city news|spectrum news|wfae)\b/i
-        : null;
-    const fallbackCityPattern = new RegExp(
-      `\\b(${cityName.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      )})\\s+(video|news|latest|weather|sports|traffic|breaking)\\b`,
-      "i"
-    );
-    const combinedVideoPool = dedupeVideosBySourceTitleAndUrl([...localVideos, ...videos]);
-    const strictMatches = dedupeVideosBySourceTitleAndUrl(
-      combinedVideoPool.filter((video) => {
-        const haystack =
-          `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+    console.log("TRENDING LOCAL VIDEO COUNT", {
+      city: cityLabel,
+      count: trendingLocalCandidatePool.length,
+    });
 
-        if (
-          citySourcePattern?.test(haystack) ||
-          cityQueryPattern.test(haystack) ||
-          charlotteLocalPattern?.test(haystack)
-        ) {
-          return true;
-        }
-
-        return new RegExp(
-          `\\b(${cityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\s+(local news video|breaking news video|weather video|sports video)\\b`,
-          "i"
-        ).test(haystack);
-      })
-    );
-    const relaxedMatches = dedupeVideosBySourceTitleAndUrl(
-      combinedVideoPool.filter((video) => {
-        const haystack =
-          `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
-
-        if (!cityQueryPattern.test(haystack)) {
-          return Boolean(charlotteLocalPattern?.test(haystack));
-        }
-
-        return fallbackCityPattern.test(haystack) || /\b(local|station|community|forecast)\b/i.test(haystack);
-      })
-    );
-    const localMatches = (strictMatches.length > 0 ? strictMatches : relaxedMatches).sort((left, right) => {
+    const combinedVideoPool = dedupeVideosBySourceTitleAndUrl([
+      ...localVideos,
+      ...videos,
+      ...weatherVideos,
+    ]);
+    const localMatches = combinedVideoPool.filter((video) => cityMatcher(video)).sort((left, right) => {
       const scoreVideo = (video: VideoItem) => {
         const haystack =
           `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
         let score = 0;
 
-        if (citySourcePattern?.test(haystack)) {
+        if (LOCAL_VIDEO_SOURCE_HINTS[cityLabel.split(",")[0]?.trim().toLowerCase() ?? ""]?.test(haystack)) {
           score += 220;
         }
 
-        if (cityQueryPattern.test(haystack)) {
+        if (cityMatcher(video)) {
           score += 140;
         }
 
-        if (/\b(local news|breaking news|weather|forecast|storm|traffic|sports)\b/i.test(haystack)) {
+        if (/\b(local news|breaking news|weather|forecast|storm|traffic|sports|community|latest)\b/i.test(haystack)) {
           score += 60;
         }
 
@@ -6918,10 +6914,13 @@ export default function Home() {
       return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
     });
 
-    console.log("LOCAL VIDEO FILTERED COUNT", {
+    console.log("LOCAL VIDEO QUERY", {
       city: cityLabel,
-      strictCount: strictMatches.length,
-      relaxedCount: relaxedMatches.length,
+      supplementalCount: localVideos.length,
+    });
+    console.log("LOCAL VIDEO RAW COUNT", {
+      city: cityLabel,
+      count: combinedVideoPool.length,
     });
 
     const finalLocalVideos = selectSourceBalancedVideos(localMatches, 6, 2);
@@ -6938,7 +6937,7 @@ export default function Home() {
         category: video.category,
       }))
     );
-    if (cityName === "charlotte") {
+    if (cityLabel.toLowerCase().startsWith("charlotte")) {
       console.log("CHARLOTTE LOCAL VIDEO FINAL COUNT", finalLocalVideos.length);
       console.log(
         "CHARLOTTE LOCAL VIDEO SAMPLE",
