@@ -206,6 +206,10 @@ const WEATHER_SOURCE_INFERENCE_RULES: Array<{ pattern: RegExp; label: string }> 
   { pattern: /\bwcnc weather\b/i, label: "WCNC Weather" },
   { pattern: /\bwsb-tv weather\b/i, label: "WSB-TV Weather" },
 ];
+const LOCAL_VIDEO_SOURCE_HINTS: Record<string, RegExp> = {
+  charlotte:
+    /\b(wcnc|wcnc charlotte|wbtv|wbtv charlotte|wsoc|wsoc charlotte|queen city news|spectrum news charlotte)\b/i,
+};
 const FEED_META_ICON_PROPS = {
   viewBox: "0 0 24 24",
   width: 14,
@@ -6648,12 +6652,62 @@ export default function Home() {
       return [] as VideoItem[];
     }
 
-    const localMatches = videos.filter((video) => {
-      const haystack = `${video.title} ${video.creator} ${video.category}`.toLowerCase();
-      return haystack.includes(cityName);
+    const citySourcePattern = LOCAL_VIDEO_SOURCE_HINTS[cityName];
+    const cityQueryPattern = new RegExp(
+      `\\b(${cityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b`,
+      "i"
+    );
+    const localMatches = dedupeVideosBySourceTitleAndUrl(
+      videos.filter((video) => {
+        const haystack =
+          `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+
+        if (
+          citySourcePattern?.test(haystack) ||
+          cityQueryPattern.test(haystack)
+        ) {
+          return true;
+        }
+
+        return new RegExp(
+          `\\b(${cityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\s+(local news video|breaking news video|weather video|sports video)\\b`,
+          "i"
+        ).test(haystack);
+      })
+    ).sort((left, right) => {
+      const scoreVideo = (video: VideoItem) => {
+        const haystack =
+          `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+        let score = 0;
+
+        if (citySourcePattern?.test(haystack)) {
+          score += 220;
+        }
+
+        if (cityQueryPattern.test(haystack)) {
+          score += 140;
+        }
+
+        if (/\b(local news|breaking news|weather|forecast|storm|traffic|sports)\b/i.test(haystack)) {
+          score += 60;
+        }
+
+        if (video.orientation === "vertical") {
+          score += 12;
+        }
+
+        return score;
+      };
+
+      const scoreDelta = scoreVideo(right) - scoreVideo(left);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+
+      return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
     });
 
-    return selectSourceBalancedVideos(localMatches, 6);
+    return selectSourceBalancedVideos(localMatches, 6, 2);
   }, [selectedLocalCity, sortMode, videos]);
 
   const myNewsImageCount = useMemo(() => {
@@ -10514,6 +10568,42 @@ export default function Home() {
           )}
         </section>
 
+        {localVideoItems.length > 0 ? (
+          <section className="home-section-block home-section-plain quick-watch-row">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Local Videos</strong>
+              </div>
+            </div>
+            <div className="quick-watch-scroll" role="list" aria-label="Local videos">
+              {localVideoItems.map((video) => (
+                <div key={`local-video-${video.id}`} className="quick-watch-item" role="listitem">
+                  <VideoFeedCard
+                    video={video}
+                    isAutoplaying={
+                      autoplayTrendingVideoKeys.includes(`local-videos:${video.id}`) && !video.fallback
+                    }
+                    onToggleLike={handleToggleVideoLike}
+                    onToggleSave={handleToggleVideoSave}
+                    onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                    onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                    frameRef={(node) => {
+                      trendingVideoFrameRefs.current[`local-videos:${video.id}`] = node;
+                    }}
+                    autoplayKey={`local-videos:${video.id}`}
+                    previewDurationMs={null}
+                    label="Local Videos"
+                    hideActions
+                    useRelativeTime
+                    className="video-card-inline quick-watch-video-card"
+                    variant="article"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {localSectionArticles.localSports.length > 0 ? (
           <section className="home-section-block home-section-plain">
             <div className="home-section-header">
@@ -10588,42 +10678,6 @@ export default function Home() {
                     className: "sports-league-compact-card",
                     imageFallbackLabel: "Food",
                   })}
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {localVideoItems.length > 0 ? (
-          <section className="home-section-block home-section-plain quick-watch-row">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Local Videos</strong>
-              </div>
-            </div>
-            <div className="quick-watch-scroll" role="list" aria-label="Local videos">
-              {localVideoItems.map((video) => (
-                <div key={`local-video-${video.id}`} className="quick-watch-item" role="listitem">
-                  <VideoFeedCard
-                    video={video}
-                    isAutoplaying={
-                      autoplayTrendingVideoKeys.includes(`local-videos:${video.id}`) && !video.fallback
-                    }
-                    onToggleLike={handleToggleVideoLike}
-                    onToggleSave={handleToggleVideoSave}
-                    onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                    onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
-                    frameRef={(node) => {
-                      trendingVideoFrameRefs.current[`local-videos:${video.id}`] = node;
-                    }}
-                    autoplayKey={`local-videos:${video.id}`}
-                    previewDurationMs={null}
-                    label="Local Videos"
-                    hideActions
-                    useRelativeTime
-                    className="video-card-inline quick-watch-video-card"
-                    variant="article"
-                  />
                 </div>
               ))}
             </div>
