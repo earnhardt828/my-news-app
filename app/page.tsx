@@ -524,6 +524,8 @@ type SportsScoreGame = {
   playByPlayAvailable?: boolean;
 };
 
+const APP_TIME_ZONE = "America/New_York";
+
 function formatTopRankLabel(rank: number) {
   if (rank === 1) return "Top 1 🥇";
   if (rank === 2) return "Top 2 🥈";
@@ -1855,6 +1857,71 @@ function getPublishedAtTimestamp(publishedAt: string | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
+function formatSportsGameTimeLabel(scheduledAt: string | null | undefined) {
+  if (!scheduledAt) {
+    return "Upcoming game";
+  }
+
+  const scheduledDate = new Date(scheduledAt);
+
+  if (Number.isNaN(scheduledDate.getTime())) {
+    return "Upcoming game";
+  }
+
+  const timeLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(scheduledDate);
+
+  const scheduledDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(scheduledDate);
+  const now = new Date();
+  const todayDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const tomorrowDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+
+  if (scheduledDay === todayDay) {
+    return `Today ${timeLabel} ET`;
+  }
+
+  if (scheduledDay === tomorrowDay) {
+    return `Tomorrow ${timeLabel} ET`;
+  }
+
+  const weekdayLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    weekday: "short",
+  }).format(scheduledDate);
+
+  return `${weekdayLabel} ${timeLabel} ET`;
+}
+
+function getSportsScoreMetaLabel(game: SportsScoreGame) {
+  if (game.status === "Live") {
+    return game.shortDetail ?? game.statusDetail ?? "Live update";
+  }
+
+  if (game.status === "Final") {
+    return game.shortDetail ?? game.statusDetail ?? "Final";
+  }
+
+  return formatSportsGameTimeLabel(game.scheduledAt);
+}
+
 function isSportsBettingAd(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.source}`.toLowerCase();
   const hasLegitimateReportingContext =
@@ -2218,6 +2285,7 @@ export default function Home() {
   const [isSportsScoresLoading, setIsSportsScoresLoading] = useState(false);
   const [areSportsScoresAvailable, setAreSportsScoresAvailable] = useState(true);
   const [selectedSportsGame, setSelectedSportsGame] = useState<SportsScoreGame | null>(null);
+  const [expandedScoresLeague, setExpandedScoresLeague] = useState<SportsScoreLeague | null>(null);
   const [autoplayTrendingVideoKeys, setAutoplayTrendingVideoKeys] = useState<string[]>([]);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
@@ -8434,6 +8502,72 @@ export default function Home() {
     </span>
   );
 
+  const renderSportsScoreCard = (
+    game: SportsScoreGame,
+    options?: {
+      role?: string;
+      className?: string;
+      layout?: "row" | "list";
+    }
+  ) => {
+    const isInteractive = Boolean(game.boxScoreAvailable || game.playByPlayAvailable);
+    const cardClassName = [
+      "sports-score-card",
+      options?.layout === "list" ? "sports-score-card-list" : "",
+      isInteractive ? "sports-score-card-button" : "sports-score-card-static",
+      options?.className ?? "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const cardContent = (
+      <>
+        <div className="sports-score-card-top">
+          <span className="sports-score-league">{game.league}</span>
+          <span className={`sports-score-status sports-score-status-${game.status.toLowerCase()}`}>
+            {game.status}
+          </span>
+        </div>
+        <div className="sports-score-team-row">
+          <div className="sports-score-team-copy">
+            {renderScoreTeamMark(game.awayTeam)}
+            <span className="sports-score-team-name">{game.awayTeam.name}</span>
+          </div>
+          <strong className="sports-score-points">{game.awayTeam.score ?? "—"}</strong>
+        </div>
+        <div className="sports-score-team-row">
+          <div className="sports-score-team-copy">
+            {renderScoreTeamMark(game.homeTeam)}
+            <span className="sports-score-team-name">{game.homeTeam.name}</span>
+          </div>
+          <strong className="sports-score-points">{game.homeTeam.score ?? "—"}</strong>
+        </div>
+        <div className="sports-score-meta">
+          <span>{getSportsScoreMetaLabel(game)}</span>
+        </div>
+      </>
+    );
+
+    if (!isInteractive) {
+      return (
+        <article key={game.id} className={cardClassName} role={options?.role ?? "listitem"}>
+          {cardContent}
+        </article>
+      );
+    }
+
+    return (
+      <button
+        key={game.id}
+        type="button"
+        className={cardClassName}
+        role={options?.role ?? "listitem"}
+        onClick={() => setSelectedSportsGame(game)}
+      >
+        {cardContent}
+      </button>
+    );
+  };
+
   const renderSportsScoreRow = (
     games: SportsScoreGame[],
     leagueLabel: string,
@@ -8450,39 +8584,61 @@ export default function Home() {
 
     return (
       <div className="sports-scores-scroll" role="list" aria-label={`${leagueLabel} scores`}>
-        {games.map((game) => (
+        {games.map((game) => renderSportsScoreCard(game))}
+      </div>
+    );
+  };
+
+  const renderExpandedScoresPage = () => {
+    if (!expandedScoresLeague) {
+      return null;
+    }
+
+    const leagueGames = sportsScoresByLeague[expandedScoresLeague] ?? [];
+    const groupedGames = leagueGames.reduce<Record<string, SportsScoreGame[]>>((accumulator, game) => {
+      const dateKey = game.scheduledAt
+        ? new Intl.DateTimeFormat("en-US", {
+            timeZone: APP_TIME_ZONE,
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+          }).format(new Date(game.scheduledAt))
+        : "Schedule";
+      accumulator[dateKey] = [...(accumulator[dateKey] ?? []), game];
+      return accumulator;
+    }, {});
+
+    return (
+      <div className="favorite-teams-page-shell" role="dialog" aria-modal="true" aria-labelledby="scores-page-title">
+        <div className="favorite-teams-page-header">
           <button
-            key={game.id}
             type="button"
-            className="sports-score-card sports-score-card-button"
-            role="listitem"
-            onClick={() => setSelectedSportsGame(game)}
+            className="icon-button favorite-teams-close"
+            onClick={() => setExpandedScoresLeague(null)}
+            aria-label="Close scores page"
           >
-            <div className="sports-score-card-top">
-              <span className="sports-score-league">{game.league}</span>
-              <span className={`sports-score-status sports-score-status-${game.status.toLowerCase()}`}>
-                {game.status}
-              </span>
-            </div>
-            <div className="sports-score-team-row">
-              <div className="sports-score-team-copy">
-                {renderScoreTeamMark(game.awayTeam)}
-                <span className="sports-score-team-name">{game.awayTeam.name}</span>
-              </div>
-              <strong className="sports-score-points">{game.awayTeam.score ?? "—"}</strong>
-            </div>
-            <div className="sports-score-team-row">
-              <div className="sports-score-team-copy">
-                {renderScoreTeamMark(game.homeTeam)}
-                <span className="sports-score-team-name">{game.homeTeam.name}</span>
-              </div>
-              <strong className="sports-score-points">{game.homeTeam.score ?? "—"}</strong>
-            </div>
-            <div className="sports-score-meta">
-              <span>{game.shortDetail ?? "Upcoming game"}</span>
-            </div>
+            ×
           </button>
-        ))}
+          <strong id="scores-page-title" className="bottom-sheet-title favorite-teams-title">
+            {expandedScoresLeague} Scores
+          </strong>
+          <span aria-hidden="true" className="favorite-teams-header-spacer" />
+        </div>
+
+        <div className="favorite-teams-page-content sports-scores-page-content">
+          {Object.entries(groupedGames).map(([dateLabel, dateGames]) => (
+            <section key={`${expandedScoresLeague}-${dateLabel}`} className="stack" style={{ gap: "12px" }}>
+              <strong className="profile-section-title-sm">{dateLabel}</strong>
+              <div className="sports-score-list" role="list" aria-label={`${dateLabel} ${expandedScoresLeague} games`}>
+                {dateGames.map((game) =>
+                  renderSportsScoreCard(game, {
+                    layout: "list",
+                  })
+                )}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     );
   };
@@ -8547,13 +8703,7 @@ export default function Home() {
             <span>{selectedSportsGame.statusDetail ?? selectedSportsGame.shortDetail ?? "Status unavailable"}</span>
             <span>
               {selectedSportsGame.scheduledAt
-                ? new Intl.DateTimeFormat("en-US", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  }).format(new Date(selectedSportsGame.scheduledAt))
+                ? formatSportsGameTimeLabel(selectedSportsGame.scheduledAt)
                 : "Scheduled time unavailable"}
             </span>
             {selectedSportsGame.venue ? <span>{selectedSportsGame.venue}</span> : null}
@@ -10038,7 +10188,7 @@ export default function Home() {
                         </p>
                         {game ? (
                           <span className="favorite-team-update-meta">
-                            {game.status} · {game.shortDetail ?? "Game update"}
+                            {game.status} · {getSportsScoreMetaLabel(game)}
                           </span>
                         ) : null}
                       </article>
@@ -10142,13 +10292,25 @@ export default function Home() {
                         {section.label}
                       </strong>
                     </div>
+                    {section.scoreLeague === "MLB" && section.scores.length > 10 ? (
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        onClick={() => setExpandedScoresLeague("MLB")}
+                      >
+                        More
+                      </button>
+                    ) : null}
                   </div>
 
                   {section.scoreLeague ? (
                     isSportsScoresLoading ? (
                       <div className="muted">Loading {section.label} scores...</div>
                     ) : (
-                      renderSportsScoreRow(section.scores.slice(0, 6), `${section.label} scores`)
+                      renderSportsScoreRow(
+                        section.scores.slice(0, section.scoreLeague === "MLB" ? 10 : 6),
+                        `${section.label} scores`
+                      )
                     )
                   ) : null}
 
@@ -10212,6 +10374,7 @@ export default function Home() {
           )}
         </section>
         {renderSportsGameDetailModal()}
+        {renderExpandedScoresPage()}
         {renderTeamPickerModal()}
       </section>
     );

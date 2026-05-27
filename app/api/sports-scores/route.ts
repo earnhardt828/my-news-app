@@ -53,28 +53,69 @@ type SportsScoreGame = {
   playByPlayAvailable?: boolean;
 };
 
+const APP_TIME_ZONE = "America/New_York";
+
 function isLeagueKey(value: string): value is ScoreLeagueKey {
   return value in SPORTS_SCORE_LEAGUES;
 }
 
-function formatGameShortDetail(date: string | null, time: string | null) {
-  const combined = `${date ?? ""} ${time ?? ""}`.trim();
-
-  if (!combined) {
+function parseSportsDbDateTime(date: string | null, time: string | null) {
+  if (!date) {
     return null;
   }
 
-  const timestamp = new Date(combined).getTime();
+  const normalizedTime = (time ?? "00:00:00").trim() || "00:00:00";
+  const isoValue = `${date}T${normalizedTime.endsWith("Z") ? normalizedTime.slice(0, -1) : normalizedTime}Z`;
+  const parsedDate = new Date(isoValue);
 
-  if (Number.isNaN(timestamp)) {
-    return time ?? date ?? null;
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null;
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
+  return parsedDate;
+}
+
+function getEasternDayKey(value: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
+function formatGameShortDetail(date: string | null, time: string | null) {
+  const parsedDate = parseSportsDbDateTime(date, time);
+
+  if (!parsedDate) {
+    return null;
+  }
+
+  const now = new Date();
+  const todayKey = getEasternDayKey(now);
+  const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowKey = getEasternDayKey(tomorrowDate);
+  const scheduledKey = getEasternDayKey(parsedDate);
+  const timeLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(timestamp));
+  }).format(parsedDate);
+
+  if (scheduledKey === todayKey) {
+    return `Today ${timeLabel} ET`;
+  }
+
+  if (scheduledKey === tomorrowKey) {
+    return `Tomorrow ${timeLabel} ET`;
+  }
+
+  const weekdayLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    weekday: "short",
+  }).format(parsedDate);
+
+  return `${weekdayLabel} ${timeLabel} ET`;
 }
 
 function normalizeTheSportsDbStatus(
@@ -137,12 +178,13 @@ async function fetchTheSportsDbLeagueScores(league: ScoreLeagueKey): Promise<Spo
     pastCount: pastPayload.events?.length ?? 0,
   });
 
-  const combined = [...(pastPayload.events ?? []).slice(0, 5), ...(nextPayload.events ?? []).slice(0, 5)];
+  const combined = [...(pastPayload.events ?? []), ...(nextPayload.events ?? [])];
 
   const normalizedGames = combined
     .map((event) => {
       const homeScore = event.intHomeScore ?? null;
       const awayScore = event.intAwayScore ?? null;
+      const parsedDate = parseSportsDbDateTime(event.dateEvent ?? null, event.strTime ?? null);
 
       return {
         id: event.idEvent ?? `${league}-${event.strHomeTeam}-${event.strAwayTeam}-${event.dateEvent}`,
@@ -160,16 +202,40 @@ async function fetchTheSportsDbLeagueScores(league: ScoreLeagueKey): Promise<Spo
         },
         shortDetail:
           event.strProgress ?? formatGameShortDetail(event.dateEvent ?? null, event.strTime ?? null),
-        scheduledAt: event.dateEvent
-          ? new Date(`${event.dateEvent} ${event.strTime ?? "00:00:00"}`).toISOString()
-          : null,
+        scheduledAt: parsedDate ? parsedDate.toISOString() : null,
         statusDetail: event.strStatus ?? event.strProgress ?? null,
         venue: event.strVenue ?? null,
         boxScoreAvailable: false,
         playByPlayAvailable: false,
       } satisfies SportsScoreGame;
     })
-    .filter((game) => game.homeTeam.name && game.awayTeam.name);
+    .filter((game) => game.homeTeam.name && game.awayTeam.name)
+    .sort((leftGame, rightGame) => {
+      const getStatusRank = (game: SportsScoreGame) =>
+        game.status === "Live" ? 4 : game.status === "Today" ? 3 : game.status === "Upcoming" ? 2 : 1;
+
+      const statusDelta = getStatusRank(rightGame) - getStatusRank(leftGame);
+
+      if (statusDelta !== 0) {
+        return statusDelta;
+      }
+
+      const leftTime = leftGame.scheduledAt ? new Date(leftGame.scheduledAt).getTime() : 0;
+      const rightTime = rightGame.scheduledAt ? new Date(rightGame.scheduledAt).getTime() : 0;
+      const now = Date.now();
+      const leftToday = leftGame.scheduledAt
+        ? getEasternDayKey(new Date(leftGame.scheduledAt)) === getEasternDayKey(new Date(now))
+        : false;
+      const rightToday = rightGame.scheduledAt
+        ? getEasternDayKey(new Date(rightGame.scheduledAt)) === getEasternDayKey(new Date(now))
+        : false;
+
+      if (leftToday !== rightToday) {
+        return Number(rightToday) - Number(leftToday);
+      }
+
+      return Math.abs(leftTime - now) - Math.abs(rightTime - now);
+    });
 
   console.log("SCORES FINAL COUNT", league, normalizedGames.length);
   return normalizedGames;

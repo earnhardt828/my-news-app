@@ -5087,6 +5087,17 @@ input {
   cursor: pointer;
 }
 
+.sports-score-card-static {
+  width: min(82vw, 312px);
+}
+
+.sports-score-card-list,
+.sports-score-card-list.sports-score-card-button,
+.sports-score-card-list.sports-score-card-static {
+  width: 100%;
+  flex: none;
+}
+
 .sports-score-card-top {
   display: flex;
   align-items: center;
@@ -5244,6 +5255,16 @@ input {
   font-size: 0.8rem;
   color: var(--text-soft);
   font-weight: 700;
+}
+
+.sports-score-list {
+  display: grid;
+  gap: 12px;
+}
+
+.sports-scores-page-content {
+  display: grid;
+  gap: 20px;
 }
 
 .profile-stat-block {
