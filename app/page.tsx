@@ -130,6 +130,8 @@ const BREAKING_NEWS_REQUIRED_PATTERN =
   /\b(breaking|live updates?|developing|urgent|major|confirmed|emergency|killed|attack|court ruling|election|disaster|war|severe weather|government|economy)\b/i;
 const BREAKING_NEWS_SOFT_STORY_PATTERN =
   /\b(ice cream|food|recipe|restaurant|travel|vacation|celebrity|hollywood|fashion|music awards|movie premiere|gossip|lifestyle|wellness|shopping)\b/i;
+const BREAKING_NEWS_SPORTS_PATTERN =
+  /\b(sports?|nfl|nba|mlb|nhl|mls|espn|cbs sports|sports illustrated|bleacher report|football|basketball|baseball|hockey|soccer)\b/i;
 const FEATURED_SOURCE_NAMES = [
   "CNN",
   "Reuters",
@@ -1305,6 +1307,11 @@ function getBreakingNewsSourcePriority(article: Article) {
 
 function getBreakingNewsRelevanceScore(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${article.category} ${article.source}`;
+
+  if (BREAKING_NEWS_SPORTS_PATTERN.test(haystack)) {
+    return -500;
+  }
+
   let score = getBreakingNewsSourcePriority(article) * 100;
 
   if (BREAKING_NEWS_REQUIRED_PATTERN.test(haystack)) {
@@ -5958,6 +5965,42 @@ export default function Home() {
     return dedupeVideosBySourceTitleAndUrl([...prioritizedSportsVideos, ...fallbackPool]).slice(0, 5);
   }, [myNewsQuickWatchVideos, myNewsVideoPool, sortMode, sportsVideos, videos]);
 
+  const trendingTallQuickWatchSections = useMemo(() => {
+    if (sortMode !== "trending") {
+      return {
+        featuredSources: [] as VideoItem[],
+        addCategories: [] as VideoItem[],
+      };
+    }
+
+    const excludedIds = new Set([
+      ...myNewsQuickWatchVideos.map((video) => video.id),
+      ...trendingBreakingFeaturedVideos.map((video) => video.id),
+    ]);
+
+    const tallPool = selectSourceBalancedVideos(
+      dedupeVideosBySourceTitleAndUrl(
+        myNewsVideoPool.filter((video) => !excludedIds.has(video.id))
+      ).sort((left, right) => {
+        const leftVertical = left.orientation === "vertical" ? 1 : 0;
+        const rightVertical = right.orientation === "vertical" ? 1 : 0;
+
+        if (rightVertical !== leftVertical) {
+          return rightVertical - leftVertical;
+        }
+
+        return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+      }),
+      10,
+      1
+    );
+
+    return {
+      featuredSources: tallPool.slice(0, 5),
+      addCategories: tallPool.slice(5, 10),
+    };
+  }, [myNewsQuickWatchVideos, myNewsVideoPool, sortMode, trendingBreakingFeaturedVideos]);
+
   const topTenTrendingArticles = useMemo(
     () => balancedTrendingArticles.slice(0, 10),
     [balancedTrendingArticles]
@@ -7477,6 +7520,66 @@ export default function Home() {
     );
   };
 
+  const renderTallTrendingQuickWatchRow = (
+    title: string,
+    videosForRow: VideoItem[],
+    keyPrefix: string,
+    playerTab: "news" | "sports" = "news"
+  ) => {
+    if (videosForRow.length === 0) {
+      return (
+        <section className="home-section-block home-section-plain quick-watch-row">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">{title}</strong>
+            </div>
+          </div>
+          <div className="empty-state compact-empty-state">
+            <strong>Videos loading…</strong>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">{title}</strong>
+          </div>
+        </div>
+        <div className="quick-watch-scroll" role="list" aria-label={title}>
+          {videosForRow.map((video) => (
+            <div key={`${keyPrefix}-${video.id}`} className="quick-watch-item" role="listitem">
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`${keyPrefix}:${video.id}`) &&
+                  !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, playerTab)}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[`${keyPrefix}:${video.id}`] = node;
+                }}
+                autoplayKey={`${keyPrefix}:${video.id}`}
+                previewDurationMs={null}
+                label={title}
+                hideActions
+                useRelativeTime
+                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
+                useUniformTallFrame
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   const renderFeaturedVideosBreak = () => {
     if (myNewsFeaturedVideos.length === 0) {
       return (
@@ -8473,7 +8576,7 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        {renderQuickWatchRow(false, true)}
+        {renderQuickWatchRow()}
 
         {renderBreakingNewsRow()}
 
@@ -8822,6 +8925,12 @@ export default function Home() {
           )}
         </section>
 
+        {renderTallTrendingQuickWatchRow(
+          "Quick Watch",
+          trendingTallQuickWatchSections.featuredSources,
+          "featured-sources-quickwatch"
+        )}
+
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
@@ -8909,6 +9018,12 @@ export default function Home() {
             })}
           </div>
         </section>
+
+        {renderTallTrendingQuickWatchRow(
+          "Quick Watch",
+          trendingTallQuickWatchSections.addCategories,
+          "add-categories-quickwatch"
+        )}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
