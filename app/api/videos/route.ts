@@ -229,6 +229,8 @@ const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCNye-wNBqNL5ZzHSJj3l8Bg", name: "Al Jazeera English" },
   { channelId: "UCGTUbwceCMibvpbd2NaIP7A", name: "The Weather Channel" },
   { channelId: "UCJRTDulllTmEvB3dJFxXP3Q", name: "Fox Weather" },
+  { channelId: "UC-RxXi2Xws6Uk22vp-sLbGA", name: "WCNC Charlotte" },
+  { channelId: "UC6YN4FNhAKN3MDO5DbJSnOA", name: "Queen City News" },
 ];
 
 const FALLBACK_VIDEOS: VideoFeedItem[] = [

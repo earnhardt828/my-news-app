@@ -216,14 +216,23 @@ const LOCAL_VIDEO_SOURCE_HINTS: Record<string, RegExp> = {
 };
 const LOCAL_VIDEO_QUERY_HINTS: Record<string, string[]> = {
   charlotte: [
-    "WCNC Charlotte video",
-    "WBTV Charlotte video",
-    "WSOC Charlotte video",
-    "Queen City News video",
-    "Spectrum News Charlotte video",
-    "Charlotte local news video",
-    "Charlotte weather video",
-    "Charlotte sports video",
+    "WCNC Charlotte",
+    "WBTV Charlotte",
+    "WSOC Charlotte",
+    "Queen City News",
+    "Spectrum News Charlotte",
+    "WFAE Charlotte",
+    "Charlotte local news",
+    "Charlotte breaking news",
+    "Charlotte weather",
+    "Charlotte sports",
+  ],
+};
+const LOCAL_VIDEO_BROAD_FALLBACK_QUERY_HINTS: Record<string, string[]> = {
+  charlotte: [
+    "Charlotte news YouTube",
+    "Charlotte local video",
+    "Charlotte NC news",
   ],
 };
 const FEED_META_ICON_PROPS = {
@@ -3098,40 +3107,61 @@ export default function Home() {
         return;
       }
 
-      const queryHints = LOCAL_VIDEO_QUERY_HINTS[cityName.toLowerCase()] ?? [
-        `${cityName} local news video`,
-        `${cityName} weather video`,
-        `${cityName} sports video`,
-        `${cityName} breaking news video`,
+      const cityKey = cityName.toLowerCase();
+      const queryHints = LOCAL_VIDEO_QUERY_HINTS[cityKey] ?? [
+        `${cityName} local news`,
+        `${cityName} breaking news`,
+        `${cityName} weather`,
+        `${cityName} sports`,
+      ];
+      const relaxedQueryHints = LOCAL_VIDEO_BROAD_FALLBACK_QUERY_HINTS[cityKey] ?? [
+        `${cityName} news YouTube`,
+        `${cityName} local video`,
+        `${cityName} news`,
       ];
 
       try {
-        const responses = await Promise.all(
-          queryHints.map((query) =>
-            apiFetch(`/api/videos?tab=news&q=${encodeURIComponent(query)}`)
-          )
-        );
+        console.log("LOCAL VIDEO CITY", cityLabel);
 
-        const payloads = await Promise.all(
-          responses.map(async (response) => {
-            if (!response.ok) {
-              const responseText = await response.text();
-              throw new Error(
-                `Local videos request failed (${response.status}): ${responseText}`
-              );
-            }
+        const loadQueryBatch = async (queries: string[]) =>
+          Promise.all(
+            queries.map(async (query) => {
+              const response = await apiFetch(`/api/videos?tab=news&q=${encodeURIComponent(query)}`);
 
-            return response.json() as Promise<{
-              videos?: VideoApiItem[];
-              fallback?: boolean;
-              message?: string;
-            }>;
-          })
-        );
+              if (!response.ok) {
+                const responseText = await response.text();
+                throw new Error(
+                  `Local videos request failed (${response.status}): ${responseText}`
+                );
+              }
 
-        const mergedVideos = dedupeVideosBySourceTitleAndUrl(
+              return response.json() as Promise<{
+                videos?: VideoApiItem[];
+                fallback?: boolean;
+                message?: string;
+              }>;
+            })
+          );
+
+        const payloads = await loadQueryBatch(queryHints);
+        let mergedVideos = dedupeVideosBySourceTitleAndUrl(
           payloads.flatMap((payload) => normalizeVideoFeedItems(payload.videos))
-        ).sort((left, right) => {
+        );
+
+        console.log("LOCAL VIDEO RAW COUNT", {
+          city: cityLabel,
+          queries: queryHints,
+          count: mergedVideos.length,
+        });
+
+        if (mergedVideos.length === 0) {
+          const relaxedPayloads = await loadQueryBatch(relaxedQueryHints);
+          mergedVideos = dedupeVideosBySourceTitleAndUrl(
+            relaxedPayloads.flatMap((payload) => normalizeVideoFeedItems(payload.videos))
+          );
+        }
+
+        mergedVideos = mergedVideos.sort((left, right) => {
           const leftHint = `${left.title} ${left.watchUrl} ${left.thumbnailUrl ?? ""}`.toLowerCase();
           const rightHint = `${right.title} ${right.watchUrl} ${right.thumbnailUrl ?? ""}`.toLowerCase();
           const leftVerticalScore =
@@ -6743,6 +6773,10 @@ export default function Home() {
       `\\b(${cityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b`,
       "i"
     );
+    const charlotteLocalPattern =
+      cityName === "charlotte"
+        ? /\b(charlotte|mecklenburg|queen city|wcnc|wbtv|wsoc|queen city news|spectrum news|wfae)\b/i
+        : null;
     const fallbackCityPattern = new RegExp(
       `\\b(${cityName.replace(
         /[.*+?^${}()|[\]\\]/g,
@@ -6758,7 +6792,8 @@ export default function Home() {
 
         if (
           citySourcePattern?.test(haystack) ||
-          cityQueryPattern.test(haystack)
+          cityQueryPattern.test(haystack) ||
+          charlotteLocalPattern?.test(haystack)
         ) {
           return true;
         }
@@ -6775,7 +6810,7 @@ export default function Home() {
           `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
 
         if (!cityQueryPattern.test(haystack)) {
-          return false;
+          return Boolean(charlotteLocalPattern?.test(haystack));
         }
 
         return fallbackCityPattern.test(haystack) || /\b(local|station|community|forecast)\b/i.test(haystack);
@@ -6814,7 +6849,28 @@ export default function Home() {
       return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
     });
 
-    return selectSourceBalancedVideos(localMatches, 6, 2);
+    console.log("LOCAL VIDEO FILTERED COUNT", {
+      city: cityLabel,
+      strictCount: strictMatches.length,
+      relaxedCount: relaxedMatches.length,
+    });
+
+    const finalLocalVideos = selectSourceBalancedVideos(localMatches, 6, 2);
+
+    console.log("LOCAL VIDEO FINAL COUNT", {
+      city: cityLabel,
+      count: finalLocalVideos.length,
+    });
+    console.log(
+      "LOCAL VIDEO SAMPLE",
+      finalLocalVideos.slice(0, 3).map((video) => ({
+        title: video.title,
+        creator: video.creator,
+        category: video.category,
+      }))
+    );
+
+    return finalLocalVideos;
   }, [localVideos, selectedLocalCity, sortMode, videos]);
 
   const myNewsImageCount = useMemo(() => {

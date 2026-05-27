@@ -280,7 +280,14 @@ export function getSourceHeaderLogoUrl(sourceName: string) {
 }
 
 export function getSourceHeaderDarkLogoUrl(sourceName: string) {
-  return findMappedLogoUrl(sourceHeaderDarkLogoMap, sourceName);
+  const mappedLogo = findMappedLogoUrl(sourceHeaderDarkLogoMap, sourceName);
+
+  if (mappedLogo) {
+    return mappedLogo;
+  }
+
+  const normalized = normalizeSourceLogoName(sourceName);
+  return normalized ? `/news-logo-head-dark/${normalized}.png` : null;
 }
 
 export function hasMappedSourceLogo(sourceName: string) {
