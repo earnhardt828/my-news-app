@@ -401,7 +401,9 @@ const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
     "NASCAR Cup Series highlights",
     "NASCAR crash highlights",
     "NASCAR race recap",
-    "motorsport highlights",
+    "NASCAR playoff highlights",
+    "Daytona highlights",
+    "Talladega highlights",
   ],
   MLB: [
     "MLB highlights",
@@ -552,7 +554,7 @@ const SELECTED_CATEGORY_MATCHERS: Record<string, RegExp> = {
   "College Football": /\b(college football|ncaa football|sec football|big ten football|acc football)\b/i,
   "College Basketball": /\b(college basketball|ncaa basketball|march madness|final four)\b/i,
   Golf: /\b(golf|pga|masters|open championship|ryder cup)\b/i,
-  NASCAR: /\b(nascar|daytona|indycar|stock car|cup series)\b/i,
+  NASCAR: /\b(nascar|cup series|xfinity series|truck series|daytona|talladega|charlotte motor speedway|martinsville|bristol|darlington|pocono)\b/i,
   Health: /\b(health|medical|hospital|disease|wellness|vaccine|cdc|nih)\b/i,
   Science: /\b(science|research|space|nasa|study|physics|biology|astronomy)\b/i,
   Entertainment: /\b(entertainment|movie|movies|tv|television|streaming|hollywood|showbiz)\b/i,
@@ -713,12 +715,77 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
     suggestedSources: ["MLSsoccer.com", "ESPN Soccer", "CBS Sports Golazo", "The Athletic Soccer", "FC Cincinnati"],
   },
   NASCAR: {
-    coreTerms: ["nascar", "cup series", "xfinity series", "truck series", "daytona", "talladega", "charlotte motor speedway", "stock car"],
-    contextTerms: ["nascar", "cup series", "xfinity series", "truck series", "race recap", "highlights", "stock car", "motorsport"],
-    relatedTerms: ["daytona", "talladega", "charlotte motor speedway", "crash highlights", "pit road", "checkered flag", "motorsport"],
-    sourceTerms: ["nascar.com", "motorsport.com", "fox sports nascar", "nbc sports nascar"],
+    coreTerms: [
+      "nascar",
+      "cup series",
+      "xfinity series",
+      "truck series",
+      "daytona",
+      "talladega",
+      "charlotte motor speedway",
+      "martinsville",
+      "bristol",
+      "darlington",
+      "pocono",
+    ],
+    contextTerms: [
+      "nascar",
+      "cup series",
+      "xfinity series",
+      "truck series",
+      "race recap",
+      "qualifying",
+      "playoff race",
+      "highlights",
+      "stock car",
+    ],
+    relatedTerms: [
+      "hendrick motorsports",
+      "joe gibbs racing",
+      "team penske",
+      "trackhouse racing",
+      "stewart-haas",
+      "checkered flag",
+      "pit road",
+      "william byron",
+      "kyle larson",
+      "denny hamlin",
+      "ryan blaney",
+      "chase elliott",
+      "joey logano",
+      "christopher bell",
+      "ross chastain",
+      "tyler reddick",
+    ],
+    sourceTerms: ["nascar.com", "nascar on fox", "fox sports nascar", "nbc sports nascar"],
     domainTerms: ["nascar.com", "motorsport.com"],
-    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under", "audi", "bmw", "mercedes", "tesla", "road test", "car review", "first drive", "suv", "sedan", "pickup truck"],
+    negativeTerms: [
+      "odds",
+      "betting",
+      "sportsbook",
+      "parlay",
+      "spread pick",
+      "over/under",
+      "audi",
+      "bmw",
+      "mercedes",
+      "tesla",
+      "ev",
+      "electric vehicle",
+      "road test",
+      "car review",
+      "first drive",
+      "suv",
+      "sedan",
+      "pickup truck",
+      "formula 1",
+      "f1",
+      "indycar",
+      "motogp",
+      "celebrity",
+      "politics",
+      "world news",
+    ],
     suggestedSources: ["NASCAR.com", "Motorsport.com", "Fox Sports NASCAR", "NBC Sports NASCAR", "RACER"],
   },
   Technology: {
@@ -935,7 +1002,7 @@ function getStrictCategoryValidationThreshold(
   const normalizedCategory = normalizeSelectedCategoryName(category);
 
   const thresholds: Record<string, { article: number; lead: number; video: number }> = {
-    NASCAR: { article: 5, lead: 8, video: 8 },
+    NASCAR: { article: 7, lead: 10, video: 10 },
     NFL: { article: 5, lead: 8, video: 8 },
     MLB: { article: 5, lead: 7, video: 7 },
     MLS: { article: 5, lead: 7, video: 7 },
@@ -7160,6 +7227,29 @@ export default function Home() {
 
     console.log("AUTO ARTICLE ACCEPTED", autoAccepted);
     console.log("AUTO ARTICLE REJECTED", autoRejected);
+
+    const nascarArticlePool = categorySectionArticles.filter((article) =>
+      getCategoryMatchScore("NASCAR", [
+        article.title,
+        article.description,
+        article.source,
+        article.category,
+        article.url,
+        article.content,
+      ]) > 0
+    );
+    const nascarAccepted = nascarArticlePool
+      .filter((article) => articleMatchesSelectedCategory(article, "NASCAR"))
+      .slice(0, 8)
+      .map((article) => article.title);
+    const nascarRejected = nascarArticlePool
+      .filter((article) => !articleMatchesSelectedCategory(article, "NASCAR"))
+      .slice(0, 8)
+      .map((article) => article.title);
+
+    console.log("NASCAR ARTICLE RAW COUNT", nascarArticlePool.length);
+    console.log("NASCAR ARTICLE ACCEPTED", nascarAccepted);
+    console.log("NASCAR ARTICLE REJECTED", nascarRejected);
   }, [categorySectionArticles]);
 
   const myNewsTrendingTopicsArticles = useMemo(() => {
@@ -7273,6 +7363,12 @@ export default function Home() {
           if (category === "Auto") {
             console.log("AUTO VIDEO ACCEPTED", relevantVideos.slice(0, 5).map((video) => video.title));
             console.log("AUTO VIDEO REJECTED", rejectedVideos.slice(0, 5).map((video) => video.title));
+          }
+          if (category === "NASCAR") {
+            console.log("NASCAR VIDEO RAW COUNT", mergedVideos.length);
+            console.log("NASCAR VIDEO ACCEPTED", relevantVideos.slice(0, 6).map((video) => video.title));
+            console.log("NASCAR VIDEO REJECTED", rejectedVideos.slice(0, 6).map((video) => video.title));
+            console.log("NASCAR VIDEO FINAL COUNT", relevantVideos.length);
           }
           if (category === "NHL") {
             console.log("NHL VIDEO ACCEPTED", relevantVideos.slice(0, 5).map((video) => video.title));
@@ -7407,6 +7503,9 @@ export default function Home() {
             leadArticle.title,
             getLargeImageCardImage(leadArticle)
           );
+          if (section.category === "NASCAR") {
+            console.log("NASCAR LARGE CARD SELECTED", leadArticle.title);
+          }
           if (section.category === "NHL") {
             console.log("NHL LARGE IMAGE ACCEPTED", leadArticle.title);
             console.log("NHL LARGE IMAGE FINAL", leadArticle.title);
@@ -7420,6 +7519,9 @@ export default function Home() {
           if (section.category === "NHL") {
             console.log("NHL LARGE IMAGE REJECTED", section.articles.map((article) => article.title).slice(0, 5));
             console.log("NHL LARGE IMAGE FINAL", null);
+          }
+          if (section.category === "NASCAR") {
+            console.log("NASCAR LARGE CARD SELECTED", null);
           }
         }
       });
