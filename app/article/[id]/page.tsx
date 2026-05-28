@@ -738,7 +738,8 @@ function buildSummaryParagraphs(
   source?: string | null,
   category?: string | null,
   description?: string | null,
-  content?: string | null
+  content?: string | null,
+  publishedAt?: string | null
 ): SummaryParagraph[] {
   const normalizedTitle = cleanDisplayText(title);
   const normalizedDescription = trimToLastFullSentence(cleanDisplayText(description ?? ""));
@@ -764,8 +765,8 @@ function buildSummaryParagraphs(
 
     if (
       !alreadyIncluded &&
-      cleanedSentence.length >= 24 &&
-      uniquePoints.length < 6
+      cleanedSentence.length >= 20 &&
+      uniquePoints.length < 8
     ) {
       uniquePoints.push(cleanedSentence);
     }
@@ -789,7 +790,7 @@ function buildSummaryParagraphs(
       (existing) => existing.toLowerCase() === candidate.toLowerCase()
     );
 
-    if (!alreadyIncluded && uniquePoints.length < 6) {
+    if (!alreadyIncluded && uniquePoints.length < 8) {
       uniquePoints.push(candidate);
     }
   });
@@ -801,7 +802,32 @@ function buildSummaryParagraphs(
       uniquePoints[0].charAt(0).toUpperCase() + uniquePoints[0].slice(1);
   }
 
+  const normalizedSource = cleanDisplayText(source ?? "").trim();
+  const normalizedCategory = cleanDisplayText(category ?? "").trim();
+  const publishedLabel = publishedAt
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(new Date(publishedAt))
+    : "";
+  const introSentence = cleanSummarySentence(
+    [
+      normalizedSource ? `${normalizedSource} reports` : "",
+      normalizedCategory ? `this ${normalizedCategory.toLowerCase()} story` : "this story",
+      publishedLabel ? `published ${publishedLabel}` : "",
+      "focuses on",
+      cleanSummarySentence(normalizedTitle)?.replace(/\.$/, "") ?? normalizedTitle,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
   const groupedPoints: string[] = [];
+
+  if (introSentence) {
+    groupedPoints.push(introSentence);
+  }
 
   for (let index = 0; index < uniquePoints.length; index += 2) {
     const paragraph = uniquePoints.slice(index, index + 2).join(" ").trim();
@@ -811,12 +837,15 @@ function buildSummaryParagraphs(
     }
   }
 
-  const normalizedSource = cleanDisplayText(source ?? "").trim();
-  const normalizedCategory = cleanDisplayText(category ?? "").trim();
   const contextualSentence = cleanSummarySentence(
     [
-      normalizedSource ? `This reporting comes from ${normalizedSource}` : "",
+      normalizedSource ? `The available report comes from ${normalizedSource}` : "",
       normalizedCategory ? `and is categorized as ${normalizedCategory}` : "",
+      !normalizedContent && normalizedDescription
+        ? "The recap is based on the available article description and metadata."
+        : !normalizedContent && !normalizedDescription
+          ? "Only limited article metadata is available for this story."
+          : "",
     ]
       .join(" ")
       .trim()
@@ -827,7 +856,7 @@ function buildSummaryParagraphs(
   }
 
   return groupedPoints
-    .slice(0, 4)
+    .slice(0, 5)
     .map((paragraph) => cleanSummarySentence(paragraph))
     .filter(Boolean);
 }
@@ -1996,7 +2025,8 @@ export default function ArticleDetailPage() {
     compareArticle.source,
     compareArticle.category,
     rawDescription,
-    cleanedContent
+    cleanedContent,
+    compareArticle.publishedAt
   );
 
   return (

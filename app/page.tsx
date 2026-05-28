@@ -8726,6 +8726,37 @@ export default function Home() {
     );
   };
 
+  const renderStandardArticleSection = (
+    articles: Article[],
+    options?: {
+      limit?: number;
+      showFreshnessTime?: boolean;
+      categoryLabelOverride?: string | null;
+      excludeArticleKey?: string | null;
+    }
+  ) => {
+    const limitedArticles = articles
+      .filter((article) =>
+        options?.excludeArticleKey
+          ? getArticleDeduplicationKey(article) !== options.excludeArticleKey
+          : true
+      )
+      .slice(0, options?.limit ?? 6);
+
+    return (
+      <div className="stack home-section-list" role="list">
+        {limitedArticles.map((article) => (
+          <div key={article.id || article.url || getArticleDeduplicationKey(article)} role="listitem">
+            {renderArticleFeedCard(article, {
+              showFreshnessTime: options?.showFreshnessTime,
+              categoryLabelOverride: options?.categoryLabelOverride,
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const renderQuickWatchRow = (
     compact = false,
     useUniformTallFrame = false,
@@ -10559,9 +10590,9 @@ export default function Home() {
                         <strong className="profile-section-title home-section-title">Local Weather</strong>
                       </div>
                     </div>
-                    {renderArticleSectionWithLargeLead(trendingWeatherSections.localWeather, {
+                    {renderStandardArticleSection(trendingWeatherSections.localWeather, {
                       limit: 6,
-                      excludeLeadArticleKey: trendingWeatherLeadArticle
+                      excludeArticleKey: trendingWeatherLeadArticle
                         ? getArticleDeduplicationKey(trendingWeatherLeadArticle)
                         : null,
                     })}
@@ -10575,9 +10606,9 @@ export default function Home() {
                         <strong className="profile-section-title home-section-title">National Weather</strong>
                       </div>
                     </div>
-                    {renderArticleSectionWithLargeLead(trendingWeatherSections.nationalWeather, {
+                    {renderStandardArticleSection(trendingWeatherSections.nationalWeather, {
                       limit: 6,
-                      excludeLeadArticleKey: trendingWeatherLeadArticle
+                      excludeArticleKey: trendingWeatherLeadArticle
                         ? getArticleDeduplicationKey(trendingWeatherLeadArticle)
                         : null,
                     })}
@@ -10621,33 +10652,39 @@ export default function Home() {
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Featured Sources</strong>
-              <span className="muted">Popular source profiles to explore right now.</span>
+              <strong className="profile-section-title home-section-title">Source Rankings</strong>
+              <span className="muted">News companies people are hearting right now.</span>
             </div>
+            <Link href="/source-rankings/" className="button button-secondary">
+              See all
+            </Link>
           </div>
 
-          {featuredSources.length === 0 ? (
+          {isHomeSourceRankingsLoading ? (
+            <div className="muted">Loading source rankings...</div>
+          ) : homeSourceRankings.length === 0 ? (
             <div className="empty-state compact-empty-state">
-              <strong>No featured sources yet</strong>
-              <span>Check back shortly as more sources gain momentum.</span>
+              <strong>No source hearts yet</strong>
+              <span>Heart a source from Search or its profile to build the rankings.</span>
             </div>
           ) : (
-            <div className="source-rankings-carousel" role="list" aria-label="Featured sources">
-              {featuredSources.map((source) => (
+            <div className="source-rankings-carousel" role="list" aria-label="Source rankings">
+              {homeSourceRankings.slice(0, 12).map((source, index) => (
                 <Link
                   key={`featured-source-${source.sourceName}`}
                   href={`/source/${slugifySourceName(source.sourceName)}/`}
-                  className="source-rankings-card featured-profile-card"
+                  className="source-rankings-card"
                   role="listitem"
                 >
                   <div className="source-rankings-card-art-shell">
                     <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
+                    <span className="source-rankings-rank">#{index + 1}</span>
                   </div>
                   <div className="source-rankings-card-copy">
                     <span className="source-rankings-name">{source.sourceName}</span>
                     <span className="source-rankings-card-meta">News Source</span>
                   </div>
-                  <div className="featured-profile-card-stats">
+                  <div className="source-rankings-card-actions">
                     <span>{source.likes} hearts</span>
                   </div>
                 </Link>
