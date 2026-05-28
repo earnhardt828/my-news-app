@@ -359,6 +359,10 @@ function normalizeSelectedCategoryName(category: string) {
     return "";
   }
 
+  if (cleaned.toLowerCase() === "cars") {
+    return "Auto";
+  }
+
   const directMatch = CATEGORY_OPTIONS.find(
     (option) => option.toLowerCase() === cleaned.toLowerCase()
   );
@@ -387,8 +391,8 @@ const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
 const SCIENCE_FEED_QUERY =
   "science news | NASA | Space.com | Scientific American | Nature | Science Magazine | National Geographic science | AP Science | Reuters Science | Live Science | climate science | health science | astronomy | technology science";
-const CARS_FEED_QUERY =
-  "car industry news | EV news | auto reviews | car technology | Tesla news | Ford news | GM news | Toyota news | Honda news | Audi news | BMW news | Mercedes news | auto safety | electric vehicle news";
+const AUTO_FEED_QUERY =
+  "car industry news | EV news | auto reviews | car technology | autonomous driving | new vehicle launches | Tesla news | Ford news | GM news | Toyota news | Honda news | BMW news | Mercedes news | Rivian news | Lucid news | Hyundai news | Kia news | Volkswagen news | auto safety | electric vehicle news";
 const BUSINESS_FEED_QUERY =
   "business news | finance news | stock market news | economy news | Wall Street news | CNBC | Bloomberg | Reuters Business | MarketWatch | Yahoo Finance";
 const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
@@ -464,7 +468,7 @@ const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
     "Bon Appetit cooking",
     "restaurant review",
   ],
-  Cars: [
+  Auto: [
     "car industry news",
     "EV news",
     "auto reviews",
@@ -700,7 +704,7 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
     relatedTerms: ["gadgets", "apple", "google", "microsoft", "openai", "nvidia", "chip", "startup", "developer", "smartphone", "semiconductor", "robot"],
     sourceTerms: ["techcrunch", "the verge", "wired", "ars technica", "engadget", "cnet", "bloomberg technology"],
     domainTerms: ["techcrunch.com", "theverge.com", "wired.com", "arstechnica.com", "engadget.com", "cnet.com"],
-    negativeTerms: ["world cup", "war update", "weather alert", "celebrity", "recipe"],
+    negativeTerms: ["world cup", "war update", "weather alert", "celebrity", "recipe", "election", "government", "ceasefire", "summit"],
     suggestedSources: ["TechCrunch", "The Verge", "Wired", "Ars Technica", "Bloomberg Technology"],
   },
   Tech: {
@@ -709,13 +713,30 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
     relatedTerms: ["gadgets", "apple", "google", "microsoft", "openai", "nvidia", "chip", "startup", "developer", "smartphone", "semiconductor", "robot"],
     sourceTerms: ["techcrunch", "the verge", "wired", "ars technica", "engadget", "cnet", "bloomberg technology"],
     domainTerms: ["techcrunch.com", "theverge.com", "wired.com", "arstechnica.com", "engadget.com", "cnet.com"],
-    negativeTerms: ["world cup", "war update", "weather alert", "celebrity", "recipe"],
+    negativeTerms: ["world cup", "war update", "weather alert", "celebrity", "recipe", "election", "government", "ceasefire", "summit"],
     suggestedSources: ["TechCrunch", "The Verge", "Wired", "Ars Technica", "Bloomberg Technology"],
   },
-  Cars: {
+  Auto: {
     coreTerms: ["car", "cars", "auto", "automotive", "ev", "electric vehicle", "auto safety"],
     contextTerms: ["car", "cars", "auto", "automotive", "ev", "electric vehicle", "review", "vehicle", "battery", "charging"],
-    relatedTerms: ["tesla", "ford", "gm", "toyota", "honda", "audi", "bmw", "mercedes", "hybrid"],
+    relatedTerms: [
+      "tesla",
+      "ford",
+      "gm",
+      "toyota",
+      "honda",
+      "audi",
+      "bmw",
+      "mercedes",
+      "hybrid",
+      "rivian",
+      "lucid",
+      "hyundai",
+      "kia",
+      "volkswagen",
+      "autonomous driving",
+      "vehicle launch",
+    ],
     sourceTerms: ["motortrend", "car and driver", "road & track", "insideevs", "electrek", "autoblog"],
     domainTerms: ["motortrend.com", "caranddriver.com", "roadandtrack.com", "insideevs.com", "electrek.co", "autoblog.com"],
     negativeTerms: ["nascar", "cup series", "xfinity series", "truck series", "daytona", "talladega", "charlotte motor speedway"],
@@ -817,10 +838,7 @@ function getCategoryMatchScore(
     domainMatches.length === 0 &&
     !(relatedMatches.length > 0 && contextMatches.length > 0)
   ) {
-    return options?.fallbackToRegex !== false &&
-      (SELECTED_CATEGORY_MATCHERS[normalizedCategory]?.test(haystack) ?? false)
-      ? 1
-      : 0;
+    return 0;
   }
 
   return (
@@ -832,8 +850,77 @@ function getCategoryMatchScore(
   );
 }
 
+function getStrictCategoryValidationThreshold(
+  category: string,
+  kind: "article" | "lead" | "video"
+) {
+  const normalizedCategory = normalizeSelectedCategoryName(category);
+
+  const thresholds: Record<string, { article: number; lead: number; video: number }> = {
+    NASCAR: { article: 5, lead: 8, video: 8 },
+    NFL: { article: 5, lead: 8, video: 8 },
+    MLB: { article: 5, lead: 7, video: 7 },
+    MLS: { article: 5, lead: 7, video: 7 },
+    "College Basketball": { article: 5, lead: 7, video: 7 },
+    Technology: { article: 5, lead: 7, video: 7 },
+    Tech: { article: 5, lead: 7, video: 7 },
+    Auto: { article: 5, lead: 7, video: 7 },
+  };
+
+  return thresholds[normalizedCategory]?.[kind] ?? (kind === "article" ? 1 : 6);
+}
+
+function isStrictCategoryMatch(
+  category: string,
+  parts: Array<string | null | undefined>,
+  kind: "article" | "lead" | "video"
+) {
+  return getCategoryMatchScore(category, parts, { fallbackToRegex: false }) >=
+    getStrictCategoryValidationThreshold(category, kind);
+}
+
 function sourceMatchesSelectedCategory(sourceName: string, category: string) {
   return matchesCategoryTaxonomy(category, [sourceName], { fallbackToRegex: true });
+}
+
+function selectRecentCategoryVideos(videos: VideoItem[], minimumCount = 4) {
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const thresholds = [7, 14, 30];
+
+  for (const thresholdDays of thresholds) {
+    const filtered = videos.filter((video) => {
+      if (!video.publishedAt) {
+        return false;
+      }
+
+      const timestamp = getPublishedAtTimestamp(video.publishedAt);
+      if (!Number.isFinite(timestamp) || timestamp <= 0) {
+        return false;
+      }
+
+      return now - timestamp <= thresholdDays * dayMs;
+    });
+
+    if (filtered.length >= minimumCount) {
+      return filtered;
+    }
+  }
+
+  const withinThirtyDays = videos.filter((video) => {
+    if (!video.publishedAt) {
+      return false;
+    }
+
+    const timestamp = getPublishedAtTimestamp(video.publishedAt);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
+      return false;
+    }
+
+    return now - timestamp <= 30 * dayMs;
+  });
+
+  return withinThirtyDays.length > 0 ? withinThirtyDays : videos;
 }
 
 function hasRealLargeImageCandidate(
@@ -861,6 +948,20 @@ function getCategoryLeadArticle(articles: Article[], category: string) {
   return (
     [...articles]
       .filter((article) => hasRealLargeImageCandidate(article))
+      .filter((article) =>
+        isStrictCategoryMatch(
+          category,
+          [
+            article.title,
+            article.description,
+            article.source,
+            article.category,
+            article.url,
+            article.content,
+          ],
+          "lead"
+        )
+      )
       .sort((leftArticle, rightArticle) => {
         const rightScore = getCategoryMatchScore(category, [
           rightArticle.title,
@@ -1343,7 +1444,7 @@ function articleMatchesSelectedCategory(article: Article, selectedCategory: stri
     return true;
   }
 
-  return matchesCategoryTaxonomy(
+  return isStrictCategoryMatch(
     normalizedCategory,
     [
       article.title,
@@ -1354,16 +1455,16 @@ function articleMatchesSelectedCategory(article: Article, selectedCategory: stri
       article.content,
       article.image,
     ],
-    { fallbackToRegex: true }
+    "article"
   );
 }
 
 function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string) {
   const normalizedCategory = normalizeSelectedCategoryName(selectedCategory);
-  return matchesCategoryTaxonomy(
+  return isStrictCategoryMatch(
     normalizedCategory,
     [video.title, video.creator, video.category, video.watchUrl, video.thumbnailUrl],
-    { fallbackToRegex: true }
+    "video"
   );
 }
 
@@ -4823,7 +4924,7 @@ export default function Home() {
             headers: { Accept: "application/json" },
           }),
           fetch(
-            `/api/news?mode=search&query=${encodeURIComponent(CARS_FEED_QUERY)}&pageSize=25`,
+            `/api/news?mode=search&query=${encodeURIComponent(AUTO_FEED_QUERY)}&pageSize=25`,
             {
               cache: "no-store",
               headers: { Accept: "application/json" },
@@ -4912,7 +5013,7 @@ export default function Home() {
               normalizeNewsPayload(
                 carsPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
-            ).filter((article) => articleMatchesSelectedCategory(article, "Cars"))
+            ).filter((article) => articleMatchesSelectedCategory(article, "Auto"))
           : [];
         const nextFoodArticles = foodPayload
           ? hydrateFeedArticles(
@@ -6747,6 +6848,46 @@ export default function Home() {
     return [] as Article[];
   }, [carsPreviewArticles, sortMode]);
 
+  const autoTrendingVideos = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as VideoItem[];
+    }
+
+    const candidateVideos = selectRecentCategoryVideos(
+      dedupeVideosBySourceTitleAndUrl([...videos, ...sportsVideos]).filter((video) =>
+        isStrictCategoryMatch(
+          "Auto",
+          [video.title, video.creator, video.category, video.watchUrl, video.thumbnailUrl],
+          "video"
+        )
+      ),
+      3
+    ).sort((left, right) => {
+      const rightScore = getCategoryMatchScore("Auto", [
+        right.title,
+        right.creator,
+        right.category,
+        right.watchUrl,
+        right.thumbnailUrl,
+      ]);
+      const leftScore = getCategoryMatchScore("Auto", [
+        left.title,
+        left.creator,
+        left.category,
+        left.watchUrl,
+        left.thumbnailUrl,
+      ]);
+
+      if (rightScore !== leftScore) {
+        return rightScore - leftScore;
+      }
+
+      return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
+    });
+
+    return selectSourceBalancedVideos(candidateVideos, 5, 1);
+  }, [sortMode, sportsVideos, videos]);
+
   const foodSectionArticles = useMemo(() => {
     if (sortMode !== "food") {
       return {
@@ -6980,7 +7121,12 @@ export default function Home() {
           const rejectedVideos = mergedVideos.filter(
             (video) => !videoMatchesSelectedCategory(video, category)
           );
-          const relevantVideos = mergedVideos.filter((video) => videoMatchesSelectedCategory(video, category));
+          const relevantVideos = selectRecentCategoryVideos(
+            mergedVideos.filter((video) => videoMatchesSelectedCategory(video, category)),
+            4
+          ).sort(
+            (left, right) => getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt)
+          );
           console.log(
             "CATEGORY VIDEO RAW COUNT",
             category,
@@ -6995,6 +7141,16 @@ export default function Home() {
             "CATEGORY VIDEO FINAL COUNT",
             category,
             relevantVideos.length
+          );
+          console.log(
+            "CATEGORY VIDEO ACCEPTED",
+            category,
+            relevantVideos.slice(0, 4).map((video) => video.title)
+          );
+          console.log(
+            "CATEGORY VIDEO REJECTED",
+            category,
+            rejectedVideos.slice(0, 4).map((video) => video.title)
           );
 
           return [category, relevantVideos] as const;
@@ -7036,13 +7192,16 @@ export default function Home() {
         ...supplementalVideos,
       ]);
 
-      const matchingVideos = mergedCategoryVideos.filter((video) => {
-        if (usedVideoIds.has(video.id)) {
-          return false;
-        }
+      const matchingVideos = selectRecentCategoryVideos(
+        mergedCategoryVideos.filter((video) => {
+          if (usedVideoIds.has(video.id)) {
+            return false;
+          }
 
-        return videoMatchesSelectedCategory(video, category);
-      });
+          return videoMatchesSelectedCategory(video, category);
+        }),
+        4
+      );
 
       const selectedVideos = selectSourceBalancedVideos(
         matchingVideos.sort((left, right) => {
@@ -7098,15 +7257,36 @@ export default function Home() {
       .forEach((section) => {
         const leadArticle = getCategoryLeadArticle(section.articles, section.category);
         console.log("CATEGORY NAME", section.category);
+        console.log(
+          "CATEGORY LARGE CARD CANDIDATE",
+          section.category,
+          section.articles
+            .map((article) => ({
+              title: article.title,
+              score: getCategoryMatchScore(section.category, [
+                article.title,
+                article.description,
+                article.source,
+                article.category,
+                article.url,
+                article.content,
+              ]),
+            }))
+            .slice(0, 5)
+        );
         if (leadArticle) {
           console.log(
-            "CATEGORY LARGE IMAGE FOUND",
+            "CATEGORY LARGE CARD ACCEPTED",
             section.category,
             leadArticle.title,
             getLargeImageCardImage(leadArticle)
           );
         } else {
-          console.log("CATEGORY LARGE IMAGE SKIPPED", section.category);
+          console.log(
+            "CATEGORY LARGE CARD REJECTED",
+            section.category,
+            section.articles.map((article) => article.title).slice(0, 5)
+          );
         }
       });
   }, [myNewsCategorySections]);
@@ -11070,7 +11250,7 @@ export default function Home() {
               type="button"
               onClick={() => scrollSectionIntoView(carsSectionRef)}
             >
-              Cars
+              Auto
             </button>
           </>
         ) : null}
@@ -11673,16 +11853,16 @@ export default function Home() {
         <section ref={carsSectionRef} className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Cars</strong>
+              <strong className="profile-section-title home-section-title">Auto</strong>
             </div>
           </div>
 
           {carsTabArticles.length === 0 ? (
             isCarsPreviewLoading ? (
-              <div className="muted">Loading car stories...</div>
+              <div className="muted">Loading auto stories...</div>
             ) : (
               <div className="empty-state compact-empty-state">
-                <strong>No car stories yet</strong>
+                <strong>No auto stories yet</strong>
                 <span>Check back shortly for fresh auto and EV coverage.</span>
               </div>
             )
@@ -11690,6 +11870,10 @@ export default function Home() {
             renderArticleSectionWithLargeLead(carsTabArticles, { limit: 6 })
           )}
         </section>
+
+        {autoTrendingVideos.length > 0
+          ? renderTallTrendingQuickWatchRow("Auto Videos", autoTrendingVideos, "auto-trending-videos")
+          : null}
 
         {isCategorySheetOpen ? (
           <div

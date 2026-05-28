@@ -2,7 +2,7 @@ export const CATEGORY_OPTIONS = [
   "Politics",
   "World",
   "Business",
-  "Cars",
+  "Auto",
   "Tech",
   "Sports",
   "MLB",
@@ -39,7 +39,7 @@ export const CATEGORY_LABELS: Record<NewsCategory, string> = {
   Politics: "Politics",
   World: "World",
   Business: "Business",
-  Cars: "Cars",
+  Auto: "Auto",
   Tech: "Tech",
   Sports: "Sports",
   MLB: "MLB",
@@ -74,7 +74,7 @@ export const CATEGORY_IMAGE_MAP: Partial<Record<NewsCategory, string>> = {
   Politics: "/category-images/politics.png",
   World: "/category-images/world.png",
   Business: "/category-images/business.png",
-  Cars: "/category-images/business.png",
+  Auto: "/category-images/business.png",
   Tech: "/category-images/tech.png",
   Sports: "/category-images/sports.png",
   MLB: "/category-images/mlb.png",
@@ -112,7 +112,7 @@ function inferCategoryFromContext(source?: string | null, title?: string | null)
   }
 
   if (/\b(car|cars|auto|automotive|vehicle|ev|electric vehicle|tesla|ford|gm|toyota|honda|audi|bmw|mercedes)\b/.test(haystack)) {
-    return "Cars";
+    return "Auto";
   }
 
   if (/\b(election|congress|senate|white house|trump|biden|politic|government|supreme court)\b/.test(haystack)) {
