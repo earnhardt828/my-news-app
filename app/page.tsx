@@ -8302,6 +8302,7 @@ export default function Home() {
     options?: {
       rankLabel?: string | null;
       showFreshnessTime?: boolean;
+      categoryLabelOverride?: string | null;
     }
   ) => {
     try {
@@ -8313,6 +8314,8 @@ export default function Home() {
 
       const safeSourceName = getSafeSourceLabel(article.source);
       const safeCategoryName = getSafeCategoryLabel(article.category, article);
+      const displayCategoryLabel =
+        options?.categoryLabelOverride ?? getCategoryLabel(safeCategoryName);
       const selectedImage = getBestArticleImage(article);
       const imageSrc = selectedImage.src;
       const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
@@ -8434,7 +8437,7 @@ export default function Home() {
                     ·
                   </span>
                   <span className="trending-source-category-inline">
-                    {getCategoryLabel(safeCategoryName)}
+                    {displayCategoryLabel}
                   </span>
                 </div>
               ) : (
@@ -8455,7 +8458,7 @@ export default function Home() {
                       ·
                     </span>
                     <span className="trending-source-category-inline">
-                      {getCategoryLabel(safeCategoryName)}
+                      {displayCategoryLabel}
                     </span>
                   </div>
                 </Link>
@@ -8686,9 +8689,17 @@ export default function Home() {
     options?: {
       limit?: number;
       showFreshnessTime?: boolean;
+      categoryLabelOverride?: string | null;
+      excludeLeadArticleKey?: string | null;
     }
   ) => {
-    const limitedArticles = articles.slice(0, options?.limit ?? 6);
+    const limitedArticles = articles
+      .filter((article) =>
+        options?.excludeLeadArticleKey
+          ? getArticleDeduplicationKey(article) !== options.excludeLeadArticleKey
+          : true
+      )
+      .slice(0, options?.limit ?? 6);
     const leadArticle = limitedArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
     const remainingArticles = leadArticle
       ? limitedArticles.filter(
@@ -8707,6 +8718,7 @@ export default function Home() {
           <div key={article.id || article.url || getArticleDeduplicationKey(article)} role="listitem">
             {renderArticleFeedCard(article, {
               showFreshnessTime: options?.showFreshnessTime,
+              categoryLabelOverride: options?.categoryLabelOverride,
             })}
           </div>
         ))}
@@ -8986,7 +8998,10 @@ export default function Home() {
             </strong>
           </div>
         </div>
-        {renderArticleSectionWithLargeLead(breakingNewsPreviewArticles, { limit: 6 })}
+        {renderArticleSectionWithLargeLead(breakingNewsPreviewArticles, {
+          limit: 6,
+          categoryLabelOverride: "Breaking",
+        })}
       </section>
     );
   };
@@ -9042,6 +9057,15 @@ export default function Home() {
       </section>
     );
   };
+
+  const trendingWeatherLeadArticle = useMemo(() => {
+    const candidateArticles = [
+      ...trendingWeatherSections.localWeather,
+      ...trendingWeatherSections.nationalWeather,
+    ];
+
+    return candidateArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
+  }, [trendingWeatherSections.localWeather, trendingWeatherSections.nationalWeather]);
 
   const renderBreakingFeaturedVideosRow = () => {
     if (trendingBreakingFeaturedVideos.length === 0) {
@@ -10521,6 +10545,13 @@ export default function Home() {
               </div>
             ) : (
               <div className="stack" style={{ gap: "18px" }}>
+                {trendingWeatherLeadArticle ? (
+                  <div
+                    key={`trending-weather-large-${trendingWeatherLeadArticle.id || trendingWeatherLeadArticle.url || getArticleDeduplicationKey(trendingWeatherLeadArticle)}`}
+                  >
+                    {renderLargeImageArticleCard(trendingWeatherLeadArticle)}
+                  </div>
+                ) : null}
                 {trendingWeatherSections.localWeather.length > 0 ? (
                   <section className="home-section-block home-section-plain">
                     <div className="home-section-header">
@@ -10528,13 +10559,12 @@ export default function Home() {
                         <strong className="profile-section-title home-section-title">Local Weather</strong>
                       </div>
                     </div>
-                    <div className="stack home-section-list">
-                      {trendingWeatherSections.localWeather.map((article) => (
-                        <div key={`trending-local-weather-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                          {renderArticleFeedCard(article)}
-                        </div>
-                      ))}
-                    </div>
+                    {renderArticleSectionWithLargeLead(trendingWeatherSections.localWeather, {
+                      limit: 6,
+                      excludeLeadArticleKey: trendingWeatherLeadArticle
+                        ? getArticleDeduplicationKey(trendingWeatherLeadArticle)
+                        : null,
+                    })}
                   </section>
                 ) : null}
 
@@ -10545,13 +10575,12 @@ export default function Home() {
                         <strong className="profile-section-title home-section-title">National Weather</strong>
                       </div>
                     </div>
-                    <div className="stack home-section-list">
-                      {trendingWeatherSections.nationalWeather.map((article) => (
-                        <div key={`trending-national-weather-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                          {renderArticleFeedCard(article)}
-                        </div>
-                      ))}
-                    </div>
+                    {renderArticleSectionWithLargeLead(trendingWeatherSections.nationalWeather, {
+                      limit: 6,
+                      excludeLeadArticleKey: trendingWeatherLeadArticle
+                        ? getArticleDeduplicationKey(trendingWeatherLeadArticle)
+                        : null,
+                    })}
                   </section>
                 ) : null}
               </div>
@@ -10761,13 +10790,7 @@ export default function Home() {
               </div>
             )
           ) : (
-            <div className="stack home-section-list">
-              {businessTabArticles.slice(0, 6).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
+            renderArticleSectionWithLargeLead(businessTabArticles, { limit: 6 })
           )}
         </section>
 

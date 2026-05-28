@@ -57,7 +57,7 @@ export default function LargeImageArticleCard({
       </div>
       <Link href={href} className="article-link large-image-article-card-link" onClick={onOpen}>
         <div className="large-image-article-card-copy">
-          <h3 className="large-image-article-card-title">{title}</h3>
+          <h3 className="trending-article-title large-image-article-card-title">{title}</h3>
           {summary ? <p className="large-image-article-card-summary">{summary}</p> : null}
         </div>
         <div className="large-image-article-card-media" aria-hidden="true">
@@ -74,6 +74,7 @@ export default function LargeImageArticleCard({
       </Link>
       <div className="news-card-footer large-image-article-card-footer">
         <span className="trending-published-date news-card-footer-date feed-meta-inline">
+          <span>{publishedLabel}</span>
           <span className="feed-meta-inline-group">
             <svg
               viewBox="0 0 24 24"
