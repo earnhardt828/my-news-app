@@ -385,6 +385,8 @@ const TRAVEL_FEED_QUERY =
   "travel news | airline news | airport news | cruise news | tourism news | travel warning | travel advisory | hotel news | vacation travel news | Travel + Leisure | Condé Nast Traveler | AFAR | Skift | The Points Guy | CNN Travel | National Geographic Travel | Lonely Planet | USA Today Travel";
 const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
+const SCIENCE_FEED_QUERY =
+  "science news | NASA | Space.com | Scientific American | Nature | Science Magazine | National Geographic science | AP Science | Reuters Science | Live Science | climate science | health science | astronomy | technology science";
 const BUSINESS_FEED_QUERY =
   "business news | finance news | stock market news | economy news | Wall Street news | CNBC | Bloomberg | Reuters Business | MarketWatch | Yahoo Finance";
 const MAJOR_WEATHER_CITY_SUGGESTIONS = [
@@ -2700,6 +2702,8 @@ export default function Home() {
   const [isBusinessPreviewLoading, setIsBusinessPreviewLoading] = useState(false);
   const [foodPreviewArticles, setFoodPreviewArticles] = useState<Article[]>([]);
   const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
+  const [sciencePreviewArticles, setSciencePreviewArticles] = useState<Article[]>([]);
+  const [isSciencePreviewLoading, setIsSciencePreviewLoading] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -2708,6 +2712,7 @@ export default function Home() {
   const foodRecipesSectionRef = useRef<HTMLElement | null>(null);
   const foodRecipeVideosSectionRef = useRef<HTMLElement | null>(null);
   const foodLatestSectionRef = useRef<HTMLElement | null>(null);
+  const scienceSectionRef = useRef<HTMLElement | null>(null);
   const topTabButtonRefs = useRef<Partial<Record<SwipeableSortMode, HTMLButtonElement | null>>>({});
   const articleLongPressTimerRef = useRef<number | null>(null);
   const [isMoreSportsVideosVisible, setIsMoreSportsVideosVisible] = useState(false);
@@ -4313,12 +4318,14 @@ export default function Home() {
         setTechnologyPreviewArticles([]);
         setBusinessPreviewArticles([]);
         setFoodPreviewArticles([]);
+        setSciencePreviewArticles([]);
         setIsBreakingPreviewLoading(false);
         setIsSportsPreviewLoading(false);
         setIsCelebrityPreviewLoading(false);
         setIsTechnologyPreviewLoading(false);
         setIsBusinessPreviewLoading(false);
         setIsFoodPreviewLoading(false);
+        setIsSciencePreviewLoading(false);
         return;
       }
 
@@ -4328,6 +4335,7 @@ export default function Home() {
       setIsTechnologyPreviewLoading(true);
       setIsBusinessPreviewLoading(true);
       setIsFoodPreviewLoading(true);
+      setIsSciencePreviewLoading(true);
 
       try {
         const [
@@ -4337,6 +4345,7 @@ export default function Home() {
           technologyResponse,
           businessResponse,
           foodResponse,
+          scienceResponse,
         ] = await Promise.all([
           fetch(
             `/api/news?mode=search&query=${encodeURIComponent(
@@ -4367,6 +4376,13 @@ export default function Home() {
             cache: "no-store",
             headers: { Accept: "application/json" },
           }),
+          fetch(
+            `/api/news?mode=search&query=${encodeURIComponent(SCIENCE_FEED_QUERY)}&pageSize=25`,
+            {
+              cache: "no-store",
+              headers: { Accept: "application/json" },
+            }
+          ),
         ]);
 
         const [
@@ -4376,6 +4392,7 @@ export default function Home() {
           technologyPayload,
           businessPayload,
           foodPayload,
+          sciencePayload,
         ] = await Promise.all([
           breakingResponse.ok ? breakingResponse.json().catch(() => null) : Promise.resolve(null),
           sportsResponse.ok ? sportsResponse.json().catch(() => null) : Promise.resolve(null),
@@ -4389,6 +4406,7 @@ export default function Home() {
             ? businessResponse.json().catch(() => null)
             : Promise.resolve(null),
           foodResponse.ok ? foodResponse.json().catch(() => null) : Promise.resolve(null),
+          scienceResponse.ok ? scienceResponse.json().catch(() => null) : Promise.resolve(null),
         ]);
 
         if (isCancelled) {
@@ -4437,6 +4455,13 @@ export default function Home() {
               ).articles
             )
           : [];
+        const nextScienceArticles = sciencePayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                sciencePayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            ).filter((article) => articleMatchesSelectedCategory(article, "Science"))
+          : [];
 
         setBreakingPreviewArticles(nextBreakingArticles);
         setSportsPreviewArticles(nextSportsArticles);
@@ -4444,6 +4469,7 @@ export default function Home() {
         setTechnologyPreviewArticles(nextTechnologyArticles);
         setBusinessPreviewArticles(nextBusinessArticles);
         setFoodPreviewArticles(nextFoodArticles);
+        setSciencePreviewArticles(nextScienceArticles);
       } catch (error) {
         console.error("TRENDING SECTION PREVIEW LOAD FAILED", error);
         if (!isCancelled) {
@@ -4453,6 +4479,7 @@ export default function Home() {
           setTechnologyPreviewArticles([]);
           setBusinessPreviewArticles([]);
           setFoodPreviewArticles([]);
+          setSciencePreviewArticles([]);
         }
       } finally {
         if (!isCancelled) {
@@ -4462,6 +4489,7 @@ export default function Home() {
           setIsTechnologyPreviewLoading(false);
           setIsBusinessPreviewLoading(false);
           setIsFoodPreviewLoading(false);
+          setIsSciencePreviewLoading(false);
         }
       }
     }
@@ -6229,6 +6257,14 @@ export default function Home() {
 
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [foodPreviewArticles, sortMode, visibleArticles]);
+
+  const scienceTabArticles = useMemo(() => {
+    if (sortMode === "trending") {
+      return selectSourceBalancedArticles(sciencePreviewArticles.slice(0, 40), 25);
+    }
+
+    return [] as Article[];
+  }, [sciencePreviewArticles, sortMode]);
 
   const foodSectionArticles = useMemo(() => {
     if (sortMode !== "food") {
@@ -8693,14 +8729,14 @@ export default function Home() {
       excludeLeadArticleKey?: string | null;
     }
   ) => {
-    const limitedArticles = articles
+    const filteredArticles = articles
       .filter((article) =>
         options?.excludeLeadArticleKey
           ? getArticleDeduplicationKey(article) !== options.excludeLeadArticleKey
           : true
-      )
-      .slice(0, options?.limit ?? 6);
-    const leadArticle = limitedArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
+      );
+    const limitedArticles = filteredArticles.slice(0, options?.limit ?? 6);
+    const leadArticle = filteredArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
     const remainingArticles = leadArticle
       ? limitedArticles.filter(
           (article) => getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
@@ -10235,6 +10271,15 @@ export default function Home() {
         >
           Business
         </button>
+        {activeMode === "trending" ? (
+          <button
+            className="toolbar-pill"
+            type="button"
+            onClick={() => scrollSectionIntoView(scienceSectionRef)}
+          >
+            Science
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -10649,50 +10694,6 @@ export default function Home() {
           )}
         </section>
 
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Source Rankings</strong>
-              <span className="muted">News companies people are hearting right now.</span>
-            </div>
-            <Link href="/source-rankings/" className="button button-secondary">
-              See all
-            </Link>
-          </div>
-
-          {isHomeSourceRankingsLoading ? (
-            <div className="muted">Loading source rankings...</div>
-          ) : homeSourceRankings.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No source hearts yet</strong>
-              <span>Heart a source from Search or its profile to build the rankings.</span>
-            </div>
-          ) : (
-            <div className="source-rankings-carousel" role="list" aria-label="Source rankings">
-              {homeSourceRankings.slice(0, 12).map((source, index) => (
-                <Link
-                  key={`featured-source-${source.sourceName}`}
-                  href={`/source/${slugifySourceName(source.sourceName)}/`}
-                  className="source-rankings-card"
-                  role="listitem"
-                >
-                  <div className="source-rankings-card-art-shell">
-                    <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
-                    <span className="source-rankings-rank">#{index + 1}</span>
-                  </div>
-                  <div className="source-rankings-card-copy">
-                    <span className="source-rankings-name">{source.sourceName}</span>
-                    <span className="source-rankings-card-meta">News Source</span>
-                  </div>
-                  <div className="source-rankings-card-actions">
-                    <span>{source.likes} hearts</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-
         {renderTallTrendingQuickWatchRow(
           "Quick Watch",
           trendingTallQuickWatchSections.featuredSources,
@@ -10853,6 +10854,27 @@ export default function Home() {
         </section>
 
         {renderNewsClipsRow()}
+
+        <section ref={scienceSectionRef} className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Science</strong>
+            </div>
+          </div>
+
+          {scienceTabArticles.length === 0 ? (
+            isSciencePreviewLoading ? (
+              <div className="muted">Loading science stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No science stories yet</strong>
+                <span>Check back shortly for fresh science coverage.</span>
+              </div>
+            )
+          ) : (
+            renderStandardArticleSection(scienceTabArticles, { limit: 6 })
+          )}
+        </section>
 
         {isCategorySheetOpen ? (
           <div
