@@ -1,6 +1,7 @@
 "use client";
 
 import LoadingScreen from "./components/loading-screen";
+import LargeImageArticleCard from "./components/large-image-article-card";
 import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
 import SourceHeaderMark from "./components/source-header-mark";
@@ -8578,6 +8579,141 @@ export default function Home() {
     }
   };
 
+  const getLargeImageCardImage = (article: Article) => {
+    const selectedImage = getBestArticleImage(article);
+    const imageSrc = selectedImage.src;
+    const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
+
+    if (!imageSrc || failedArticleImages[imageFailureKey]) {
+      return null;
+    }
+
+    if (!isLikelyHighQualityArticleImage(selectedImage.source, imageSrc)) {
+      return null;
+    }
+
+    return {
+      src: imageSrc,
+      failureKey: imageFailureKey,
+    };
+  };
+
+  const renderLargeImageArticleCard = (article: Article) => {
+    const articleRouteId = getArticleRouteId(article);
+
+    if (!articleRouteId || !isRenderableArticleRecord(article)) {
+      return null;
+    }
+
+    const realImage = getLargeImageCardImage(article);
+
+    if (!realImage) {
+      return null;
+    }
+
+    const safeSourceName = getSafeSourceLabel(article.source);
+    const summaryText = article.description
+      ? cleanDisplayText(article.description)
+          .split(/(?<=[.!?])\s+/)
+          .slice(0, 3)
+          .join(" ")
+          .trim()
+      : null;
+
+    return (
+      <LargeImageArticleCard
+        href={`/article/${articleRouteId}/`}
+        sourceContent={
+          <Link
+            href={`/source/${slugifySourceName(safeSourceName)}/`}
+            className="source-trigger source-trigger-tight large-image-article-card-source-link"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <SourceHeaderMark sourceName={safeSourceName} fallbackMode="text" />
+          </Link>
+        }
+        publishedLabel={formatFreshnessTime(article.publishedAt, article.time)}
+        title={cleanDisplayText(article.title)}
+        summary={summaryText}
+        imageSrc={realImage.src}
+        imageAlt={cleanDisplayText(article.title)}
+        likes={article.likes}
+        commentsCount={article.comments.length}
+        onOpen={() => {
+          persistArticleMetadata(article);
+          saveArticleReturnState({
+            path: "/",
+            scrollY: window.scrollY,
+            source: "home",
+            sortMode,
+            selectedLocalCity,
+            localLocationLabel,
+          });
+        }}
+        onImageError={() => {
+          setFailedArticleImages((prev) => {
+            if (prev[realImage.failureKey]) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              [realImage.failureKey]: true,
+            };
+          });
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openLongPressMenu(article);
+        }}
+        onTouchStart={() => {
+          clearArticleLongPressTimer();
+          articleLongPressTimerRef.current = window.setTimeout(() => {
+            openLongPressMenu(article);
+          }, 420);
+        }}
+        onTouchEnd={clearArticleLongPressTimer}
+        onTouchCancel={clearArticleLongPressTimer}
+        onTouchMove={clearArticleLongPressTimer}
+      />
+    );
+  };
+
+  const renderArticleSectionWithLargeLead = (
+    articles: Article[],
+    options?: {
+      limit?: number;
+      showFreshnessTime?: boolean;
+    }
+  ) => {
+    const limitedArticles = articles.slice(0, options?.limit ?? 6);
+    const leadArticle = limitedArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
+    const remainingArticles = leadArticle
+      ? limitedArticles.filter(
+          (article) => getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+        )
+      : limitedArticles;
+
+    return (
+      <div className="stack home-section-list" role="list">
+        {leadArticle ? (
+          <div key={`large-${leadArticle.id || leadArticle.url || getArticleDeduplicationKey(leadArticle)}`} role="listitem">
+            {renderLargeImageArticleCard(leadArticle)}
+          </div>
+        ) : null}
+        {remainingArticles.map((article) => (
+          <div key={article.id || article.url || getArticleDeduplicationKey(article)} role="listitem">
+            {renderArticleFeedCard(article, {
+              showFreshnessTime: options?.showFreshnessTime,
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const renderQuickWatchRow = (
     compact = false,
     useUniformTallFrame = false,
@@ -8850,16 +8986,7 @@ export default function Home() {
             </strong>
           </div>
         </div>
-        <div className="stack home-section-list" role="list" aria-label="Breaking news">
-          {breakingNewsPreviewArticles.map((article) => (
-            <div
-              key={`breaking-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-              role="listitem"
-            >
-              {renderArticleFeedCard(article)}
-            </div>
-          ))}
-        </div>
+        {renderArticleSectionWithLargeLead(breakingNewsPreviewArticles, { limit: 6 })}
       </section>
     );
   };
@@ -10530,13 +10657,7 @@ export default function Home() {
               </div>
             )
           ) : (
-            <div className="stack home-section-list">
-              {sportsTabArticles.slice(0, 6).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
+            renderArticleSectionWithLargeLead(sportsTabArticles, { limit: 6 })
           )}
         </section>
 
@@ -10617,13 +10738,7 @@ export default function Home() {
               </div>
             )
           ) : (
-            <div className="stack home-section-list">
-              {technologyTabArticles.slice(0, 6).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
+            renderArticleSectionWithLargeLead(technologyTabArticles, { limit: 6 })
           )}
         </section>
 
@@ -10673,13 +10788,7 @@ export default function Home() {
               </div>
             )
           ) : (
-            <div className="stack home-section-list">
-              {foodTabArticles.slice(0, 6).map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
-                </div>
-              ))}
-            </div>
+            renderArticleSectionWithLargeLead(foodTabArticles, { limit: 6 })
           )}
         </section>
 
