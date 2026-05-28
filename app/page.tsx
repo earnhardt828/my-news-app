@@ -138,6 +138,38 @@ const NHL_SECTION_VIDEO_QUERIES = [
   "Stanley Cup highlights",
   "NHL Network highlights",
 ] as const;
+const NFL_SECTION_ARTICLE_QUERIES = [
+  "NFL news",
+  "NFL latest",
+  "football news",
+  "NFL injuries",
+  "NFL offseason",
+  "NFL draft",
+  "NFL training camp",
+  "NFL teams",
+  "NFL.com latest",
+  "ESPN NFL",
+  "AP NFL",
+  "Reuters NFL",
+  "CBS Sports NFL",
+  "NBC Sports NFL",
+  "Fox Sports NFL",
+  "Yahoo Sports NFL",
+  "Bleacher Report NFL",
+  "Sports Illustrated NFL",
+] as const;
+const NFL_SECTION_VIDEO_QUERIES = [
+  "NFL highlights",
+  "NFL Network highlights",
+  "ESPN NFL highlights",
+  "football highlights",
+  "touchdown highlights",
+  "Cowboys highlights",
+  "Panthers highlights",
+  "Chiefs highlights",
+  "Eagles highlights",
+  "NFL.com videos",
+] as const;
 
 function buildMlbFallbackVideos(): VideoItem[] {
   return [
@@ -235,6 +267,49 @@ function buildNhlFallbackVideos(): VideoItem[] {
       thumbnailUrl: null,
       publishedAt: null,
       watchUrl: "https://www.espn.com/nhl/",
+      embedUrl: "",
+      fallback: true,
+      saved: false,
+      liked: false,
+      theme: "video-card-theme-ink",
+    },
+  ];
+}
+
+function buildNflFallbackVideos(): VideoItem[] {
+  return [
+    {
+      id: "nfl-fallback-1",
+      youtubeId: "nfl-fallback-1",
+      title: "NFL highlights and top touchdowns",
+      creator: "NFL.com",
+      category: "Sports",
+      orientation: "vertical",
+      views: 0,
+      likes: 0,
+      comments: 0,
+      thumbnailUrl: null,
+      publishedAt: null,
+      watchUrl: "https://www.nfl.com/videos/",
+      embedUrl: "",
+      fallback: true,
+      saved: false,
+      liked: false,
+      theme: "video-card-theme-rose",
+    },
+    {
+      id: "nfl-fallback-2",
+      youtubeId: "nfl-fallback-2",
+      title: "Football highlights from around the league",
+      creator: "ESPN NFL",
+      category: "Sports",
+      orientation: "vertical",
+      views: 0,
+      likes: 0,
+      comments: 0,
+      thumbnailUrl: null,
+      publishedAt: null,
+      watchUrl: "https://www.espn.com/nfl/",
       embedUrl: "",
       fallback: true,
       saved: false,
@@ -2465,6 +2540,8 @@ export default function Home() {
   const [mlbSectionVideos, setMlbSectionVideos] = useState<VideoItem[]>([]);
   const [nhlSectionArticles, setNhlSectionArticles] = useState<Article[]>([]);
   const [nhlSectionVideos, setNhlSectionVideos] = useState<VideoItem[]>([]);
+  const [nflSectionArticles, setNflSectionArticles] = useState<Article[]>([]);
+  const [nflSectionVideos, setNflSectionVideos] = useState<VideoItem[]>([]);
   const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
@@ -6244,12 +6321,21 @@ export default function Home() {
           setMlbSectionVideos([]);
           setNhlSectionArticles([]);
           setNhlSectionVideos([]);
+          setNflSectionArticles([]);
+          setNflSectionVideos([]);
         }
         return;
       }
 
       try {
-        const [mlbArticleResponses, mlbVideoResponses, nhlArticleResponses, nhlVideoResponses] = await Promise.all([
+        const [
+          mlbArticleResponses,
+          mlbVideoResponses,
+          nhlArticleResponses,
+          nhlVideoResponses,
+          nflArticleResponses,
+          nflVideoResponses,
+        ] = await Promise.all([
           Promise.allSettled(
             MLB_SECTION_ARTICLE_QUERIES.map(async (query) => {
               const response = await apiFetch(
@@ -6302,6 +6388,35 @@ export default function Home() {
 
               if (!response.ok) {
                 throw new Error(`NHL video request failed (${response.status})`);
+              }
+
+              const payload = (await response.json()) as { videos?: VideoApiItem[] };
+              return normalizeVideoFeedItems(payload.videos ?? []);
+            })
+          ),
+          Promise.allSettled(
+            NFL_SECTION_ARTICLE_QUERIES.map(async (query) => {
+              const response = await apiFetch(
+                `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=6`
+              );
+
+              if (!response.ok) {
+                throw new Error(`NFL article request failed (${response.status})`);
+              }
+
+              return hydrateFeedArticles(
+                normalizeNewsPayload(
+                  (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+                ).articles
+              );
+            })
+          ),
+          Promise.allSettled(
+            NFL_SECTION_VIDEO_QUERIES.map(async (query) => {
+              const response = await apiFetch(`/api/videos?tab=sports&q=${encodeURIComponent(query)}`);
+
+              if (!response.ok) {
+                throw new Error(`NFL video request failed (${response.status})`);
               }
 
               const payload = (await response.json()) as { videos?: VideoApiItem[] };
@@ -6413,7 +6528,42 @@ export default function Home() {
         console.log("NHL VIDEO FINAL COUNT", finalNhlVideos.length);
 
         setNhlSectionArticles(filteredNhlArticles);
-        setNhlSectionVideos(finalNhlVideos.length > 0 ? finalNhlVideos : buildNhlFallbackVideos());
+        setNhlSectionVideos(finalNhlVideos);
+
+        const mergedNflArticles = nflArticleResponses.reduce<Article[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("NFL article fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return mergeArticlesByIdentity(accumulator, result.value);
+        }, []);
+
+        const filteredNflArticles = selectSourceBalancedArticles(
+          mergedNflArticles.filter(
+            (article) =>
+              matchesSportsSectionArticle(article, SPORTS_SECTION_CONFIGS.find((section) => section.key === "NFL")!) &&
+              !isSportsBettingAd(article)
+          ),
+          14
+        );
+
+        const mergedNflVideos = nflVideoResponses.reduce<VideoItem[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("NFL video fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return dedupeVideosBySourceTitleAndUrl([...accumulator, ...result.value]);
+        }, []);
+        const strictNflVideos = mergedNflVideos.filter((video) => isStrictNflVideo(video));
+        const finalNflVideos =
+          strictNflVideos.length > 0
+            ? selectSourceBalancedVideos(strictNflVideos, 10)
+            : buildNflFallbackVideos();
+
+        setNflSectionArticles(filteredNflArticles);
+        setNflSectionVideos(finalNflVideos);
       } catch (error) {
         console.error("Error loading MLB section supplements:", error);
         if (!isCancelled) {
@@ -6421,6 +6571,8 @@ export default function Home() {
           setMlbSectionVideos([]);
           setNhlSectionArticles([]);
           setNhlSectionVideos([]);
+          setNflSectionArticles([]);
+          setNflSectionVideos([]);
         }
       }
     }
@@ -7167,9 +7319,21 @@ export default function Home() {
         ? favoriteTeams.filter((team) => team.league === section.key)
         : [];
       const supplementalArticles =
-        section.key === "MLB" ? mlbSectionArticles : section.key === "NHL" ? nhlSectionArticles : [];
+        section.key === "MLB"
+          ? mlbSectionArticles
+          : section.key === "NHL"
+            ? nhlSectionArticles
+            : section.key === "NFL"
+              ? nflSectionArticles
+              : [];
       const supplementalVideos =
-        section.key === "MLB" ? mlbSectionVideos : section.key === "NHL" ? nhlSectionVideos : [];
+        section.key === "MLB"
+          ? mlbSectionVideos
+          : section.key === "NHL"
+            ? nhlSectionVideos
+            : section.key === "NFL"
+              ? nflSectionVideos
+              : [];
 
       const candidateArticles = mergeArticlesByIdentity(sportsStandardArticles, supplementalArticles).filter((article) => {
         if (usedArticleKeys.has(getArticleDeduplicationKey(article))) {
@@ -7267,7 +7431,7 @@ export default function Home() {
         videos: selectedVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -9192,6 +9356,7 @@ export default function Home() {
                 hideActions
                 useRelativeTime
                 className="video-card-inline quick-watch-video-card"
+                useUniformTallFrame={sectionKey === "NHL"}
                 variant="article"
               />
             </div>
