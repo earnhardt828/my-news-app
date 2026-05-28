@@ -387,6 +387,8 @@ const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
 const SCIENCE_FEED_QUERY =
   "science news | NASA | Space.com | Scientific American | Nature | Science Magazine | National Geographic science | AP Science | Reuters Science | Live Science | climate science | health science | astronomy | technology science";
+const CARS_FEED_QUERY =
+  "car industry news | EV news | auto reviews | car technology | Tesla news | Ford news | GM news | Toyota news | Honda news | Audi news | BMW news | Mercedes news | auto safety | electric vehicle news";
 const BUSINESS_FEED_QUERY =
   "business news | finance news | stock market news | economy news | Wall Street news | CNBC | Bloomberg | Reuters Business | MarketWatch | Yahoo Finance";
 const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
@@ -461,6 +463,14 @@ const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
     "Food Network recipe",
     "Bon Appetit cooking",
     "restaurant review",
+  ],
+  Cars: [
+    "car industry news",
+    "EV news",
+    "auto reviews",
+    "car technology",
+    "Tesla news",
+    "Ford news",
   ],
 };
 const MAJOR_WEATHER_CITY_SUGGESTIONS = [
@@ -603,12 +613,12 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
     suggestedSources: ["MLB.com", "ESPN MLB", "Baseball America", "The Athletic MLB", "AP MLB"],
   },
   NFL: {
-    coreTerms: ["nfl", "football", "touchdown", "quarterback", "super bowl"],
-    contextTerms: ["nfl", "football", "touchdown", "quarterback", "super bowl", "highlights"],
+    coreTerms: ["nfl", "football", "touchdown", "quarterback", "draft", "training camp"],
+    contextTerms: ["nfl", "football", "touchdown", "quarterback", "draft", "training camp", "highlights"],
     relatedTerms: ["cowboys", "panthers", "chiefs", "eagles", "packers", "bears", "draft", "training camp"],
     sourceTerms: ["nfl.com", "espn nfl", "nfl network", "fox sports nfl", "ap nfl"],
     domainTerms: ["nfl.com", "espn.com"],
-    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under", "supergirl", "movie", "tv series", "trailer"],
     suggestedSources: ["NFL.com", "ESPN NFL", "AP NFL", "The Athletic NFL", "Fox Sports NFL"],
   },
   NHL: {
@@ -676,18 +686,18 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
     suggestedSources: ["MLSsoccer.com", "ESPN Soccer", "CBS Sports Golazo", "The Athletic Soccer", "FC Cincinnati"],
   },
   NASCAR: {
-    coreTerms: ["nascar", "motorsport", "motorsports", "racing", "race recap", "cup series"],
-    contextTerms: ["nascar", "motorsport", "racing", "cup series", "highlights"],
-    relatedTerms: ["daytona", "crash highlights", "stock car", "pit road", "checkered flag"],
+    coreTerms: ["nascar", "cup series", "xfinity series", "truck series", "daytona", "talladega", "charlotte motor speedway", "stock car"],
+    contextTerms: ["nascar", "cup series", "xfinity series", "truck series", "race recap", "highlights", "stock car", "motorsport"],
+    relatedTerms: ["daytona", "talladega", "charlotte motor speedway", "crash highlights", "pit road", "checkered flag", "motorsport"],
     sourceTerms: ["nascar.com", "motorsport.com", "fox sports nascar", "nbc sports nascar"],
     domainTerms: ["nascar.com", "motorsport.com"],
-    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under", "audi", "bmw", "mercedes", "tesla", "road test", "car review", "first drive", "suv", "sedan", "pickup truck"],
     suggestedSources: ["NASCAR.com", "Motorsport.com", "Fox Sports NASCAR", "NBC Sports NASCAR", "RACER"],
   },
   Technology: {
     coreTerms: ["technology", "tech", "ai", "artificial intelligence", "software", "cybersecurity"],
-    contextTerms: ["technology", "tech", "ai", "software", "cybersecurity", "gadget"],
-    relatedTerms: ["gadgets", "apple", "google", "microsoft", "openai", "chip", "startup", "developer"],
+    contextTerms: ["technology", "tech", "ai", "artificial intelligence", "software", "cybersecurity", "gadget", "smartphone", "chip", "semiconductor", "robot", "startup"],
+    relatedTerms: ["gadgets", "apple", "google", "microsoft", "openai", "nvidia", "chip", "startup", "developer", "smartphone", "semiconductor", "robot"],
     sourceTerms: ["techcrunch", "the verge", "wired", "ars technica", "engadget", "cnet", "bloomberg technology"],
     domainTerms: ["techcrunch.com", "theverge.com", "wired.com", "arstechnica.com", "engadget.com", "cnet.com"],
     negativeTerms: ["world cup", "war update", "weather alert", "celebrity", "recipe"],
@@ -695,12 +705,21 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
   },
   Tech: {
     coreTerms: ["technology", "tech", "ai", "artificial intelligence", "software", "cybersecurity"],
-    contextTerms: ["technology", "tech", "ai", "software", "cybersecurity", "gadget"],
-    relatedTerms: ["gadgets", "apple", "google", "microsoft", "openai", "chip", "startup", "developer"],
+    contextTerms: ["technology", "tech", "ai", "artificial intelligence", "software", "cybersecurity", "gadget", "smartphone", "chip", "semiconductor", "robot", "startup"],
+    relatedTerms: ["gadgets", "apple", "google", "microsoft", "openai", "nvidia", "chip", "startup", "developer", "smartphone", "semiconductor", "robot"],
     sourceTerms: ["techcrunch", "the verge", "wired", "ars technica", "engadget", "cnet", "bloomberg technology"],
     domainTerms: ["techcrunch.com", "theverge.com", "wired.com", "arstechnica.com", "engadget.com", "cnet.com"],
     negativeTerms: ["world cup", "war update", "weather alert", "celebrity", "recipe"],
     suggestedSources: ["TechCrunch", "The Verge", "Wired", "Ars Technica", "Bloomberg Technology"],
+  },
+  Cars: {
+    coreTerms: ["car", "cars", "auto", "automotive", "ev", "electric vehicle", "auto safety"],
+    contextTerms: ["car", "cars", "auto", "automotive", "ev", "electric vehicle", "review", "vehicle", "battery", "charging"],
+    relatedTerms: ["tesla", "ford", "gm", "toyota", "honda", "audi", "bmw", "mercedes", "hybrid"],
+    sourceTerms: ["motortrend", "car and driver", "road & track", "insideevs", "electrek", "autoblog"],
+    domainTerms: ["motortrend.com", "caranddriver.com", "roadandtrack.com", "insideevs.com", "electrek.co", "autoblog.com"],
+    negativeTerms: ["nascar", "cup series", "xfinity series", "truck series", "daytona", "talladega", "charlotte motor speedway"],
+    suggestedSources: ["MotorTrend", "Car and Driver", "InsideEVs", "Electrek", "Road & Track"],
   },
   Celebrity: {
     coreTerms: ["celebrity", "entertainment", "hollywood", "movie", "tv", "music"],
@@ -749,45 +768,125 @@ function matchesCategoryTaxonomy(
   parts: Array<string | null | undefined>,
   options?: { fallbackToRegex?: boolean }
 ) {
+  return getCategoryMatchScore(category, parts, options) > 0;
+}
+
+function getCategoryMatchScore(
+  category: string,
+  parts: Array<string | null | undefined>,
+  options?: { fallbackToRegex?: boolean }
+) {
   const normalizedCategory = normalizeSelectedCategoryName(category);
   const taxonomy = CATEGORY_TAXONOMY[normalizedCategory];
   const haystack = buildCategoryTaxonomyHaystack(parts);
 
   if (!haystack) {
-    return false;
+    return 0;
   }
 
   if (!taxonomy) {
-    return options?.fallbackToRegex !== false
-      ? (SELECTED_CATEGORY_MATCHERS[normalizedCategory]?.test(haystack) ?? false)
-      : false;
+    return options?.fallbackToRegex !== false &&
+      (SELECTED_CATEGORY_MATCHERS[normalizedCategory]?.test(haystack) ?? false)
+      ? 1
+      : 0;
   }
 
   if (taxonomy.negativeTerms?.some((term) => haystack.includes(normalizeCategoryTaxonomyValue(term)))) {
-    return false;
+    return 0;
   }
 
-  const coreMatched = taxonomy.coreTerms.some((term) =>
+  const coreMatches = taxonomy.coreTerms.filter((term) =>
     haystack.includes(normalizeCategoryTaxonomyValue(term))
   );
-  const sourceMatched = (taxonomy.sourceTerms ?? []).some((term) =>
+  const sourceMatches = (taxonomy.sourceTerms ?? []).filter((term) =>
     haystack.includes(normalizeCategoryTaxonomyValue(term))
   );
-  const domainMatched = (taxonomy.domainTerms ?? []).some((term) =>
+  const domainMatches = (taxonomy.domainTerms ?? []).filter((term) =>
     haystack.includes(normalizeCategoryTaxonomyValue(term))
   );
-  const relatedMatched = (taxonomy.relatedTerms ?? []).some((term) =>
+  const relatedMatches = (taxonomy.relatedTerms ?? []).filter((term) =>
     haystack.includes(normalizeCategoryTaxonomyValue(term))
   );
-  const contextMatched = (taxonomy.contextTerms ?? taxonomy.coreTerms).some((term) =>
+  const contextMatches = (taxonomy.contextTerms ?? taxonomy.coreTerms).filter((term) =>
     haystack.includes(normalizeCategoryTaxonomyValue(term))
   );
 
-  return coreMatched || sourceMatched || domainMatched || (relatedMatched && contextMatched);
+  if (
+    coreMatches.length === 0 &&
+    sourceMatches.length === 0 &&
+    domainMatches.length === 0 &&
+    !(relatedMatches.length > 0 && contextMatches.length > 0)
+  ) {
+    return options?.fallbackToRegex !== false &&
+      (SELECTED_CATEGORY_MATCHERS[normalizedCategory]?.test(haystack) ?? false)
+      ? 1
+      : 0;
+  }
+
+  return (
+    coreMatches.length * 5 +
+    sourceMatches.length * 4 +
+    domainMatches.length * 4 +
+    contextMatches.length * 2 +
+    relatedMatches.length
+  );
 }
 
 function sourceMatchesSelectedCategory(sourceName: string, category: string) {
   return matchesCategoryTaxonomy(category, [sourceName], { fallbackToRegex: true });
+}
+
+function hasRealLargeImageCandidate(
+  article: Pick<
+    Article,
+    | "title"
+    | "description"
+    | "source"
+    | "category"
+    | "image"
+    | "imageUrl"
+    | "urlToImage"
+    | "mediaContent"
+    | "enclosureUrl"
+    | "ogImage"
+    | "twitterImage"
+    | "thumbnail"
+  >
+) {
+  const selectedImage = getBestArticleImage(article);
+  return Boolean(selectedImage.src) && isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
+}
+
+function getCategoryLeadArticle(articles: Article[], category: string) {
+  return (
+    [...articles]
+      .filter((article) => hasRealLargeImageCandidate(article))
+      .sort((leftArticle, rightArticle) => {
+        const rightScore = getCategoryMatchScore(category, [
+          rightArticle.title,
+          rightArticle.description,
+          rightArticle.source,
+          rightArticle.category,
+          rightArticle.url,
+          rightArticle.content,
+        ]);
+        const leftScore = getCategoryMatchScore(category, [
+          leftArticle.title,
+          leftArticle.description,
+          leftArticle.source,
+          leftArticle.category,
+          leftArticle.url,
+          leftArticle.content,
+        ]);
+
+        if (rightScore !== leftScore) {
+          return rightScore - leftScore;
+        }
+
+        return getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle);
+      })
+      .find((article) => hasRealLargeImageCandidate(article)) ?? null
+  );
 }
 const BROAD_SPORTS_SOURCE_PATTERN =
   /\b(motorsport\.com|motorsport|nascar\.com|nascar|bleacher report|mlb\.com|nhl\.com|nba\.com|nfl\.com|mlssoccer\.com|espn|yahoo sports|fox sports|nbc sports|cbs sports|sports illustrated|ap sports|ap news sports|reuters sports|fc cincinnati|hero sports|big 12|big 12 conference|dallas cowboys|official site|team site|conference site|sports|athletics|sporting)\b/i;
@@ -3041,6 +3140,8 @@ export default function Home() {
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
   const [businessPreviewArticles, setBusinessPreviewArticles] = useState<Article[]>([]);
   const [isBusinessPreviewLoading, setIsBusinessPreviewLoading] = useState(false);
+  const [carsPreviewArticles, setCarsPreviewArticles] = useState<Article[]>([]);
+  const [isCarsPreviewLoading, setIsCarsPreviewLoading] = useState(false);
   const [foodPreviewArticles, setFoodPreviewArticles] = useState<Article[]>([]);
   const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
   const [sciencePreviewArticles, setSciencePreviewArticles] = useState<Article[]>([]);
@@ -3057,6 +3158,7 @@ export default function Home() {
   const foodRecipeVideosSectionRef = useRef<HTMLElement | null>(null);
   const foodLatestSectionRef = useRef<HTMLElement | null>(null);
   const scienceSectionRef = useRef<HTMLElement | null>(null);
+  const carsSectionRef = useRef<HTMLElement | null>(null);
   const topTabButtonRefs = useRef<Partial<Record<SwipeableSortMode, HTMLButtonElement | null>>>({});
   const articleLongPressTimerRef = useRef<number | null>(null);
   const [isMoreSportsVideosVisible, setIsMoreSportsVideosVisible] = useState(false);
@@ -4661,6 +4763,7 @@ export default function Home() {
         setCelebrityPreviewArticles([]);
         setTechnologyPreviewArticles([]);
         setBusinessPreviewArticles([]);
+        setCarsPreviewArticles([]);
         setFoodPreviewArticles([]);
         setSciencePreviewArticles([]);
         setIsBreakingPreviewLoading(false);
@@ -4668,6 +4771,7 @@ export default function Home() {
         setIsCelebrityPreviewLoading(false);
         setIsTechnologyPreviewLoading(false);
         setIsBusinessPreviewLoading(false);
+        setIsCarsPreviewLoading(false);
         setIsFoodPreviewLoading(false);
         setIsSciencePreviewLoading(false);
         return;
@@ -4678,6 +4782,7 @@ export default function Home() {
       setIsCelebrityPreviewLoading(true);
       setIsTechnologyPreviewLoading(true);
       setIsBusinessPreviewLoading(true);
+      setIsCarsPreviewLoading(true);
       setIsFoodPreviewLoading(true);
       setIsSciencePreviewLoading(true);
 
@@ -4688,6 +4793,7 @@ export default function Home() {
           celebrityResponse,
           technologyResponse,
           businessResponse,
+          carsResponse,
           foodResponse,
           scienceResponse,
         ] = await Promise.all([
@@ -4716,6 +4822,13 @@ export default function Home() {
             cache: "no-store",
             headers: { Accept: "application/json" },
           }),
+          fetch(
+            `/api/news?mode=search&query=${encodeURIComponent(CARS_FEED_QUERY)}&pageSize=25`,
+            {
+              cache: "no-store",
+              headers: { Accept: "application/json" },
+            }
+          ),
           fetch("/api/news?mode=food&pageSize=25", {
             cache: "no-store",
             headers: { Accept: "application/json" },
@@ -4735,6 +4848,7 @@ export default function Home() {
           celebrityPayload,
           technologyPayload,
           businessPayload,
+          carsPayload,
           foodPayload,
           sciencePayload,
         ] = await Promise.all([
@@ -4749,6 +4863,7 @@ export default function Home() {
           businessResponse.ok
             ? businessResponse.json().catch(() => null)
             : Promise.resolve(null),
+          carsResponse.ok ? carsResponse.json().catch(() => null) : Promise.resolve(null),
           foodResponse.ok ? foodResponse.json().catch(() => null) : Promise.resolve(null),
           scienceResponse.ok ? scienceResponse.json().catch(() => null) : Promise.resolve(null),
         ]);
@@ -4792,6 +4907,13 @@ export default function Home() {
               ).articles
             )
           : [];
+        const nextCarsArticles = carsPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                carsPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            ).filter((article) => articleMatchesSelectedCategory(article, "Cars"))
+          : [];
         const nextFoodArticles = foodPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
@@ -4812,6 +4934,7 @@ export default function Home() {
         setCelebrityPreviewArticles(nextCelebrityArticles);
         setTechnologyPreviewArticles(nextTechnologyArticles);
         setBusinessPreviewArticles(nextBusinessArticles);
+        setCarsPreviewArticles(nextCarsArticles);
         setFoodPreviewArticles(nextFoodArticles);
         setSciencePreviewArticles(nextScienceArticles);
       } catch (error) {
@@ -4822,6 +4945,7 @@ export default function Home() {
           setCelebrityPreviewArticles([]);
           setTechnologyPreviewArticles([]);
           setBusinessPreviewArticles([]);
+          setCarsPreviewArticles([]);
           setFoodPreviewArticles([]);
           setSciencePreviewArticles([]);
         }
@@ -4832,6 +4956,7 @@ export default function Home() {
           setIsCelebrityPreviewLoading(false);
           setIsTechnologyPreviewLoading(false);
           setIsBusinessPreviewLoading(false);
+          setIsCarsPreviewLoading(false);
           setIsFoodPreviewLoading(false);
           setIsSciencePreviewLoading(false);
         }
@@ -5113,6 +5238,10 @@ export default function Home() {
           }
 
           visibilityMap.set(videoKey, entry.isIntersecting ? entry.intersectionRatio : 0);
+
+          if (videoKey.startsWith("mynews-category-") && entry.isIntersecting && entry.intersectionRatio >= 0.3) {
+            console.log("MY NEWS CATEGORY VIDEO AUTOPLAY ATTEMPT", videoKey);
+          }
         });
 
         const nextAutoplayKeys = Array.from(visibilityMap.entries())
@@ -6610,6 +6739,14 @@ export default function Home() {
     return [] as Article[];
   }, [sciencePreviewArticles, sortMode]);
 
+  const carsTabArticles = useMemo(() => {
+    if (sortMode === "trending") {
+      return selectSourceBalancedArticles(carsPreviewArticles.slice(0, 40), 25);
+    }
+
+    return [] as Article[];
+  }, [carsPreviewArticles, sortMode]);
+
   const foodSectionArticles = useMemo(() => {
     if (sortMode !== "food") {
       return {
@@ -6713,20 +6850,28 @@ export default function Home() {
         });
 
         const rankedArticles = [...matchingArticles].sort((leftArticle, rightArticle) => {
-          const leftDisplayCategory = getDisplayCategory(leftArticle.category, {
-            source: leftArticle.source,
-            title: leftArticle.title,
-          });
-          const rightDisplayCategory = getDisplayCategory(rightArticle.category, {
-            source: rightArticle.source,
-            title: rightArticle.title,
-          });
-          const leftExactCategoryBoost =
-            leftDisplayCategory.toLowerCase() === category.toLowerCase() ? 90 : 0;
-          const rightExactCategoryBoost =
-            rightDisplayCategory.toLowerCase() === category.toLowerCase() ? 90 : 0;
-          const leftScore = getArticlePriorityScore(leftArticle) + leftExactCategoryBoost;
-          const rightScore = getArticlePriorityScore(rightArticle) + rightExactCategoryBoost;
+          const leftScore =
+            getArticlePriorityScore(leftArticle) +
+            getCategoryMatchScore(category, [
+              leftArticle.title,
+              leftArticle.description,
+              leftArticle.source,
+              leftArticle.category,
+              leftArticle.url,
+              leftArticle.content,
+            ]) *
+              20;
+          const rightScore =
+            getArticlePriorityScore(rightArticle) +
+            getCategoryMatchScore(category, [
+              rightArticle.title,
+              rightArticle.description,
+              rightArticle.source,
+              rightArticle.category,
+              rightArticle.url,
+              rightArticle.content,
+            ]) *
+              20;
           return rightScore - leftScore;
         });
 
@@ -6901,6 +7046,25 @@ export default function Home() {
 
       const selectedVideos = selectSourceBalancedVideos(
         matchingVideos.sort((left, right) => {
+          const leftCategoryScore = getCategoryMatchScore(category, [
+            left.title,
+            left.creator,
+            left.category,
+            left.watchUrl,
+            left.thumbnailUrl,
+          ]);
+          const rightCategoryScore = getCategoryMatchScore(category, [
+            right.title,
+            right.creator,
+            right.category,
+            right.watchUrl,
+            right.thumbnailUrl,
+          ]);
+
+          if (rightCategoryScore !== leftCategoryScore) {
+            return rightCategoryScore - leftCategoryScore;
+          }
+
           const leftVerticalBoost = left.orientation === "vertical" ? 1 : 0;
           const rightVerticalBoost = right.orientation === "vertical" ? 1 : 0;
 
@@ -6932,8 +7096,7 @@ export default function Home() {
     myNewsCategorySections
       .filter((section) => section.category !== "Recommended for You")
       .forEach((section) => {
-        const leadArticle =
-          section.articles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
+        const leadArticle = getCategoryLeadArticle(section.articles, section.category);
         console.log("CATEGORY NAME", section.category);
         if (leadArticle) {
           console.log(
@@ -10894,13 +11057,22 @@ export default function Home() {
           Business
         </button>
         {activeMode === "trending" ? (
-          <button
-            className="toolbar-pill"
-            type="button"
-            onClick={() => scrollSectionIntoView(scienceSectionRef)}
-          >
-            Science
-          </button>
+          <>
+            <button
+              className="toolbar-pill"
+              type="button"
+              onClick={() => scrollSectionIntoView(scienceSectionRef)}
+            >
+              Science
+            </button>
+            <button
+              className="toolbar-pill"
+              type="button"
+              onClick={() => scrollSectionIntoView(carsSectionRef)}
+            >
+              Cars
+            </button>
+          </>
         ) : null}
       </div>
     </div>
@@ -11498,6 +11670,27 @@ export default function Home() {
           )}
         </section>
 
+        <section ref={carsSectionRef} className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Cars</strong>
+            </div>
+          </div>
+
+          {carsTabArticles.length === 0 ? (
+            isCarsPreviewLoading ? (
+              <div className="muted">Loading car stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No car stories yet</strong>
+                <span>Check back shortly for fresh auto and EV coverage.</span>
+              </div>
+            )
+          ) : (
+            renderArticleSectionWithLargeLead(carsTabArticles, { limit: 6 })
+          )}
+        </section>
+
         {isCategorySheetOpen ? (
           <div
             className="bottom-sheet-backdrop"
@@ -11652,8 +11845,7 @@ export default function Home() {
                         </div>
                       </div>
                       {(() => {
-                        const leadArticle =
-                          section.articles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
+                        const leadArticle = getCategoryLeadArticle(section.articles, section.category);
                         const leadArticleKey = leadArticle
                           ? getArticleDeduplicationKey(leadArticle)
                           : null;
