@@ -2193,7 +2193,10 @@ input {
 }
 
 .article-detail-source-wrap .source-header-logo {
-  height: 26px;
+  height: clamp(28px, 3.8vw, 40px);
+  width: auto;
+  max-width: min(180px, 46vw);
+  object-fit: contain;
 }
 
 .article-detail-inline-image-wrap-fallback {

@@ -201,6 +201,7 @@ export function normalizeSourceLogoName(sourceName: string) {
     .trim()
     .toLowerCase()
     .replace(/&/g, "and")
+    .replace(/\.com\b/g, "")
     .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, "-");
 }
@@ -210,6 +211,7 @@ function normalizeSourceLookupKey(sourceName: string) {
     .trim()
     .toLowerCase()
     .replace(/&/g, "and")
+    .replace(/\.com\b/g, "")
     .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -224,11 +226,13 @@ function buildArticleHeaderLogoCandidates(sourceName: string) {
   const normalized = normalizeSourceLogoName(trimmed);
   const withoutLeadingThe = normalized.replace(/^the-/, "");
   const lookupKey = normalizeSourceLookupKey(trimmed);
-  const candidates = new Set<string>([normalized, withoutLeadingThe]);
+  const withoutCom = withoutLeadingThe.replace(/-com$/, "");
+  const candidates = new Set<string>([normalized, withoutLeadingThe, withoutCom]);
 
   if (lookupKey === "washington post" || lookupKey === "the washington post") {
     candidates.add("washington-post");
     candidates.add("the-washington-post");
+    candidates.add("the-washinton-post");
   }
 
   if (lookupKey === "new york times" || lookupKey === "the new york times") {
@@ -239,6 +243,22 @@ function buildArticleHeaderLogoCandidates(sourceName: string) {
   if (lookupKey === "ap news" || lookupKey === "associated press" || lookupKey === "ap") {
     candidates.add("ap-news");
     candidates.add("ap");
+  }
+
+  if (lookupKey === "mlb" || lookupKey === "mlb com") {
+    candidates.add("mlb");
+  }
+
+  if (lookupKey === "nfl" || lookupKey === "nfl com") {
+    candidates.add("nfl");
+  }
+
+  if (lookupKey === "nba" || lookupKey === "nba com") {
+    candidates.add("nba");
+  }
+
+  if (lookupKey === "nhl" || lookupKey === "nhl com") {
+    candidates.add("nhl");
   }
 
   return Array.from(candidates).filter(Boolean);

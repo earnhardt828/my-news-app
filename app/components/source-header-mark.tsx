@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getArticleHeaderLogo,
 } from "../../lib/source-logos";
@@ -19,34 +19,52 @@ export default function SourceHeaderMark({
 }: SourceHeaderMarkProps) {
   const [failedLightLogoUrl, setFailedLightLogoUrl] = useState<string | null>(null);
   const [failedDarkLogoUrl, setFailedDarkLogoUrl] = useState<string | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const updateTheme = () => {
+      setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+    };
+
+    updateTheme();
+
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   const lightLogoUrl = getArticleHeaderLogo(sourceName, "light");
   const darkLogoUrl = getArticleHeaderLogo(sourceName, "dark");
-  const showLightLogo = Boolean(lightLogoUrl) && failedLightLogoUrl !== lightLogoUrl;
-  const showDarkLogo = Boolean(darkLogoUrl) && failedDarkLogoUrl !== darkLogoUrl;
+  const activeLogoUrl =
+    theme === "dark"
+      ? (darkLogoUrl && failedDarkLogoUrl !== darkLogoUrl ? darkLogoUrl : null)
+      : (lightLogoUrl && failedLightLogoUrl !== lightLogoUrl ? lightLogoUrl : null);
 
-  if (showLightLogo || showDarkLogo) {
+  if (activeLogoUrl) {
     return (
       <span className={`source-header-mark ${className}`.trim()} aria-hidden="true">
-        {showLightLogo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={lightLogoUrl!}
-            alt={`${sourceName} header logo`}
-            className={`source-header-logo ${showDarkLogo ? "branding-image-light" : ""}`.trim()}
-            loading="lazy"
-            onError={() => setFailedLightLogoUrl(lightLogoUrl)}
-          />
-        ) : null}
-        {showDarkLogo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={darkLogoUrl!}
-            alt={`${sourceName} dark header logo`}
-            className={`source-header-logo ${showLightLogo ? "branding-image-dark" : ""}`.trim()}
-            loading="lazy"
-            onError={() => setFailedDarkLogoUrl(darkLogoUrl)}
-          />
-        ) : null}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={activeLogoUrl}
+          alt={`${sourceName} header logo`}
+          className="source-header-logo"
+          loading="lazy"
+          onError={() => {
+            if (theme === "dark") {
+              setFailedDarkLogoUrl(activeLogoUrl);
+            } else {
+              setFailedLightLogoUrl(activeLogoUrl);
+            }
+          }}
+        />
       </span>
     );
   }
