@@ -6368,7 +6368,25 @@ export default function Home() {
           return articleMatchesSelectedCategory(article, category);
         });
 
-        const selectedArticles = selectSourceBalancedArticles(matchingArticles, 6);
+        const rankedArticles = [...matchingArticles].sort((leftArticle, rightArticle) => {
+          const leftDisplayCategory = getDisplayCategory(leftArticle.category, {
+            source: leftArticle.source,
+            title: leftArticle.title,
+          });
+          const rightDisplayCategory = getDisplayCategory(rightArticle.category, {
+            source: rightArticle.source,
+            title: rightArticle.title,
+          });
+          const leftExactCategoryBoost =
+            leftDisplayCategory.toLowerCase() === category.toLowerCase() ? 90 : 0;
+          const rightExactCategoryBoost =
+            rightDisplayCategory.toLowerCase() === category.toLowerCase() ? 90 : 0;
+          const leftScore = getArticlePriorityScore(leftArticle) + leftExactCategoryBoost;
+          const rightScore = getArticlePriorityScore(rightArticle) + rightExactCategoryBoost;
+          return rightScore - leftScore;
+        });
+
+        const selectedArticles = selectSourceBalancedArticles(rankedArticles, 6);
         selectedArticles.forEach((article) => usedKeys.add(getArticleDeduplicationKey(article)));
 
         return {
@@ -8793,6 +8811,32 @@ export default function Home() {
     );
   };
 
+  const renderRankedCompactArticleSection = (
+    articles: Article[],
+    options?: {
+      limit?: number;
+      excludeArticleKey?: string | null;
+    }
+  ) => {
+    const limitedArticles = articles
+      .filter((article) =>
+        options?.excludeArticleKey
+          ? getArticleDeduplicationKey(article) !== options.excludeArticleKey
+          : true
+      )
+      .slice(0, options?.limit ?? 5);
+
+    return (
+      <div className="stack home-section-list top-trending-card-rail top-trending-list-rail" role="list">
+        {limitedArticles.map((article, index) => (
+          <div key={article.id || article.url || getArticleDeduplicationKey(article)} role="listitem">
+            {renderCompactSideImageArticle(article, { showRank: index + 1 })}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const renderQuickWatchRow = (
     compact = false,
     useUniformTallFrame = false,
@@ -10872,7 +10916,7 @@ export default function Home() {
               </div>
             )
           ) : (
-            renderStandardArticleSection(scienceTabArticles, { limit: 6 })
+            renderArticleSectionWithLargeLead(scienceTabArticles, { limit: 6 })
           )}
         </section>
 
@@ -11029,13 +11073,29 @@ export default function Home() {
                           </strong>
                         </div>
                       </div>
-                      <div className="stack home-section-list">
-                        {section.articles.map((article) => (
-                          <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                            {renderArticleFeedCard(article)}
+                      {(() => {
+                        const leadArticle =
+                          section.articles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
+                        const leadArticleKey = leadArticle
+                          ? getArticleDeduplicationKey(leadArticle)
+                          : null;
+
+                        return (
+                          <div className="stack" style={{ gap: "18px" }}>
+                            {leadArticle ? (
+                              <div
+                                key={`mynews-large-${leadArticle.id || leadArticle.url || leadArticleKey}`}
+                              >
+                                {renderLargeImageArticleCard(leadArticle)}
+                              </div>
+                            ) : null}
+                            {renderRankedCompactArticleSection(section.articles, {
+                              limit: 5,
+                              excludeArticleKey: leadArticleKey,
+                            })}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
                     </section>
 
                     {renderMyNewsCategoryVideosRow(
