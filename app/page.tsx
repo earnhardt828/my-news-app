@@ -138,6 +138,38 @@ const NHL_SECTION_VIDEO_QUERIES = [
   "Stanley Cup highlights",
   "NHL Network highlights",
 ] as const;
+const MLS_SECTION_ARTICLE_QUERIES = [
+  "MLS news",
+  "Major League Soccer news",
+  "MLSsoccer.com latest",
+  "ESPN Soccer",
+  "ESPN MLS",
+  "CBS Sports Golazo",
+  "NBC Sports Soccer",
+  "Fox Sports Soccer",
+  "Yahoo Sports Soccer",
+  "AP Soccer",
+  "Reuters Soccer",
+  "The Athletic Soccer",
+  "FC Cincinnati",
+  "Charlotte FC",
+  "Inter Miami",
+  "LAFC",
+  "Atlanta United",
+  "Seattle Sounders",
+] as const;
+const NBA_SECTION_VIDEO_QUERIES = [
+  "NBA highlights today",
+  "NBA.com highlights",
+  "ESPN NBA highlights",
+  "TNT NBA highlights",
+  "NBA on ESPN",
+  "basketball highlights",
+  "dunk highlights",
+  "buzzer beater",
+  "NBA playoff highlights",
+  "NBA Finals highlights",
+] as const;
 const NFL_SECTION_ARTICLE_QUERIES = [
   "NFL news",
   "NFL latest",
@@ -317,6 +349,32 @@ function buildNflFallbackVideos(): VideoItem[] {
       theme: "video-card-theme-ink",
     },
   ];
+}
+
+function normalizeSelectedCategoryName(category: string) {
+  const cleaned = cleanDisplayText(category).trim();
+
+  if (!cleaned) {
+    return "";
+  }
+
+  const directMatch = CATEGORY_OPTIONS.find(
+    (option) => option.toLowerCase() === cleaned.toLowerCase()
+  );
+
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const labelMatch = CATEGORY_OPTIONS.find(
+    (option) => getCategoryLabel(option).toLowerCase() === cleaned.toLowerCase()
+  );
+
+  if (labelMatch) {
+    return labelMatch;
+  }
+
+  return cleaned;
 }
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
@@ -859,16 +917,17 @@ function isSportsFeaturedCandidate(article: Pick<Article, "title" | "source" | "
 }
 
 function articleMatchesSelectedCategory(article: Article, selectedCategory: string) {
+  const normalizedCategory = normalizeSelectedCategoryName(selectedCategory);
   const displayCategory = getDisplayCategory(article.category, {
     source: article.source,
     title: article.title,
   });
 
-  if (displayCategory.toLowerCase() === selectedCategory.toLowerCase()) {
+  if (displayCategory.toLowerCase() === normalizedCategory.toLowerCase()) {
     return true;
   }
 
-  const matcher = SELECTED_CATEGORY_MATCHERS[selectedCategory];
+  const matcher = SELECTED_CATEGORY_MATCHERS[normalizedCategory];
 
   if (!matcher) {
     return false;
@@ -879,7 +938,8 @@ function articleMatchesSelectedCategory(article: Article, selectedCategory: stri
 }
 
 function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string) {
-  const matcher = SELECTED_CATEGORY_MATCHERS[selectedCategory];
+  const normalizedCategory = normalizeSelectedCategoryName(selectedCategory);
+  const matcher = SELECTED_CATEGORY_MATCHERS[normalizedCategory];
 
   if (!matcher) {
     return false;
@@ -2221,8 +2281,12 @@ function isStrictMlbVideo(video: VideoItem) {
 
 function isStrictNhlVideo(video: VideoItem) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
-  const hasNhlTerms =
-    /(nhl|hockey|stanley cup|goal|save|overtime|playoff|nhl network|nhl\.com|rangers|bruins|maple leafs|oilers|panthers|hurricanes|stars|avalanche|golden knights|devils|islanders|flyers|penguins|red wings|blackhawks|kraken|kings|ducks|sharks|canucks|flames|senators|canadiens|jets|wild|predators|blues|blue jackets|sabres|utah hockey club)/.test(
+  const hasCoreNhlTerms =
+    /(nhl|hockey|stanley cup|goal|save|overtime|playoff|nhl network|nhl\.com|espn nhl)/.test(
+      haystack
+    );
+  const hasNhlTeamTerms =
+    /\b(rangers|bruins|maple leafs|oilers|panthers|hurricanes|stars|avalanche|golden knights|devils|islanders|flyers|penguins|red wings|blackhawks|kraken|kings|ducks|sharks|canucks|flames|senators|canadiens|jets|wild|predators|blues|blue jackets|sabres|utah hockey club)\b/.test(
       haystack
     );
   const hasPreferredSource =
@@ -2234,7 +2298,29 @@ function isStrictNhlVideo(video: VideoItem) {
       haystack
     );
 
-  return !hasRejectedTerms && (hasNhlTerms || hasPreferredSource);
+  return !hasRejectedTerms && (hasPreferredSource || hasCoreNhlTerms || (hasNhlTeamTerms && /\b(hockey|nhl|stanley cup|goal|save|overtime|playoff)\b/.test(haystack)));
+}
+
+function isStrictNbaVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  const hasCoreNbaTerms =
+    /(nba|basketball|nba\.com|espn nba|tnt nba|nba on espn|dunk|buzzer beater|playoff|finals)/.test(
+      haystack
+    );
+  const hasNbaTeamTerms =
+    /\b(lakers|celtics|knicks|warriors|nuggets|timberwolves|mavericks|thunder|bucks|heat|suns|clippers|rockets|spurs|grizzlies|pacers|cavaliers|hawks|nets|bulls|pistons|raptors|76ers|sixers|pelicans|magic|hornets|kings|trail blazers|blazers|jazz|wizards)\b/.test(
+      haystack
+    );
+  const hasPreferredSource =
+    /(nba\.com|espn nba|nba on espn|tnt nba|bleacher report nba|yahoo sports nba|cbs sports nba|nbc sports nba)/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|nhl|hockey|mlb|baseball|nfl|football|mls|soccer)/.test(
+      haystack
+    );
+
+  return !hasRejectedTerms && (hasPreferredSource || hasCoreNbaTerms || (hasNbaTeamTerms && /\b(basketball|nba|dunk|buzzer beater|finals|playoff)\b/.test(haystack)));
 }
 
 function matchesFavoriteLeagueTeamName(text: string, league: FavoriteLeagueKey) {
@@ -2297,7 +2383,7 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
                 haystack
               )
             : section.key === "MLS"
-              ? /\b(mlssoccer\.com|soccer|football club|fc cincinnati|inter miami|charlotte fc|atlanta united|premier league|champions league|bbc sport)\b/i.test(
+              ? /\b(mlssoccer\.com|major league soccer|soccer|football club|espn soccer|espn mls|cbs sports golazo|nbc sports soccer|fox sports soccer|yahoo sports soccer|ap soccer|reuters soccer|the athletic soccer|fc cincinnati|charlotte fc|inter miami|lafc|atlanta united|seattle sounders|lionel messi|usmnt|uswnt|local mls|team official site)\b/i.test(
                   haystack
                 )
               : section.key === "COLLEGE_FOOTBALL"
@@ -2329,20 +2415,19 @@ function matchesSportsSectionVideo(video: VideoItem, section: SportsSectionConfi
   if (section.key === "NFL") {
     return isStrictNflVideo(video);
   }
+  if (section.key === "NBA") {
+    return isStrictNbaVideo(video);
+  }
+  if (section.key === "NHL") {
+    return isStrictNhlVideo(video);
+  }
 
   if (section.key === "MLB" && matchesFavoriteLeagueTeamName(haystack, "MLB")) {
-    return true;
-  }
-  if (section.key === "NBA" && matchesFavoriteLeagueTeamName(haystack, "NBA")) {
     return true;
   }
   if (section.key === "MLS" && matchesFavoriteLeagueTeamName(haystack, "MLS")) {
     return true;
   }
-  if (section.key === "NHL" && matchesFavoriteLeagueTeamName(haystack, "NHL")) {
-    return true;
-  }
-
   return section.videoPattern.test(haystack);
 }
 
@@ -2540,6 +2625,8 @@ export default function Home() {
   const [mlbSectionVideos, setMlbSectionVideos] = useState<VideoItem[]>([]);
   const [nhlSectionArticles, setNhlSectionArticles] = useState<Article[]>([]);
   const [nhlSectionVideos, setNhlSectionVideos] = useState<VideoItem[]>([]);
+  const [mlsSectionArticles, setMlsSectionArticles] = useState<Article[]>([]);
+  const [nbaSectionVideos, setNbaSectionVideos] = useState<VideoItem[]>([]);
   const [nflSectionArticles, setNflSectionArticles] = useState<Article[]>([]);
   const [nflSectionVideos, setNflSectionVideos] = useState<VideoItem[]>([]);
   const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
@@ -6220,15 +6307,20 @@ export default function Home() {
     return selectSourceBalancedArticles(categorySectionArticles.slice(0, 60), 25);
   }, [categories.length, categorySectionArticles]);
 
+  const normalizedSelectedCategories = useMemo(
+    () => categories.map((category) => normalizeSelectedCategoryName(category)),
+    [categories]
+  );
+
   const myNewsCategorySections = useMemo(() => {
-    if (categories.length === 0) {
+    if (normalizedSelectedCategories.length === 0) {
       return [] as Array<{ category: string; articles: Article[] }>;
     }
 
     const recommendedArticles = selectSourceBalancedArticles(categorySectionArticles.slice(0, 18), 8);
     const usedKeys = new Set<string>();
 
-    const sections = categories
+    const sections = normalizedSelectedCategories
       .map((category) => {
         const matchingArticles = categorySectionArticles.filter((article) => {
           const dedupeKey = getArticleDeduplicationKey(article);
@@ -6258,10 +6350,10 @@ export default function Home() {
         ),
       },
     ];
-  }, [categories, categorySectionArticles]);
+  }, [categorySectionArticles, normalizedSelectedCategories]);
 
   const myNewsCategoryVideoSections = useMemo(() => {
-    if (categories.length === 0) {
+    if (normalizedSelectedCategories.length === 0) {
       return {} as Record<string, VideoItem[]>;
     }
 
@@ -6274,7 +6366,7 @@ export default function Home() {
     const usedVideoIds = new Set<string>();
     const sectionVideos: Record<string, VideoItem[]> = {};
 
-    categories.forEach((category) => {
+    normalizedSelectedCategories.forEach((category) => {
       const matchingVideos = candidateVideos.filter((video) => {
         if (usedVideoIds.has(video.id)) {
           return false;
@@ -6303,7 +6395,16 @@ export default function Home() {
     });
 
     return sectionVideos;
-  }, [categories, celebrityVideos, sportsVideos, videos, weatherVideos]);
+  }, [celebrityVideos, normalizedSelectedCategories, sportsVideos, videos, weatherVideos]);
+
+  useEffect(() => {
+    console.log("SELECTED CATEGORIES", normalizedSelectedCategories);
+    console.log("CELEBRITY SELECTED", normalizedSelectedCategories.includes("Celebrity"));
+    console.log(
+      "CELEBRITY SECTION COUNT",
+      myNewsCategorySections.find((section) => section.category === "Celebrity")?.articles.length ?? 0
+    );
+  }, [myNewsCategorySections, normalizedSelectedCategories]);
 
   useEffect(() => {
     if (sortMode === "sports") {
@@ -6321,6 +6422,8 @@ export default function Home() {
           setMlbSectionVideos([]);
           setNhlSectionArticles([]);
           setNhlSectionVideos([]);
+          setMlsSectionArticles([]);
+          setNbaSectionVideos([]);
           setNflSectionArticles([]);
           setNflSectionVideos([]);
         }
@@ -6333,6 +6436,8 @@ export default function Home() {
           mlbVideoResponses,
           nhlArticleResponses,
           nhlVideoResponses,
+          mlsArticleResponses,
+          nbaVideoResponses,
           nflArticleResponses,
           nflVideoResponses,
         ] = await Promise.all([
@@ -6388,6 +6493,35 @@ export default function Home() {
 
               if (!response.ok) {
                 throw new Error(`NHL video request failed (${response.status})`);
+              }
+
+              const payload = (await response.json()) as { videos?: VideoApiItem[] };
+              return normalizeVideoFeedItems(payload.videos ?? []);
+            })
+          ),
+          Promise.allSettled(
+            MLS_SECTION_ARTICLE_QUERIES.map(async (query) => {
+              const response = await apiFetch(
+                `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=6`
+              );
+
+              if (!response.ok) {
+                throw new Error(`MLS article request failed (${response.status})`);
+              }
+
+              return hydrateFeedArticles(
+                normalizeNewsPayload(
+                  (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+                ).articles
+              );
+            })
+          ),
+          Promise.allSettled(
+            NBA_SECTION_VIDEO_QUERIES.map(async (query) => {
+              const response = await apiFetch(`/api/videos?tab=sports&q=${encodeURIComponent(query)}`);
+
+              if (!response.ok) {
+                throw new Error(`NBA video request failed (${response.status})`);
               }
 
               const payload = (await response.json()) as { videos?: VideoApiItem[] };
@@ -6530,6 +6664,72 @@ export default function Home() {
         setNhlSectionArticles(filteredNhlArticles);
         setNhlSectionVideos(finalNhlVideos);
 
+        console.log(
+          "NHL VIDEO REJECTED SAMPLE",
+          mergedNhlVideos
+            .filter((video) => !isStrictNhlVideo(video))
+            .slice(0, 5)
+            .map((video) => ({
+              id: video.id,
+              title: video.title,
+              creator: video.creator,
+            }))
+        );
+
+        const mergedMlsArticles = mlsArticleResponses.reduce<Article[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("MLS article fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return mergeArticlesByIdentity(accumulator, result.value);
+        }, []);
+
+        console.log("MLS ARTICLES RAW COUNT", mergedMlsArticles.length);
+        const filteredMlsArticles = selectSourceBalancedArticles(
+          mergedMlsArticles.filter(
+            (article) =>
+              matchesSportsSectionArticle(article, SPORTS_SECTION_CONFIGS.find((section) => section.key === "MLS")!) &&
+              !isSportsBettingAd(article)
+          ),
+          14
+        );
+        console.log("MLS ARTICLES FINAL COUNT", filteredMlsArticles.length);
+        console.log(
+          "MLS ARTICLE SAMPLE",
+          filteredMlsArticles.slice(0, 5).map((article) => ({
+            title: article.title,
+            source: article.source,
+            category: article.category,
+          }))
+        );
+        setMlsSectionArticles(filteredMlsArticles);
+
+        const mergedNbaVideos = nbaVideoResponses.reduce<VideoItem[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("NBA video fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return dedupeVideosBySourceTitleAndUrl([...accumulator, ...result.value]);
+        }, []);
+        const strictNbaVideos = mergedNbaVideos.filter((video) => isStrictNbaVideo(video));
+        console.log(
+          "NBA VIDEO REJECTED SAMPLE",
+          mergedNbaVideos
+            .filter((video) => !isStrictNbaVideo(video))
+            .slice(0, 5)
+            .map((video) => ({
+              id: video.id,
+              title: video.title,
+              creator: video.creator,
+            }))
+        );
+        console.log("NBA VIDEO FINAL COUNT", strictNbaVideos.length);
+        setNbaSectionVideos(
+          strictNbaVideos.length > 0 ? selectSourceBalancedVideos(strictNbaVideos, 10) : []
+        );
+
         const mergedNflArticles = nflArticleResponses.reduce<Article[]>((accumulator, result) => {
           if (result.status !== "fulfilled") {
             console.error("NFL article fetch failed:", result.reason);
@@ -6571,6 +6771,8 @@ export default function Home() {
           setMlbSectionVideos([]);
           setNhlSectionArticles([]);
           setNhlSectionVideos([]);
+          setMlsSectionArticles([]);
+          setNbaSectionVideos([]);
           setNflSectionArticles([]);
           setNflSectionVideos([]);
         }
@@ -6944,38 +7146,38 @@ export default function Home() {
     }
 
     const usedVideoIds = new Set(myNewsQuickWatchVideos.map((video) => video.id));
-    const sportsFirstPool = selectSourceBalancedVideos(
-      ensureMinimumVideoCount(
-        [...sportsVideos, ...videos]
-          .filter((video) => {
-            return (
-              !usedVideoIds.has(video.id) &&
-              (isSportsVideo(video) ||
-                (video.fallback &&
-                  /\b(sports|football|basketball|baseball|hockey|soccer|highlights?|top plays)\b/i.test(
-                    `${video.category} ${video.title} ${video.creator}`
-                  )))
-            );
-          })
-          .sort((left, right) => {
-            const leftVertical = left.orientation === "vertical" ? 1 : 0;
-            const rightVertical = right.orientation === "vertical" ? 1 : 0;
+    const preferredGeneralNewsPattern =
+      /\b(cnn|reuters|ap news|associated press|abc news|nbc news|cbs news|bbc|pbs|pbs newshour|al jazeera|fox news)\b/i;
+    const rejectedSportsPattern =
+      /\b(nhl|nba|nfl|mlb|mls|espn|sportscenter|hockey|football|basketball|baseball|soccer)\b/i;
+    const rejectedNonNewsPattern =
+      /\b(celebrity|tmz|page six|entertainment tonight|e! news|weather channel|fox weather|accuweather|recipe|cooking|food network|travel|gossip)\b/i;
 
-            if (rightVertical !== leftVertical) {
-              return rightVertical - leftVertical;
-            }
+    const candidateVideos = myNewsVideoPool
+      .filter((video) => {
+        if (usedVideoIds.has(video.id)) {
+          return false;
+        }
 
-            return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
-          }),
-        [...sportsVideos, ...videos].filter((video) => video.fallback && !usedVideoIds.has(video.id)),
-        3
-      ),
-      10,
-      1
-    );
+        const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`;
+        return preferredGeneralNewsPattern.test(haystack) && !rejectedSportsPattern.test(haystack) && !rejectedNonNewsPattern.test(haystack);
+      })
+      .sort((left, right) => {
+        const leftPreferred = preferredGeneralNewsPattern.test(
+          `${left.title} ${left.creator} ${left.category} ${left.watchUrl}`
+        )
+          ? 1
+          : 0;
+        const rightPreferred = preferredGeneralNewsPattern.test(
+          `${right.title} ${right.creator} ${right.category} ${right.watchUrl}`
+        )
+          ? 1
+          : 0;
 
-    const prioritizedSportsVideos = selectSourceBalancedVideos(
-      sportsFirstPool.sort((left, right) => {
+        if (rightPreferred !== leftPreferred) {
+          return rightPreferred - leftPreferred;
+        }
+
         const leftVertical = left.orientation === "vertical" ? 1 : 0;
         const rightVertical = right.orientation === "vertical" ? 1 : 0;
 
@@ -6984,23 +7186,10 @@ export default function Home() {
         }
 
         return getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt);
-      }),
-      5,
-      1
-    );
+      });
 
-    if (prioritizedSportsVideos.length >= 3) {
-      return prioritizedSportsVideos;
-    }
-
-    const fallbackPool = myNewsVideoPool.filter(
-      (video) =>
-        !usedVideoIds.has(video.id) &&
-        !prioritizedSportsVideos.some((selectedVideo) => selectedVideo.id === video.id)
-    );
-
-    return dedupeVideosBySourceTitleAndUrl([...prioritizedSportsVideos, ...fallbackPool]).slice(0, 5);
-  }, [myNewsQuickWatchVideos, myNewsVideoPool, sortMode, sportsVideos, videos]);
+    return selectSourceBalancedVideos(candidateVideos, 5, 1);
+  }, [myNewsQuickWatchVideos, myNewsVideoPool, sortMode]);
 
   const trendingTallQuickWatchSections = useMemo(() => {
     if (sortMode !== "trending") {
@@ -7323,12 +7512,16 @@ export default function Home() {
           ? mlbSectionArticles
           : section.key === "NHL"
             ? nhlSectionArticles
+            : section.key === "MLS"
+              ? mlsSectionArticles
             : section.key === "NFL"
               ? nflSectionArticles
               : [];
       const supplementalVideos =
         section.key === "MLB"
           ? mlbSectionVideos
+          : section.key === "NBA"
+            ? nbaSectionVideos
           : section.key === "NHL"
             ? nhlSectionVideos
             : section.key === "NFL"
@@ -7431,7 +7624,7 @@ export default function Home() {
         videos: selectedVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -8758,7 +8951,7 @@ export default function Home() {
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "sports")}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
                 frameRef={(node) => {
                   trendingVideoFrameRefs.current[`breaking-featured-videos:${video.id}`] = node;
                 }}
