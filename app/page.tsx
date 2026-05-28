@@ -392,21 +392,24 @@ const BUSINESS_FEED_QUERY =
 const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
   NASCAR: [
     "NASCAR highlights",
+    "NASCAR Cup Series highlights",
     "NASCAR crash highlights",
     "NASCAR race recap",
-    "NASCAR Cup Series highlights",
+    "motorsport highlights",
   ],
   MLB: [
     "MLB highlights",
-    "MLB Network highlights",
     "baseball highlights",
-    "home run highlights",
+    "MLB Network highlights",
+    "MLB.com highlights",
+    "Yankees Dodgers Braves Astros Rangers highlights",
   ],
   NFL: [
     "NFL highlights",
     "NFL Network highlights",
     "ESPN NFL highlights",
     "touchdown highlights",
+    "Cowboys Panthers Chiefs Eagles highlights",
   ],
   MLS: [
     "MLS highlights",
@@ -414,6 +417,7 @@ const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
     "soccer highlights",
     "Charlotte FC highlights",
     "FC Cincinnati highlights",
+    "Inter Miami highlights",
   ],
   "College Basketball": [
     "college basketball highlights",
@@ -424,20 +428,39 @@ const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
     "NHL highlights",
     "hockey highlights",
     "Stanley Cup highlights",
+    "NHL Network highlights",
+    "NHL.com highlights",
   ],
   Technology: [
-    "technology news video",
-    "AI news video",
+    "technology news",
+    "AI news",
+    "Apple tech news",
+    "Google AI news",
+    "cybersecurity news",
+    "gadgets review",
+  ],
+  Tech: [
+    "technology news",
+    "AI news",
+    "Apple tech news",
+    "Google AI news",
+    "cybersecurity news",
+    "gadgets review",
   ],
   Celebrity: [
-    "E News celebrity video",
-    "Entertainment Tonight celebrity video",
-    "People celebrity video",
+    "E News celebrity",
+    "Entertainment Tonight celebrity",
+    "People celebrity",
+    "TMZ celebrity",
+    "Hollywood Reporter celebrity",
+    "red carpet interviews",
   ],
   Food: [
     "recipe video",
     "cooking video",
     "Food Network recipe",
+    "Bon Appetit cooking",
+    "restaurant review",
   ],
 };
 const MAJOR_WEATHER_CITY_SUGGESTIONS = [
@@ -526,6 +549,246 @@ const SELECTED_CATEGORY_MATCHERS: Record<string, RegExp> = {
   Opinion: /\b(opinion|editorial|column|analysis|commentary)\b/i,
   "Breaking News": /\b(breaking|live updates|developing|urgent|just in|alert)\b/i,
 };
+
+type CategoryTaxonomyRule = {
+  coreTerms: string[];
+  contextTerms?: string[];
+  relatedTerms?: string[];
+  sourceTerms?: string[];
+  domainTerms?: string[];
+  negativeTerms?: string[];
+  suggestedSources?: string[];
+};
+
+const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
+  MLB: {
+    coreTerms: ["mlb", "major league baseball", "baseball"],
+    contextTerms: ["mlb", "baseball", "home run", "highlights", "innings"],
+    relatedTerms: [
+      "yankees",
+      "dodgers",
+      "braves",
+      "astros",
+      "rangers",
+      "mets",
+      "red sox",
+      "cubs",
+      "phillies",
+      "padres",
+      "orioles",
+      "tigers",
+      "guardians",
+      "mariners",
+      "giants",
+      "cardinals",
+      "brewers",
+      "diamondbacks",
+      "blue jays",
+      "royals",
+      "twins",
+      "reds",
+      "pirates",
+      "rays",
+      "marlins",
+      "rockies",
+      "athletics",
+      "angels",
+      "nationals",
+      "white sox",
+      "home run",
+    ],
+    sourceTerms: ["mlb.com", "espn mlb", "mlb network", "baseball america", "the athletic mlb"],
+    domainTerms: ["mlb.com", "espn.com", "theathletic.com"],
+    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    suggestedSources: ["MLB.com", "ESPN MLB", "Baseball America", "The Athletic MLB", "AP MLB"],
+  },
+  NFL: {
+    coreTerms: ["nfl", "football", "touchdown", "quarterback", "super bowl"],
+    contextTerms: ["nfl", "football", "touchdown", "quarterback", "super bowl", "highlights"],
+    relatedTerms: ["cowboys", "panthers", "chiefs", "eagles", "packers", "bears", "draft", "training camp"],
+    sourceTerms: ["nfl.com", "espn nfl", "nfl network", "fox sports nfl", "ap nfl"],
+    domainTerms: ["nfl.com", "espn.com"],
+    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    suggestedSources: ["NFL.com", "ESPN NFL", "AP NFL", "The Athletic NFL", "Fox Sports NFL"],
+  },
+  NHL: {
+    coreTerms: ["nhl", "hockey", "stanley cup"],
+    contextTerms: ["nhl", "hockey", "stanley cup", "goal", "save", "overtime", "playoff", "highlights"],
+    relatedTerms: [
+      "goal",
+      "save",
+      "overtime",
+      "playoff",
+      "rangers",
+      "bruins",
+      "oilers",
+      "panthers",
+      "hurricanes",
+      "stars",
+      "avalanche",
+      "golden knights",
+      "maple leafs",
+      "devils",
+      "islanders",
+      "flyers",
+      "penguins",
+      "red wings",
+      "blackhawks",
+      "kraken",
+      "kings",
+      "ducks",
+      "sharks",
+      "canucks",
+      "flames",
+      "senators",
+      "canadiens",
+      "jets",
+      "wild",
+      "predators",
+      "blues",
+      "blue jackets",
+      "sabres",
+      "utah hockey club",
+    ],
+    sourceTerms: ["nhl.com", "nhl network", "espn nhl", "sportsnet nhl", "tsn hockey"],
+    domainTerms: ["nhl.com", "espn.com"],
+    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    suggestedSources: ["NHL.com", "ESPN NHL", "Sportsnet NHL", "The Hockey News", "TSN Hockey"],
+  },
+  MLS: {
+    coreTerms: ["mls", "major league soccer", "soccer"],
+    contextTerms: ["mls", "major league soccer", "soccer", "football club", "highlights"],
+    relatedTerms: [
+      "football club",
+      "fc cincinnati",
+      "charlotte fc",
+      "inter miami",
+      "lafc",
+      "atlanta united",
+      "seattle sounders",
+      "lionel messi",
+      "usmnt",
+      "uswnt",
+    ],
+    sourceTerms: ["mlssoccer.com", "espn soccer", "espn mls", "cbs sports golazo", "fox sports soccer"],
+    domainTerms: ["mlssoccer.com", "espn.com"],
+    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    suggestedSources: ["MLSsoccer.com", "ESPN Soccer", "CBS Sports Golazo", "The Athletic Soccer", "FC Cincinnati"],
+  },
+  NASCAR: {
+    coreTerms: ["nascar", "motorsport", "motorsports", "racing", "race recap", "cup series"],
+    contextTerms: ["nascar", "motorsport", "racing", "cup series", "highlights"],
+    relatedTerms: ["daytona", "crash highlights", "stock car", "pit road", "checkered flag"],
+    sourceTerms: ["nascar.com", "motorsport.com", "fox sports nascar", "nbc sports nascar"],
+    domainTerms: ["nascar.com", "motorsport.com"],
+    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    suggestedSources: ["NASCAR.com", "Motorsport.com", "Fox Sports NASCAR", "NBC Sports NASCAR", "RACER"],
+  },
+  Technology: {
+    coreTerms: ["technology", "tech", "ai", "artificial intelligence", "software", "cybersecurity"],
+    contextTerms: ["technology", "tech", "ai", "software", "cybersecurity", "gadget"],
+    relatedTerms: ["gadgets", "apple", "google", "microsoft", "openai", "chip", "startup", "developer"],
+    sourceTerms: ["techcrunch", "the verge", "wired", "ars technica", "engadget", "cnet", "bloomberg technology"],
+    domainTerms: ["techcrunch.com", "theverge.com", "wired.com", "arstechnica.com", "engadget.com", "cnet.com"],
+    negativeTerms: ["world cup", "war update", "weather alert", "celebrity", "recipe"],
+    suggestedSources: ["TechCrunch", "The Verge", "Wired", "Ars Technica", "Bloomberg Technology"],
+  },
+  Tech: {
+    coreTerms: ["technology", "tech", "ai", "artificial intelligence", "software", "cybersecurity"],
+    contextTerms: ["technology", "tech", "ai", "software", "cybersecurity", "gadget"],
+    relatedTerms: ["gadgets", "apple", "google", "microsoft", "openai", "chip", "startup", "developer"],
+    sourceTerms: ["techcrunch", "the verge", "wired", "ars technica", "engadget", "cnet", "bloomberg technology"],
+    domainTerms: ["techcrunch.com", "theverge.com", "wired.com", "arstechnica.com", "engadget.com", "cnet.com"],
+    negativeTerms: ["world cup", "war update", "weather alert", "celebrity", "recipe"],
+    suggestedSources: ["TechCrunch", "The Verge", "Wired", "Ars Technica", "Bloomberg Technology"],
+  },
+  Celebrity: {
+    coreTerms: ["celebrity", "entertainment", "hollywood", "movie", "tv", "music"],
+    contextTerms: ["celebrity", "entertainment", "hollywood", "movie", "tv", "music", "red carpet"],
+    relatedTerms: ["red carpet", "actor", "actress", "singer", "interview", "award show", "gossip"],
+    sourceTerms: ["e! news", "entertainment tonight", "people", "tmz", "page six", "billboard", "variety", "hollywood reporter", "deadline"],
+    domainTerms: ["eonline.com", "people.com", "tmz.com", "pagesix.com", "billboard.com", "variety.com", "hollywoodreporter.com", "deadline.com"],
+    negativeTerms: ["election", "war", "hurricane", "recipe", "stock market"],
+    suggestedSources: ["People", "E! News", "Entertainment Tonight", "TMZ", "The Hollywood Reporter"],
+  },
+  Food: {
+    coreTerms: ["food", "recipe", "cooking", "restaurant", "dining"],
+    contextTerms: ["food", "recipe", "cooking", "restaurant", "dining", "chef"],
+    relatedTerms: ["chef", "kitchen", "meal", "dessert", "restaurant review", "food scene"],
+    sourceTerms: ["food network", "bon appétit", "bon appetit", "serious eats", "eater", "allrecipes", "food & wine", "delish"],
+    domainTerms: ["foodnetwork.com", "bonappetit.com", "seriouseats.com", "eater.com", "allrecipes.com", "foodandwine.com"],
+    negativeTerms: ["election", "war", "hurricane", "touchdown", "stock market"],
+    suggestedSources: ["Food Network", "Bon Appétit", "Serious Eats", "Eater", "Allrecipes"],
+  },
+  "College Basketball": {
+    coreTerms: ["college basketball", "ncaa basketball", "march madness", "final four"],
+    contextTerms: ["college basketball", "ncaa basketball", "march madness", "final four", "basketball", "highlights"],
+    relatedTerms: ["hoops", "bracket", "ncaa tournament"],
+    sourceTerms: ["espn college basketball", "cbs sports college basketball", "ncaa"],
+    domainTerms: ["espn.com", "ncaa.com"],
+    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    suggestedSources: ["ESPN College Basketball", "CBS Sports College Basketball", "NCAA", "The Athletic CBB"],
+  },
+};
+
+function normalizeCategoryTaxonomyValue(value: string | null | undefined) {
+  return cleanDisplayText(value ?? "")
+    .toLowerCase()
+    .replace(/\.com\b/g, "")
+    .replace(/[^a-z0-9\s/-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildCategoryTaxonomyHaystack(parts: Array<string | null | undefined>) {
+  return normalizeCategoryTaxonomyValue(parts.filter(Boolean).join(" "));
+}
+
+function matchesCategoryTaxonomy(
+  category: string,
+  parts: Array<string | null | undefined>,
+  options?: { fallbackToRegex?: boolean }
+) {
+  const normalizedCategory = normalizeSelectedCategoryName(category);
+  const taxonomy = CATEGORY_TAXONOMY[normalizedCategory];
+  const haystack = buildCategoryTaxonomyHaystack(parts);
+
+  if (!haystack) {
+    return false;
+  }
+
+  if (!taxonomy) {
+    return options?.fallbackToRegex !== false
+      ? (SELECTED_CATEGORY_MATCHERS[normalizedCategory]?.test(haystack) ?? false)
+      : false;
+  }
+
+  if (taxonomy.negativeTerms?.some((term) => haystack.includes(normalizeCategoryTaxonomyValue(term)))) {
+    return false;
+  }
+
+  const coreMatched = taxonomy.coreTerms.some((term) =>
+    haystack.includes(normalizeCategoryTaxonomyValue(term))
+  );
+  const sourceMatched = (taxonomy.sourceTerms ?? []).some((term) =>
+    haystack.includes(normalizeCategoryTaxonomyValue(term))
+  );
+  const domainMatched = (taxonomy.domainTerms ?? []).some((term) =>
+    haystack.includes(normalizeCategoryTaxonomyValue(term))
+  );
+  const relatedMatched = (taxonomy.relatedTerms ?? []).some((term) =>
+    haystack.includes(normalizeCategoryTaxonomyValue(term))
+  );
+  const contextMatched = (taxonomy.contextTerms ?? taxonomy.coreTerms).some((term) =>
+    haystack.includes(normalizeCategoryTaxonomyValue(term))
+  );
+
+  return coreMatched || sourceMatched || domainMatched || (relatedMatched && contextMatched);
+}
+
+function sourceMatchesSelectedCategory(sourceName: string, category: string) {
+  return matchesCategoryTaxonomy(category, [sourceName], { fallbackToRegex: true });
+}
 const BROAD_SPORTS_SOURCE_PATTERN =
   /\b(motorsport\.com|motorsport|nascar\.com|nascar|bleacher report|mlb\.com|nhl\.com|nba\.com|nfl\.com|mlssoccer\.com|espn|yahoo sports|fox sports|nbc sports|cbs sports|sports illustrated|ap sports|ap news sports|reuters sports|fc cincinnati|hero sports|big 12|big 12 conference|dallas cowboys|official site|team site|conference site|sports|athletics|sporting)\b/i;
 const MY_NEWS_FEATURED_SPORTS_PATTERN =
@@ -981,26 +1244,28 @@ function articleMatchesSelectedCategory(article: Article, selectedCategory: stri
     return true;
   }
 
-  const matcher = SELECTED_CATEGORY_MATCHERS[normalizedCategory];
-
-  if (!matcher) {
-    return false;
-  }
-
-  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${displayCategory}`.toLowerCase();
-  return matcher.test(haystack);
+  return matchesCategoryTaxonomy(
+    normalizedCategory,
+    [
+      article.title,
+      article.description,
+      article.source,
+      displayCategory,
+      article.url,
+      article.content,
+      article.image,
+    ],
+    { fallbackToRegex: true }
+  );
 }
 
 function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string) {
   const normalizedCategory = normalizeSelectedCategoryName(selectedCategory);
-  const matcher = SELECTED_CATEGORY_MATCHERS[normalizedCategory];
-
-  if (!matcher) {
-    return false;
-  }
-
-  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
-  return matcher.test(haystack);
+  return matchesCategoryTaxonomy(
+    normalizedCategory,
+    [video.title, video.creator, video.category, video.watchUrl, video.thumbnailUrl],
+    { fallbackToRegex: true }
+  );
 }
 
 function resolveMyNewsCategoryVideoTab(category: string): "news" | "sports" | "celebrity" {
@@ -6486,6 +6751,50 @@ export default function Home() {
     ];
   }, [categorySectionArticles, normalizedSelectedCategories]);
 
+  const myNewsCategorySourceSuggestions = useMemo(() => {
+    const suggestions: Record<string, string[]> = {};
+
+    normalizedSelectedCategories.forEach((category) => {
+      const normalizedCategory = normalizeSelectedCategoryName(category);
+      const taxonomy = CATEGORY_TAXONOMY[normalizedCategory];
+      const discoveredSources = Array.from(
+        new Set(
+          categorySectionArticles
+            .filter((article) => articleMatchesSelectedCategory(article, normalizedCategory))
+            .map((article) => getSafeSourceLabel(article.source))
+            .filter((sourceName) => sourceMatchesSelectedCategory(sourceName, normalizedCategory))
+        )
+      );
+
+      suggestions[normalizedCategory] = Array.from(
+        new Set([...(taxonomy?.suggestedSources ?? []), ...discoveredSources])
+      ).slice(0, 5);
+    });
+
+    return suggestions;
+  }, [categorySectionArticles, normalizedSelectedCategories]);
+
+  const myNewsTrendingTopicsArticles = useMemo(() => {
+    const sectionMap: Record<string, Article[]> = {};
+
+    normalizedSelectedCategories.forEach((category) => {
+      const normalizedCategory = normalizeSelectedCategoryName(category);
+      const matchingArticles = categorySectionArticles.filter((article) =>
+        articleMatchesSelectedCategory(article, normalizedCategory)
+      );
+
+      sectionMap[normalizedCategory] = selectSourceBalancedArticles(
+        [...matchingArticles].sort(
+          (leftArticle, rightArticle) =>
+            getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle)
+        ),
+        3
+      );
+    });
+
+    return sectionMap;
+  }, [categorySectionArticles, normalizedSelectedCategories]);
+
   useEffect(() => {
     if (sortMode !== "mynews" || normalizedSelectedCategories.length === 0) {
       setMyNewsCategorySupplementalVideos({});
@@ -6495,6 +6804,8 @@ export default function Home() {
     let isCancelled = false;
 
     const loadSupplementalCategoryVideos = async () => {
+      // Articles usually arrive with stronger category/source metadata, but video feeds are noisier.
+      // We compensate here with category-specific queries plus stricter title/source/url matching.
       const categoryVideoEntries = await Promise.all(
         normalizedSelectedCategories.map(async (category) => {
           const queries = getMyNewsCategoryVideoQueries(category);
@@ -6502,6 +6813,7 @@ export default function Home() {
 
           const queryResults = await Promise.all(
             queries.map(async (query) => {
+              console.log("CATEGORY VIDEO QUERY", category, query);
               try {
                 const response = await fetch(
                   `/api/videos?tab=${encodeURIComponent(videoTab)}&q=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}`
@@ -6520,7 +6832,25 @@ export default function Home() {
           );
 
           const mergedVideos = dedupeVideosBySourceTitleAndUrl(queryResults.flat());
+          const rejectedVideos = mergedVideos.filter(
+            (video) => !videoMatchesSelectedCategory(video, category)
+          );
           const relevantVideos = mergedVideos.filter((video) => videoMatchesSelectedCategory(video, category));
+          console.log(
+            "CATEGORY VIDEO RAW COUNT",
+            category,
+            mergedVideos.length
+          );
+          console.log(
+            "CATEGORY VIDEO REJECTED COUNT",
+            category,
+            rejectedVideos.length
+          );
+          console.log(
+            "CATEGORY VIDEO FINAL COUNT",
+            category,
+            relevantVideos.length
+          );
 
           return [category, relevantVideos] as const;
         })
@@ -6617,6 +6947,18 @@ export default function Home() {
         }
       });
   }, [myNewsCategorySections]);
+
+  useEffect(() => {
+    normalizedSelectedCategories.forEach((category) => {
+      console.log("BECAUSE YOU FOLLOW CATEGORY", category);
+      console.log("BECAUSE YOU FOLLOW SUGGESTIONS", category, myNewsCategorySourceSuggestions[category] ?? []);
+      console.log(
+        "TRENDING TOPICS ARTICLE COUNT",
+        category,
+        myNewsTrendingTopicsArticles[category]?.length ?? 0
+      );
+    });
+  }, [myNewsCategorySourceSuggestions, myNewsTrendingTopicsArticles, normalizedSelectedCategories]);
 
   useEffect(() => {
     console.log("SELECTED CATEGORIES", normalizedSelectedCategories);
@@ -9188,12 +9530,14 @@ export default function Home() {
 
   const renderMyNewsCategorySeparator = (index: number, category: string) => {
     const separatorCycle = index % 3;
+    const categorySuggestions = myNewsCategorySourceSuggestions[category] ?? [];
+    const trendingTopicArticles = myNewsTrendingTopicsArticles[category] ?? [];
 
     if (separatorCycle === 0) {
       return renderAddMoreCategoriesRow();
     }
 
-    if (separatorCycle === 1 && homeSourceRankings.length > 0) {
+    if (separatorCycle === 1 && categorySuggestions.length > 0) {
       return (
         <section className="home-section-block home-section-plain mynews-separator-section">
           <div className="home-section-header">
@@ -9205,19 +9549,19 @@ export default function Home() {
             </div>
           </div>
           <div className="source-rankings-carousel" role="list" aria-label="Recommended sources">
-            {homeSourceRankings.slice(0, 4).map((source, sourceIndex) => (
+            {categorySuggestions.map((sourceName, sourceIndex) => (
               <Link
-                key={`mynews-separator-source-${category}-${source.sourceName}`}
-                href={`/source/${slugifySourceName(source.sourceName)}/`}
+                key={`mynews-separator-source-${category}-${sourceName}`}
+                href={`/source/${slugifySourceName(sourceName)}/`}
                 className="source-rankings-card"
                 role="listitem"
               >
                 <div className="source-rankings-card-art-shell">
-                  <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
+                  <SourceBadge sourceName={sourceName} className="source-rankings-card-art" />
                   <span className="source-rankings-rank">#{sourceIndex + 1}</span>
                 </div>
                 <div className="source-rankings-card-copy">
-                  <span className="source-rankings-name">{source.sourceName}</span>
+                  <span className="source-rankings-name">{sourceName}</span>
                   <span className="source-rankings-card-meta">Recommended Source</span>
                 </div>
               </Link>
@@ -9227,25 +9571,23 @@ export default function Home() {
       );
     }
 
-    if (topPollsSection.length > 0) {
+    if (trendingTopicArticles.length > 0) {
       return (
         <section className="home-section-block home-section-plain mynews-separator-section">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Trending in Your Topics</strong>
-              <span className="muted">A quick pulse-check between your sections.</span>
+              <span className="muted">Fresh stories tied to what you follow.</span>
             </div>
           </div>
-          <div className="polls-carousel" role="list" aria-label="Quick topic poll">
-            <div className="polls-carousel-item" role="listitem">
-              <PollCard
-                poll={topPollsSection[0]}
-                onVote={handleVoteOnPoll}
-                isVoting={activePollVoteId === topPollsSection[0].id}
-                rankLabel={formatTopRankLabel(1)}
-                className="poll-card-featured"
-              />
-            </div>
+          <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
+            {trendingTopicArticles.map((article, articleIndex) => (
+              <div
+                key={`mynews-topics-${category}-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+              >
+                {renderCompactSideImageArticle(article, { showRank: articleIndex + 1 })}
+              </div>
+            ))}
           </div>
         </section>
       );
