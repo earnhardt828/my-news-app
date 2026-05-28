@@ -389,6 +389,57 @@ const SCIENCE_FEED_QUERY =
   "science news | NASA | Space.com | Scientific American | Nature | Science Magazine | National Geographic science | AP Science | Reuters Science | Live Science | climate science | health science | astronomy | technology science";
 const BUSINESS_FEED_QUERY =
   "business news | finance news | stock market news | economy news | Wall Street news | CNBC | Bloomberg | Reuters Business | MarketWatch | Yahoo Finance";
+const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
+  NASCAR: [
+    "NASCAR highlights",
+    "NASCAR crash highlights",
+    "NASCAR race recap",
+    "NASCAR Cup Series highlights",
+  ],
+  MLB: [
+    "MLB highlights",
+    "MLB Network highlights",
+    "baseball highlights",
+    "home run highlights",
+  ],
+  NFL: [
+    "NFL highlights",
+    "NFL Network highlights",
+    "ESPN NFL highlights",
+    "touchdown highlights",
+  ],
+  MLS: [
+    "MLS highlights",
+    "MLSsoccer highlights",
+    "soccer highlights",
+    "Charlotte FC highlights",
+    "FC Cincinnati highlights",
+  ],
+  "College Basketball": [
+    "college basketball highlights",
+    "NCAA basketball highlights",
+    "March Madness highlights",
+  ],
+  NHL: [
+    "NHL highlights",
+    "hockey highlights",
+    "Stanley Cup highlights",
+  ],
+  Technology: [
+    "technology news video",
+    "AI news video",
+  ],
+  Celebrity: [
+    "E News celebrity video",
+    "Entertainment Tonight celebrity video",
+    "People celebrity video",
+  ],
+  Food: [
+    "recipe video",
+    "cooking video",
+    "Food Network recipe",
+  ],
+};
 const MAJOR_WEATHER_CITY_SUGGESTIONS = [
   "Charlotte, NC",
   "New York, NY",
@@ -950,6 +1001,31 @@ function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string
 
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
   return matcher.test(haystack);
+}
+
+function resolveMyNewsCategoryVideoTab(category: string): "news" | "sports" | "celebrity" {
+  if (
+    ["MLB", "NFL", "NHL", "MLS", "College Basketball", "College Football", "NASCAR", "Sports"].includes(
+      category
+    )
+  ) {
+    return "sports";
+  }
+
+  if (category === "Celebrity") {
+    return "celebrity";
+  }
+
+  return "news";
+}
+
+function getMyNewsCategoryVideoQueries(category: string) {
+  return (
+    MY_NEWS_CATEGORY_VIDEO_QUERIES[category] ?? [
+      `${getCategoryLabel(category)} news video`,
+      `${getCategoryLabel(category)} highlights`,
+    ]
+  );
 }
 
 function isRecipeArticle(article: Pick<Article, "title" | "description" | "source" | "category">) {
@@ -2704,6 +2780,9 @@ export default function Home() {
   const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
   const [sciencePreviewArticles, setSciencePreviewArticles] = useState<Article[]>([]);
   const [isSciencePreviewLoading, setIsSciencePreviewLoading] = useState(false);
+  const [myNewsCategorySupplementalVideos, setMyNewsCategorySupplementalVideos] = useState<
+    Record<string, VideoItem[]>
+  >({});
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
   const trendingVideoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -6407,6 +6486,60 @@ export default function Home() {
     ];
   }, [categorySectionArticles, normalizedSelectedCategories]);
 
+  useEffect(() => {
+    if (sortMode !== "mynews" || normalizedSelectedCategories.length === 0) {
+      setMyNewsCategorySupplementalVideos({});
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadSupplementalCategoryVideos = async () => {
+      const categoryVideoEntries = await Promise.all(
+        normalizedSelectedCategories.map(async (category) => {
+          const queries = getMyNewsCategoryVideoQueries(category);
+          const videoTab = resolveMyNewsCategoryVideoTab(category);
+
+          const queryResults = await Promise.all(
+            queries.map(async (query) => {
+              try {
+                const response = await fetch(
+                  `/api/videos?tab=${encodeURIComponent(videoTab)}&q=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}`
+                );
+                if (!response.ok) {
+                  return [] as VideoItem[];
+                }
+
+                const data = (await response.json()) as { videos?: VideoItem[] };
+                return Array.isArray(data.videos) ? data.videos : [];
+              } catch (error) {
+                console.error(`Failed to load ${category} videos for query "${query}"`, error);
+                return [] as VideoItem[];
+              }
+            })
+          );
+
+          const mergedVideos = dedupeVideosBySourceTitleAndUrl(queryResults.flat());
+          const relevantVideos = mergedVideos.filter((video) => videoMatchesSelectedCategory(video, category));
+
+          return [category, relevantVideos] as const;
+        })
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      setMyNewsCategorySupplementalVideos(Object.fromEntries(categoryVideoEntries));
+    };
+
+    void loadSupplementalCategoryVideos();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [normalizedSelectedCategories, sortMode]);
+
   const myNewsCategoryVideoSections = useMemo(() => {
     if (normalizedSelectedCategories.length === 0) {
       return {} as Record<string, VideoItem[]>;
@@ -6422,7 +6555,13 @@ export default function Home() {
     const sectionVideos: Record<string, VideoItem[]> = {};
 
     normalizedSelectedCategories.forEach((category) => {
-      const matchingVideos = candidateVideos.filter((video) => {
+      const supplementalVideos = myNewsCategorySupplementalVideos[category] ?? [];
+      const mergedCategoryVideos = dedupeVideosBySourceTitleAndUrl([
+        ...candidateVideos,
+        ...supplementalVideos,
+      ]);
+
+      const matchingVideos = mergedCategoryVideos.filter((video) => {
         if (usedVideoIds.has(video.id)) {
           return false;
         }
@@ -6450,7 +6589,34 @@ export default function Home() {
     });
 
     return sectionVideos;
-  }, [celebrityVideos, normalizedSelectedCategories, sportsVideos, videos, weatherVideos]);
+  }, [
+    celebrityVideos,
+    myNewsCategorySupplementalVideos,
+    normalizedSelectedCategories,
+    sportsVideos,
+    videos,
+    weatherVideos,
+  ]);
+
+  useEffect(() => {
+    myNewsCategorySections
+      .filter((section) => section.category !== "Recommended for You")
+      .forEach((section) => {
+        const leadArticle =
+          section.articles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
+        console.log("CATEGORY NAME", section.category);
+        if (leadArticle) {
+          console.log(
+            "CATEGORY LARGE IMAGE FOUND",
+            section.category,
+            leadArticle.title,
+            getLargeImageCardImage(leadArticle)
+          );
+        } else {
+          console.log("CATEGORY LARGE IMAGE SKIPPED", section.category);
+        }
+      });
+  }, [myNewsCategorySections]);
 
   useEffect(() => {
     console.log("SELECTED CATEGORIES", normalizedSelectedCategories);
@@ -8922,7 +9088,7 @@ export default function Home() {
     const normalizedCategoryKey = category.toLowerCase().replace(/\s+/g, "-");
 
     return (
-      <section className="home-section-block home-section-plain quick-watch-row">
+      <section className="home-section-block home-section-plain quick-watch-row mynews-category-videos-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
             <strong className="profile-section-title home-section-title">{label}</strong>
@@ -8945,7 +9111,9 @@ export default function Home() {
                 onToggleLike={handleToggleVideoLike}
                 onToggleSave={handleToggleVideoSave}
                 onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                onOpenPlayer={(videoId) =>
+                  handleOpenFeedVideo(videoId, resolveMyNewsCategoryVideoTab(category))
+                }
                 frameRef={(node) => {
                   trendingVideoFrameRefs.current[
                     `mynews-category-${normalizedCategoryKey}:${video.id}`
@@ -9016,6 +9184,74 @@ export default function Home() {
         </div>
       </section>
     );
+  };
+
+  const renderMyNewsCategorySeparator = (index: number, category: string) => {
+    const separatorCycle = index % 3;
+
+    if (separatorCycle === 0) {
+      return renderAddMoreCategoriesRow();
+    }
+
+    if (separatorCycle === 1 && homeSourceRankings.length > 0) {
+      return (
+        <section className="home-section-block home-section-plain mynews-separator-section">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">
+                Because You Follow {getCategoryLabel(category)}
+              </strong>
+              <span className="muted">Recommended sources connected to your topics.</span>
+            </div>
+          </div>
+          <div className="source-rankings-carousel" role="list" aria-label="Recommended sources">
+            {homeSourceRankings.slice(0, 4).map((source, sourceIndex) => (
+              <Link
+                key={`mynews-separator-source-${category}-${source.sourceName}`}
+                href={`/source/${slugifySourceName(source.sourceName)}/`}
+                className="source-rankings-card"
+                role="listitem"
+              >
+                <div className="source-rankings-card-art-shell">
+                  <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
+                  <span className="source-rankings-rank">#{sourceIndex + 1}</span>
+                </div>
+                <div className="source-rankings-card-copy">
+                  <span className="source-rankings-name">{source.sourceName}</span>
+                  <span className="source-rankings-card-meta">Recommended Source</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    if (topPollsSection.length > 0) {
+      return (
+        <section className="home-section-block home-section-plain mynews-separator-section">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Trending in Your Topics</strong>
+              <span className="muted">A quick pulse-check between your sections.</span>
+            </div>
+          </div>
+          <div className="polls-carousel" role="list" aria-label="Quick topic poll">
+            <div className="polls-carousel-item" role="listitem">
+              <PollCard
+                poll={topPollsSection[0]}
+                onVote={handleVoteOnPoll}
+                isVoting={activePollVoteId === topPollsSection[0].id}
+                rankLabel={formatTopRankLabel(1)}
+                className="poll-card-featured"
+              />
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    return null;
   };
 
   const renderFeaturedStoriesRow = () => {
@@ -11103,8 +11339,8 @@ export default function Home() {
                       myNewsCategoryVideoSections[section.category] ?? []
                     )}
 
-                    {index < filteredSections.length - 1 && index % 2 === 0
-                      ? renderAddMoreCategoriesRow()
+                    {index < filteredSections.length - 1
+                      ? renderMyNewsCategorySeparator(index, section.category)
                       : null}
                   </div>
                 ))}

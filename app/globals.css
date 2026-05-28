@@ -3031,6 +3031,19 @@ input {
   display: none;
 }
 
+.mynews-category-videos-row .quick-watch-scroll {
+  padding-inline: 2px;
+}
+
+.mynews-separator-section {
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding-top: 10px;
+}
+
+.dark .mynews-separator-section {
+  border-top-color: rgba(148, 163, 184, 0.22);
+}
+
 .quick-watch-item {
   flex: 0 0 min(88vw, 372px);
   scroll-snap-align: start;

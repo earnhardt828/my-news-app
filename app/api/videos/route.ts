@@ -13,6 +13,22 @@ type RssFeedEntry = {
   thumbnailHeight: number | null;
 };
 
+type YouTubeSearchResult = {
+  id?: {
+    videoId?: string;
+  };
+  snippet?: {
+    title?: string;
+    channelTitle?: string;
+    publishedAt?: string;
+    thumbnails?: {
+      high?: { url?: string; width?: number; height?: number };
+      medium?: { url?: string; width?: number; height?: number };
+      default?: { url?: string; width?: number; height?: number };
+    };
+  };
+};
+
 type VideoFeedItem = {
   id: string;
   youtubeId: string;
@@ -211,6 +227,8 @@ const WEATHER_REJECTED_PATTERN =
 
 const BLOCKED_VIDEO_SOURCE_PATTERN = /\b(kanak news|kanak news odisha)\b/i;
 const BLOCKED_VIDEO_URL_PATTERN = /kanaknews\.com/i;
+const YOUTUBE_API_KEY =
+  process.env.YOUTUBE_API_KEY ?? process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ?? "";
 
 const APPROVED_CHANNELS: ApprovedChannel[] = [
   { channelId: "UCiWLfSweyRNmLpgEHekhoAg", name: "ESPN" },
@@ -771,6 +789,59 @@ function buildRssFeedUrl(channelId: string) {
   return `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
 }
 
+async function fetchVideosForSearchQuery(searchTerm: string) {
+  if (!YOUTUBE_API_KEY || !searchTerm.trim()) {
+    return [] as RssFeedEntry[];
+  }
+
+  const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
+  searchUrl.searchParams.set("part", "snippet");
+  searchUrl.searchParams.set("type", "video");
+  searchUrl.searchParams.set("maxResults", "16");
+  searchUrl.searchParams.set("q", searchTerm);
+  searchUrl.searchParams.set("safeSearch", "moderate");
+  searchUrl.searchParams.set("videoEmbeddable", "true");
+  searchUrl.searchParams.set("order", "date");
+  searchUrl.searchParams.set("key", YOUTUBE_API_KEY);
+
+  const response = await fetch(searchUrl.toString(), {
+    next: { revalidate: 900 },
+  });
+
+  if (!response.ok) {
+    throw new Error(`YouTube Data API search failed (${response.status})`);
+  }
+
+  const payload = (await response.json()) as {
+    items?: YouTubeSearchResult[];
+  };
+
+  return (payload.items ?? [])
+    .map((item): RssFeedEntry | null => {
+      const videoId = item.id?.videoId?.trim();
+      const snippet = item.snippet;
+      const title = snippet?.title?.trim();
+      const creator = snippet?.channelTitle?.trim() ?? "";
+      const thumbnail =
+        snippet?.thumbnails?.high ?? snippet?.thumbnails?.medium ?? snippet?.thumbnails?.default;
+
+      if (!videoId || !title) {
+        return null;
+      }
+
+      return {
+        videoId,
+        title,
+        creator,
+        publishedAt: snippet?.publishedAt ?? null,
+        thumbnailUrl: thumbnail?.url ?? null,
+        thumbnailWidth: thumbnail?.width ?? null,
+        thumbnailHeight: thumbnail?.height ?? null,
+      };
+    })
+    .filter((entry): entry is RssFeedEntry => entry !== null);
+}
+
 async function fetchVideosForChannel(channel: ApprovedChannel) {
   const response = await fetch(buildRssFeedUrl(channel.channelId), {
     next: { revalidate: 900 },
@@ -1012,6 +1083,12 @@ export async function GET(request: Request) {
     const successfulEntries = results.flatMap((result) =>
       result.status === "fulfilled" ? result.value : []
     );
+    const searchEntries = searchTerm
+      ? await fetchVideosForSearchQuery(searchTerm).catch((error) => {
+          console.error("YouTube Data API search failed:", error);
+          return [] as RssFeedEntry[];
+        })
+      : [];
     const failedFeeds = results
       .map((result, index) =>
         result.status === "rejected"
@@ -1030,7 +1107,9 @@ export async function GET(request: Request) {
       console.error("YouTube RSS feed failures:", failedFeeds);
     }
 
-    if (successfulEntries.length === 0) {
+    const allEntries = [...successfulEntries, ...searchEntries];
+
+    if (allEntries.length === 0) {
       return Response.json({
         videos: buildFallbackVideosForTab(tab),
         fallback: true,
@@ -1038,7 +1117,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const videos = filterAndSortVideos(successfulEntries, {
+    const videos = filterAndSortVideos(allEntries, {
       category,
       searchTerm,
       tab:
