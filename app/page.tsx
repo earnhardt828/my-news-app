@@ -469,12 +469,21 @@ const MY_NEWS_CATEGORY_VIDEO_QUERIES: Partial<Record<string, string[]>> = {
     "restaurant review",
   ],
   Auto: [
-    "car industry news",
-    "EV news",
-    "auto reviews",
-    "car technology",
+    "Automotive News",
+    "Car and Driver",
+    "MotorTrend",
+    "Edmunds",
+    "Autoblog",
+    "The Drive",
+    "InsideEVs",
+    "Electrek",
+    "Green Car Reports",
+    "Reuters auto industry",
+    "AP auto industry",
     "Tesla news",
-    "Ford news",
+    "EV news",
+    "new car releases",
+    "automotive technology",
   ],
 };
 const MAJOR_WEATHER_CITY_SUGGESTIONS = [
@@ -627,7 +636,7 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
   },
   NHL: {
     coreTerms: ["nhl", "hockey", "stanley cup"],
-    contextTerms: ["nhl", "hockey", "stanley cup", "goal", "save", "overtime", "playoff", "highlights"],
+    contextTerms: ["nhl", "hockey", "stanley cup", "goal", "save", "overtime", "playoff", "highlights", "rink", "puck"],
     relatedTerms: [
       "goal",
       "save",
@@ -666,7 +675,21 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
     ],
     sourceTerms: ["nhl.com", "nhl network", "espn nhl", "sportsnet nhl", "tsn hockey"],
     domainTerms: ["nhl.com", "espn.com"],
-    negativeTerms: ["odds", "betting", "sportsbook", "parlay", "spread pick", "over/under"],
+    negativeTerms: [
+      "odds",
+      "betting",
+      "sportsbook",
+      "parlay",
+      "spread pick",
+      "over/under",
+      "nfl",
+      "nba",
+      "mlb",
+      "soccer",
+      "golf",
+      "formula 1",
+      "nascar",
+    ],
     suggestedSources: ["NHL.com", "ESPN NHL", "Sportsnet NHL", "The Hockey News", "TSN Hockey"],
   },
   MLS: {
@@ -717,12 +740,27 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
     suggestedSources: ["TechCrunch", "The Verge", "Wired", "Ars Technica", "Bloomberg Technology"],
   },
   Auto: {
-    coreTerms: ["car", "cars", "auto", "automotive", "ev", "electric vehicle", "auto safety"],
-    contextTerms: ["car", "cars", "auto", "automotive", "ev", "electric vehicle", "review", "vehicle", "battery", "charging"],
+    coreTerms: ["auto", "automotive", "vehicle", "vehicles", "ev", "electric vehicle", "hybrid", "auto industry"],
+    contextTerms: [
+      "auto",
+      "automotive",
+      "vehicle",
+      "vehicles",
+      "ev",
+      "electric vehicle",
+      "hybrid",
+      "autonomous driving",
+      "self-driving",
+      "vehicle safety",
+      "new model",
+      "new car",
+      "auto industry",
+    ],
     relatedTerms: [
       "tesla",
       "ford",
       "gm",
+      "chevrolet",
       "toyota",
       "honda",
       "audi",
@@ -737,10 +775,50 @@ const CATEGORY_TAXONOMY: Record<string, CategoryTaxonomyRule> = {
       "autonomous driving",
       "vehicle launch",
     ],
-    sourceTerms: ["motortrend", "car and driver", "road & track", "insideevs", "electrek", "autoblog"],
-    domainTerms: ["motortrend.com", "caranddriver.com", "roadandtrack.com", "insideevs.com", "electrek.co", "autoblog.com"],
-    negativeTerms: ["nascar", "cup series", "xfinity series", "truck series", "daytona", "talladega", "charlotte motor speedway"],
-    suggestedSources: ["MotorTrend", "Car and Driver", "InsideEVs", "Electrek", "Road & Track"],
+    sourceTerms: [
+      "automotive news",
+      "car and driver",
+      "motortrend",
+      "edmunds",
+      "autoblog",
+      "the drive",
+      "insideevs",
+      "electrek",
+      "green car reports",
+      "reuters auto industry",
+      "ap auto industry",
+    ],
+    domainTerms: [
+      "autonews.com",
+      "caranddriver.com",
+      "motortrend.com",
+      "edmunds.com",
+      "autoblog.com",
+      "thedrive.com",
+      "insideevs.com",
+      "electrek.co",
+      "greencarreports.com",
+      "reuters.com",
+      "apnews.com",
+    ],
+    negativeTerms: [
+      "nascar",
+      "cup series",
+      "xfinity series",
+      "truck series",
+      "daytona",
+      "talladega",
+      "charlotte motor speedway",
+      "celebrity",
+      "movie",
+      "election",
+      "campaign",
+      "touchdown",
+      "stanley cup",
+      "stock market",
+      "earnings call",
+    ],
+    suggestedSources: ["Automotive News", "Car and Driver", "MotorTrend", "InsideEVs", "Electrek"],
   },
   Celebrity: {
     coreTerms: ["celebrity", "entertainment", "hollywood", "movie", "tv", "music"],
@@ -988,6 +1066,16 @@ function getCategoryLeadArticle(articles: Article[], category: string) {
       })
       .find((article) => hasRealLargeImageCandidate(article)) ?? null
   );
+}
+
+function getMyNewsCategoryLeadArticle(category: string, categoryPool: Article[], visibleSectionArticles: Article[]) {
+  const broaderLead = getCategoryLeadArticle(categoryPool, category);
+
+  if (broaderLead) {
+    return broaderLead;
+  }
+
+  return getCategoryLeadArticle(visibleSectionArticles, category);
 }
 const BROAD_SPORTS_SOURCE_PATTERN =
   /\b(motorsport\.com|motorsport|nascar\.com|nascar|bleacher report|mlb\.com|nhl\.com|nba\.com|nfl\.com|mlssoccer\.com|espn|yahoo sports|fox sports|nbc sports|cbs sports|sports illustrated|ap sports|ap news sports|reuters sports|fc cincinnati|hero sports|big 12|big 12 conference|dallas cowboys|official site|team site|conference site|sports|athletics|sporting)\b/i;
@@ -7060,6 +7148,20 @@ export default function Home() {
     return suggestions;
   }, [categorySectionArticles, normalizedSelectedCategories]);
 
+  useEffect(() => {
+    const autoAccepted = categorySectionArticles
+      .filter((article) => articleMatchesSelectedCategory(article, "Auto"))
+      .slice(0, 6)
+      .map((article) => article.title);
+    const autoRejected = categorySectionArticles
+      .filter((article) => !articleMatchesSelectedCategory(article, "Auto"))
+      .slice(0, 6)
+      .map((article) => article.title);
+
+    console.log("AUTO ARTICLE ACCEPTED", autoAccepted);
+    console.log("AUTO ARTICLE REJECTED", autoRejected);
+  }, [categorySectionArticles]);
+
   const myNewsTrendingTopicsArticles = useMemo(() => {
     const sectionMap: Record<string, Article[]> = {};
 
@@ -7080,6 +7182,22 @@ export default function Home() {
 
     return sectionMap;
   }, [categorySectionArticles, normalizedSelectedCategories]);
+
+  const myNewsCategoryLeadArticles = useMemo(() => {
+    const leadMap: Record<string, Article | null> = {};
+
+    normalizedSelectedCategories.forEach((category) => {
+      const categoryPool = categorySectionArticles.filter((article) =>
+        articleMatchesSelectedCategory(article, category)
+      );
+      const visibleSectionArticles =
+        myNewsCategorySections.find((section) => section.category === category)?.articles ?? [];
+
+      leadMap[category] = getMyNewsCategoryLeadArticle(category, categoryPool, visibleSectionArticles);
+    });
+
+    return leadMap;
+  }, [categorySectionArticles, myNewsCategorySections, normalizedSelectedCategories]);
 
   useEffect(() => {
     if (sortMode !== "mynews" || normalizedSelectedCategories.length === 0) {
@@ -7152,6 +7270,14 @@ export default function Home() {
             category,
             rejectedVideos.slice(0, 4).map((video) => video.title)
           );
+          if (category === "Auto") {
+            console.log("AUTO VIDEO ACCEPTED", relevantVideos.slice(0, 5).map((video) => video.title));
+            console.log("AUTO VIDEO REJECTED", rejectedVideos.slice(0, 5).map((video) => video.title));
+          }
+          if (category === "NHL") {
+            console.log("NHL VIDEO ACCEPTED", relevantVideos.slice(0, 5).map((video) => video.title));
+            console.log("NHL VIDEO REJECTED", rejectedVideos.slice(0, 5).map((video) => video.title));
+          }
 
           return [category, relevantVideos] as const;
         })
@@ -7255,7 +7381,7 @@ export default function Home() {
     myNewsCategorySections
       .filter((section) => section.category !== "Recommended for You")
       .forEach((section) => {
-        const leadArticle = getCategoryLeadArticle(section.articles, section.category);
+        const leadArticle = myNewsCategoryLeadArticles[section.category] ?? null;
         console.log("CATEGORY NAME", section.category);
         console.log(
           "CATEGORY LARGE CARD CANDIDATE",
@@ -7281,15 +7407,23 @@ export default function Home() {
             leadArticle.title,
             getLargeImageCardImage(leadArticle)
           );
+          if (section.category === "NHL") {
+            console.log("NHL LARGE IMAGE ACCEPTED", leadArticle.title);
+            console.log("NHL LARGE IMAGE FINAL", leadArticle.title);
+          }
         } else {
           console.log(
             "CATEGORY LARGE CARD REJECTED",
             section.category,
             section.articles.map((article) => article.title).slice(0, 5)
           );
+          if (section.category === "NHL") {
+            console.log("NHL LARGE IMAGE REJECTED", section.articles.map((article) => article.title).slice(0, 5));
+            console.log("NHL LARGE IMAGE FINAL", null);
+          }
         }
       });
-  }, [myNewsCategorySections]);
+  }, [myNewsCategoryLeadArticles, myNewsCategorySections]);
 
   useEffect(() => {
     normalizedSelectedCategories.forEach((category) => {
@@ -12029,7 +12163,7 @@ export default function Home() {
                         </div>
                       </div>
                       {(() => {
-                        const leadArticle = getCategoryLeadArticle(section.articles, section.category);
+                        const leadArticle = myNewsCategoryLeadArticles[section.category] ?? null;
                         const leadArticleKey = leadArticle
                           ? getArticleDeduplicationKey(leadArticle)
                           : null;
