@@ -258,69 +258,7 @@ const MY_NEWS_MLB_VIDEO_QUERIES = [
   "Astros highlights",
   "Rangers highlights",
 ] as const;
-const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v2";
-
-function buildMlbFallbackVideos(): VideoItem[] {
-  return [
-    {
-      id: "mlb-fallback-1",
-      youtubeId: "mlb-fallback-1",
-      title: "MLB highlights and home run roundup",
-      creator: "MLB.com",
-      category: "Sports",
-      orientation: "vertical",
-      views: 0,
-      likes: 0,
-      comments: 0,
-      thumbnailUrl: null,
-      publishedAt: null,
-      watchUrl: "https://www.mlb.com/video",
-      embedUrl: "",
-      fallback: true,
-      saved: false,
-      liked: false,
-      theme: "video-card-theme-rose",
-    },
-    {
-      id: "mlb-fallback-2",
-      youtubeId: "mlb-fallback-2",
-      title: "Baseball highlights from around the league",
-      creator: "ESPN MLB",
-      category: "Sports",
-      orientation: "vertical",
-      views: 0,
-      likes: 0,
-      comments: 0,
-      thumbnailUrl: null,
-      publishedAt: null,
-      watchUrl: "https://www.espn.com/mlb/",
-      embedUrl: "",
-      fallback: true,
-      saved: false,
-      liked: false,
-      theme: "video-card-theme-ink",
-    },
-    {
-      id: "mlb-fallback-3",
-      youtubeId: "mlb-fallback-3",
-      title: "Yankees, Dodgers, Braves, Astros, and Rangers top plays",
-      creator: "MLB Network",
-      category: "Sports",
-      orientation: "vertical",
-      views: 0,
-      likes: 0,
-      comments: 0,
-      thumbnailUrl: null,
-      publishedAt: null,
-      watchUrl: "https://www.mlb.com/video",
-      embedUrl: "",
-      fallback: true,
-      saved: false,
-      liked: false,
-      theme: "video-card-theme-sunset",
-    },
-  ];
-}
+const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
 function buildNhlFallbackVideos(): VideoItem[] {
   return [
@@ -7623,21 +7561,23 @@ export default function Home() {
       const versionKey = "graffiti:mynews-category-cache-version";
       const storedVersion = window.localStorage.getItem(versionKey);
 
+      window.localStorage.removeItem("graffiti:mynews:category:MLB");
+      window.localStorage.removeItem("graffiti:mynews:category:Baseball");
+      window.localStorage.removeItem("graffiti:mynews:category:Major League Baseball");
+      window.localStorage.removeItem("graffiti:mynews:videos:MLB");
+      window.localStorage.removeItem("graffiti:mynews:videos:Baseball");
+      window.localStorage.removeItem("graffiti:mynews:videos:Major League Baseball");
+      window.sessionStorage.removeItem("graffiti:mynews:category:MLB");
+      window.sessionStorage.removeItem("graffiti:mynews:category:Baseball");
+      window.sessionStorage.removeItem("graffiti:mynews:category:Major League Baseball");
+      window.sessionStorage.removeItem("graffiti:mynews:videos:MLB");
+      window.sessionStorage.removeItem("graffiti:mynews:videos:Baseball");
+      window.sessionStorage.removeItem("graffiti:mynews:videos:Major League Baseball");
+      console.log("FORCE MLB VIDEO CACHE CLEAR ON APP LOAD");
+
       if (storedVersion !== MY_NEWS_CATEGORY_CACHE_VERSION) {
         window.localStorage.removeItem("graffiti:last-feed:trending");
         window.localStorage.removeItem("graffiti:last-feed:mynews");
-        window.localStorage.removeItem("graffiti:mynews:category:MLB");
-        window.localStorage.removeItem("graffiti:mynews:category:Baseball");
-        window.localStorage.removeItem("graffiti:mynews:category:Major League Baseball");
-        window.localStorage.removeItem("graffiti:mynews:videos:MLB");
-        window.localStorage.removeItem("graffiti:mynews:videos:Baseball");
-        window.localStorage.removeItem("graffiti:mynews:videos:Major League Baseball");
-        window.sessionStorage.removeItem("graffiti:mynews:category:MLB");
-        window.sessionStorage.removeItem("graffiti:mynews:category:Baseball");
-        window.sessionStorage.removeItem("graffiti:mynews:category:Major League Baseball");
-        window.sessionStorage.removeItem("graffiti:mynews:videos:MLB");
-        window.sessionStorage.removeItem("graffiti:mynews:videos:Baseball");
-        window.sessionStorage.removeItem("graffiti:mynews:videos:Major League Baseball");
         console.log("FORCE MLB DEDICATED ROUTE ACTIVE");
         window.localStorage.setItem(versionKey, MY_NEWS_CATEGORY_CACHE_VERSION);
       }
@@ -8441,10 +8381,7 @@ export default function Home() {
                   `${video.title} ${video.creator} ${video.category}`
                 )
               );
-        const filteredMlbVideos = selectSourceBalancedVideos(
-          relaxedMlbVideos.length > 0 ? relaxedMlbVideos : buildMlbFallbackVideos(),
-          10
-        );
+        const filteredMlbVideos = selectSourceBalancedVideos(relaxedMlbVideos, 10);
         console.log(
           "MLB PLAYABLE COUNT",
           filteredMlbVideos.filter((video) => !video.fallback && Boolean(video.youtubeId)).length
@@ -10707,11 +10644,19 @@ export default function Home() {
   };
 
   const renderMyNewsCategoryVideosRow = (category: string, categoryVideos: VideoItem[]) => {
+    const videosToRender = isDedicatedMlbCategory(category)
+      ? categoryVideos.filter((video) => isDedicatedMlbVideo(video))
+      : categoryVideos;
+
     if (isDedicatedMlbCategory(category)) {
-      console.log("MLB VIDEOS RENDERED COUNT", categoryVideos.length);
+      console.log("RENDERING MLB VIDEO ROW", {
+        videoTitles: videosToRender.map((video) => video.title),
+        sourceVariable: "myNewsCategoryVideoSections[section.category]",
+      });
+      console.log("MLB VIDEOS RENDERED COUNT", videosToRender.length);
     }
 
-    if (categoryVideos.length === 0) {
+    if (videosToRender.length === 0) {
       return null;
     }
 
@@ -10726,41 +10671,47 @@ export default function Home() {
           </div>
         </div>
         <div className="quick-watch-scroll" role="list" aria-label={label}>
-          {categoryVideos.map((video) => (
-            <div
-              key={`mynews-category-video-${normalizedCategoryKey}-${video.id}`}
-              className="quick-watch-item"
-              role="listitem"
-            >
-              <VideoFeedCard
-                video={video}
-                isAutoplaying={
-                  autoplayTrendingVideoKeys.includes(
-                    `mynews-category-${normalizedCategoryKey}:${video.id}`
-                  ) && !video.fallback
-                }
-                onToggleLike={handleToggleVideoLike}
-                onToggleSave={handleToggleVideoSave}
-                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) =>
-                  handleOpenFeedVideo(videoId, resolveMyNewsCategoryVideoTab(category))
-                }
-                frameRef={(node) => {
-                  trendingVideoFrameRefs.current[
-                    `mynews-category-${normalizedCategoryKey}:${video.id}`
-                  ] = node;
-                }}
-                autoplayKey={`mynews-category-${normalizedCategoryKey}:${video.id}`}
-                previewDurationMs={null}
-                label={label}
-                hideActions
-                useRelativeTime
-                className="video-card-inline quick-watch-video-card"
-                variant="article"
-                useUniformTallFrame={category === "MLB"}
-              />
-            </div>
-          ))}
+          {videosToRender.map((video) => {
+            if (isDedicatedMlbCategory(category)) {
+              console.log("MLB RENDERED VIDEO CARD TITLE", video.title);
+            }
+
+            return (
+              <div
+                key={`mynews-category-video-${normalizedCategoryKey}-${video.id}`}
+                className="quick-watch-item"
+                role="listitem"
+              >
+                <VideoFeedCard
+                  video={video}
+                  isAutoplaying={
+                    autoplayTrendingVideoKeys.includes(
+                      `mynews-category-${normalizedCategoryKey}:${video.id}`
+                    ) && !video.fallback
+                  }
+                  onToggleLike={handleToggleVideoLike}
+                  onToggleSave={handleToggleVideoSave}
+                  onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                  onOpenPlayer={(videoId) =>
+                    handleOpenFeedVideo(videoId, resolveMyNewsCategoryVideoTab(category))
+                  }
+                  frameRef={(node) => {
+                    trendingVideoFrameRefs.current[
+                      `mynews-category-${normalizedCategoryKey}:${video.id}`
+                    ] = node;
+                  }}
+                  autoplayKey={`mynews-category-${normalizedCategoryKey}:${video.id}`}
+                  previewDurationMs={null}
+                  label={label}
+                  hideActions
+                  useRelativeTime
+                  className="video-card-inline quick-watch-video-card"
+                  variant="article"
+                  useUniformTallFrame={category === "MLB"}
+                />
+              </div>
+            );
+          })}
         </div>
       </section>
     );
