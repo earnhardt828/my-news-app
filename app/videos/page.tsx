@@ -33,6 +33,27 @@ const actionIconProps = {
   "aria-hidden": true,
 };
 
+function isStrictTechnologyVideo(video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
+    video.thumbnailUrl ?? ""
+  }`.toLowerCase();
+
+  const hasStrongTechContext =
+    /\b(technology|tech|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device)\b/.test(
+      haystack
+    );
+  const hasRejectedContext =
+    /\b(politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|war|court|election|local news|world news)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedContext && !hasStrongTechContext) {
+    return false;
+  }
+
+  return hasStrongTechContext;
+}
+
 type VideoTab = SharedVideoTab;
 
 export default function VideosPage() {
@@ -75,7 +96,11 @@ export default function VideosPage() {
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
 
-  const displayedVideos = videosByTab[activeTab];
+  const displayedVideosRaw = videosByTab[activeTab];
+  const displayedVideos =
+    activeTab === "technology"
+      ? displayedVideosRaw.filter((video) => isStrictTechnologyVideo(video))
+      : displayedVideosRaw;
   const statusMessage = statusMessages[activeTab];
   const isCurrentTabLoading = tabLoading[activeTab];
   const requestedTab =
@@ -92,6 +117,16 @@ export default function VideosPage() {
   useEffect(() => {
     console.log("VIDEO PAGE ACTIVE TABS", SHARED_VIDEO_CATEGORIES.map((tab) => tab.value));
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "technology") {
+      return;
+    }
+
+    console.log("TECHNOLOGY RENDER RAW TITLES", displayedVideosRaw.map((video) => video.title));
+    console.log("TECHNOLOGY RENDER FILTERED TITLES", displayedVideos.map((video) => video.title));
+    console.log("TECHNOLOGY RENDER FINAL COUNT", displayedVideos.length);
+  }, [activeTab, displayedVideos, displayedVideosRaw]);
 
   useEffect(() => {
     setReturnState(readVideoReturnState());
@@ -390,6 +425,9 @@ export default function VideosPage() {
       </div>
       {activeTab === "technology" ? (
         <div className="chip chip-accent reels-status">Technology tab active</div>
+      ) : null}
+      {activeTab === "technology" ? (
+        <div className="chip chip-accent reels-status">TECHNOLOGY FILTER ACTIVE</div>
       ) : null}
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
       {isCurrentTabLoading && hasLoadedOnce ? (

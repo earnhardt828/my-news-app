@@ -10787,7 +10787,9 @@ export default function Home() {
     }
 
     if (isTechnologyRow) {
-      console.log("TECH VIDEO FINAL COUNT", videosToRender.length);
+      console.log("TECHNOLOGY RENDER RAW TITLES", categoryVideos.map((video) => video.title));
+      console.log("TECHNOLOGY RENDER FILTERED TITLES", videosToRender.map((video) => video.title));
+      console.log("TECHNOLOGY RENDER FINAL COUNT", videosToRender.length);
     }
 
     if (videosToRender.length === 0) {
@@ -10812,7 +10814,7 @@ export default function Home() {
         ) : null}
         {isTechnologyRow ? (
           <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-            <strong>TECHNOLOGY VIDEO TEST ROW</strong>
+            <strong>TECHNOLOGY FILTER ACTIVE</strong>
           </div>
         ) : null}
         <div className="quick-watch-scroll" role="list" aria-label={label}>
