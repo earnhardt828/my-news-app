@@ -188,6 +188,10 @@ export default function VideoFeedCard({
     if (isAutoplaying && autoplayKey?.includes("featured-videos-above-weather")) {
       console.log("FEATURED VIDEOS ABOVE WEATHER AUTOPLAY ATTEMPT", autoplayKey, video.id);
     }
+
+    if (isAutoplaying && autoplayKey?.includes("mynews-category-tech")) {
+      console.log("MY NEWS TECH VIDEO AUTOPLAY ATTEMPT", autoplayKey, video.id);
+    }
   }, [autoplayKey, isAutoplaying, video.id]);
 
   const articleFrameClass =

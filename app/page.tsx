@@ -5987,6 +5987,14 @@ export default function Home() {
           if (videoKey.startsWith("mynews-category-") && entry.isIntersecting && entry.intersectionRatio >= 0.3) {
             console.log("MY NEWS CATEGORY VIDEO AUTOPLAY ATTEMPT", videoKey);
           }
+
+          if (
+            videoKey.startsWith("mynews-category-tech:") &&
+            entry.isIntersecting &&
+            entry.intersectionRatio >= 0.3
+          ) {
+            console.log("MY NEWS TECH VIDEO AUTOPLAY ATTEMPT", videoKey);
+          }
         });
 
         const nextAutoplayKeys = Array.from(visibilityMap.entries())
