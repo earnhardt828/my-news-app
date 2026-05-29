@@ -79,6 +79,10 @@ import {
   getCategoryLabel,
   getDisplayCategory,
 } from "../lib/categories";
+import {
+  resolveVideoCategoryForMyNewsCategory,
+  type SharedVideoTab,
+} from "../lib/video-navigation";
 import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../lib/video-feed";
 
 const FEED_PAGE_SIZE = 25;
@@ -348,20 +352,37 @@ function buildNflFallbackVideos(): VideoItem[] {
 
 function normalizeSelectedCategoryName(category: string) {
   const cleaned = cleanDisplayText(category).trim();
+  const normalizedLower = cleaned.toLowerCase();
 
   if (!cleaned) {
     return "";
   }
 
-  if (cleaned.toLowerCase() === "cars") {
+  if (normalizedLower === "technology") {
+    return "Tech";
+  }
+
+  if (normalizedLower === "cars") {
     return "Auto";
   }
 
   if (
-    cleaned.toLowerCase() === "baseball" ||
-    cleaned.toLowerCase() === "major league baseball"
+    normalizedLower === "baseball" ||
+    normalizedLower === "major league baseball"
   ) {
     return "MLB";
+  }
+
+  if (normalizedLower === "soccer") {
+    return "MLS";
+  }
+
+  if (normalizedLower === "college basketball") {
+    return "College Basketball";
+  }
+
+  if (normalizedLower === "college football") {
+    return "College Football";
   }
 
   const directMatch = CATEGORY_OPTIONS.find(
@@ -381,6 +402,16 @@ function normalizeSelectedCategoryName(category: string) {
   }
 
   return cleaned;
+}
+
+function normalizeSelectableCategories(nextCategories: string[]) {
+  return Array.from(
+    new Set(
+      nextCategories
+        .map((category) => normalizeSelectedCategoryName(category))
+        .filter((category): category is string => CATEGORY_OPTIONS.includes(category as (typeof CATEGORY_OPTIONS)[number]))
+    )
+  );
 }
 
 function isDedicatedMlbCategory(category: string) {
@@ -1177,6 +1208,8 @@ async function getMlbArticles() {
 }
 
 async function getMlbVideos() {
+  console.log("MLB DEDICATED VIDEOS CALLED");
+
   const payloads = await Promise.all(
     MY_NEWS_MLB_VIDEO_QUERIES.map(async (query) => {
       const response = await fetch(
@@ -1194,20 +1227,22 @@ async function getMlbVideos() {
 
   const mergedVideos = dedupeVideosBySourceTitleAndUrl(payloads.flat());
   const validVideos = selectRecentCategoryVideos(
-    mergedVideos.filter((video) => isDedicatedMlbVideo(video)),
+    mergedVideos.filter((video) => isStrictMlbVideo(video)),
     4
   ).sort((left, right) => getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt));
-  const rejectedVideos = mergedVideos.filter((video) => !isDedicatedMlbVideo(video));
+  const rejectedVideos = mergedVideos.filter((video) => !isStrictMlbVideo(video));
 
-  console.log("MLB DEDICATED VIDEOS RAW", mergedVideos.length);
-  console.log("MLB DEDICATED VIDEOS VALID", validVideos.length);
-  console.log(
-    "MLB DEDICATED VIDEOS REJECTED SAMPLE",
-    rejectedVideos.slice(0, 6).map((video) => ({
+  console.log("MLB DEDICATED VIDEOS RAW COUNT", mergedVideos.length);
+  console.log("MLB DEDICATED VIDEOS VALID COUNT", validVideos.length);
+  console.log("MLB DEDICATED VIDEOS TITLES", validVideos.map((video) => video.title));
+  rejectedVideos.forEach((video) => {
+    const reason = getStrictMlbVideoRejectionReason(video);
+    console.log("MLB VIDEO REJECTED", {
       title: video.title,
       creator: video.creator,
-    }))
-  );
+      reason,
+    });
+  });
 
   return validVideos;
 }
@@ -1470,33 +1505,58 @@ function isDedicatedMlbArticle(
   return strictScore >= 1 && isStrictCategoryMatch("MLB", [haystack], "article");
 }
 
-function isDedicatedMlbVideo(video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">) {
+function getMlbVideoValidationState(
+  video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">
+) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
     video.thumbnailUrl ?? ""
   }`.toLowerCase();
 
-  const hasMlbCoreTerms =
-    /\b(mlb|major league baseball|baseball|mlb network|mlb\.com|home run|pitcher|inning)\b/.test(
-      haystack
-    );
+  const hasMlbLeagueTerms = /\b(mlb|major league baseball|mlb network|mlb\.com)\b/.test(
+    haystack
+  );
   const hasMlbTeamTerms =
     /\b(yankees|dodgers|braves|mets|red sox|cubs|phillies|astros|rangers|padres|orioles|tigers|guardians|mariners|giants|cardinals|brewers|diamondbacks|blue jays|royals|twins|reds|pirates|rays|marlins|rockies|athletics|angels|nationals|white sox)\b/.test(
       haystack
     );
-  const hasMlbSourceTerms =
-    /\b(mlb network|mlb\.com|espn mlb|fox sports mlb|cbs sports mlb|nbc sports mlb|yahoo sports mlb|bleacher report mlb|ap mlb|reuters mlb)\b/.test(
+  const hasBaseballTerms =
+    /\b(baseball|home run|pitcher|inning|bullpen|batting|dugout|world series|mlb|major league baseball)\b/.test(
       haystack
     );
-  const hasRejectedTerms =
-    /\b(generic sports|nfl|nba|nhl|mls|soccer|football|basketball|hockey|politics?|election|world news|celebrity|hollywood|entertainment|odds|betting|sportsbook|parlay|spread pick|over\/under)\b/.test(
+  const hasRejectedCollegeTerms =
+    /\b(college baseball|ncaa|college|alabama|softball|college softball|high school|little league)\b/.test(
+      haystack
+    );
+  const hasRejectedBasketballTerms =
+    /\b(basketball|nba|wnba|san antonio spurs|spurs|nuns)\b/.test(haystack);
+  const hasRejectedUnrelatedTerms =
+    /\b(wcnc|nfl|nhl|mls|soccer|football|hockey|politics?|election|world news|celebrity|hollywood|entertainment|betting|odds|parlay|spread pick|over\/under)\b/.test(
       haystack
     );
 
-  if (hasRejectedTerms) {
-    return false;
+  const hasMlbOrProContext = hasMlbLeagueTerms || hasMlbTeamTerms;
+
+  if (hasRejectedCollegeTerms) {
+    return { valid: false, reason: "college baseball" };
   }
 
-  return hasMlbCoreTerms || hasMlbTeamTerms || hasMlbSourceTerms;
+  if (hasRejectedBasketballTerms) {
+    return { valid: false, reason: "basketball" };
+  }
+
+  if (hasRejectedUnrelatedTerms) {
+    return { valid: false, reason: "unrelated source" };
+  }
+
+  if (!hasMlbOrProContext || !hasBaseballTerms) {
+    return { valid: false, reason: "no MLB/pro context" };
+  }
+
+  return { valid: true, reason: null as string | null };
+}
+
+function isDedicatedMlbVideo(video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">) {
+  return getMlbVideoValidationState(video).valid;
 }
 
 function getMlbLargeCardSelection(articles: Article[]) {
@@ -2046,20 +2106,8 @@ function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string
   );
 }
 
-function resolveMyNewsCategoryVideoTab(category: string): "news" | "sports" | "celebrity" {
-  if (
-    ["MLB", "NFL", "NHL", "MLS", "College Basketball", "College Football", "NASCAR", "Sports"].includes(
-      category
-    )
-  ) {
-    return "sports";
-  }
-
-  if (category === "Celebrity") {
-    return "celebrity";
-  }
-
-  return "news";
+function resolveMyNewsCategoryVideoTab(category: string): SharedVideoTab {
+  return resolveVideoCategoryForMyNewsCategory(normalizeSelectedCategoryName(category));
 }
 
 function getMyNewsCategoryVideoQueries(category: string) {
@@ -3383,22 +3431,37 @@ function isStrictNflVideo(video: VideoItem) {
   return !hasRejectedTerms && (hasNflTerms || hasPreferredSource);
 }
 
+function getStrictMlbVideoRejectionReason(video: VideoItem) {
+  return getMlbVideoValidationState(video).reason;
+}
+
 function isStrictMlbVideo(video: VideoItem) {
-  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
-  const hasMlbTerms =
-    /(mlb|major league baseball|baseball|mlb network|mlb\.com|baseball highlights|home run|walk off|pitcher|bullpen|yankees|dodgers|braves|astros|rangers|mets|red sox|cubs|phillies|orioles|tigers|guardians|mariners|giants|cardinals|brewers|diamondbacks|blue jays|royals|twins|reds|pirates|rays|marlins|rockies|athletics|angels|nationals|white sox)/.test(
-      haystack
-    );
-  const hasPreferredSource =
-    /(mlb\.com|mlb network|espn|fox sports mlb|cbs sports mlb|nbc sports mlb|yahoo sports mlb|bleacher report mlb|ap mlb|reuters mlb)/.test(
+  return getStrictMlbVideoRejectionReason(video) === null;
+}
+
+function isStrictTechnologyVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
+    video.thumbnailUrl ?? ""
+  }`.toLowerCase();
+
+  const hasTechTerms =
+    /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|semiconductor)\b/.test(
       haystack
     );
   const hasRejectedTerms =
-    /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/.test(
+    /\b(world news|politics?|election|congress|white house|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|crime|breaking news)\b/.test(
+      haystack
+    );
+  const hasTechContextException =
+    /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|semiconductor)\b/.test(
       haystack
     );
 
-  return !hasRejectedTerms && (hasMlbTerms || hasPreferredSource);
+  if (hasRejectedTerms && !hasTechContextException) {
+    return false;
+  }
+
+  return hasTechTerms;
 }
 
 function isStrictNhlVideo(video: VideoItem) {
@@ -4192,7 +4255,7 @@ export default function Home() {
         }
 
         setUsername(profile?.username ?? null);
-        const nextCategories = profile?.categories ?? [];
+        const nextCategories = normalizeSelectableCategories(profile?.categories ?? []);
         setCategories((prev) =>
           arraysShallowEqual(prev, nextCategories) ? prev : nextCategories
         );
@@ -5710,7 +5773,7 @@ export default function Home() {
   };
 
   const handleOpenFeedVideo = useCallback(
-    (videoId: string, tab: "news" | "sports" | "celebrity") => {
+    (videoId: string, tab: "news" | "sports" | "celebrity" | "technology") => {
       saveVideoReturnState({
         path: "/",
         scrollY: window.scrollY,
@@ -7060,7 +7123,7 @@ export default function Home() {
   }, [activeCommentsArticle, commentSortMode]);
 
   const openCategorySheet = useCallback(() => {
-    setCategoryDraft(categories);
+    setCategoryDraft(normalizeSelectableCategories(categories));
     setCategorySheetStatus(
       userId
         ? null
@@ -7085,10 +7148,15 @@ export default function Home() {
   }, [openCategorySheet]);
 
   const handleToggleCategoryDraft = (category: string) => {
+    const normalizedCategory = normalizeSelectedCategoryName(category);
+    if (!CATEGORY_OPTIONS.includes(normalizedCategory as (typeof CATEGORY_OPTIONS)[number])) {
+      return;
+    }
+
     setCategoryDraft((prev) =>
-      prev.includes(category)
-        ? prev.filter((current) => current !== category)
-        : [...prev, category]
+      prev.includes(normalizedCategory)
+        ? prev.filter((current) => current !== normalizedCategory)
+        : [...prev, normalizedCategory]
     );
   };
 
@@ -7104,6 +7172,8 @@ export default function Home() {
     setIsSavingCategories(true);
     setCategorySheetStatus(null);
 
+    const normalizedDraft = normalizeSelectableCategories(categoryDraft);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -7117,7 +7187,7 @@ export default function Home() {
         id: userId,
         email: user?.email ?? null,
         username: username ?? null,
-        categories: categoryDraft,
+        categories: normalizedDraft,
         preferred_sources: preferredSources,
         show_less_sources: showLessSources,
       }
@@ -7134,7 +7204,7 @@ export default function Home() {
       return;
     }
 
-    setCategories(categoryDraft);
+    setCategories(normalizedDraft);
     setCategorySheetStatus({
       type: "success",
       text: "Categories updated.",
@@ -7155,9 +7225,16 @@ export default function Home() {
       return;
     }
 
-    const nextCategories = categories.includes(category)
-      ? categories.filter((current) => current !== category)
-      : [...categories, category];
+    const normalizedCategory = normalizeSelectedCategoryName(category);
+    if (!CATEGORY_OPTIONS.includes(normalizedCategory as (typeof CATEGORY_OPTIONS)[number])) {
+      return;
+    }
+
+    const nextCategories = normalizeSelectableCategories(
+      categories.includes(normalizedCategory)
+        ? categories.filter((current) => current !== normalizedCategory)
+        : [...categories, normalizedCategory]
+    );
     const previousCategories = categories;
 
     setCategories(nextCategories);
@@ -7859,6 +7936,13 @@ export default function Home() {
       // We compensate here with category-specific queries plus stricter title/source/url matching.
       const categoryVideoEntries = await Promise.all(
         normalizedSelectedCategories.map(async (category) => {
+          const videoTab = resolveMyNewsCategoryVideoTab(category);
+          console.log("VIDEO TAB USED FOR CATEGORY", { category, tab: videoTab });
+          console.log("MY NEWS CATEGORY VIDEO SOURCE", {
+            category,
+            source: `/api/videos?tab=${videoTab}`,
+          });
+
           if (category === "NASCAR") {
             const relevantVideos = await getNascarVideos();
             console.log("NASCAR VIDEO RAW COUNT", relevantVideos.length);
@@ -7891,8 +7975,42 @@ export default function Home() {
             return [category, relevantVideos] as const;
           }
 
+          const isTechnologyCategory = normalizeSelectedCategoryName(category) === "Tech";
+
+          if (isTechnologyCategory) {
+            try {
+              const response = await fetch(`/api/videos?tab=technology`);
+              if (!response.ok) {
+                return [category, [] as VideoItem[]] as const;
+              }
+
+              const data = (await response.json()) as { videos?: VideoItem[] };
+              const mergedVideos = dedupeVideosBySourceTitleAndUrl(
+                Array.isArray(data.videos) ? data.videos : []
+              );
+              const relevantVideos = selectRecentCategoryVideos(
+                mergedVideos.filter((video) => isStrictTechnologyVideo(video)),
+                4
+              ).sort(
+                (left, right) =>
+                  getPublishedAtTimestamp(right.publishedAt) -
+                  getPublishedAtTimestamp(left.publishedAt)
+              );
+              const rejectedVideos = mergedVideos.filter((video) => !isStrictTechnologyVideo(video));
+
+              console.log("TECH VIDEO RAW COUNT", mergedVideos.length);
+              console.log("TECH VIDEO ACCEPTED", relevantVideos.slice(0, 8).map((video) => video.title));
+              console.log("TECH VIDEO REJECTED", rejectedVideos.slice(0, 8).map((video) => video.title));
+              console.log("TECH VIDEO FINAL COUNT", relevantVideos.length);
+
+              return [category, relevantVideos] as const;
+            } catch (error) {
+              console.error("Failed to load Technology videos from shared tab feed", error);
+              return [category, [] as VideoItem[]] as const;
+            }
+          }
+
           const queries = getMyNewsCategoryVideoQueries(category);
-          const videoTab = resolveMyNewsCategoryVideoTab(category);
 
           const queryResults = await Promise.all(
             queries.map(async (query) => {
@@ -7915,11 +8033,11 @@ export default function Home() {
           );
 
           const mergedVideos = dedupeVideosBySourceTitleAndUrl(queryResults.flat());
-          const rejectedVideos = mergedVideos.filter(
-            (video) => !videoMatchesSelectedCategory(video, category)
-          );
+          const categoryVideoMatcher = (video: VideoItem) =>
+            videoMatchesSelectedCategory(video, category);
+          const rejectedVideos = mergedVideos.filter((video) => !categoryVideoMatcher(video));
           const relevantVideos = selectRecentCategoryVideos(
-            mergedVideos.filter((video) => videoMatchesSelectedCategory(video, category)),
+            mergedVideos.filter((video) => categoryVideoMatcher(video)),
             4
           ).sort(
             (left, right) => getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt)
@@ -8372,16 +8490,17 @@ export default function Home() {
         console.log("MLB VIDEO RAW COUNT", mergedVideos.length);
 
         const strictMlbVideos = mergedVideos.filter((video) => isStrictMlbVideo(video));
+        const rejectedMlbVideos = mergedVideos.filter((video) => !isStrictMlbVideo(video));
         console.log("MLB VIDEO FILTERED COUNT", strictMlbVideos.length);
-        const relaxedMlbVideos =
-          strictMlbVideos.length > 0
-            ? strictMlbVideos
-            : mergedVideos.filter((video) =>
-                /(mlb|baseball|highlights?|home run|walk off|pitcher|bullpen|yankees|dodgers|braves|astros|rangers|mlb network|mlb\.com)/i.test(
-                  `${video.title} ${video.creator} ${video.category}`
-                )
-              );
-        const filteredMlbVideos = selectSourceBalancedVideos(relaxedMlbVideos, 10);
+        const filteredMlbVideos = selectSourceBalancedVideos(strictMlbVideos, 10);
+        rejectedMlbVideos.forEach((video) => {
+          const reason = getStrictMlbVideoRejectionReason(video);
+          console.log("MLB VIDEO REJECTED", {
+            title: video.title,
+            creator: video.creator,
+            reason,
+          });
+        });
         console.log(
           "MLB PLAYABLE COUNT",
           filteredMlbVideos.filter((video) => !video.fallback && Boolean(video.youtubeId)).length
@@ -9986,7 +10105,8 @@ export default function Home() {
         backgroundImage: imageUrl
           ? `linear-gradient(135deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url(${imageUrl})`
           : undefined,
-        backgroundSize: "cover",
+        backgroundSize: imageUrl ? "contain" : "cover",
+        backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
         backgroundColor: imageUrl ? undefined : undefined,
       } as const;
@@ -10643,17 +10763,31 @@ export default function Home() {
     );
   };
 
-  const renderMyNewsCategoryVideosRow = (category: string, categoryVideos: VideoItem[]) => {
+  const renderMyNewsCategoryVideosRow = (
+    category: string,
+    categoryVideos: VideoItem[],
+    options?: { sourceVariable?: string }
+  ) => {
+    const isMlbRow = isDedicatedMlbCategory(category);
+    const isTechnologyRow = normalizeSelectedCategoryName(category) === "Tech";
     const videosToRender = isDedicatedMlbCategory(category)
       ? categoryVideos.filter((video) => isDedicatedMlbVideo(video))
+      : isTechnologyRow
+        ? categoryVideos.filter((video) => isStrictTechnologyVideo(video))
       : categoryVideos;
 
-    if (isDedicatedMlbCategory(category)) {
-      console.log("RENDERING MLB VIDEO ROW", {
-        videoTitles: videosToRender.map((video) => video.title),
-        sourceVariable: "myNewsCategoryVideoSections[section.category]",
-      });
+    if (isMlbRow) {
+      console.log("RENDERING MLB VIDEO ROW");
+      console.log(
+        "VIDEO SOURCE VARIABLE:",
+        options?.sourceVariable ?? "myNewsCategoryVideoSections[section.category]"
+      );
+      console.log("VIDEO TITLES:", videosToRender.map((video) => video.title));
       console.log("MLB VIDEOS RENDERED COUNT", videosToRender.length);
+    }
+
+    if (isTechnologyRow) {
+      console.log("TECH VIDEO FINAL COUNT", videosToRender.length);
     }
 
     if (videosToRender.length === 0) {
@@ -10670,9 +10804,20 @@ export default function Home() {
             <strong className="profile-section-title home-section-title">{label}</strong>
           </div>
         </div>
+        {isMlbRow ? (
+          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
+            <strong>MY NEWS MLB VIDEOS</strong>
+            <span>MLB TEST VIDEO RENDER PATH</span>
+          </div>
+        ) : null}
+        {isTechnologyRow ? (
+          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
+            <strong>TECHNOLOGY VIDEO TEST ROW</strong>
+          </div>
+        ) : null}
         <div className="quick-watch-scroll" role="list" aria-label={label}>
           {videosToRender.map((video) => {
-            if (isDedicatedMlbCategory(category)) {
+            if (isMlbRow) {
               console.log("MLB RENDERED VIDEO CARD TITLE", video.title);
             }
 
@@ -10707,7 +10852,8 @@ export default function Home() {
                   useRelativeTime
                   className="video-card-inline quick-watch-video-card"
                   variant="article"
-                  useUniformTallFrame={category === "MLB"}
+                  useUniformTallFrame={isMlbRow}
+                  useUniformWideFrame={isTechnologyRow}
                 />
               </div>
             );
@@ -11583,7 +11729,10 @@ export default function Home() {
     label: string,
     leagueVideos: VideoItem[]
   ) => {
-    if (leagueVideos.length === 0) {
+    const filteredLeagueVideos =
+      sectionKey === "MLB" ? leagueVideos.filter((video) => isStrictMlbVideo(video)) : leagueVideos;
+
+    if (filteredLeagueVideos.length === 0) {
       return (
         <section className="home-section-block home-section-plain quick-watch-row">
           <div className="home-section-header">
@@ -11591,6 +11740,11 @@ export default function Home() {
               <strong className="profile-section-title home-section-title">{label}</strong>
             </div>
           </div>
+          {sectionKey === "MLB" ? (
+            <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
+              <strong>SPORTS MLB VIDEOS</strong>
+            </div>
+          ) : null}
           <div className="empty-state compact-empty-state">
             <strong>Videos loading…</strong>
           </div>
@@ -11605,8 +11759,13 @@ export default function Home() {
             <strong className="profile-section-title home-section-title">{label}</strong>
           </div>
         </div>
+        {sectionKey === "MLB" ? (
+          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
+            <strong>SPORTS MLB VIDEOS</strong>
+          </div>
+        ) : null}
         <div className="quick-watch-scroll" role="list" aria-label={`${label} videos`}>
-          {leagueVideos.map((video, index) => (
+          {filteredLeagueVideos.map((video, index) => (
             <div key={`${sectionKey}-video-${video.id}`} className="quick-watch-item" role="listitem">
               <VideoFeedCard
                 video={video}
@@ -12603,8 +12762,8 @@ export default function Home() {
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Add Categories</strong>
-              <span className="muted">Swipe through topics to shape your feed.</span>
+              <strong className="profile-section-title home-section-title">Suggested Categories</strong>
+              <span className="muted">Swipe through official topics to shape your feed.</span>
             </div>
             {userId ? (
               <Link href="/profile/categories/" className="button button-secondary">
@@ -12621,8 +12780,8 @@ export default function Home() {
             )}
           </div>
 
-          <div className="category-swipe-row" role="list" aria-label="Browse categories">
-            {CATEGORY_OPTIONS.slice(0, 16).map((category, index) => {
+          <div className="category-swipe-row" role="list" aria-label="Suggested categories">
+            {CATEGORY_OPTIONS.map((category, index) => {
               const isSelected = categories.includes(category);
               const label = getCategoryLabel(category);
 
@@ -12815,7 +12974,14 @@ export default function Home() {
                     }`}
                     onClick={() => handleToggleCategoryDraft(category)}
                   >
-                    {getCategoryLabel(category)}
+                    {getCategoryImageUrl(category) ? (
+                      <span
+                        className="category-pill-icon"
+                        style={{ backgroundImage: `url(${getCategoryImageUrl(category)})` }}
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <span>{getCategoryLabel(category)}</span>
                   </button>
                 ))}
               </div>
@@ -12913,110 +13079,181 @@ export default function Home() {
             <div className="stack" style={{ gap: "22px" }}>
               {myNewsCategorySections
                 .filter((section) => section.category !== "Recommended for You")
-                .map((section, index, filteredSections) => (
-                  <div key={`mynews-section-wrap-${section.category}`} className="stack" style={{ gap: "18px" }}>
-                    <section
-                      key={`mynews-section-${section.category}`}
-                      className="home-section-block home-section-plain"
-                    >
-                      <div className="home-section-header">
-                        <div className="stack" style={{ gap: "4px" }}>
-                          <strong className="profile-section-title home-section-title">
-                            {getCategoryLabel(section.category)}
-                          </strong>
-                        </div>
-                      </div>
-                  {(() => {
-                        const leadSelection = myNewsCategoryLeadArticles[section.category] ?? {
-                          article: null,
-                          imageSrcOverride: null,
-                        };
-                        const leadArticle = leadSelection.article;
-                        if (isDedicatedMlbCategory(section.category)) {
-                          const supplementalMlbArticles =
-                            myNewsCategorySupplementalArticles[section.category] ?? [];
-                          const validMlbArticles = supplementalMlbArticles.filter((article) =>
-                            isDedicatedMlbArticle(article, "lead")
-                          );
-                          const realImageMlbArticles = validMlbArticles.filter((article) =>
-                            Boolean(getLargeImageCardImage(article))
-                          );
+                .map((section, index, filteredSections) => {
+                  const isDedicatedMlbSection = isDedicatedMlbCategory(section.category);
+                  const dedicatedMlbArticles = isDedicatedMlbSection
+                    ? selectSourceBalancedArticles(
+                        (myNewsCategorySupplementalArticles[section.category] ?? [])
+                          .filter((article) => isDedicatedMlbArticle(article, "article"))
+                          .sort((leftArticle, rightArticle) => {
+                            const leftScore =
+                              getArticlePriorityScore(leftArticle) +
+                              getCategoryMatchScore("MLB", [
+                                leftArticle.title,
+                                leftArticle.description,
+                                leftArticle.source,
+                                leftArticle.category,
+                                leftArticle.url,
+                                leftArticle.content,
+                              ]) *
+                                20;
+                            const rightScore =
+                              getArticlePriorityScore(rightArticle) +
+                              getCategoryMatchScore("MLB", [
+                                rightArticle.title,
+                                rightArticle.description,
+                                rightArticle.source,
+                                rightArticle.category,
+                                rightArticle.url,
+                                rightArticle.content,
+                              ]) *
+                                20;
+                            return rightScore - leftScore;
+                          }),
+                        6
+                      )
+                    : section.articles;
+                  const dedicatedMlbVideos = isDedicatedMlbSection
+                    ? (myNewsCategorySupplementalVideos[section.category] ?? []).filter((video) =>
+                        isDedicatedMlbVideo(video)
+                      )
+                    : myNewsCategoryVideoSections[section.category] ?? [];
 
-                          console.log(
-                            "MLB LARGE CARD ARTICLE TITLE",
-                            leadArticle?.title ?? null
-                          );
-                          console.log(
-                            "MLB LARGE CARD IMAGE URL",
-                            leadSelection.imageSrcOverride ??
-                              (leadArticle ? getLargeImageCardImage(leadArticle)?.src ?? null : null)
-                          );
-                          if (leadArticle) {
-                            console.log("MLB LARGE CARD RENDER TRUE/FALSE", true);
-                            console.log("MLB LARGE CARD RENDERED", {
-                              title: leadArticle.title,
-                              source: leadArticle.source,
-                            });
-                          } else if (supplementalMlbArticles.length === 0) {
-                            console.log("MLB LARGE CARD RENDER TRUE/FALSE", false);
-                            console.log("MLB LARGE CARD RENDERED", {
-                              rendered: false,
-                              reason: "render path not used",
-                            });
-                          } else if (validMlbArticles.length === 0) {
-                            console.log("MLB LARGE CARD RENDER TRUE/FALSE", false);
-                            console.log("MLB LARGE CARD RENDERED", {
-                              rendered: false,
-                              reason: "no valid MLB article",
-                            });
-                          } else if (realImageMlbArticles.length === 0) {
-                            console.log("MLB LARGE CARD RENDER TRUE/FALSE", false);
-                            console.log("MLB LARGE CARD RENDERED", {
-                              rendered: false,
-                              reason: "no real image",
-                            });
-                          } else {
-                            console.log("MLB LARGE CARD RENDER TRUE/FALSE", false);
-                            console.log("MLB LARGE CARD RENDERED", {
-                              rendered: false,
-                              reason: "wrong category",
-                            });
-                          }
-                        }
-                        const leadArticleKey = leadArticle
-                          ? getArticleDeduplicationKey(leadArticle)
-                          : null;
-
-                        return (
-                          <div className="stack" style={{ gap: "18px" }}>
-                            {leadArticle ? (
-                              <div
-                                key={`mynews-large-${leadArticle.id || leadArticle.url || leadArticleKey}`}
-                              >
-                                {renderLargeImageArticleCard(leadArticle, {
-                                  imageSrcOverride: leadSelection.imageSrcOverride ?? null,
-                                })}
-                              </div>
-                            ) : null}
-                            {renderRankedCompactArticleSection(section.articles, {
-                              limit: 5,
-                              excludeArticleKey: leadArticleKey,
-                            })}
+                  return (
+                    <div key={`mynews-section-wrap-${section.category}`} className="stack" style={{ gap: "18px" }}>
+                      <section
+                        key={`mynews-section-${section.category}`}
+                        className="home-section-block home-section-plain"
+                      >
+                        {isDedicatedMlbSection
+                          ? (() => {
+                              console.log("RENDERING MLB SECTION FROM THIS FILE");
+                              return null;
+                            })()
+                          : null}
+                        <div className="home-section-header">
+                          <div className="stack" style={{ gap: "4px" }}>
+                            <strong className="profile-section-title home-section-title">
+                              {getCategoryLabel(section.category)}
+                            </strong>
                           </div>
-                        );
-                      })()}
-                    </section>
+                        </div>
+                    {(() => {
+                          const leadSelection = myNewsCategoryLeadArticles[section.category] ?? {
+                                article: null,
+                                imageSrcOverride: null,
+                              };
+                          const leadArticle = leadSelection.article;
+                          const rawLeadImageOverride =
+                            "imageSrc" in leadSelection
+                              ? leadSelection.imageSrc
+                              : leadSelection.imageSrcOverride;
+                          const leadImageOverride: string | null =
+                            typeof rawLeadImageOverride === "string" ? rawLeadImageOverride : null;
+                          if (isDedicatedMlbSection) {
+                            const supplementalMlbArticles =
+                              myNewsCategorySupplementalArticles[section.category] ?? [];
+                            const validMlbArticles = supplementalMlbArticles.filter((article) =>
+                              isDedicatedMlbArticle(article, "lead")
+                            );
+                            const realImageMlbArticles = validMlbArticles.filter((article) =>
+                              Boolean(getLargeImageCardImage(article))
+                            );
 
-                    {renderMyNewsCategoryVideosRow(
-                      section.category,
-                      myNewsCategoryVideoSections[section.category] ?? []
-                    )}
+                            console.log("FORCE MLB DEDICATED ROUTE ACTIVE");
+                            console.log(
+                              "RENDERING MLB LARGE CARD",
+                              {
+                                exists: Boolean(leadArticle),
+                                title: leadArticle?.title ?? null,
+                                image:
+                                  leadImageOverride ??
+                                  (leadArticle ? getLargeImageCardImage(leadArticle)?.src ?? null : null),
+                              }
+                            );
+                            console.log("MLB LARGE CARD ARTICLE TITLE", leadArticle?.title ?? null);
+                            console.log(
+                              "MLB LARGE CARD IMAGE URL",
+                              leadImageOverride ??
+                                (leadArticle ? getLargeImageCardImage(leadArticle)?.src ?? null : null)
+                            );
+                            if (leadArticle) {
+                              console.log("MLB LARGE CARD RENDER TRUE/FALSE", true);
+                              console.log("MLB LARGE CARD RENDERED", {
+                                title: leadArticle.title,
+                                source: leadArticle.source,
+                              });
+                            } else if (supplementalMlbArticles.length === 0) {
+                              console.log("MLB LARGE CARD RENDER TRUE/FALSE", false);
+                              console.log("MLB LARGE CARD RENDERED", {
+                                rendered: false,
+                                reason: "render path not used",
+                              });
+                            } else if (validMlbArticles.length === 0) {
+                              console.log("MLB LARGE CARD RENDER TRUE/FALSE", false);
+                              console.log("MLB LARGE CARD RENDERED", {
+                                rendered: false,
+                                reason: "no valid MLB article",
+                              });
+                            } else if (realImageMlbArticles.length === 0) {
+                              console.log("MLB LARGE CARD RENDER TRUE/FALSE", false);
+                              console.log("MLB LARGE CARD RENDERED", {
+                                rendered: false,
+                                reason: "no real image",
+                              });
+                            } else {
+                              console.log("MLB LARGE CARD RENDER TRUE/FALSE", false);
+                              console.log("MLB LARGE CARD RENDERED", {
+                                rendered: false,
+                                reason: "wrong category",
+                              });
+                            }
+                          }
+                          const leadArticleKey = leadArticle
+                            ? getArticleDeduplicationKey(leadArticle)
+                            : null;
 
-                    {index < filteredSections.length - 1
-                      ? renderMyNewsCategorySeparator(index, section.category)
-                      : null}
-                  </div>
-                ))}
+                          return (
+                            <div className="stack" style={{ gap: "18px" }}>
+                              {leadArticle ? (
+                                <div
+                                  key={`mynews-large-${leadArticle.id || leadArticle.url || leadArticleKey}`}
+                                >
+                                  {renderLargeImageArticleCard(leadArticle, {
+                                    imageSrcOverride: leadImageOverride ?? null,
+                                  })}
+                                </div>
+                              ) : null}
+                              {renderRankedCompactArticleSection(
+                                isDedicatedMlbSection ? dedicatedMlbArticles : section.articles,
+                                {
+                                  limit: 5,
+                                  excludeArticleKey: leadArticleKey,
+                                }
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </section>
+
+                      {renderMyNewsCategoryVideosRow(
+                        section.category,
+                        isDedicatedMlbSection
+                          ? dedicatedMlbVideos
+                          : myNewsCategoryVideoSections[section.category] ?? [],
+                        {
+                          sourceVariable: isDedicatedMlbSection
+                            ? "myNewsCategorySupplementalVideos[section.category]"
+                            : "myNewsCategoryVideoSections[section.category]",
+                        }
+                      )}
+
+                      {index < filteredSections.length - 1
+                        ? renderMyNewsCategorySeparator(index, section.category)
+                        : null}
+                    </div>
+                  );
+                })}
 
               {myNewsCategorySections.find((section) => section.category === "Recommended for You")?.articles
                 .length ? (
@@ -14614,7 +14851,14 @@ export default function Home() {
                     }`}
                     onClick={() => handleToggleCategoryDraft(category)}
                   >
-                    {getCategoryLabel(category)}
+                    {getCategoryImageUrl(category) ? (
+                      <span
+                        className="category-pill-icon"
+                        style={{ backgroundImage: `url(${getCategoryImageUrl(category)})` }}
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <span>{getCategoryLabel(category)}</span>
                   </button>
                 ))}
               </div>
@@ -14826,7 +15070,14 @@ export default function Home() {
                   }`}
                   onClick={() => handleToggleCategoryDraft(category)}
                 >
-                  {getCategoryLabel(category)}
+                  {getCategoryImageUrl(category) ? (
+                    <span
+                      className="category-pill-icon"
+                      style={{ backgroundImage: `url(${getCategoryImageUrl(category)})` }}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  <span>{getCategoryLabel(category)}</span>
                 </button>
               ))}
             </div>

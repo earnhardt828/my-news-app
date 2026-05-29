@@ -9,6 +9,8 @@ import SourceBadge from "../components/source-badge";
 import {
   readVideoReturnState,
   savePendingVideoReturnState,
+  SHARED_VIDEO_CATEGORIES,
+  type SharedVideoTab,
   type VideoReturnState,
 } from "../../lib/video-navigation";
 import {
@@ -31,7 +33,7 @@ const actionIconProps = {
   "aria-hidden": true,
 };
 
-type VideoTab = "news" | "sports" | "celebrity";
+type VideoTab = SharedVideoTab;
 
 export default function VideosPage() {
   const router = useRouter();
@@ -41,6 +43,7 @@ export default function VideosPage() {
     news: initialVideos,
     sports: [],
     celebrity: [],
+    technology: [],
   });
   const [activeCommentsVideoId, setActiveCommentsVideoId] = useState<string | null>(
     null
@@ -53,11 +56,13 @@ export default function VideosPage() {
     news: true,
     sports: false,
     celebrity: false,
+    technology: false,
   });
   const [statusMessages, setStatusMessages] = useState<Record<VideoTab, string>>({
     news: "",
     sports: "",
     celebrity: "",
+    technology: "",
   });
   const videoFrameRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hasLoadedOnceRef = useRef(false);
@@ -65,6 +70,7 @@ export default function VideosPage() {
     news: false,
     sports: false,
     celebrity: false,
+    technology: false,
   });
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
@@ -77,9 +83,15 @@ export default function VideosPage() {
       ? "sports"
       : searchParams.get("tab") === "celebrity"
         ? "celebrity"
+        : searchParams.get("tab") === "technology"
+          ? "technology"
         : "news";
   const requestedVideoId = searchParams.get("video");
   const [returnState, setReturnState] = useState<VideoReturnState | null>(null);
+
+  useEffect(() => {
+    console.log("VIDEO PAGE ACTIVE TABS", SHARED_VIDEO_CATEGORIES.map((tab) => tab.value));
+  }, []);
 
   useEffect(() => {
     setReturnState(readVideoReturnState());
@@ -131,6 +143,8 @@ export default function VideosPage() {
             ? "Could not load live sports videos right now."
             : tab === "celebrity"
               ? "Could not load live celebrity videos right now."
+              : tab === "technology"
+                ? "Could not load live technology videos right now."
               : "Could not load live videos, so the current feed is shown instead.",
       }));
     } finally {
@@ -267,6 +281,7 @@ export default function VideosPage() {
       news: updateVideos(prev.news),
       sports: updateVideos(prev.sports),
       celebrity: updateVideos(prev.celebrity),
+      technology: updateVideos(prev.technology),
     }));
   };
 
@@ -280,6 +295,7 @@ export default function VideosPage() {
       news: updateVideos(prev.news),
       sports: updateVideos(prev.sports),
       celebrity: updateVideos(prev.celebrity),
+      technology: updateVideos(prev.technology),
     }));
   };
 
@@ -308,7 +324,7 @@ export default function VideosPage() {
       return;
     }
 
-    const tabs: VideoTab[] = ["news", "sports", "celebrity"];
+    const tabs = SHARED_VIDEO_CATEGORIES.map((tab) => tab.value);
     const currentIndex = tabs.indexOf(activeTab);
     const nextTab = tabs[diffX < 0 ? currentIndex + 1 : currentIndex - 1];
     if (nextTab) {
@@ -357,34 +373,24 @@ export default function VideosPage() {
         </button>
       ) : null}
       <div className="videos-page-tab-row" role="tablist" aria-label="Video categories">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "news"}
-          className={`videos-page-tab ${activeTab === "news" ? "videos-page-tab-active" : ""}`}
-          onClick={() => setActiveTab("news")}
-        >
-          News
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "sports"}
-          className={`videos-page-tab ${activeTab === "sports" ? "videos-page-tab-active" : ""}`}
-          onClick={() => setActiveTab("sports")}
-        >
-          Sports
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "celebrity"}
-          className={`videos-page-tab ${activeTab === "celebrity" ? "videos-page-tab-active" : ""}`}
-          onClick={() => setActiveTab("celebrity")}
-        >
-          Celebrity
-        </button>
+        {SHARED_VIDEO_CATEGORIES.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.value}
+            className={`videos-page-tab ${
+              activeTab === tab.value ? "videos-page-tab-active" : ""
+            }`}
+            onClick={() => setActiveTab(tab.value)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+      {activeTab === "technology" ? (
+        <div className="chip chip-accent reels-status">Technology tab active</div>
+      ) : null}
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
       {isCurrentTabLoading && hasLoadedOnce ? (
         <div className="muted reels-inline-status">Refreshing videos...</div>
@@ -404,6 +410,8 @@ export default function VideosPage() {
               ? "No sports videos yet"
               : activeTab === "celebrity"
                 ? "No celebrity videos yet"
+                : activeTab === "technology"
+                  ? "No technology videos yet"
                 : "No news videos yet"}
           </strong>
           <span>Check back shortly for a fresh vertical video feed.</span>

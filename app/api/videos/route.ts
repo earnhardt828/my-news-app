@@ -46,7 +46,7 @@ type VideoFeedItem = {
   fallback: boolean;
 };
 
-type VideoFeedTab = "all" | "news" | "sports" | "celebrity";
+type VideoFeedTab = "all" | "news" | "sports" | "celebrity" | "technology";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
 
 function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedItem[] {
@@ -122,6 +122,38 @@ function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedIt
         title: "Music, movies, and TV buzz",
         creator: "Variety",
         category: "Entertainment",
+        orientation: "horizontal",
+        ...common,
+      },
+    ];
+  }
+
+  if (tab === "technology") {
+    return [
+      {
+        id: "technology-fallback-1",
+        youtubeId: "technology-fallback-1",
+        title: "AI and software news roundup",
+        creator: "The Verge",
+        category: "Tech",
+        orientation: "horizontal",
+        ...common,
+      },
+      {
+        id: "technology-fallback-2",
+        youtubeId: "technology-fallback-2",
+        title: "Apple, Google, and chip industry updates",
+        creator: "Bloomberg Technology",
+        category: "Tech",
+        orientation: "horizontal",
+        ...common,
+      },
+      {
+        id: "technology-fallback-3",
+        youtubeId: "technology-fallback-3",
+        title: "Cybersecurity and startup headlines",
+        creator: "CNBC",
+        category: "Tech",
         orientation: "horizontal",
         ...common,
       },
@@ -224,6 +256,10 @@ const WEATHER_POSITIVE_PATTERN =
   /(weather|storm|tornado|hurricane|rain|snow|flooding|wildfire|radar|forecast|climate|severe weather|the weather channel|fox weather|accuweather|noaa|national weather service|cnn weather|storm tracker|storm surge|heat wave|blizzard)/;
 const WEATHER_REJECTED_PATTERN =
   /(politics|election|economy|stocks|market|crime|celebrity|red carpet|hollywood|sportscenter|touchdown|dunk|home run|goal|nfl|nba|mlb|nhl|mls|war|white house|congress|president|music awards)/;
+const TECHNOLOGY_POSITIVE_PATTERN =
+  /(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|chips|semiconductor|semiconductors|robot|robots|developer|developers|coding|cloud computing|device launch)/;
+const TECHNOLOGY_REJECTED_PATTERN =
+  /(world news|politics|election|senate|congress|president|war|sportscenter|nfl|nba|mlb|nhl|mls|hockey|football|basketball|baseball|celebrity|hollywood|red carpet|weather|forecast|storm|crime|shooting|generic breaking news)/;
 
 const BLOCKED_VIDEO_SOURCE_PATTERN = /\b(kanak news|kanak news odisha)\b/i;
 const BLOCKED_VIDEO_URL_PATTERN = /kanaknews\.com/i;
@@ -693,6 +729,46 @@ function getWeatherVideoScore(
   return score;
 }
 
+function isStrictTechnologyVideo(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+  return TECHNOLOGY_POSITIVE_PATTERN.test(haystack) && !TECHNOLOGY_REJECTED_PATTERN.test(haystack);
+}
+
+function getTechnologyVideoScore(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+  let score = 0;
+
+  if (!isStrictTechnologyVideo(video)) {
+    return -1000;
+  }
+
+  if (
+    /(openai|nvidia|apple|google|microsoft|artificial intelligence|ai|cybersecurity|software|startup|semiconductor|iphone|gadgets?|cloud computing)/.test(
+      haystack
+    )
+  ) {
+    score += 165;
+  }
+
+  if (/(technology|tech|developer|device launch|chip|robot)/.test(haystack)) {
+    score += 90;
+  }
+
+  if (video.category === "Tech") {
+    score += 72;
+  }
+
+  if (video.orientation === "horizontal") {
+    score += 50;
+  }
+
+  return score;
+}
+
 function isBlockedVideo(video: Pick<VideoFeedItem, "title" | "creator" | "watchUrl">) {
   const haystack = `${video.title} ${video.creator} ${video.watchUrl}`;
   return (
@@ -947,6 +1023,8 @@ function filterAndSortVideos(
       ? categoryFiltered.filter((video) => isStrictSportsVideo(video))
       : options.tab === "celebrity"
         ? categoryFiltered.filter((video) => isStrictCelebrityVideo(video))
+      : options.tab === "technology"
+        ? categoryFiltered.filter((video) => isStrictTechnologyVideo(video))
       : options.tab === "news"
         ? categoryFiltered.filter(
             (video) =>
@@ -991,6 +1069,11 @@ function filterAndSortVideos(
               );
           }
 
+          if (options.tab === "technology") {
+            return !TECHNOLOGY_REJECTED_PATTERN.test(haystack) &&
+              TECHNOLOGY_POSITIVE_PATTERN.test(haystack);
+          }
+
           if (options.tab === "news") {
             return !isStrictSportsVideo(video) && !isStrictCelebrityVideo(video) && !isStrictWeatherVideo(video);
           }
@@ -1008,6 +1091,8 @@ function filterAndSortVideos(
         ? getSportsVideoScore(b) - getSportsVideoScore(a)
         : options.tab === "celebrity"
           ? getCelebrityVideoScore(b) - getCelebrityVideoScore(a)
+        : options.tab === "technology"
+          ? getTechnologyVideoScore(b) - getTechnologyVideoScore(a)
         : options.tab === "weather"
           ? getWeatherVideoScore(b) - getWeatherVideoScore(a)
         : options.tab === "news"
@@ -1073,7 +1158,9 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const searchTerm = requestUrl.searchParams.get("q")?.trim() ?? "";
   const category = requestUrl.searchParams.get("category")?.trim() ?? "Trending";
-  const tab = (requestUrl.searchParams.get("tab")?.trim().toLowerCase() ?? "all") as WeatherCapableVideoFeedTab;
+  const tab = (requestUrl.searchParams.get("tab")?.trim().toLowerCase() ?? "all") as
+    | WeatherCapableVideoFeedTab
+    | "technology";
 
   try {
     const results = await Promise.allSettled(
@@ -1121,7 +1208,11 @@ export async function GET(request: Request) {
       category,
       searchTerm,
       tab:
-        tab === "sports" || tab === "news" || tab === "celebrity" || tab === "weather"
+        tab === "sports" ||
+        tab === "news" ||
+        tab === "celebrity" ||
+        tab === "weather" ||
+        tab === "technology"
           ? tab
           : "all",
     });
