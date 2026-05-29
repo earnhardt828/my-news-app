@@ -7979,8 +7979,10 @@ export default function Home() {
 
           if (isTechnologyCategory) {
             try {
+              console.log("MY NEWS TECH FETCH START");
               console.log("MY NEWS TECH VIDEO FEED USED", "/api/videos?tab=technology");
               const response = await fetch(`/api/videos?tab=technology`);
+              console.log("MY NEWS TECH API STATUS", response.status);
               if (!response.ok) {
                 return [category, [] as VideoItem[]] as const;
               }
@@ -7989,6 +7991,7 @@ export default function Home() {
               const mergedVideos = dedupeVideosBySourceTitleAndUrl(
                 Array.isArray(data.videos) ? data.videos : []
               );
+              console.log("MY NEWS TECH RAW COUNT", mergedVideos.length);
               const relevantVideos = selectRecentCategoryVideos(
                 mergedVideos.filter((video) => isStrictTechnologyVideo(video)),
                 4
@@ -7998,6 +8001,7 @@ export default function Home() {
                   getPublishedAtTimestamp(left.publishedAt)
               );
               const rejectedVideos = mergedVideos.filter((video) => !isStrictTechnologyVideo(video));
+              console.log("MY NEWS TECH STRICT COUNT", relevantVideos.length);
 
               console.log("TECH VIDEO RAW COUNT", mergedVideos.length);
               console.log("TECH VIDEO ACCEPTED", relevantVideos.slice(0, 8).map((video) => video.title));
@@ -8005,6 +8009,7 @@ export default function Home() {
               console.log("TECH VIDEO FINAL COUNT", relevantVideos.length);
               console.log("MY NEWS TECH VIDEO COUNT", relevantVideos.length);
               console.log("MY NEWS TECH VIDEO TITLES", relevantVideos.map((video) => video.title));
+              console.log("MY NEWS TECH SET STATE COUNT", relevantVideos.length);
 
               return [category, relevantVideos] as const;
             } catch (error) {
@@ -10793,12 +10798,13 @@ export default function Home() {
       console.log("MY NEWS TECH VIDEO FEED USED", options?.sourceVariable ?? "/api/videos?tab=technology");
       console.log("MY NEWS TECH VIDEO COUNT", videosToRender.length);
       console.log("MY NEWS TECH VIDEO TITLES", videosToRender.map((video) => video.title));
+      console.log("MY NEWS TECH RENDER COUNT", videosToRender.length);
       console.log("TECHNOLOGY RENDER RAW TITLES", categoryVideos.map((video) => video.title));
       console.log("TECHNOLOGY RENDER FILTERED TITLES", videosToRender.map((video) => video.title));
       console.log("TECHNOLOGY RENDER FINAL COUNT", videosToRender.length);
     }
 
-    if (videosToRender.length === 0) {
+    if (!isTechnologyRow && videosToRender.length === 0) {
       return null;
     }
 
@@ -10821,6 +10827,11 @@ export default function Home() {
         {isTechnologyRow ? (
           <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
             <strong>TECHNOLOGY FILTER ACTIVE</strong>
+          </div>
+        ) : null}
+        {isTechnologyRow && videosToRender.length === 0 ? (
+          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
+            <strong>No technology videos available right now.</strong>
           </div>
         ) : null}
         <div className="quick-watch-scroll" role="list" aria-label={label}>
