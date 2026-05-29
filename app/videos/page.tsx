@@ -123,6 +123,8 @@ export default function VideosPage() {
       return;
     }
 
+    console.log("TECHNOLOGY RENDER RAW COUNT", displayedVideosRaw.length);
+    console.log("TECHNOLOGY RENDER STRICT COUNT", displayedVideos.length);
     console.log("TECHNOLOGY RENDER RAW TITLES", displayedVideosRaw.map((video) => video.title));
     console.log("TECHNOLOGY RENDER FILTERED TITLES", displayedVideos.map((video) => video.title));
     console.log("TECHNOLOGY RENDER FINAL COUNT", displayedVideos.length);

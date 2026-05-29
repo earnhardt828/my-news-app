@@ -48,6 +48,18 @@ type VideoFeedItem = {
 
 type VideoFeedTab = "all" | "news" | "sports" | "celebrity" | "technology";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
+const TECHNOLOGY_TAB_SEARCH_QUERIES = [
+  "tech news",
+  "AI news",
+  "Apple technology",
+  "Google AI",
+  "Microsoft AI",
+  "OpenAI news",
+  "Nvidia AI",
+  "cybersecurity news",
+  "gadget news",
+  "semiconductor news",
+] as const;
 
 function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedItem[] {
   const common = {
@@ -129,35 +141,7 @@ function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedIt
   }
 
   if (tab === "technology") {
-    return [
-      {
-        id: "technology-fallback-1",
-        youtubeId: "technology-fallback-1",
-        title: "AI and software news roundup",
-        creator: "The Verge",
-        category: "Tech",
-        orientation: "horizontal",
-        ...common,
-      },
-      {
-        id: "technology-fallback-2",
-        youtubeId: "technology-fallback-2",
-        title: "Apple, Google, and chip industry updates",
-        creator: "Bloomberg Technology",
-        category: "Tech",
-        orientation: "horizontal",
-        ...common,
-      },
-      {
-        id: "technology-fallback-3",
-        youtubeId: "technology-fallback-3",
-        title: "Cybersecurity and startup headlines",
-        creator: "CNBC",
-        category: "Tech",
-        orientation: "horizontal",
-        ...common,
-      },
-    ];
+    return [];
   }
 
   if (tab === "weather") {
@@ -1051,15 +1035,16 @@ function filterAndSortVideos(
 
   if (options.tab === "technology") {
     const rejectedTechnologyVideos = categoryFiltered.filter((video) => !isStrictTechnologyVideo(video));
-    console.log("TECHNOLOGY VIDEO RAW COUNT", categoryFiltered.length);
+    console.log("TECHNOLOGY API RAW COUNT", categoryFiltered.length);
     console.log(
       "TECHNOLOGY VIDEO ACCEPTED",
       tabFiltered.slice(0, 8).map((video) => video.title)
     );
     console.log(
-      "TECHNOLOGY VIDEO REJECTED",
+      "TECHNOLOGY REJECTED TITLES",
       rejectedTechnologyVideos.slice(0, 8).map((video) => video.title)
     );
+    console.log("TECHNOLOGY API STRICT COUNT", tabFiltered.length);
   }
 
   console.log("VIDEO FILTERED COUNT", {
@@ -1204,19 +1189,31 @@ export async function GET(request: Request) {
     | "technology";
 
   try {
-    const results = await Promise.allSettled(
-      APPROVED_CHANNELS.map((channel) => fetchVideosForChannel(channel))
-    );
+    const useTechnologyOnlySearch = tab === "technology";
+    const results = useTechnologyOnlySearch
+      ? []
+      : await Promise.allSettled(APPROVED_CHANNELS.map((channel) => fetchVideosForChannel(channel)));
 
     const successfulEntries = results.flatMap((result) =>
       result.status === "fulfilled" ? result.value : []
     );
-    const searchEntries = searchTerm
-      ? await fetchVideosForSearchQuery(searchTerm).catch((error) => {
-          console.error("YouTube Data API search failed:", error);
-          return [] as RssFeedEntry[];
-        })
-      : [];
+    const searchTerms = useTechnologyOnlySearch
+      ? searchTerm
+        ? [searchTerm]
+        : [...TECHNOLOGY_TAB_SEARCH_QUERIES]
+      : searchTerm
+        ? [searchTerm]
+        : [];
+    const searchEntries = (
+      await Promise.all(
+        searchTerms.map(async (term) =>
+          fetchVideosForSearchQuery(term).catch((error) => {
+            console.error("YouTube Data API search failed:", error);
+            return [] as RssFeedEntry[];
+          })
+        )
+      )
+    ).flat();
     const failedFeeds = results
       .map((result, index) =>
         result.status === "rejected"
@@ -1235,7 +1232,7 @@ export async function GET(request: Request) {
       console.error("YouTube RSS feed failures:", failedFeeds);
     }
 
-    const allEntries = [...successfulEntries, ...searchEntries];
+    const allEntries = useTechnologyOnlySearch ? searchEntries : [...successfulEntries, ...searchEntries];
 
     if (allEntries.length === 0) {
       if (tab === "technology") {
