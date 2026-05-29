@@ -54,6 +54,29 @@ function isStrictTechnologyVideo(video: Pick<VideoItem, "title" | "creator" | "c
   return hasStrongTechContext;
 }
 
+function isStrictPoliticsVideo(
+  video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">
+) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
+    video.thumbnailUrl ?? ""
+  }`.toLowerCase();
+
+  const hasPoliticsContext =
+    /\b(politics?|political|white house|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|ap politics|reuters politics|cnn politics|fox news politics|nbc politics|abc politics|cbs politics)\b/.test(
+      haystack
+    );
+  const hasRejectedContext =
+    /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather|forecast|storm|technology|tech|ai|software|crime)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedContext && !hasPoliticsContext) {
+    return false;
+  }
+
+  return hasPoliticsContext;
+}
+
 type VideoTab = SharedVideoTab;
 
 export default function VideosPage() {
@@ -62,6 +85,7 @@ export default function VideosPage() {
   const [activeTab, setActiveTab] = useState<VideoTab>("news");
   const [videosByTab, setVideosByTab] = useState<Record<VideoTab, VideoItem[]>>({
     news: initialVideos,
+    politics: [],
     sports: [],
     celebrity: [],
     technology: [],
@@ -75,12 +99,14 @@ export default function VideosPage() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [tabLoading, setTabLoading] = useState<Record<VideoTab, boolean>>({
     news: true,
+    politics: false,
     sports: false,
     celebrity: false,
     technology: false,
   });
   const [statusMessages, setStatusMessages] = useState<Record<VideoTab, string>>({
     news: "",
+    politics: "",
     sports: "",
     celebrity: "",
     technology: "",
@@ -89,6 +115,7 @@ export default function VideosPage() {
   const hasLoadedOnceRef = useRef(false);
   const loadedTabsRef = useRef<Record<VideoTab, boolean>>({
     news: false,
+    politics: false,
     sports: false,
     celebrity: false,
     technology: false,
@@ -100,12 +127,16 @@ export default function VideosPage() {
   const displayedVideos =
     activeTab === "technology"
       ? displayedVideosRaw.filter((video) => isStrictTechnologyVideo(video))
+      : activeTab === "politics"
+        ? displayedVideosRaw.filter((video) => isStrictPoliticsVideo(video))
       : displayedVideosRaw;
   const statusMessage = statusMessages[activeTab];
   const isCurrentTabLoading = tabLoading[activeTab];
   const requestedTab =
     searchParams.get("tab") === "sports"
       ? "sports"
+      : searchParams.get("tab") === "politics"
+        ? "politics"
       : searchParams.get("tab") === "celebrity"
         ? "celebrity"
         : searchParams.get("tab") === "technology"
@@ -178,6 +209,8 @@ export default function VideosPage() {
         [tab]:
           tab === "sports"
             ? "Could not load live sports videos right now."
+            : tab === "politics"
+              ? "Could not load live politics videos right now."
             : tab === "celebrity"
               ? "Could not load live celebrity videos right now."
               : tab === "technology"
@@ -316,6 +349,7 @@ export default function VideosPage() {
 
     setVideosByTab((prev) => ({
       news: updateVideos(prev.news),
+      politics: updateVideos(prev.politics),
       sports: updateVideos(prev.sports),
       celebrity: updateVideos(prev.celebrity),
       technology: updateVideos(prev.technology),
@@ -330,6 +364,7 @@ export default function VideosPage() {
 
     setVideosByTab((prev) => ({
       news: updateVideos(prev.news),
+      politics: updateVideos(prev.politics),
       sports: updateVideos(prev.sports),
       celebrity: updateVideos(prev.celebrity),
       technology: updateVideos(prev.technology),
@@ -425,12 +460,6 @@ export default function VideosPage() {
           </button>
         ))}
       </div>
-      {activeTab === "technology" ? (
-        <div className="chip chip-accent reels-status">Technology tab active</div>
-      ) : null}
-      {activeTab === "technology" ? (
-        <div className="chip chip-accent reels-status">TECHNOLOGY FILTER ACTIVE</div>
-      ) : null}
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
       {isCurrentTabLoading && hasLoadedOnce ? (
         <div className="muted reels-inline-status">Refreshing videos...</div>
@@ -448,6 +477,8 @@ export default function VideosPage() {
           <strong>
             {activeTab === "sports"
               ? "No sports videos yet"
+              : activeTab === "politics"
+                ? "No politics videos available right now."
               : activeTab === "celebrity"
                 ? "No celebrity videos yet"
                 : activeTab === "technology"

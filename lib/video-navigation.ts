@@ -1,7 +1,7 @@
 export const VIDEO_RETURN_STATE_KEY = "graffiti-video-return-state";
 export const VIDEO_RETURN_PENDING_KEY = "graffiti-video-return-pending";
 
-export type SharedVideoTab = "news" | "sports" | "celebrity" | "technology";
+export type SharedVideoTab = "news" | "politics" | "sports" | "celebrity" | "technology";
 
 export const SHARED_VIDEO_CATEGORIES: Array<{
   label: string;
@@ -14,6 +14,21 @@ export const SHARED_VIDEO_CATEGORIES: Array<{
     value: "news",
     apiTab: "news",
     keywords: ["news", "breaking", "world", "politics", "business"],
+  },
+  {
+    label: "Politics",
+    value: "politics",
+    apiTab: "politics",
+    keywords: [
+      "politics",
+      "white house",
+      "congress",
+      "senate",
+      "supreme court",
+      "election",
+      "policy",
+      "government",
+    ],
   },
   {
     label: "Sports",
@@ -67,6 +82,10 @@ export function resolveVideoCategoryForMyNewsCategory(category: string): SharedV
 
   if (["celebrity", "entertainment"].includes(normalized)) {
     return "celebrity";
+  }
+
+  if (normalized === "politics") {
+    return "politics";
   }
 
   if (["tech", "technology"].includes(normalized)) {

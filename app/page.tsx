@@ -119,6 +119,26 @@ const MLB_SECTION_VIDEO_QUERIES = [
   "Rangers highlights",
   "home run highlights",
 ] as const;
+const MY_NEWS_POLITICS_ARTICLE_QUERIES = [
+  "U.S. politics",
+  "White House news",
+  "Congress news",
+  "Senate news",
+  "Supreme Court news",
+  "election news",
+  "campaign news",
+  "government policy news",
+  "Politico latest",
+  "Reuters Politics",
+  "AP Politics",
+  "CNN Politics",
+  "Fox News Politics",
+  "NBC Politics",
+  "ABC Politics",
+  "CBS Politics",
+  "Washington Post Politics",
+  "New York Times Politics",
+] as const;
 const NHL_SECTION_ARTICLE_QUERIES = [
   "NHL news",
   "hockey news",
@@ -1205,6 +1225,39 @@ async function getMlbArticles() {
   console.log("MLB DEDICATED ARTICLES VALID", validMlbArticles.length);
 
   return validMlbArticles;
+}
+
+async function getPoliticsArticles() {
+  const payloads = await Promise.all(
+    MY_NEWS_POLITICS_ARTICLE_QUERIES.map(async (query) => {
+      const response = await fetch(
+        `/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=8`,
+        {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const mergedPoliticsArticles = dedupeArticlesByContent(payloads.flat());
+  const validPoliticsArticles = mergedPoliticsArticles.filter((article) =>
+    isStrictPoliticsArticle(article)
+  );
+
+  console.log("POLITICS ARTICLE COUNT", validPoliticsArticles.length);
+
+  return validPoliticsArticles;
 }
 
 async function getMlbVideos() {
@@ -3443,11 +3496,31 @@ const TECH_STRONG_CONTEXT_PATTERN =
   /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|semiconductor|robot|app|device)\b/i;
 const TECH_REJECTED_CONTEXT_PATTERN =
   /\b(world news|politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|war|court|election|local news)\b/i;
+const POLITICS_STRONG_CONTEXT_PATTERN =
+  /\b(politics?|political|white house|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|ap politics|reuters politics|cnn politics|fox news politics|nbc politics|abc politics|cbs politics|washington post politics|new york times politics)\b/i;
+const POLITICS_REJECTED_CONTEXT_PATTERN =
+  /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather|forecast|storm|technology|tech|ai|software|crime)\b/i;
 
 function hasStrictTechnologyContext(values: Array<string | null | undefined>) {
   const haystack = values.filter(Boolean).join(" ").toLowerCase();
   const hasStrongContext = TECH_STRONG_CONTEXT_PATTERN.test(haystack);
   const hasRejectedContext = TECH_REJECTED_CONTEXT_PATTERN.test(haystack);
+
+  if (!hasStrongContext) {
+    return false;
+  }
+
+  if (hasRejectedContext && !hasStrongContext) {
+    return false;
+  }
+
+  return true;
+}
+
+function hasStrictPoliticsContext(values: Array<string | null | undefined>) {
+  const haystack = values.filter(Boolean).join(" ").toLowerCase();
+  const hasStrongContext = POLITICS_STRONG_CONTEXT_PATTERN.test(haystack);
+  const hasRejectedContext = POLITICS_REJECTED_CONTEXT_PATTERN.test(haystack);
 
   if (!hasStrongContext) {
     return false;
@@ -3471,8 +3544,29 @@ function isStrictTechnologyArticle(article: Article) {
   ]);
 }
 
+function isStrictPoliticsArticle(article: Article) {
+  return hasStrictPoliticsContext([
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]);
+}
+
 function isStrictTechnologyVideo(video: VideoItem) {
   return hasStrictTechnologyContext([
+    video.title,
+    video.creator,
+    video.category,
+    video.watchUrl,
+    video.thumbnailUrl,
+  ]);
+}
+
+function isStrictPoliticsVideo(video: VideoItem) {
+  return hasStrictPoliticsContext([
     video.title,
     video.creator,
     video.category,
@@ -3529,6 +3623,25 @@ function getTechLargeCardSelection(articles: Article[]) {
   });
 
   console.log("TECH LARGE CARD FINAL", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.imageUrl ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getPoliticsLargeCardSelection(articles: Article[]) {
+  const candidates = articles.map((article) => ({
+    article,
+    imageUrl: getBestArticleImage(article).src,
+    hasImage: hasRealLargeImageCandidate(article),
+    isStrictPolitics: isStrictPoliticsArticle(article),
+  }));
+
+  const selectedCandidate = candidates.find((candidate) => candidate.isStrictPolitics && candidate.hasImage);
+
+  console.log("POLITICS LARGE CARD SELECTED", {
     title: selectedCandidate?.article.title ?? null,
     source: selectedCandidate?.article.source ?? null,
     imageUrl: selectedCandidate?.imageUrl ?? null,
@@ -5847,7 +5960,7 @@ export default function Home() {
   };
 
   const handleOpenFeedVideo = useCallback(
-    (videoId: string, tab: "news" | "sports" | "celebrity" | "technology") => {
+    (videoId: string, tab: SharedVideoTab) => {
       saveVideoReturnState({
         path: "/",
         scrollY: window.scrollY,
@@ -8078,6 +8191,14 @@ export default function Home() {
         return;
       }
 
+      if (category === "Politics") {
+        leadMap[category] = {
+          article: getPoliticsLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
       leadMap[category] = {
         article: getMyNewsCategoryLeadArticle(category, categoryPool, visibleSectionArticles),
         imageSrcOverride: null,
@@ -8132,6 +8253,11 @@ export default function Home() {
           articleEntries.push(["MLB", validMlbArticles]);
         }
 
+        if (normalizedSelectedCategories.includes("Politics")) {
+          const validPoliticsArticles = await getPoliticsArticles();
+          articleEntries.push(["Politics", validPoliticsArticles]);
+        }
+
         setMyNewsCategorySupplementalArticles(Object.fromEntries(articleEntries));
       } catch (error) {
         console.error("MY NEWS DEDICATED ARTICLE SUPPLEMENT LOAD FAILED", error);
@@ -8183,6 +8309,31 @@ export default function Home() {
               "MLB DEDICATED VIDEOS TITLES",
               relevantVideos.slice(0, 10).map((video) => video.title)
             );
+            return [category, relevantVideos] as const;
+          }
+
+          if (category === "Politics") {
+            const response = await fetch(`/api/videos?tab=politics`);
+
+            if (!response.ok) {
+              return [category, [] as VideoItem[]] as const;
+            }
+
+            const data = (await response.json()) as { videos?: VideoItem[] };
+            const mergedVideos = dedupeVideosBySourceTitleAndUrl(
+              Array.isArray(data.videos) ? data.videos : []
+            );
+            const relevantVideos = selectRecentCategoryVideos(
+              mergedVideos.filter((video) => isStrictPoliticsVideo(video)),
+              4
+            ).sort(
+              (left, right) =>
+                getPublishedAtTimestamp(right.publishedAt) -
+                getPublishedAtTimestamp(left.publishedAt)
+            );
+
+            console.log("POLITICS VIDEO RAW COUNT", mergedVideos.length);
+            console.log("POLITICS VIDEO FINAL COUNT", relevantVideos.length);
             return [category, relevantVideos] as const;
           }
 
@@ -8331,7 +8482,7 @@ export default function Home() {
     normalizedSelectedCategories.forEach((category) => {
       const supplementalVideos = myNewsCategorySupplementalVideos[category] ?? [];
       const mergedCategoryVideos =
-        category === "NASCAR" || isDedicatedMlbCategory(category)
+        category === "NASCAR" || isDedicatedMlbCategory(category) || category === "Politics"
           ? [...supplementalVideos]
           : dedupeVideosBySourceTitleAndUrl([
               ...candidateVideos,
@@ -8346,6 +8497,8 @@ export default function Home() {
 
           return isDedicatedMlbCategory(category)
             ? isDedicatedMlbVideo(video)
+            : category === "Politics"
+              ? isStrictPoliticsVideo(video)
             : videoMatchesSelectedCategory(video, category);
         }),
         4
@@ -8387,6 +8540,10 @@ export default function Home() {
 
       if (isDedicatedMlbCategory(category)) {
         console.log("MLB VIDEOS RENDERED COUNT", selectedVideos.length);
+      }
+
+      if (category === "Politics") {
+        console.log("MY NEWS POLITICS VIDEO COUNT", selectedVideos.length);
       }
 
       selectedVideos.forEach((video) => usedVideoIds.add(video.id));
@@ -10989,10 +11146,13 @@ export default function Home() {
   ) => {
     const isMlbRow = isDedicatedMlbCategory(category);
     const isTechnologyRow = normalizeSelectedCategoryName(category) === "Tech";
+    const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const videosToRender = isDedicatedMlbCategory(category)
       ? categoryVideos.filter((video) => isDedicatedMlbVideo(video))
       : isTechnologyRow
         ? categoryVideos.filter((video) => isStrictTechnologyVideo(video))
+      : isPoliticsRow
+        ? categoryVideos.filter((video) => isStrictPoliticsVideo(video))
       : categoryVideos;
 
     if (isMlbRow) {
@@ -11015,7 +11175,7 @@ export default function Home() {
       console.log("TECHNOLOGY RENDER FINAL COUNT", videosToRender.length);
     }
 
-    if (!isTechnologyRow && videosToRender.length === 0) {
+    if (!isTechnologyRow && !isPoliticsRow && videosToRender.length === 0) {
       return null;
     }
 
@@ -11035,14 +11195,14 @@ export default function Home() {
             <span>MLB TEST VIDEO RENDER PATH</span>
           </div>
         ) : null}
-        {isTechnologyRow ? (
-          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-            <strong>TECHNOLOGY FILTER ACTIVE</strong>
-          </div>
-        ) : null}
         {isTechnologyRow && videosToRender.length === 0 ? (
           <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
             <strong>No technology videos available right now.</strong>
+          </div>
+        ) : null}
+        {isPoliticsRow && videosToRender.length === 0 ? (
+          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
+            <strong>No politics videos available right now.</strong>
           </div>
         ) : null}
         <div className="quick-watch-scroll" role="list" aria-label={label}>
