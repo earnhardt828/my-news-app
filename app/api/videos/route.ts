@@ -733,7 +733,20 @@ function isStrictTechnologyVideo(
   video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
 ) {
   const haystack = getVideoSearchHaystack(video);
-  return TECHNOLOGY_POSITIVE_PATTERN.test(haystack) && !TECHNOLOGY_REJECTED_PATTERN.test(haystack);
+  const hasStrongTechContext =
+    /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device)\b/.test(
+      haystack
+    );
+  const hasRejectedContext =
+    /\b(politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|world news|war|court|election|local news)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedContext && !hasStrongTechContext) {
+    return false;
+  }
+
+  return hasStrongTechContext && !TECHNOLOGY_REJECTED_PATTERN.test(haystack);
 }
 
 function getTechnologyVideoScore(
@@ -1036,6 +1049,19 @@ function filterAndSortVideos(
         ? categoryFiltered.filter((video) => isStrictWeatherVideo(video))
       : categoryFiltered;
 
+  if (options.tab === "technology") {
+    const rejectedTechnologyVideos = categoryFiltered.filter((video) => !isStrictTechnologyVideo(video));
+    console.log("TECHNOLOGY VIDEO RAW COUNT", categoryFiltered.length);
+    console.log(
+      "TECHNOLOGY VIDEO ACCEPTED",
+      tabFiltered.slice(0, 8).map((video) => video.title)
+    );
+    console.log(
+      "TECHNOLOGY VIDEO REJECTED",
+      rejectedTechnologyVideos.slice(0, 8).map((video) => video.title)
+    );
+  }
+
   console.log("VIDEO FILTERED COUNT", {
     tab: options.tab,
     strictCount: tabFiltered.length,
@@ -1082,7 +1108,11 @@ function filterAndSortVideos(
         });
 
   const deduped = dedupeVideoItems(
-    tabFiltered.length >= minimumTargetCount ? tabFiltered : [...tabFiltered, ...relaxedTabFiltered]
+    options.tab === "technology"
+      ? tabFiltered
+      : tabFiltered.length >= minimumTargetCount
+        ? tabFiltered
+        : [...tabFiltered, ...relaxedTabFiltered]
   );
 
   deduped.sort((a, b) => {
@@ -1135,6 +1165,17 @@ function filterAndSortVideos(
   const withinFourteenDays = deduped.filter(
     (video) => getVideoTimestamp(video.publishedAt) >= fourteenDayCutoff
   );
+
+  if (options.tab === "technology") {
+    const finalTechnologyVideos = diversifyVideoSources(withinFourteenDays);
+    console.log("TECHNOLOGY VIDEO FINAL COUNT", finalTechnologyVideos.length);
+    console.log("VIDEO FINAL COUNT", {
+      tab: options.tab,
+      finalCount: finalTechnologyVideos.length,
+      usedFallback: false,
+    });
+    return finalTechnologyVideos;
+  }
 
   const finalCandidateVideos = diversifyVideoSources(withinFourteenDays);
   const finalVideos =
@@ -1197,6 +1238,14 @@ export async function GET(request: Request) {
     const allEntries = [...successfulEntries, ...searchEntries];
 
     if (allEntries.length === 0) {
+      if (tab === "technology") {
+        return Response.json({
+          videos: [],
+          fallback: false,
+          message: "No technology videos available right now.",
+        });
+      }
+
       return Response.json({
         videos: buildFallbackVideosForTab(tab),
         fallback: true,
@@ -1218,6 +1267,14 @@ export async function GET(request: Request) {
     });
 
     if (videos.length === 0) {
+      if (tab === "technology") {
+        return Response.json({
+          videos: [],
+          fallback: false,
+          message: "No technology videos available right now.",
+        });
+      }
+
       return Response.json({
         videos: buildFallbackVideosForTab(tab),
         fallback: true,
@@ -1231,6 +1288,14 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Error loading RSS news videos:", error);
+
+    if (tab === "technology") {
+      return Response.json({
+        videos: [],
+        fallback: false,
+        message: "No technology videos available right now.",
+      });
+    }
 
     return Response.json({
       videos: buildFallbackVideosForTab(tab),

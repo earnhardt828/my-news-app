@@ -411,7 +411,7 @@ export default function VideosPage() {
               : activeTab === "celebrity"
                 ? "No celebrity videos yet"
                 : activeTab === "technology"
-                  ? "No technology videos yet"
+                  ? "No technology videos available right now."
                 : "No news videos yet"}
           </strong>
           <span>Check back shortly for a fresh vertical video feed.</span>
