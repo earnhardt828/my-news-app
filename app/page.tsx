@@ -3439,29 +3439,102 @@ function isStrictMlbVideo(video: VideoItem) {
   return getStrictMlbVideoRejectionReason(video) === null;
 }
 
-function isStrictTechnologyVideo(video: VideoItem) {
-  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
-    video.thumbnailUrl ?? ""
-  }`.toLowerCase();
+const TECH_STRONG_CONTEXT_PATTERN =
+  /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|semiconductor|robot|app|device)\b/i;
+const TECH_REJECTED_CONTEXT_PATTERN =
+  /\b(world news|politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|war|court|election|local news)\b/i;
 
-  const hasTechTerms =
-    /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|semiconductor)\b/.test(
-      haystack
-    );
-  const hasRejectedTerms =
-    /\b(world news|politics?|election|congress|white house|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|crime|breaking news)\b/.test(
-      haystack
-    );
-  const hasTechContextException =
-    /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|semiconductor)\b/.test(
-      haystack
-    );
+function hasStrictTechnologyContext(values: Array<string | null | undefined>) {
+  const haystack = values.filter(Boolean).join(" ").toLowerCase();
+  const hasStrongContext = TECH_STRONG_CONTEXT_PATTERN.test(haystack);
+  const hasRejectedContext = TECH_REJECTED_CONTEXT_PATTERN.test(haystack);
 
-  if (hasRejectedTerms && !hasTechContextException) {
+  if (!hasStrongContext) {
     return false;
   }
 
-  return hasTechTerms;
+  if (hasRejectedContext && !hasStrongContext) {
+    return false;
+  }
+
+  return true;
+}
+
+function isStrictTechnologyArticle(article: Article) {
+  return hasStrictTechnologyContext([
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]);
+}
+
+function isStrictTechnologyVideo(video: VideoItem) {
+  return hasStrictTechnologyContext([
+    video.title,
+    video.creator,
+    video.category,
+    video.watchUrl,
+    video.thumbnailUrl,
+  ]);
+}
+
+function getTechLargeCardSelection(articles: Article[]) {
+  const candidates = articles.map((article) => ({
+    article,
+    imageUrl: getBestArticleImage(article).src,
+    hasImage: hasRealLargeImageCandidate(article),
+    isStrictTech: isStrictTechnologyArticle(article),
+  }));
+
+  candidates.forEach((candidate) => {
+    console.log("TECH LARGE CARD CANDIDATE", {
+      title: candidate.article.title,
+      source: candidate.article.source,
+      imageUrl: candidate.imageUrl,
+      hasImage: candidate.hasImage,
+      isStrictTech: candidate.isStrictTech,
+    });
+  });
+
+  const selectedCandidate = candidates.find((candidate) => {
+    if (!candidate.isStrictTech) {
+      console.log("TECH LARGE CARD REJECTED", {
+        title: candidate.article.title,
+        source: candidate.article.source,
+        imageUrl: candidate.imageUrl,
+        reason: "not-tech",
+      });
+      return false;
+    }
+
+    if (!candidate.hasImage) {
+      console.log("TECH LARGE CARD REJECTED", {
+        title: candidate.article.title,
+        source: candidate.article.source,
+        imageUrl: candidate.imageUrl,
+        reason: "no-real-image",
+      });
+      return false;
+    }
+
+    console.log("TECH LARGE CARD ACCEPTED", {
+      title: candidate.article.title,
+      source: candidate.article.source,
+      imageUrl: candidate.imageUrl,
+    });
+    return true;
+  });
+
+  console.log("TECH LARGE CARD FINAL", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.imageUrl ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
 }
 
 function isStrictNhlVideo(video: VideoItem) {
@@ -3832,6 +3905,7 @@ export default function Home() {
   const [selectedSportsGame, setSelectedSportsGame] = useState<SportsScoreGame | null>(null);
   const [expandedScoresLeague, setExpandedScoresLeague] = useState<SportsScoreLeague | null>(null);
   const [autoplayTrendingVideoKeys, setAutoplayTrendingVideoKeys] = useState<string[]>([]);
+  const [activeMyNewsTechVideoKey, setActiveMyNewsTechVideoKey] = useState<string | null>(null);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<string[]>([]);
   const [categorySheetStatus, setCategorySheetStatus] = useState<{
@@ -6023,6 +6097,127 @@ export default function Home() {
   }, [articles.length, celebrityVideos, sortMode, sportsVideos, videos, weatherVideos]);
 
   useEffect(() => {
+    if (sortMode !== "mynews") {
+      setActiveMyNewsTechVideoKey(null);
+      return;
+    }
+
+    const techEntries = Object.entries(trendingVideoFrameRefs.current).filter(
+      ([videoKey, node]) => videoKey.startsWith("mynews-category-tech:") && Boolean(node)
+    ) as Array<[string, HTMLDivElement]>;
+
+    if (techEntries.length === 0) {
+      return;
+    }
+
+    const visibilityMap = new Map<string, number>();
+    const techScrollParents = Array.from(
+      new Set(
+        techEntries
+          .map(([, node]) => node.closest(".quick-watch-scroll"))
+          .filter((node): node is HTMLElement => Boolean(node))
+      )
+    );
+
+    const computeVisibilityRatio = (node: HTMLDivElement) => {
+      const rect = node.getBoundingClientRect();
+
+      if (rect.width <= 0 || rect.height <= 0) {
+        return 0;
+      }
+
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const visibleWidth = Math.max(0, Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0));
+      const visibleHeight = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
+      const visibleArea = visibleWidth * visibleHeight;
+      const totalArea = rect.width * rect.height;
+
+      return totalArea > 0 ? visibleArea / totalArea : 0;
+    };
+
+    const syncTechAutoplayKeys = () => {
+      techEntries.forEach(([videoKey, node]) => {
+        visibilityMap.set(videoKey, computeVisibilityRatio(node));
+      });
+
+      const topVisibleTechKey = Array.from(visibilityMap.entries())
+        .filter(([, ratio]) => ratio >= 0.55)
+        .sort((left, right) => right[1] - left[1])[0]?.[0];
+
+      setAutoplayTrendingVideoKeys((currentKeys) => {
+        const nonTechKeys = currentKeys.filter((key) => !key.startsWith("mynews-category-tech:"));
+        const nextKeys = topVisibleTechKey ? [...nonTechKeys, topVisibleTechKey] : nonTechKeys;
+        const hasSameLength = nextKeys.length === currentKeys.length;
+        const hasSameOrder = hasSameLength && nextKeys.every((key, index) => key === currentKeys[index]);
+
+        if (hasSameOrder) {
+          return currentKeys;
+        }
+
+        if (topVisibleTechKey) {
+          console.log("MY NEWS TECH VIDEO AUTOPLAY ATTEMPT", topVisibleTechKey);
+        }
+
+        return nextKeys;
+      });
+      setActiveMyNewsTechVideoKey(topVisibleTechKey ?? null);
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const videoKey = (entry.target as HTMLDivElement).dataset.videoKey;
+
+          if (!videoKey?.startsWith("mynews-category-tech:")) {
+            return;
+          }
+
+          visibilityMap.set(videoKey, entry.isIntersecting ? entry.intersectionRatio : 0);
+        });
+
+        syncTechAutoplayKeys();
+      },
+      {
+        threshold: [0.55, 0.7, 0.85],
+        rootMargin: "0px",
+      }
+    );
+
+    techEntries.forEach(([videoKey, node]) => {
+      visibilityMap.set(videoKey, 0);
+      observer.observe(node);
+    });
+
+    const handleVisibilityRefresh = () => {
+      window.requestAnimationFrame(syncTechAutoplayKeys);
+    };
+
+    handleVisibilityRefresh();
+    window.addEventListener("scroll", handleVisibilityRefresh, { passive: true });
+    window.addEventListener("resize", handleVisibilityRefresh);
+    window.addEventListener("focus", handleVisibilityRefresh);
+    window.addEventListener("pageshow", handleVisibilityRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityRefresh);
+    techScrollParents.forEach((node) => {
+      node.addEventListener("scroll", handleVisibilityRefresh, { passive: true });
+    });
+
+    return () => {
+      observer.disconnect();
+      setActiveMyNewsTechVideoKey(null);
+      window.removeEventListener("scroll", handleVisibilityRefresh);
+      window.removeEventListener("resize", handleVisibilityRefresh);
+      window.removeEventListener("focus", handleVisibilityRefresh);
+      window.removeEventListener("pageshow", handleVisibilityRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityRefresh);
+      techScrollParents.forEach((node) => {
+        node.removeEventListener("scroll", handleVisibilityRefresh);
+      });
+    };
+  }, [categories, myNewsCategorySupplementalVideos, sortMode]);
+
+  useEffect(() => {
     if (sortMode !== "local") {
       return;
     }
@@ -7871,6 +8066,14 @@ export default function Home() {
         leadMap[category] = {
           article: mlbSelection?.article ?? null,
           imageSrcOverride: mlbSelection?.imageSrc ?? null,
+        };
+        return;
+      }
+
+      if (category === "Tech") {
+        leadMap[category] = {
+          article: getTechLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
         };
         return;
       }
@@ -10857,9 +11060,12 @@ export default function Home() {
                 <VideoFeedCard
                   video={video}
                   isAutoplaying={
-                    autoplayTrendingVideoKeys.includes(
-                      `mynews-category-${normalizedCategoryKey}:${video.id}`
-                    ) && !video.fallback
+                    (isTechnologyRow
+                      ? activeMyNewsTechVideoKey ===
+                        `mynews-category-${normalizedCategoryKey}:${video.id}`
+                      : autoplayTrendingVideoKeys.includes(
+                          `mynews-category-${normalizedCategoryKey}:${video.id}`
+                        )) && !video.fallback
                   }
                   onToggleLike={handleToggleVideoLike}
                   onToggleSave={handleToggleVideoSave}
