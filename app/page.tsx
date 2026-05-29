@@ -1194,6 +1194,8 @@ function dedupeArticlesByContent(articles: Article[]) {
   });
 }
 
+const NASCAR_LARGE_CARD_FALLBACK_IMAGE = "/category-images/nascar.png";
+
 function getCategoryLeadArticle(articles: Article[], category: string) {
   return (
     [...articles]
@@ -1248,6 +1250,132 @@ function getMyNewsCategoryLeadArticle(category: string, categoryPool: Article[],
   }
 
   return getCategoryLeadArticle(visibleSectionArticles, category);
+}
+
+function getLargeImageCardImageCandidate(article: Article) {
+  const selectedImage = getBestArticleImage(article);
+
+  if (!selectedImage.src) {
+    return null;
+  }
+
+  if (!isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src)) {
+    return null;
+  }
+
+  return selectedImage;
+}
+
+function getNascarLargeCardSelection(articles: Article[]) {
+  console.log(
+    "NASCAR LARGE CARD RAW ARTICLES",
+    articles.map((article) => ({
+      title: article.title,
+      source: article.source,
+      imageUrl: getBestArticleImage(article).src,
+    }))
+  );
+
+  const nascarValidatedArticles = articles.filter((article) =>
+    isStrictCategoryMatch(
+      "NASCAR",
+      [
+        article.title,
+        article.description,
+        article.source,
+        article.category,
+        article.url,
+        article.content,
+      ],
+      "lead"
+    )
+  );
+
+  const rejectedNotNascar = articles
+    .filter((article) => !nascarValidatedArticles.includes(article))
+    .map((article) => ({
+      title: article.title,
+      source: article.source,
+      imageUrl: getBestArticleImage(article).src,
+      reason: "not_nascar",
+    }));
+
+  const realImageCandidates = nascarValidatedArticles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      score: getCategoryMatchScore("NASCAR", [
+        article.title,
+        article.description,
+        article.source,
+        article.category,
+        article.url,
+        article.content,
+      ]),
+    }))
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return getArticlePriorityScore(right.article) - getArticlePriorityScore(left.article);
+    });
+
+  const validRealImageCandidates = realImageCandidates.filter((candidate) => Boolean(candidate.image));
+  const rejectedNoImage = realImageCandidates
+    .filter((candidate) => !candidate.image)
+    .map((candidate) => ({
+      title: candidate.article.title,
+      source: candidate.article.source,
+      imageUrl: getBestArticleImage(candidate.article).src,
+      reason: "no_real_image",
+    }));
+
+  console.log(
+    "NASCAR LARGE CARD REAL IMAGE CANDIDATES",
+    validRealImageCandidates.map((candidate) => ({
+      title: candidate.article.title,
+      source: candidate.article.source,
+      imageUrl: candidate.image?.src ?? null,
+    }))
+  );
+  console.log("NASCAR LARGE CARD REJECTED NO IMAGE", rejectedNoImage);
+  console.log("NASCAR LARGE CARD REJECTED NOT NASCAR", rejectedNotNascar);
+
+  const selectedRealImageCandidate = validRealImageCandidates[0];
+
+  if (selectedRealImageCandidate?.image) {
+    console.log("NASCAR LARGE CARD SELECTED", {
+      title: selectedRealImageCandidate.article.title,
+      source: selectedRealImageCandidate.article.source,
+      imageUrl: selectedRealImageCandidate.image.src,
+      reason: "real_image",
+    });
+
+    return {
+      article: selectedRealImageCandidate.article,
+      imageSrc: selectedRealImageCandidate.image.src,
+    };
+  }
+
+  const fallbackArticle = realImageCandidates[0]?.article ?? null;
+
+  if (fallbackArticle) {
+    console.log("NASCAR LARGE CARD SELECTED", {
+      title: fallbackArticle.title,
+      source: fallbackArticle.source,
+      imageUrl: NASCAR_LARGE_CARD_FALLBACK_IMAGE,
+      reason: "nascar_fallback_image",
+    });
+
+    return {
+      article: fallbackArticle,
+      imageSrc: NASCAR_LARGE_CARD_FALLBACK_IMAGE,
+    };
+  }
+
+  console.log("NASCAR LARGE CARD SELECTED", null);
+  return null;
 }
 const BROAD_SPORTS_SOURCE_PATTERN =
   /\b(motorsport\.com|motorsport|nascar\.com|nascar|bleacher report|mlb\.com|nhl\.com|nba\.com|nfl\.com|mlssoccer\.com|espn|yahoo sports|fox sports|nbc sports|cbs sports|sports illustrated|ap sports|ap news sports|reuters sports|fc cincinnati|hero sports|big 12|big 12 conference|dallas cowboys|official site|team site|conference site|sports|athletics|sporting)\b/i;
@@ -7390,7 +7518,7 @@ export default function Home() {
   }, [categorySectionArticles, normalizedSelectedCategories]);
 
   const myNewsCategoryLeadArticles = useMemo(() => {
-    const leadMap: Record<string, Article | null> = {};
+    const leadMap: Record<string, { article: Article | null; imageSrcOverride?: string | null }> = {};
 
     normalizedSelectedCategories.forEach((category) => {
       const categoryPool =
@@ -7407,7 +7535,19 @@ export default function Home() {
       const visibleSectionArticles =
         myNewsCategorySections.find((section) => section.category === category)?.articles ?? [];
 
-      leadMap[category] = getMyNewsCategoryLeadArticle(category, categoryPool, visibleSectionArticles);
+      if (category === "NASCAR") {
+        const nascarSelection = getNascarLargeCardSelection(categoryPool);
+        leadMap[category] = {
+          article: nascarSelection?.article ?? null,
+          imageSrcOverride: nascarSelection?.imageSrc ?? null,
+        };
+        return;
+      }
+
+      leadMap[category] = {
+        article: getMyNewsCategoryLeadArticle(category, categoryPool, visibleSectionArticles),
+        imageSrcOverride: null,
+      };
     });
 
     return leadMap;
@@ -7648,7 +7788,11 @@ export default function Home() {
     myNewsCategorySections
       .filter((section) => section.category !== "Recommended for You")
       .forEach((section) => {
-        const leadArticle = myNewsCategoryLeadArticles[section.category] ?? null;
+        const leadSelection = myNewsCategoryLeadArticles[section.category] ?? {
+          article: null,
+          imageSrcOverride: null,
+        };
+        const leadArticle = leadSelection.article;
         console.log("CATEGORY NAME", section.category);
         console.log(
           "CATEGORY LARGE CARD CANDIDATE",
@@ -9940,14 +10084,22 @@ export default function Home() {
     };
   };
 
-  const renderLargeImageArticleCard = (article: Article) => {
+  const renderLargeImageArticleCard = (
+    article: Article,
+    options?: { imageSrcOverride?: string | null }
+  ) => {
     const articleRouteId = getArticleRouteId(article);
 
     if (!articleRouteId || !isRenderableArticleRecord(article)) {
       return null;
     }
 
-    const realImage = getLargeImageCardImage(article);
+    const realImage = options?.imageSrcOverride
+      ? {
+          src: options.imageSrcOverride,
+          failureKey: `${article.id}:override:${options.imageSrcOverride}`,
+        }
+      : getLargeImageCardImage(article);
 
     if (!realImage) {
       return null;
@@ -12462,8 +12614,12 @@ export default function Home() {
                           </strong>
                         </div>
                       </div>
-                      {(() => {
-                        const leadArticle = myNewsCategoryLeadArticles[section.category] ?? null;
+                  {(() => {
+                        const leadSelection = myNewsCategoryLeadArticles[section.category] ?? {
+                          article: null,
+                          imageSrcOverride: null,
+                        };
+                        const leadArticle = leadSelection.article;
                         const leadArticleKey = leadArticle
                           ? getArticleDeduplicationKey(leadArticle)
                           : null;
@@ -12474,7 +12630,9 @@ export default function Home() {
                               <div
                                 key={`mynews-large-${leadArticle.id || leadArticle.url || leadArticleKey}`}
                               >
-                                {renderLargeImageArticleCard(leadArticle)}
+                                {renderLargeImageArticleCard(leadArticle, {
+                                  imageSrcOverride: leadSelection.imageSrcOverride ?? null,
+                                })}
                               </div>
                             ) : null}
                             {renderRankedCompactArticleSection(section.articles, {
