@@ -258,6 +258,7 @@ const MY_NEWS_MLB_VIDEO_QUERIES = [
   "Astros highlights",
   "Rangers highlights",
 ] as const;
+const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v1";
 
 function buildMlbFallbackVideos(): VideoItem[] {
   return [
@@ -418,6 +419,13 @@ function normalizeSelectedCategoryName(category: string) {
     return "Auto";
   }
 
+  if (
+    cleaned.toLowerCase() === "baseball" ||
+    cleaned.toLowerCase() === "major league baseball"
+  ) {
+    return "MLB";
+  }
+
   const directMatch = CATEGORY_OPTIONS.find(
     (option) => option.toLowerCase() === cleaned.toLowerCase()
   );
@@ -435,6 +443,10 @@ function normalizeSelectedCategoryName(category: string) {
   }
 
   return cleaned;
+}
+
+function isDedicatedMlbCategory(category: string) {
+  return normalizeSelectedCategoryName(category) === "MLB";
 }
 const CELEBRITY_FEED_QUERY =
   "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
@@ -7584,6 +7596,24 @@ export default function Home() {
     [categories]
   );
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const versionKey = "graffiti:mynews-category-cache-version";
+      const storedVersion = window.localStorage.getItem(versionKey);
+
+      if (storedVersion !== MY_NEWS_CATEGORY_CACHE_VERSION) {
+        window.localStorage.removeItem("graffiti:last-feed:trending");
+        window.localStorage.setItem(versionKey, MY_NEWS_CATEGORY_CACHE_VERSION);
+      }
+    } catch (error) {
+      console.error("Error refreshing My News category cache version:", error);
+    }
+  }, []);
+
   const myNewsCategorySections = useMemo(() => {
     if (normalizedSelectedCategories.length === 0) {
       return [] as Array<{ category: string; articles: Article[] }>;
@@ -7594,9 +7624,15 @@ export default function Home() {
 
     const sections = normalizedSelectedCategories
       .map((category) => {
+        const routeUsed = isDedicatedMlbCategory(category)
+          ? "dedicated-mlb"
+          : category === "NASCAR"
+            ? "dedicated-nascar"
+            : "generic-category";
+        console.log("MY NEWS CATEGORY ROUTE", { category, routeUsed });
         const supplementalArticles = myNewsCategorySupplementalArticles[category] ?? [];
         const mergedCategoryArticles =
-          category === "NASCAR" || category === "MLB"
+          category === "NASCAR" || isDedicatedMlbCategory(category)
             ? [...supplementalArticles]
             : dedupeArticlesByContent([
                 ...categorySectionArticles,
@@ -7744,7 +7780,7 @@ export default function Home() {
 
     normalizedSelectedCategories.forEach((category) => {
       const categoryPool =
-        category === "NASCAR" || category === "MLB"
+        category === "NASCAR" || isDedicatedMlbCategory(category)
           ? (myNewsCategorySupplementalArticles[category] ?? []).filter((article) =>
               articleMatchesSelectedCategory(article, category)
             )
@@ -7766,7 +7802,7 @@ export default function Home() {
         return;
       }
 
-      if (category === "MLB") {
+      if (isDedicatedMlbCategory(category)) {
         const mlbSelection = getMlbLargeCardSelection(categoryPool);
         leadMap[category] = {
           article: mlbSelection?.article ?? null,
@@ -7821,6 +7857,10 @@ export default function Home() {
 
         if (normalizedSelectedCategories.includes("MLB")) {
           const validMlbArticles = await getMlbArticles();
+          console.log("MY NEWS CATEGORY ROUTE", {
+            category: "MLB",
+            routeUsed: "dedicated-mlb",
+          });
           articleEntries.push(["MLB", validMlbArticles]);
         }
 
@@ -7856,6 +7896,10 @@ export default function Home() {
 
           if (category === "MLB") {
             const relevantVideos = await getMlbVideos();
+            console.log("MY NEWS CATEGORY ROUTE", {
+              category: "MLB",
+              routeUsed: "dedicated-mlb",
+            });
             console.log("MLB VIDEO RAW COUNT", relevantVideos.length);
             console.log("MLB VIDEO VALID COUNT", relevantVideos.length);
             console.log(
@@ -7972,7 +8016,7 @@ export default function Home() {
     normalizedSelectedCategories.forEach((category) => {
       const supplementalVideos = myNewsCategorySupplementalVideos[category] ?? [];
       const mergedCategoryVideos =
-        category === "NASCAR" || category === "MLB"
+        category === "NASCAR" || isDedicatedMlbCategory(category)
           ? [...supplementalVideos]
           : dedupeVideosBySourceTitleAndUrl([
               ...candidateVideos,
@@ -10619,6 +10663,10 @@ export default function Home() {
   };
 
   const renderMyNewsCategoryVideosRow = (category: string, categoryVideos: VideoItem[]) => {
+    if (isDedicatedMlbCategory(category)) {
+      console.log("MLB VIDEOS RENDERED COUNT", categoryVideos.length);
+    }
+
     if (categoryVideos.length === 0) {
       return null;
     }
@@ -12889,6 +12937,43 @@ export default function Home() {
                           imageSrcOverride: null,
                         };
                         const leadArticle = leadSelection.article;
+                        if (isDedicatedMlbCategory(section.category)) {
+                          const supplementalMlbArticles =
+                            myNewsCategorySupplementalArticles[section.category] ?? [];
+                          const validMlbArticles = supplementalMlbArticles.filter((article) =>
+                            isDedicatedMlbArticle(article, "lead")
+                          );
+                          const realImageMlbArticles = validMlbArticles.filter((article) =>
+                            Boolean(getLargeImageCardImage(article))
+                          );
+
+                          if (leadArticle) {
+                            console.log("MLB LARGE CARD RENDERED", {
+                              title: leadArticle.title,
+                              source: leadArticle.source,
+                            });
+                          } else if (supplementalMlbArticles.length === 0) {
+                            console.log("MLB LARGE CARD RENDERED", {
+                              rendered: false,
+                              reason: "render path not used",
+                            });
+                          } else if (validMlbArticles.length === 0) {
+                            console.log("MLB LARGE CARD RENDERED", {
+                              rendered: false,
+                              reason: "no valid MLB article",
+                            });
+                          } else if (realImageMlbArticles.length === 0) {
+                            console.log("MLB LARGE CARD RENDERED", {
+                              rendered: false,
+                              reason: "no real image",
+                            });
+                          } else {
+                            console.log("MLB LARGE CARD RENDERED", {
+                              rendered: false,
+                              reason: "wrong category",
+                            });
+                          }
+                        }
                         const leadArticleKey = leadArticle
                           ? getArticleDeduplicationKey(leadArticle)
                           : null;
