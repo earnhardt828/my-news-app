@@ -244,8 +244,9 @@ const MY_NEWS_NASCAR_VIDEO_QUERIES = [
   "Talladega highlights",
 ] as const;
 const MY_NEWS_MLB_VIDEO_QUERIES = [
-  "MLB highlights this week",
   "MLB highlights today",
+  "MLB highlights this week",
+  "MLB Network",
   "MLB Network highlights",
   "MLB.com highlights",
   "ESPN MLB highlights",
@@ -1214,7 +1215,7 @@ async function getMlbArticles() {
 
   const mergedMlbArticles = dedupeArticlesByContent(payloads.flat());
   const validMlbArticles = mergedMlbArticles.filter((article) =>
-    articleMatchesSelectedCategory(article, "MLB")
+    isDedicatedMlbArticle(article, "article")
   );
 
   console.log("MLB DEDICATED ARTICLES RAW", mergedMlbArticles.length);
@@ -1241,10 +1242,10 @@ async function getMlbVideos() {
 
   const mergedVideos = dedupeVideosBySourceTitleAndUrl(payloads.flat());
   const validVideos = selectRecentCategoryVideos(
-    mergedVideos.filter((video) => videoMatchesSelectedCategory(video, "MLB")),
+    mergedVideos.filter((video) => isDedicatedMlbVideo(video)),
     4
   ).sort((left, right) => getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt));
-  const rejectedVideos = mergedVideos.filter((video) => !videoMatchesSelectedCategory(video, "MLB"));
+  const rejectedVideos = mergedVideos.filter((video) => !isDedicatedMlbVideo(video));
 
   console.log("MLB DEDICATED VIDEOS RAW", mergedVideos.length);
   console.log("MLB DEDICATED VIDEOS VALID", validVideos.length);
@@ -1296,8 +1297,6 @@ function dedupeArticlesByContent(articles: Article[]) {
 }
 
 const NASCAR_LARGE_CARD_FALLBACK_IMAGE = "/category-images/nascar.png";
-const MLB_LARGE_CARD_FALLBACK_IMAGE = "/category-images/mlb.png";
-
 function getCategoryLeadArticle(articles: Article[], category: string) {
   return (
     [...articles]
@@ -1480,6 +1479,74 @@ function getNascarLargeCardSelection(articles: Article[]) {
   return null;
 }
 
+function isDedicatedMlbArticle(
+  article: Pick<Article, "title" | "description" | "source" | "category" | "url" | "content">,
+  kind: "article" | "lead" = "article"
+) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${
+    article.category ?? ""
+  } ${article.url} ${article.content ?? ""}`.toLowerCase();
+
+  const hasMlbCoreTerms =
+    /\b(mlb|major league baseball|baseball|mlb\.com|home run|pitcher|inning|bullpen|manager|trade deadline|roster|injured list|prospect|minor league|dugout|postseason|world series)\b/.test(
+      haystack
+    );
+  const hasMlbTeamTerms =
+    /\b(yankees|dodgers|braves|mets|red sox|cubs|phillies|astros|rangers|padres|orioles|tigers|guardians|mariners|giants|cardinals|brewers|diamondbacks|blue jays|royals|twins|reds|pirates|rays|marlins|rockies|athletics|angels|nationals|white sox)\b/.test(
+      haystack
+    );
+  const hasMlbSourceTerms =
+    /\b(mlb\.com|mlb network|espn mlb|cbs sports mlb|nbc sports mlb|fox sports mlb|yahoo sports mlb|ap mlb|reuters mlb|bleacher report mlb|the athletic mlb|baseball america)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(nfl|nba|nhl|mls|soccer|football|basketball|hockey|odds|betting|sportsbook|parlay|spread pick|over\/under|politics?|election|world news|celebrity|hollywood|audi|tesla|ev|electric vehicle|auto review|formula 1|formula1|indycar|motogp)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms) {
+    return false;
+  }
+
+  const strictScore =
+    (hasMlbCoreTerms ? 1 : 0) + (hasMlbTeamTerms ? 1 : 0) + (hasMlbSourceTerms ? 1 : 0);
+
+  if (kind === "lead") {
+    return strictScore >= 1 && isStrictCategoryMatch("MLB", [haystack], "lead");
+  }
+
+  return strictScore >= 1 && isStrictCategoryMatch("MLB", [haystack], "article");
+}
+
+function isDedicatedMlbVideo(video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
+    video.thumbnailUrl ?? ""
+  }`.toLowerCase();
+
+  const hasMlbCoreTerms =
+    /\b(mlb|major league baseball|baseball|mlb network|mlb\.com|home run|pitcher|inning)\b/.test(
+      haystack
+    );
+  const hasMlbTeamTerms =
+    /\b(yankees|dodgers|braves|mets|red sox|cubs|phillies|astros|rangers|padres|orioles|tigers|guardians|mariners|giants|cardinals|brewers|diamondbacks|blue jays|royals|twins|reds|pirates|rays|marlins|rockies|athletics|angels|nationals|white sox)\b/.test(
+      haystack
+    );
+  const hasMlbSourceTerms =
+    /\b(mlb network|mlb\.com|espn mlb|fox sports mlb|cbs sports mlb|nbc sports mlb|yahoo sports mlb|bleacher report mlb|ap mlb|reuters mlb)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(generic sports|nfl|nba|nhl|mls|soccer|football|basketball|hockey|politics?|election|world news|celebrity|hollywood|entertainment|odds|betting|sportsbook|parlay|spread pick|over\/under)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms) {
+    return false;
+  }
+
+  return hasMlbCoreTerms || hasMlbTeamTerms || hasMlbSourceTerms;
+}
+
 function getMlbLargeCardSelection(articles: Article[]) {
   console.log(
     "MLB LARGE IMAGE CANDIDATES",
@@ -1490,20 +1557,7 @@ function getMlbLargeCardSelection(articles: Article[]) {
     }))
   );
 
-  const mlbValidatedArticles = articles.filter((article) =>
-    isStrictCategoryMatch(
-      "MLB",
-      [
-        article.title,
-        article.description,
-        article.source,
-        article.category,
-        article.url,
-        article.content,
-      ],
-      "lead"
-    )
-  );
+  const mlbValidatedArticles = articles.filter((article) => isDedicatedMlbArticle(article, "lead"));
 
   const rankedMlbCandidates = mlbValidatedArticles
     .map((article) => ({
@@ -1539,22 +1593,6 @@ function getMlbLargeCardSelection(articles: Article[]) {
     return {
       article: selectedRealImageCandidate.article,
       imageSrc: selectedRealImageCandidate.image.src,
-    };
-  }
-
-  const fallbackArticle = rankedMlbCandidates[0]?.article ?? null;
-
-  if (fallbackArticle) {
-    console.log("MLB LARGE IMAGE SELECTED", {
-      title: fallbackArticle.title,
-      source: fallbackArticle.source,
-      imageUrl: MLB_LARGE_CARD_FALLBACK_IMAGE,
-      reason: "mlb_fallback_image",
-    });
-
-    return {
-      article: fallbackArticle,
-      imageSrc: MLB_LARGE_CARD_FALLBACK_IMAGE,
     };
   }
 
