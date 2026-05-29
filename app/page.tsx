@@ -216,6 +216,23 @@ const MY_NEWS_NASCAR_ARTICLE_QUERIES = [
   "AP NASCAR",
   "Charlotte Motor Speedway NASCAR",
 ] as const;
+const MY_NEWS_MLB_ARTICLE_QUERIES = [
+  "MLB.com",
+  "ESPN MLB",
+  "CBS Sports MLB",
+  "NBC Sports MLB",
+  "Fox Sports MLB",
+  "Yahoo Sports MLB",
+  "AP MLB",
+  "Reuters MLB",
+  "Bleacher Report MLB",
+  "The Athletic MLB",
+  "Baseball America",
+  "MLB latest news",
+  "baseball news",
+  "MLB trade rumors",
+  "MLB injury news",
+] as const;
 const MY_NEWS_NASCAR_VIDEO_QUERIES = [
   "NASCAR highlights this week",
   "NASCAR Cup Series highlights",
@@ -225,6 +242,20 @@ const MY_NEWS_NASCAR_VIDEO_QUERIES = [
   "NASCAR crash highlights",
   "Daytona highlights",
   "Talladega highlights",
+] as const;
+const MY_NEWS_MLB_VIDEO_QUERIES = [
+  "MLB highlights this week",
+  "MLB highlights today",
+  "MLB Network highlights",
+  "MLB.com highlights",
+  "ESPN MLB highlights",
+  "baseball highlights today",
+  "home run highlights",
+  "Yankees highlights",
+  "Dodgers highlights",
+  "Braves highlights",
+  "Astros highlights",
+  "Rangers highlights",
 ] as const;
 
 function buildMlbFallbackVideos(): VideoItem[] {
@@ -1158,6 +1189,76 @@ async function getNascarVideos() {
   return validVideos;
 }
 
+async function getMlbArticles() {
+  const payloads = await Promise.all(
+    MY_NEWS_MLB_ARTICLE_QUERIES.map(async (query) => {
+      const response = await fetch(
+        `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=8`,
+        {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const mergedMlbArticles = dedupeArticlesByContent(payloads.flat());
+  const validMlbArticles = mergedMlbArticles.filter((article) =>
+    articleMatchesSelectedCategory(article, "MLB")
+  );
+
+  console.log("MLB DEDICATED ARTICLES RAW", mergedMlbArticles.length);
+  console.log("MLB DEDICATED ARTICLES VALID", validMlbArticles.length);
+
+  return validMlbArticles;
+}
+
+async function getMlbVideos() {
+  const payloads = await Promise.all(
+    MY_NEWS_MLB_VIDEO_QUERIES.map(async (query) => {
+      const response = await fetch(
+        `/api/videos?tab=sports&q=${encodeURIComponent(query)}&category=${encodeURIComponent("MLB")}`
+      );
+
+      if (!response.ok) {
+        return [] as VideoItem[];
+      }
+
+      const data = (await response.json()) as { videos?: VideoItem[] };
+      return Array.isArray(data.videos) ? data.videos : [];
+    })
+  );
+
+  const mergedVideos = dedupeVideosBySourceTitleAndUrl(payloads.flat());
+  const validVideos = selectRecentCategoryVideos(
+    mergedVideos.filter((video) => videoMatchesSelectedCategory(video, "MLB")),
+    4
+  ).sort((left, right) => getPublishedAtTimestamp(right.publishedAt) - getPublishedAtTimestamp(left.publishedAt));
+  const rejectedVideos = mergedVideos.filter((video) => !videoMatchesSelectedCategory(video, "MLB"));
+
+  console.log("MLB DEDICATED VIDEOS RAW", mergedVideos.length);
+  console.log("MLB DEDICATED VIDEOS VALID", validVideos.length);
+  console.log(
+    "MLB DEDICATED VIDEOS REJECTED SAMPLE",
+    rejectedVideos.slice(0, 6).map((video) => ({
+      title: video.title,
+      creator: video.creator,
+    }))
+  );
+
+  return validVideos;
+}
+
 function hasRealLargeImageCandidate(
   article: Pick<
     Article,
@@ -1195,6 +1296,7 @@ function dedupeArticlesByContent(articles: Article[]) {
 }
 
 const NASCAR_LARGE_CARD_FALLBACK_IMAGE = "/category-images/nascar.png";
+const MLB_LARGE_CARD_FALLBACK_IMAGE = "/category-images/mlb.png";
 
 function getCategoryLeadArticle(articles: Article[], category: string) {
   return (
@@ -1375,6 +1477,88 @@ function getNascarLargeCardSelection(articles: Article[]) {
   }
 
   console.log("NASCAR LARGE CARD SELECTED", null);
+  return null;
+}
+
+function getMlbLargeCardSelection(articles: Article[]) {
+  console.log(
+    "MLB LARGE IMAGE CANDIDATES",
+    articles.map((article) => ({
+      title: article.title,
+      source: article.source,
+      imageUrl: getBestArticleImage(article).src,
+    }))
+  );
+
+  const mlbValidatedArticles = articles.filter((article) =>
+    isStrictCategoryMatch(
+      "MLB",
+      [
+        article.title,
+        article.description,
+        article.source,
+        article.category,
+        article.url,
+        article.content,
+      ],
+      "lead"
+    )
+  );
+
+  const rankedMlbCandidates = mlbValidatedArticles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      score: getCategoryMatchScore("MLB", [
+        article.title,
+        article.description,
+        article.source,
+        article.category,
+        article.url,
+        article.content,
+      ]),
+    }))
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return getArticlePriorityScore(right.article) - getArticlePriorityScore(left.article);
+    });
+
+  const selectedRealImageCandidate = rankedMlbCandidates.find((candidate) => Boolean(candidate.image));
+
+  if (selectedRealImageCandidate?.image) {
+    console.log("MLB LARGE IMAGE SELECTED", {
+      title: selectedRealImageCandidate.article.title,
+      source: selectedRealImageCandidate.article.source,
+      imageUrl: selectedRealImageCandidate.image.src,
+      reason: "real_image",
+    });
+
+    return {
+      article: selectedRealImageCandidate.article,
+      imageSrc: selectedRealImageCandidate.image.src,
+    };
+  }
+
+  const fallbackArticle = rankedMlbCandidates[0]?.article ?? null;
+
+  if (fallbackArticle) {
+    console.log("MLB LARGE IMAGE SELECTED", {
+      title: fallbackArticle.title,
+      source: fallbackArticle.source,
+      imageUrl: MLB_LARGE_CARD_FALLBACK_IMAGE,
+      reason: "mlb_fallback_image",
+    });
+
+    return {
+      article: fallbackArticle,
+      imageSrc: MLB_LARGE_CARD_FALLBACK_IMAGE,
+    };
+  }
+
+  console.log("MLB LARGE IMAGE SELECTED", null);
   return null;
 }
 const BROAD_SPORTS_SOURCE_PATTERN =
@@ -7374,7 +7558,7 @@ export default function Home() {
       .map((category) => {
         const supplementalArticles = myNewsCategorySupplementalArticles[category] ?? [];
         const mergedCategoryArticles =
-          category === "NASCAR"
+          category === "NASCAR" || category === "MLB"
             ? [...supplementalArticles]
             : dedupeArticlesByContent([
                 ...categorySectionArticles,
@@ -7522,7 +7706,7 @@ export default function Home() {
 
     normalizedSelectedCategories.forEach((category) => {
       const categoryPool =
-        category === "NASCAR"
+        category === "NASCAR" || category === "MLB"
           ? (myNewsCategorySupplementalArticles[category] ?? []).filter((article) =>
               articleMatchesSelectedCategory(article, category)
             )
@@ -7540,6 +7724,15 @@ export default function Home() {
         leadMap[category] = {
           article: nascarSelection?.article ?? null,
           imageSrcOverride: nascarSelection?.imageSrc ?? null,
+        };
+        return;
+      }
+
+      if (category === "MLB") {
+        const mlbSelection = getMlbLargeCardSelection(categoryPool);
+        leadMap[category] = {
+          article: mlbSelection?.article ?? null,
+          imageSrcOverride: mlbSelection?.imageSrc ?? null,
         };
         return;
       }
@@ -7568,7 +7761,9 @@ export default function Home() {
     let isCancelled = false;
 
     const loadSupplementalCategoryArticles = async () => {
-      if (!normalizedSelectedCategories.includes("NASCAR")) {
+      const articleEntries: Array<[string, Article[]]> = [];
+
+      if (!normalizedSelectedCategories.includes("NASCAR") && !normalizedSelectedCategories.includes("MLB")) {
         if (!isCancelled) {
           setMyNewsCategorySupplementalArticles({});
         }
@@ -7579,15 +7774,21 @@ export default function Home() {
         if (isCancelled) {
           return;
         }
-        const validNascarArticles = await getNascarArticles();
-        console.log("NASCAR ARTICLE RAW COUNT", validNascarArticles.length);
-        console.log("NASCAR ARTICLE VALID COUNT", validNascarArticles.length);
+        if (normalizedSelectedCategories.includes("NASCAR")) {
+          const validNascarArticles = await getNascarArticles();
+          console.log("NASCAR ARTICLE RAW COUNT", validNascarArticles.length);
+          console.log("NASCAR ARTICLE VALID COUNT", validNascarArticles.length);
+          articleEntries.push(["NASCAR", validNascarArticles]);
+        }
 
-        setMyNewsCategorySupplementalArticles({
-          NASCAR: validNascarArticles,
-        });
+        if (normalizedSelectedCategories.includes("MLB")) {
+          const validMlbArticles = await getMlbArticles();
+          articleEntries.push(["MLB", validMlbArticles]);
+        }
+
+        setMyNewsCategorySupplementalArticles(Object.fromEntries(articleEntries));
       } catch (error) {
-        console.error("NASCAR ARTICLE SUPPLEMENT LOAD FAILED", error);
+        console.error("MY NEWS DEDICATED ARTICLE SUPPLEMENT LOAD FAILED", error);
 
         if (!isCancelled) {
           setMyNewsCategorySupplementalArticles({});
@@ -7606,6 +7807,21 @@ export default function Home() {
             console.log("NASCAR VIDEO VALID COUNT", relevantVideos.length);
             console.log(
               "NASCAR VIDEO SAMPLE",
+              relevantVideos.slice(0, 6).map((video) => ({
+                title: video.title,
+                creator: video.creator,
+                publishedAt: video.publishedAt,
+              }))
+            );
+            return [category, relevantVideos] as const;
+          }
+
+          if (category === "MLB") {
+            const relevantVideos = await getMlbVideos();
+            console.log("MLB VIDEO RAW COUNT", relevantVideos.length);
+            console.log("MLB VIDEO VALID COUNT", relevantVideos.length);
+            console.log(
+              "MLB VIDEO SAMPLE",
               relevantVideos.slice(0, 6).map((video) => ({
                 title: video.title,
                 creator: video.creator,
@@ -7718,7 +7934,7 @@ export default function Home() {
     normalizedSelectedCategories.forEach((category) => {
       const supplementalVideos = myNewsCategorySupplementalVideos[category] ?? [];
       const mergedCategoryVideos =
-        category === "NASCAR"
+        category === "NASCAR" || category === "MLB"
           ? [...supplementalVideos]
           : dedupeVideosBySourceTitleAndUrl([
               ...candidateVideos,
@@ -7847,6 +8063,16 @@ export default function Home() {
               ).slice(0, 5).length
             );
           }
+          if (section.category === "MLB") {
+            console.log("MLB LARGE IMAGE SELECTED", leadArticle.title);
+            console.log(
+              "MLB RANKED COUNT",
+              section.articles.filter(
+                (article) =>
+                  getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+              ).slice(0, 5).length
+            );
+          }
           if (section.category === "NHL") {
             console.log("NHL LARGE IMAGE ACCEPTED", leadArticle.title);
             console.log("NHL LARGE IMAGE FINAL", leadArticle.title);
@@ -7864,6 +8090,10 @@ export default function Home() {
           if (section.category === "NASCAR") {
             console.log("NASCAR LARGE IMAGE SELECTED", null);
             console.log("NASCAR RANKED COUNT", section.articles.slice(0, 5).length);
+          }
+          if (section.category === "MLB") {
+            console.log("MLB LARGE IMAGE SELECTED", null);
+            console.log("MLB RANKED COUNT", section.articles.slice(0, 5).length);
           }
         }
       });
@@ -10397,6 +10627,7 @@ export default function Home() {
                 useRelativeTime
                 className="video-card-inline quick-watch-video-card"
                 variant="article"
+                useUniformTallFrame={category === "MLB"}
               />
             </div>
           ))}
