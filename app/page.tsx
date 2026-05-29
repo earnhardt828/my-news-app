@@ -203,6 +203,29 @@ const NFL_SECTION_VIDEO_QUERIES = [
   "Eagles highlights",
   "NFL.com videos",
 ] as const;
+const MY_NEWS_NASCAR_ARTICLE_QUERIES = [
+  "NASCAR news",
+  "NASCAR Cup Series news",
+  "NASCAR race recap",
+  "NASCAR.com",
+  "Motorsport.com NASCAR",
+  "Jayski NASCAR",
+  "NBC Sports NASCAR",
+  "Fox Sports NASCAR",
+  "ESPN NASCAR",
+  "AP NASCAR",
+  "Charlotte Motor Speedway NASCAR",
+] as const;
+const MY_NEWS_NASCAR_VIDEO_QUERIES = [
+  "NASCAR highlights this week",
+  "NASCAR Cup Series highlights",
+  "NASCAR race recap",
+  "NASCAR on FOX highlights",
+  "NBC Sports NASCAR highlights",
+  "NASCAR crash highlights",
+  "Daytona highlights",
+  "Talladega highlights",
+] as const;
 
 function buildMlbFallbackVideos(): VideoItem[] {
   return [
@@ -1087,6 +1110,21 @@ function hasRealLargeImageCandidate(
 ) {
   const selectedImage = getBestArticleImage(article);
   return Boolean(selectedImage.src) && isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
+}
+
+function dedupeArticlesByContent(articles: Article[]) {
+  const seen = new Set<string>();
+
+  return articles.filter((article) => {
+    const key = getArticleDeduplicationKey(article);
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
 }
 
 function getCategoryLeadArticle(articles: Article[], category: string) {
@@ -3402,6 +3440,9 @@ export default function Home() {
   const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
   const [sciencePreviewArticles, setSciencePreviewArticles] = useState<Article[]>([]);
   const [isSciencePreviewLoading, setIsSciencePreviewLoading] = useState(false);
+  const [myNewsCategorySupplementalArticles, setMyNewsCategorySupplementalArticles] = useState<
+    Record<string, Article[]>
+  >({});
   const [myNewsCategorySupplementalVideos, setMyNewsCategorySupplementalVideos] = useState<
     Record<string, VideoItem[]>
   >({});
@@ -7136,7 +7177,12 @@ export default function Home() {
 
     const sections = normalizedSelectedCategories
       .map((category) => {
-        const matchingArticles = categorySectionArticles.filter((article) => {
+        const supplementalArticles = myNewsCategorySupplementalArticles[category] ?? [];
+        const mergedCategoryArticles = dedupeArticlesByContent([
+          ...categorySectionArticles,
+          ...supplementalArticles,
+        ]);
+        const matchingArticles = mergedCategoryArticles.filter((article) => {
           const dedupeKey = getArticleDeduplicationKey(article);
           if (usedKeys.has(dedupeKey)) {
             return false;
@@ -7190,7 +7236,7 @@ export default function Home() {
         ),
       },
     ];
-  }, [categorySectionArticles, normalizedSelectedCategories]);
+  }, [categorySectionArticles, myNewsCategorySupplementalArticles, normalizedSelectedCategories]);
 
   const myNewsCategorySourceSuggestions = useMemo(() => {
     const suggestions: Record<string, string[]> = {};
@@ -7277,7 +7323,10 @@ export default function Home() {
     const leadMap: Record<string, Article | null> = {};
 
     normalizedSelectedCategories.forEach((category) => {
-      const categoryPool = categorySectionArticles.filter((article) =>
+      const categoryPool = dedupeArticlesByContent([
+        ...categorySectionArticles,
+        ...(myNewsCategorySupplementalArticles[category] ?? []),
+      ]).filter((article) =>
         articleMatchesSelectedCategory(article, category)
       );
       const visibleSectionArticles =
@@ -7287,22 +7336,88 @@ export default function Home() {
     });
 
     return leadMap;
-  }, [categorySectionArticles, myNewsCategorySections, normalizedSelectedCategories]);
+  }, [
+    categorySectionArticles,
+    myNewsCategorySections,
+    myNewsCategorySupplementalArticles,
+    normalizedSelectedCategories,
+  ]);
 
   useEffect(() => {
     if (sortMode !== "mynews" || normalizedSelectedCategories.length === 0) {
+      setMyNewsCategorySupplementalArticles({});
       setMyNewsCategorySupplementalVideos({});
       return;
     }
 
     let isCancelled = false;
 
+    const loadSupplementalCategoryArticles = async () => {
+      if (!normalizedSelectedCategories.includes("NASCAR")) {
+        if (!isCancelled) {
+          setMyNewsCategorySupplementalArticles({});
+        }
+        return;
+      }
+
+      try {
+        const payloads = await Promise.all(
+          MY_NEWS_NASCAR_ARTICLE_QUERIES.map(async (query) => {
+            const response = await fetch(
+              `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=8`,
+              {
+                cache: "no-store",
+                headers: { Accept: "application/json" },
+              }
+            );
+
+            if (!response.ok) {
+              return [] as Article[];
+            }
+
+            const payload = normalizeNewsPayload(
+              (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+            );
+
+            return hydrateFeedArticles(payload.articles);
+          })
+        );
+
+        if (isCancelled) {
+          return;
+        }
+
+        const mergedNascarArticles = dedupeArticlesByContent(payloads.flat());
+        const validNascarArticles = mergedNascarArticles.filter((article) =>
+          articleMatchesSelectedCategory(article, "NASCAR")
+        );
+        console.log("NASCAR ARTICLE RAW COUNT", mergedNascarArticles.length);
+        console.log(
+          "NASCAR ARTICLE VALID COUNT",
+          validNascarArticles.length
+        );
+
+        setMyNewsCategorySupplementalArticles({
+          NASCAR: validNascarArticles,
+        });
+      } catch (error) {
+        console.error("NASCAR ARTICLE SUPPLEMENT LOAD FAILED", error);
+
+        if (!isCancelled) {
+          setMyNewsCategorySupplementalArticles({});
+        }
+      }
+    };
+
     const loadSupplementalCategoryVideos = async () => {
       // Articles usually arrive with stronger category/source metadata, but video feeds are noisier.
       // We compensate here with category-specific queries plus stricter title/source/url matching.
       const categoryVideoEntries = await Promise.all(
         normalizedSelectedCategories.map(async (category) => {
-          const queries = getMyNewsCategoryVideoQueries(category);
+          const queries =
+            category === "NASCAR"
+              ? [...MY_NEWS_NASCAR_VIDEO_QUERIES]
+              : getMyNewsCategoryVideoQueries(category);
           const videoTab = resolveMyNewsCategoryVideoTab(category);
 
           const queryResults = await Promise.all(
@@ -7366,9 +7481,18 @@ export default function Home() {
           }
           if (category === "NASCAR") {
             console.log("NASCAR VIDEO RAW COUNT", mergedVideos.length);
+            console.log("NASCAR VIDEO VALID COUNT", relevantVideos.length);
             console.log("NASCAR VIDEO ACCEPTED", relevantVideos.slice(0, 6).map((video) => video.title));
             console.log("NASCAR VIDEO REJECTED", rejectedVideos.slice(0, 6).map((video) => video.title));
             console.log("NASCAR VIDEO FINAL COUNT", relevantVideos.length);
+            console.log(
+              "NASCAR VIDEO SAMPLE",
+              relevantVideos.slice(0, 6).map((video) => ({
+                title: video.title,
+                creator: video.creator,
+                publishedAt: video.publishedAt,
+              }))
+            );
           }
           if (category === "NHL") {
             console.log("NHL VIDEO ACCEPTED", relevantVideos.slice(0, 5).map((video) => video.title));
@@ -7386,6 +7510,7 @@ export default function Home() {
       setMyNewsCategorySupplementalVideos(Object.fromEntries(categoryVideoEntries));
     };
 
+    void loadSupplementalCategoryArticles();
     void loadSupplementalCategoryVideos();
 
     return () => {
@@ -7504,7 +7629,14 @@ export default function Home() {
             getLargeImageCardImage(leadArticle)
           );
           if (section.category === "NASCAR") {
-            console.log("NASCAR LARGE CARD SELECTED", leadArticle.title);
+            console.log("NASCAR LARGE IMAGE SELECTED", leadArticle.title);
+            console.log(
+              "NASCAR RANKED COUNT",
+              section.articles.filter(
+                (article) =>
+                  getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+              ).slice(0, 5).length
+            );
           }
           if (section.category === "NHL") {
             console.log("NHL LARGE IMAGE ACCEPTED", leadArticle.title);
@@ -7521,7 +7653,8 @@ export default function Home() {
             console.log("NHL LARGE IMAGE FINAL", null);
           }
           if (section.category === "NASCAR") {
-            console.log("NASCAR LARGE CARD SELECTED", null);
+            console.log("NASCAR LARGE IMAGE SELECTED", null);
+            console.log("NASCAR RANKED COUNT", section.articles.slice(0, 5).length);
           }
         }
       });
