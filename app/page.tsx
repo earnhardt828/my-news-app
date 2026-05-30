@@ -232,8 +232,6 @@ const MLS_SECTION_ARTICLE_QUERIES = [
   "NBC Sports Soccer",
   "Fox Sports Soccer",
   "Yahoo Sports Soccer",
-  "AP Soccer",
-  "Reuters Soccer",
   "The Athletic Soccer",
   "FC Cincinnati",
   "Charlotte FC",
@@ -241,6 +239,8 @@ const MLS_SECTION_ARTICLE_QUERIES = [
   "LAFC",
   "Atlanta United",
   "Seattle Sounders",
+  "MLS standings",
+  "MLS transfer news",
 ] as const;
 const NBA_SECTION_VIDEO_QUERIES = [
   "NBA highlights today",
@@ -341,6 +341,8 @@ const MY_NEWS_MLB_VIDEO_QUERIES = [
 ] as const;
 const MLB_VIDEOS_DISABLED = true;
 const NFL_VIDEOS_DISABLED = true;
+const NHL_VIDEOS_DISABLED = true;
+const MLS_VIDEOS_DISABLED = true;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
 function buildNhlFallbackVideos(): VideoItem[] {
@@ -1318,6 +1320,124 @@ async function getNflArticles() {
 
   console.log("NFL ARTICLE FINAL COUNT", validNflArticles.length);
   return validNflArticles;
+}
+
+async function getNhlArticles() {
+  const payloads = await Promise.allSettled(
+    NHL_SECTION_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validNhlArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictNhlArticle(article));
+
+  return validNhlArticles;
+}
+
+async function getMlsArticles() {
+  const payloads = await Promise.allSettled(
+    MLS_SECTION_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validMlsArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictMlsArticle(article));
+
+  console.log("MLS ARTICLE FINAL COUNT", validMlsArticles.length);
+  return validMlsArticles;
+}
+
+async function getCollegeFootballArticles() {
+  const queries = [
+    "college football news",
+    "NCAA football news",
+    "ESPN college football",
+    "CBS Sports college football",
+    "Fox Sports college football",
+    "The Athletic college football",
+    "Yahoo Sports college football",
+    "AP college football",
+    "Reuters college football",
+    "ACC football",
+    "SEC football",
+    "Big Ten football",
+    "Big 12 football",
+    "CFP news",
+    "college football playoff",
+    "transfer portal football",
+    "recruiting football",
+  ] as const;
+
+  const payloads = await Promise.allSettled(
+    queries.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validCollegeFootballArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictCollegeFootballArticle(article));
+
+  console.log("COLLEGE FOOTBALL ARTICLE FINAL COUNT", validCollegeFootballArticles.length);
+  return validCollegeFootballArticles;
 }
 
 async function getPoliticsArticles() {
@@ -3876,6 +3996,109 @@ function isStrictNflArticle(article: Article) {
   return hasNflTerms || hasNflSourceTerms;
 }
 
+function isStrictNhlArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasNhlTerms =
+    /\b(nhl|national hockey league|nhl\.com|hockey|stanley cup|goalie|goal|puck|overtime|playoff)\b/.test(
+      haystack
+    );
+  const hasNhlTeamTerms =
+    /\b(rangers|bruins|maple leafs|oilers|panthers|hurricanes|stars|avalanche|golden knights|devils|islanders|flyers|penguins|red wings|blackhawks|kraken|kings|ducks|sharks|canucks|flames|senators|canadiens|jets|wild|predators|blues|blue jackets|sabres|utah hockey club)\b/.test(
+      haystack
+    );
+  const hasNhlSourceTerms =
+    /\b(nhl\.com|espn nhl|sportsnet nhl|the hockey news|tsn hockey|ap nhl|reuters nhl|cbs sports nhl|nbc sports nhl|yahoo sports nhl|bleacher report nhl)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(mlb|baseball|nfl|football|nba|basketball|mls|soccer|odds|betting|sportsbook|parlay|celebrity|hollywood|movie|music)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms || isSportsBettingAd(article)) {
+    return false;
+  }
+
+  return hasNhlTerms || hasNhlTeamTerms || hasNhlSourceTerms;
+}
+
+function isStrictMlsArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasMlsTerms =
+    /\b(mls|major league soccer|mlssoccer|mlssoccer\.com|soccer|mls standings|mls transfer)\b/.test(
+      haystack
+    );
+  const hasMlsTeamTerms =
+    /\b(charlotte fc|inter miami|fc cincinnati|lafc|atlanta united|seattle sounders)\b/.test(
+      haystack
+    );
+  const hasMlsSourceTerms =
+    /\b(mlssoccer\.com|espn mls|the athletic soccer|cbs sports golazo|nbc sports soccer|fox sports soccer|yahoo sports soccer)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(premier league|champions league|la liga|bundesliga|serie a|ligue 1|world cup|euros|copa america|betting|odds|sportsbook|parlay|celebrity|travel|weather|crime)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms || isSportsBettingAd(article)) {
+    return false;
+  }
+
+  return hasMlsTeamTerms || hasMlsSourceTerms || (hasMlsTerms && (hasMlsTeamTerms || /mls|major league soccer|mlssoccer/.test(haystack)));
+}
+
+function isStrictCollegeFootballArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasCollegeFootballTerms =
+    /\b(college football|ncaa football|cfp|college football playoff|acc football|sec football|big ten football|big 12 football|transfer portal|recruiting)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(nfl\b|national football league|college basketball|high school football|odds|betting|sportsbook|parlay|spread pick|over\/under|promo code|bonus code)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms || isSportsBettingAd(article)) {
+    return false;
+  }
+
+  return hasCollegeFootballTerms;
+}
+
 function getTechLargeCardSelection(articles: Article[]) {
   const candidates = articles.map((article) => ({
     article,
@@ -4010,6 +4233,60 @@ function getNflLargeCardSelection(articles: Article[]) {
     .find((candidate) => candidate.isStrictNfl && candidate.image);
 
   console.log("NFL LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getNhlLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictNhl: isStrictNhlArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictNhl && candidate.image);
+
+  console.log("NHL LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getMlsLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictMls: isStrictMlsArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictMls && candidate.image);
+
+  console.log("MLS LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getCollegeFootballLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictCollegeFootball: isStrictCollegeFootballArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictCollegeFootball && candidate.image);
+
+  console.log("COLLEGE FOOTBALL LARGE CARD SELECTED", {
     title: selectedCandidate?.article.title ?? null,
     source: selectedCandidate?.article.source ?? null,
     imageUrl: selectedCandidate?.image?.src ?? null,
@@ -8410,12 +8687,18 @@ export default function Home() {
 
     const sections = normalizedSelectedCategories
       .map((category) => {
-        const routeUsed = isDedicatedMlbCategory(category)
+      const routeUsed = isDedicatedMlbCategory(category)
           ? "dedicated-mlb"
           : category === "NASCAR"
             ? "dedicated-nascar"
             : category === "NFL"
               ? "dedicated-nfl"
+            : category === "NHL"
+              ? "dedicated-nhl"
+            : category === "MLS"
+              ? "dedicated-mls"
+            : category === "College Football"
+              ? "dedicated-college-football"
             : category === "Sports"
               ? "dedicated-sports"
             : category === "World"
@@ -8432,6 +8715,9 @@ export default function Home() {
           category === "NASCAR" ||
           isDedicatedMlbCategory(category) ||
           category === "NFL" ||
+          category === "NHL" ||
+          category === "MLS" ||
+          category === "College Football" ||
           category === "Sports" ||
           category === "Politics" ||
           category === "World"
@@ -8450,6 +8736,12 @@ export default function Home() {
             ? isDedicatedMlbArticle(article, "article")
             : category === "NFL"
               ? isStrictNflArticle(article)
+            : category === "NHL"
+              ? isStrictNhlArticle(article)
+            : category === "MLS"
+              ? isStrictMlsArticle(article)
+            : category === "College Football"
+              ? isStrictCollegeFootballArticle(article)
             : category === "Sports"
               ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
             : category === "Auto"
@@ -8468,6 +8760,12 @@ export default function Home() {
               ? (isBroadSportsArticle(leftArticle) && !isSportsBettingAd(leftArticle) ? 6 : 0)
               : category === "NFL"
                 ? (isStrictNflArticle(leftArticle) ? 6 : 0)
+              : category === "NHL"
+                ? (isStrictNhlArticle(leftArticle) ? 6 : 0)
+              : category === "MLS"
+                ? (isStrictMlsArticle(leftArticle) ? 6 : 0)
+              : category === "College Football"
+                ? (isStrictCollegeFootballArticle(leftArticle) ? 6 : 0)
               : category === "Auto"
               ? (isStrictAutoArticle(leftArticle) ? 6 : 0)
               : category === "Politics"
@@ -8489,6 +8787,12 @@ export default function Home() {
               ? (isBroadSportsArticle(rightArticle) && !isSportsBettingAd(rightArticle) ? 6 : 0)
               : category === "NFL"
                 ? (isStrictNflArticle(rightArticle) ? 6 : 0)
+              : category === "NHL"
+                ? (isStrictNhlArticle(rightArticle) ? 6 : 0)
+              : category === "MLS"
+                ? (isStrictMlsArticle(rightArticle) ? 6 : 0)
+              : category === "College Football"
+                ? (isStrictCollegeFootballArticle(rightArticle) ? 6 : 0)
               : category === "Auto"
               ? (isStrictAutoArticle(rightArticle) ? 6 : 0)
               : category === "Politics"
@@ -8522,6 +8826,9 @@ export default function Home() {
 
         return (
           (section.category === "Auto" ||
+            section.category === "NHL" ||
+            section.category === "MLS" ||
+            section.category === "College Football" ||
             section.category === "Sports" ||
             section.category === "Politics" ||
             section.category === "World") &&
@@ -8649,6 +8956,9 @@ export default function Home() {
         category === "NASCAR" ||
         isDedicatedMlbCategory(category) ||
         category === "NFL" ||
+        category === "NHL" ||
+        category === "MLS" ||
+        category === "College Football" ||
         category === "Sports" ||
         category === "Politics" ||
         category === "World"
@@ -8657,6 +8967,12 @@ export default function Home() {
                 ? isDedicatedMlbArticle(article, "lead")
                 : category === "NFL"
                   ? isStrictNflArticle(article)
+                : category === "NHL"
+                  ? isStrictNhlArticle(article)
+                : category === "MLS"
+                  ? isStrictMlsArticle(article)
+                : category === "College Football"
+                  ? isStrictCollegeFootballArticle(article)
                 : category === "Sports"
                   ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
                 : category === "Business"
@@ -8675,6 +8991,12 @@ export default function Home() {
                 ? isStrictBusinessArticle(article)
               : category === "NFL"
                 ? isStrictNflArticle(article)
+              : category === "NHL"
+                ? isStrictNhlArticle(article)
+              : category === "MLS"
+                ? isStrictMlsArticle(article)
+              : category === "College Football"
+                ? isStrictCollegeFootballArticle(article)
               : category === "Sports"
                 ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
               : category === "Politics"
@@ -8723,6 +9045,30 @@ export default function Home() {
       if (category === "NFL") {
         leadMap[category] = {
           article: getNflLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
+      if (category === "NHL") {
+        leadMap[category] = {
+          article: getNhlLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
+      if (category === "MLS") {
+        leadMap[category] = {
+          article: getMlsLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
+      if (category === "College Football") {
+        leadMap[category] = {
+          article: getCollegeFootballLargeCardSelection(categoryPool),
           imageSrcOverride: null,
         };
         return;
@@ -8797,6 +9143,9 @@ export default function Home() {
                 loading:
                   category === "Auto" ||
                   category === "Business" ||
+                  category === "NHL" ||
+                  category === "MLS" ||
+                  category === "College Football" ||
                   category === "Sports" ||
                   category === "Politics" ||
                   category === "World",
@@ -8811,6 +9160,9 @@ export default function Home() {
         !normalizedSelectedCategories.includes("Business") &&
         !normalizedSelectedCategories.includes("NASCAR") &&
         !normalizedSelectedCategories.includes("MLB") &&
+        !normalizedSelectedCategories.includes("NHL") &&
+        !normalizedSelectedCategories.includes("MLS") &&
+        !normalizedSelectedCategories.includes("College Football") &&
         !normalizedSelectedCategories.includes("Sports") &&
         !normalizedSelectedCategories.includes("Politics") &&
         !normalizedSelectedCategories.includes("World")
@@ -8854,6 +9206,31 @@ export default function Home() {
           articleTasks.push(
             getNflArticles().then((validNflArticles) => {
               return ["NFL", validNflArticles] as const;
+            })
+          );
+        }
+
+        if (normalizedSelectedCategories.includes("NHL")) {
+          articleTasks.push(
+            getNhlArticles().then((validNhlArticles) => {
+              console.log("NHL ARTICLE FINAL COUNT", validNhlArticles.length);
+              return ["NHL", validNhlArticles] as const;
+            })
+          );
+        }
+
+        if (normalizedSelectedCategories.includes("MLS")) {
+          articleTasks.push(
+            getMlsArticles().then((validMlsArticles) => {
+              return ["MLS", validMlsArticles] as const;
+            })
+          );
+        }
+
+        if (normalizedSelectedCategories.includes("College Football")) {
+          articleTasks.push(
+            getCollegeFootballArticles().then((validCollegeFootballArticles) => {
+              return ["College Football", validCollegeFootballArticles] as const;
             })
           );
         }
@@ -9145,6 +9522,32 @@ export default function Home() {
           if (category === "Auto") {
             if (AUTO_VIDEOS_DISABLED) {
               console.log("AUTO VIDEOS DISABLED");
+            }
+            if (!isCancelled) {
+              setMyNewsCategoryVideoStatus((prev) => ({
+                ...prev,
+                [category]: { loading: false, error: false },
+              }));
+            }
+            return [category, [] as VideoItem[]] as const;
+          }
+
+          if (category === "NHL") {
+            if (NHL_VIDEOS_DISABLED) {
+              console.log("NHL VIDEOS DISABLED");
+            }
+            if (!isCancelled) {
+              setMyNewsCategoryVideoStatus((prev) => ({
+                ...prev,
+                [category]: { loading: false, error: false },
+              }));
+            }
+            return [category, [] as VideoItem[]] as const;
+          }
+
+          if (category === "MLS") {
+            if (MLS_VIDEOS_DISABLED) {
+              console.log("MLS VIDEOS DISABLED");
             }
             if (!isCancelled) {
               setMyNewsCategoryVideoStatus((prev) => ({
@@ -12066,6 +12469,8 @@ export default function Home() {
     const isAutoRow = normalizeSelectedCategoryName(category) === "Auto";
     const isMlbRow = normalizeSelectedCategoryName(category) === "MLB";
     const isNflRow = normalizeSelectedCategoryName(category) === "NFL";
+    const isNhlRow = normalizeSelectedCategoryName(category) === "NHL";
+    const isMlsRow = normalizeSelectedCategoryName(category) === "MLS";
     const isCelebrityRow = normalizeSelectedCategoryName(category) === "Celebrity";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const isWorldRow = normalizeSelectedCategoryName(category) === "World";
@@ -12081,6 +12486,14 @@ export default function Home() {
     }
     if (isNflRow && NFL_VIDEOS_DISABLED) {
       console.log("NFL VIDEOS DISABLED");
+      return null;
+    }
+    if (isNhlRow && NHL_VIDEOS_DISABLED) {
+      console.log("NHL VIDEOS DISABLED");
+      return null;
+    }
+    if (isMlsRow && MLS_VIDEOS_DISABLED) {
+      console.log("MLS VIDEOS DISABLED");
       return null;
     }
     if (isBusinessRow || (AUTO_VIDEOS_DISABLED && isAutoRow)) {
@@ -14338,6 +14751,9 @@ export default function Home() {
                 .map((section, index, filteredSections) => {
                   const isDedicatedMlbSection = isDedicatedMlbCategory(section.category);
                   const isAutoSection = section.category === "Auto";
+                  const isNhlSection = section.category === "NHL";
+                  const isMlsSection = section.category === "MLS";
+                  const isCollegeFootballSection = section.category === "College Football";
                   const isSportsSection = section.category === "Sports";
                   const isPoliticsSection = section.category === "Politics";
                   const isWorldSection = section.category === "World";
@@ -14495,13 +14911,25 @@ export default function Home() {
                                   excludeArticleKey: leadArticleKey,
                                 }
                               )}
-                              {(isAutoSection || isSportsSection || isPoliticsSection || isWorldSection) &&
+                              {(isAutoSection ||
+                                isNhlSection ||
+                                isMlsSection ||
+                                isCollegeFootballSection ||
+                                isSportsSection ||
+                                isPoliticsSection ||
+                                isWorldSection) &&
                               !leadArticle &&
                               section.articles.length === 0 &&
                               categoryArticleStatus.loading ? (
                                 <div className="muted" style={{ padding: "4px 0 0" }}>
                                   {isAutoSection
                                     ? "Loading auto stories..."
+                                    : isNhlSection
+                                      ? "Loading NHL stories..."
+                                      : isMlsSection
+                                        ? "Loading MLS stories..."
+                                        : isCollegeFootballSection
+                                          ? "Loading college football stories..."
                                     : isSportsSection
                                       ? "Loading sports stories..."
                                       : isWorldSection
