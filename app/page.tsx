@@ -8839,7 +8839,10 @@ export default function Home() {
   const sportsTabArticles = useMemo(() => {
     const rawSportsArticles =
       sortMode === "sports"
-        ? visibleArticles.slice(0, 90)
+        ? dedupeArticlesByContent([
+            ...sportsPreviewArticles.slice(0, 60),
+            ...visibleArticles.slice(0, 90),
+          ])
         : sortMode === "trending"
           ? sportsPreviewArticles.slice(0, 60)
           : ([] as Article[]);
@@ -8862,6 +8865,28 @@ export default function Home() {
 
     return [] as Article[];
   }, [sortMode, sportsPreviewArticles, visibleArticles]);
+
+  const localSportsArticles = useMemo(() => {
+    const candidateArticles =
+      sortMode === "sports"
+        ? dedupeArticlesByContent([
+            ...visibleArticles.slice(0, 90),
+            ...sportsPreviewArticles.slice(0, 60),
+          ])
+        : ([] as Article[]);
+
+    if (candidateArticles.length === 0) {
+      return [] as Article[];
+    }
+
+    return candidateArticles.filter((article) => {
+      if (!isBroadSportsArticle(article) || isSportsBettingAd(article)) {
+        return false;
+      }
+
+      return scoreLocalArticle(article, localQuery, localLocationLabel) >= 110;
+    });
+  }, [localLocationLabel, localQuery, sortMode, sportsPreviewArticles, visibleArticles]);
 
   const celebrityTabArticles = useMemo(() => {
     if (sortMode === "celebrity") {
@@ -10708,8 +10733,11 @@ export default function Home() {
   useEffect(() => {
     if (sortMode === "sports") {
       console.log("SPORTS ARTICLE COUNT", sportsTabArticles.length);
+      console.log("SPORTS PAGE ARTICLE COUNT", sportsTabArticles.length);
+      console.log("SPORTS PAGE LOCAL COUNT", localSportsArticles.length);
+      console.log("SPORTS PAGE BROAD COUNT", sportsTabArticles.length);
     }
-  }, [sortMode, sportsTabArticles.length]);
+  }, [localSportsArticles.length, sortMode, sportsTabArticles.length]);
 
   useEffect(() => {
     let isCancelled = false;
