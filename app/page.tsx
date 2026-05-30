@@ -183,6 +183,59 @@ const MY_NEWS_BUSINESS_ARTICLE_QUERIES = [
   "Yahoo Finance",
   "stock market news",
 ] as const;
+const MY_NEWS_GOLF_ARTICLE_QUERIES = [
+  "golf news",
+  "PGA Tour news",
+  "LPGA news",
+  "Masters golf",
+  "U.S. Open golf",
+  "British Open golf",
+  "The Open Championship golf",
+  "Ryder Cup news",
+  "Golf Channel",
+  "ESPN Golf",
+  "CBS Sports Golf",
+  "NBC Sports Golf",
+  "Yahoo Sports Golf",
+  "AP Golf",
+  "Reuters Golf",
+] as const;
+const MY_NEWS_SCIENCE_ARTICLE_QUERIES = [
+  "science news",
+  "NASA news",
+  "space news",
+  "climate science",
+  "astronomy news",
+  "physics news",
+  "biology research",
+  "medical science",
+  "Scientific American",
+  "Nature science",
+  "Science Magazine",
+  "Live Science",
+  "Space.com",
+  "National Geographic science",
+  "AP Science",
+  "Reuters Science",
+] as const;
+const COLLEGE_BASKETBALL_ARTICLE_QUERIES = [
+  "college basketball news",
+  "NCAA basketball news",
+  "ESPN college basketball",
+  "CBS Sports college basketball",
+  "Fox Sports college basketball",
+  "The Athletic college basketball",
+  "Yahoo Sports college basketball",
+  "AP college basketball",
+  "Reuters college basketball",
+  "March Madness",
+  "Final Four",
+  "NCAA tournament",
+  "ACC basketball",
+  "SEC basketball",
+  "Big Ten basketball",
+  "Big 12 basketball",
+] as const;
 const MY_NEWS_WORLD_ARTICLE_QUERIES = [
   "world news",
   "international news",
@@ -343,6 +396,7 @@ const MLB_VIDEOS_DISABLED = true;
 const NFL_VIDEOS_DISABLED = true;
 const NHL_VIDEOS_DISABLED = true;
 const MLS_VIDEOS_DISABLED = true;
+const COLLEGE_BASKETBALL_VIDEOS_DISABLED = true;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
 function buildNhlFallbackVideos(): VideoItem[] {
@@ -1438,6 +1492,105 @@ async function getCollegeFootballArticles() {
 
   console.log("COLLEGE FOOTBALL ARTICLE FINAL COUNT", validCollegeFootballArticles.length);
   return validCollegeFootballArticles;
+}
+
+async function getCollegeBasketballArticles() {
+  const payloads = await Promise.allSettled(
+    COLLEGE_BASKETBALL_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validCollegeBasketballArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictCollegeBasketballArticle(article));
+
+  console.log("COLLEGE BASKETBALL ARTICLE FINAL COUNT", validCollegeBasketballArticles.length);
+  return validCollegeBasketballArticles;
+}
+
+async function getGolfArticles() {
+  const payloads = await Promise.allSettled(
+    MY_NEWS_GOLF_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validGolfArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictGolfArticle(article));
+
+  console.log("GOLF ARTICLE FINAL COUNT", validGolfArticles.length);
+  return validGolfArticles;
+}
+
+async function getScienceArticles() {
+  const payloads = await Promise.allSettled(
+    MY_NEWS_SCIENCE_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validScienceArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictScienceArticle(article));
+
+  console.log("SCIENCE ARTICLE FINAL COUNT", validScienceArticles.length);
+  return validScienceArticles;
 }
 
 async function getPoliticsArticles() {
@@ -4099,6 +4252,112 @@ function isStrictCollegeFootballArticle(article: Article) {
   return hasCollegeFootballTerms;
 }
 
+function isStrictCollegeBasketballArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasCollegeBasketballTerms =
+    /\b(college basketball|ncaa basketball|men['’]s basketball|women['’]s basketball|march madness|final four|ncaa tournament|hoops|college hoops|acc basketball|sec basketball|big ten basketball|big 12 basketball|espn college basketball|cbs sports college basketball)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(college football|college golf|golf|football|nfl|pga|liv|high school basketball|odds|betting|sportsbook|parlay|spread pick|over\/under|promo code|bonus code)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms || isSportsBettingAd(article)) {
+    return false;
+  }
+
+  return hasCollegeBasketballTerms;
+}
+
+function isStrictGolfArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasGolfTerms =
+    /\b(golf|pga|lpga|masters|u\.s\. open|us open|the open|open championship|british open|ryder cup|tournament|golfer|tee time)\b/.test(
+      haystack
+    );
+  const hasGolfSourceTerms =
+    /\b(golf channel|espn golf|cbs sports golf|nbc sports golf|yahoo sports golf|ap golf|reuters golf)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(college basketball|college football|nfl|nba|mlb|nhl|mls|odds|betting|sportsbook|parlay|spread pick|over\/under|promo code|bonus code)\b/.test(
+      haystack
+    );
+  const hasCountryClubOnly = /\b(country club)\b/.test(haystack) && !/\b(golf|pga|lpga|masters|open|ryder cup|tee time|golfer)\b/.test(haystack);
+
+  if (hasRejectedTerms || hasCountryClubOnly || isSportsBettingAd(article)) {
+    return false;
+  }
+
+  return hasGolfTerms || hasGolfSourceTerms;
+}
+
+function isStrictScienceArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasScienceTerms =
+    /\b(science|nasa|space|astronomy|climate science|research|study|biology|physics|chemistry|medicine|medical research|discovery|scientists|telescope|planet|galaxy|asteroid)\b/.test(
+      haystack
+    );
+  const hasScienceSourceTerms =
+    /\b(scientific american|nature|science magazine|live science|space\.com|national geographic science|ap science|reuters science)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(celebrity|sports|astrology|movie|music|hollywood)\b/.test(haystack);
+  const hasConditionalRejectedTerms =
+    /\b(politics|election|campaign|government|weather forecast|forecast|tech product|iphone|android|laptop|smartphone)\b/.test(
+      haystack
+    );
+  const hasScienceOverride =
+    /\b(science|nasa|space|astronomy|research|study|biology|physics|chemistry|medicine|medical research|discovery|scientists|telescope|planet|galaxy|asteroid|climate science)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms) {
+    return false;
+  }
+
+  if (hasConditionalRejectedTerms && !hasScienceOverride) {
+    return false;
+  }
+
+  return hasScienceTerms || hasScienceSourceTerms;
+}
+
 function getTechLargeCardSelection(articles: Article[]) {
   const candidates = articles.map((article) => ({
     article,
@@ -4287,6 +4546,60 @@ function getCollegeFootballLargeCardSelection(articles: Article[]) {
     .find((candidate) => candidate.isStrictCollegeFootball && candidate.image);
 
   console.log("COLLEGE FOOTBALL LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getCollegeBasketballLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictCollegeBasketball: isStrictCollegeBasketballArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictCollegeBasketball && candidate.image);
+
+  console.log("COLLEGE BASKETBALL LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getGolfLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictGolf: isStrictGolfArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictGolf && candidate.image);
+
+  console.log("GOLF LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getScienceLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictScience: isStrictScienceArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictScience && candidate.image);
+
+  console.log("SCIENCE LARGE CARD SELECTED", {
     title: selectedCandidate?.article.title ?? null,
     source: selectedCandidate?.article.source ?? null,
     imageUrl: selectedCandidate?.image?.src ?? null,
@@ -8699,6 +9012,12 @@ export default function Home() {
               ? "dedicated-mls"
             : category === "College Football"
               ? "dedicated-college-football"
+            : category === "College Basketball"
+              ? "dedicated-college-basketball"
+            : category === "Golf"
+              ? "dedicated-golf"
+            : category === "Science"
+              ? "dedicated-science"
             : category === "Sports"
               ? "dedicated-sports"
             : category === "World"
@@ -8718,6 +9037,9 @@ export default function Home() {
           category === "NHL" ||
           category === "MLS" ||
           category === "College Football" ||
+          category === "College Basketball" ||
+          category === "Golf" ||
+          category === "Science" ||
           category === "Sports" ||
           category === "Politics" ||
           category === "World"
@@ -8742,6 +9064,12 @@ export default function Home() {
               ? isStrictMlsArticle(article)
             : category === "College Football"
               ? isStrictCollegeFootballArticle(article)
+            : category === "College Basketball"
+              ? isStrictCollegeBasketballArticle(article)
+            : category === "Golf"
+              ? isStrictGolfArticle(article)
+            : category === "Science"
+              ? isStrictScienceArticle(article)
             : category === "Sports"
               ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
             : category === "Auto"
@@ -8766,6 +9094,12 @@ export default function Home() {
                 ? (isStrictMlsArticle(leftArticle) ? 6 : 0)
               : category === "College Football"
                 ? (isStrictCollegeFootballArticle(leftArticle) ? 6 : 0)
+              : category === "College Basketball"
+                ? (isStrictCollegeBasketballArticle(leftArticle) ? 6 : 0)
+              : category === "Golf"
+                ? (isStrictGolfArticle(leftArticle) ? 6 : 0)
+              : category === "Science"
+                ? (isStrictScienceArticle(leftArticle) ? 6 : 0)
               : category === "Auto"
               ? (isStrictAutoArticle(leftArticle) ? 6 : 0)
               : category === "Politics"
@@ -8793,6 +9127,12 @@ export default function Home() {
                 ? (isStrictMlsArticle(rightArticle) ? 6 : 0)
               : category === "College Football"
                 ? (isStrictCollegeFootballArticle(rightArticle) ? 6 : 0)
+              : category === "College Basketball"
+                ? (isStrictCollegeBasketballArticle(rightArticle) ? 6 : 0)
+              : category === "Golf"
+                ? (isStrictGolfArticle(rightArticle) ? 6 : 0)
+              : category === "Science"
+                ? (isStrictScienceArticle(rightArticle) ? 6 : 0)
               : category === "Auto"
               ? (isStrictAutoArticle(rightArticle) ? 6 : 0)
               : category === "Politics"
@@ -8829,6 +9169,9 @@ export default function Home() {
             section.category === "NHL" ||
             section.category === "MLS" ||
             section.category === "College Football" ||
+            section.category === "College Basketball" ||
+            section.category === "Golf" ||
+            section.category === "Science" ||
             section.category === "Sports" ||
             section.category === "Politics" ||
             section.category === "World") &&
@@ -8959,6 +9302,9 @@ export default function Home() {
         category === "NHL" ||
         category === "MLS" ||
         category === "College Football" ||
+        category === "College Basketball" ||
+        category === "Golf" ||
+        category === "Science" ||
         category === "Sports" ||
         category === "Politics" ||
         category === "World"
@@ -8973,6 +9319,12 @@ export default function Home() {
                   ? isStrictMlsArticle(article)
                 : category === "College Football"
                   ? isStrictCollegeFootballArticle(article)
+                : category === "College Basketball"
+                  ? isStrictCollegeBasketballArticle(article)
+                : category === "Golf"
+                  ? isStrictGolfArticle(article)
+                : category === "Science"
+                  ? isStrictScienceArticle(article)
                 : category === "Sports"
                   ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
                 : category === "Business"
@@ -8997,6 +9349,12 @@ export default function Home() {
                 ? isStrictMlsArticle(article)
               : category === "College Football"
                 ? isStrictCollegeFootballArticle(article)
+              : category === "College Basketball"
+                ? isStrictCollegeBasketballArticle(article)
+              : category === "Golf"
+                ? isStrictGolfArticle(article)
+              : category === "Science"
+                ? isStrictScienceArticle(article)
               : category === "Sports"
                 ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
               : category === "Politics"
@@ -9082,6 +9440,30 @@ export default function Home() {
         return;
       }
 
+      if (category === "College Basketball") {
+        leadMap[category] = {
+          article: getCollegeBasketballLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
+      if (category === "Golf") {
+        leadMap[category] = {
+          article: getGolfLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
+      if (category === "Science") {
+        leadMap[category] = {
+          article: getScienceLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
       if (category === "Business") {
         leadMap[category] = {
           article: getBusinessLargeCardSelection(categoryPool),
@@ -9146,6 +9528,9 @@ export default function Home() {
                   category === "NHL" ||
                   category === "MLS" ||
                   category === "College Football" ||
+                  category === "College Basketball" ||
+                  category === "Golf" ||
+                  category === "Science" ||
                   category === "Sports" ||
                   category === "Politics" ||
                   category === "World",
@@ -9163,6 +9548,9 @@ export default function Home() {
         !normalizedSelectedCategories.includes("NHL") &&
         !normalizedSelectedCategories.includes("MLS") &&
         !normalizedSelectedCategories.includes("College Football") &&
+        !normalizedSelectedCategories.includes("College Basketball") &&
+        !normalizedSelectedCategories.includes("Golf") &&
+        !normalizedSelectedCategories.includes("Science") &&
         !normalizedSelectedCategories.includes("Sports") &&
         !normalizedSelectedCategories.includes("Politics") &&
         !normalizedSelectedCategories.includes("World")
@@ -9231,6 +9619,30 @@ export default function Home() {
           articleTasks.push(
             getCollegeFootballArticles().then((validCollegeFootballArticles) => {
               return ["College Football", validCollegeFootballArticles] as const;
+            })
+          );
+        }
+
+        if (normalizedSelectedCategories.includes("College Basketball")) {
+          articleTasks.push(
+            getCollegeBasketballArticles().then((validCollegeBasketballArticles) => {
+              return ["College Basketball", validCollegeBasketballArticles] as const;
+            })
+          );
+        }
+
+        if (normalizedSelectedCategories.includes("Golf")) {
+          articleTasks.push(
+            getGolfArticles().then((validGolfArticles) => {
+              return ["Golf", validGolfArticles] as const;
+            })
+          );
+        }
+
+        if (normalizedSelectedCategories.includes("Science")) {
+          articleTasks.push(
+            getScienceArticles().then((validScienceArticles) => {
+              return ["Science", validScienceArticles] as const;
             })
           );
         }
@@ -9548,6 +9960,19 @@ export default function Home() {
           if (category === "MLS") {
             if (MLS_VIDEOS_DISABLED) {
               console.log("MLS VIDEOS DISABLED");
+            }
+            if (!isCancelled) {
+              setMyNewsCategoryVideoStatus((prev) => ({
+                ...prev,
+                [category]: { loading: false, error: false },
+              }));
+            }
+            return [category, [] as VideoItem[]] as const;
+          }
+
+          if (category === "College Basketball") {
+            if (COLLEGE_BASKETBALL_VIDEOS_DISABLED) {
+              console.log("COLLEGE BASKETBALL VIDEOS DISABLED");
             }
             if (!isCancelled) {
               setMyNewsCategoryVideoStatus((prev) => ({
@@ -12471,6 +12896,7 @@ export default function Home() {
     const isNflRow = normalizeSelectedCategoryName(category) === "NFL";
     const isNhlRow = normalizeSelectedCategoryName(category) === "NHL";
     const isMlsRow = normalizeSelectedCategoryName(category) === "MLS";
+    const isCollegeBasketballRow = normalizeSelectedCategoryName(category) === "College Basketball";
     const isCelebrityRow = normalizeSelectedCategoryName(category) === "Celebrity";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const isWorldRow = normalizeSelectedCategoryName(category) === "World";
@@ -12494,6 +12920,10 @@ export default function Home() {
     }
     if (isMlsRow && MLS_VIDEOS_DISABLED) {
       console.log("MLS VIDEOS DISABLED");
+      return null;
+    }
+    if (isCollegeBasketballRow && COLLEGE_BASKETBALL_VIDEOS_DISABLED) {
+      console.log("COLLEGE BASKETBALL VIDEOS DISABLED");
       return null;
     }
     if (isBusinessRow || (AUTO_VIDEOS_DISABLED && isAutoRow)) {
@@ -14754,6 +15184,9 @@ export default function Home() {
                   const isNhlSection = section.category === "NHL";
                   const isMlsSection = section.category === "MLS";
                   const isCollegeFootballSection = section.category === "College Football";
+                  const isCollegeBasketballSection = section.category === "College Basketball";
+                  const isGolfSection = section.category === "Golf";
+                  const isScienceSection = section.category === "Science";
                   const isSportsSection = section.category === "Sports";
                   const isPoliticsSection = section.category === "Politics";
                   const isWorldSection = section.category === "World";
@@ -14915,6 +15348,9 @@ export default function Home() {
                                 isNhlSection ||
                                 isMlsSection ||
                                 isCollegeFootballSection ||
+                                isCollegeBasketballSection ||
+                                isGolfSection ||
+                                isScienceSection ||
                                 isSportsSection ||
                                 isPoliticsSection ||
                                 isWorldSection) &&
@@ -14930,6 +15366,12 @@ export default function Home() {
                                         ? "Loading MLS stories..."
                                         : isCollegeFootballSection
                                           ? "Loading college football stories..."
+                                          : isCollegeBasketballSection
+                                            ? "Loading college basketball stories..."
+                                            : isGolfSection
+                                              ? "Loading golf stories..."
+                                              : isScienceSection
+                                                ? "Loading science stories..."
                                     : isSportsSection
                                       ? "Loading sports stories..."
                                       : isWorldSection
