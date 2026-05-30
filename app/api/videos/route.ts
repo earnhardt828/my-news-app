@@ -1278,7 +1278,7 @@ export async function GET(request: Request) {
 
   try {
     if (tab === "politics") {
-      console.log("POLITICS VIDEOS API HIT", { searchTerm, category });
+      console.log("POLITICS TAB API HIT", { searchTerm, category });
     }
 
     const useSpecializedSearchOnly = tab === "technology" || tab === "politics";
@@ -1309,9 +1309,15 @@ export async function GET(request: Request) {
       )
     ).flat();
     let effectiveEntries = searchEntries;
-    let usedPoliticsFallback = false;
     if (tab === "politics") {
-      console.log("POLITICS VIDEOS RAW COUNT", searchEntries.length);
+      console.log(
+        "POLITICS RAW VIDEOS BEFORE FILTER",
+        searchEntries.slice(0, 10).map((entry) => ({
+          title: entry.title,
+          creator: entry.creator,
+          videoId: entry.videoId,
+        }))
+      );
     }
     const failedFeeds = results
       .map((result, index) =>
@@ -1331,8 +1337,7 @@ export async function GET(request: Request) {
       console.error("YouTube RSS feed failures:", failedFeeds);
     }
 
-    const loadPoliticsFallbackEntries = async () => {
-      console.log("POLITICS VIDEO PRIMARY FAILED");
+    if (tab === "politics" && searchEntries.length === 0) {
       const fallbackEntries = (
         await Promise.all(
           POLITICS_FALLBACK_NEWS_QUERIES.map(async (term) =>
@@ -1345,32 +1350,67 @@ export async function GET(request: Request) {
       ).flat();
 
       if (fallbackEntries.length > 0) {
-        console.log("POLITICS VIDEO FALLBACK USED");
-        usedPoliticsFallback = true;
-        return dedupeEntriesByVideoId(fallbackEntries);
+        effectiveEntries = dedupeEntriesByVideoId(fallbackEntries);
       }
-
-      return [] as RssFeedEntry[];
-    };
-
-    if (tab === "politics" && searchEntries.length === 0) {
-      effectiveEntries = await loadPoliticsFallbackEntries();
     }
 
     const allEntries = useSpecializedSearchOnly
       ? effectiveEntries
       : [...successfulEntries, ...searchEntries];
 
+    if (tab === "politics") {
+      const unfilteredPoliticsVideos = dedupeVideoItems(
+        allEntries
+          .map((entry) => {
+            const inferredCategory = inferVideoCategory(entry.title, entry.creator, category);
+
+            return {
+              id: entry.videoId,
+              youtubeId: entry.videoId,
+              title: entry.title,
+              creator: entry.creator,
+              category: inferredCategory,
+              orientation: inferVideoOrientation(entry.thumbnailWidth, entry.thumbnailHeight, {
+                title: entry.title,
+                thumbnailUrl: entry.thumbnailUrl,
+                watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+              }),
+              views: 0,
+              likes: 0,
+              comments: 0,
+              thumbnailUrl: entry.thumbnailUrl,
+              publishedAt: entry.publishedAt,
+              watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+              embedUrl: `https://www.youtube-nocookie.com/embed/${entry.videoId}?autoplay=1`,
+              fallback: false,
+            } satisfies VideoFeedItem;
+          })
+          .filter((video) => !isBlockedVideo(video))
+      ).slice(0, 10);
+
+      console.log(
+        "POLITICS RETURNING UNFILTERED TEST VIDEOS",
+        unfilteredPoliticsVideos.map((video) => ({
+          title: video.title,
+          creator: video.creator,
+        }))
+      );
+
+      return Response.json({
+        videos: unfilteredPoliticsVideos,
+        fallback: false,
+        fetchFailed: false,
+      });
+    }
+
     if (allEntries.length === 0) {
-      if (tab === "technology" || tab === "politics") {
+      if (tab === "technology") {
         return Response.json({
           videos: [],
           fallback: false,
           fetchFailed: false,
           message:
-            tab === "politics"
-              ? "No politics videos available right now."
-              : "No technology videos available right now.",
+            "No technology videos available right now.",
         });
       }
 
@@ -1381,12 +1421,11 @@ export async function GET(request: Request) {
       });
     }
 
-    let videos = filterAndSortVideos(allEntries, {
+    const videos = filterAndSortVideos(allEntries, {
       category,
       searchTerm,
       tab:
         tab === "sports" ||
-        tab === "politics" ||
         tab === "news" ||
         tab === "celebrity" ||
         tab === "weather" ||
@@ -1395,32 +1434,14 @@ export async function GET(request: Request) {
           : "all",
     });
 
-    if (tab === "politics" && videos.length === 0 && !usedPoliticsFallback) {
-      const fallbackEntries = await loadPoliticsFallbackEntries();
-      if (fallbackEntries.length > 0) {
-        videos = filterAndSortVideos(fallbackEntries, {
-          category,
-          searchTerm,
-          tab: "politics",
-        });
-      }
-    }
-
-    if (tab === "politics") {
-      console.log("POLITICS VIDEOS FILTERED COUNT", videos.length);
-      console.log("POLITICS VIDEOS FINAL TITLES", videos.map((video) => video.title));
-    }
-
     if (videos.length === 0) {
-      if (tab === "technology" || tab === "politics") {
+      if (tab === "technology") {
         return Response.json({
           videos: [],
           fallback: false,
           fetchFailed: false,
           message:
-            tab === "politics"
-              ? "No politics videos available right now."
-              : "No technology videos available right now.",
+            "No technology videos available right now.",
         });
       }
 

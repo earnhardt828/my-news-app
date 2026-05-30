@@ -127,8 +127,6 @@ export default function VideosPage() {
   const displayedVideos =
     activeTab === "technology"
       ? displayedVideosRaw.filter((video) => isStrictTechnologyVideo(video))
-      : activeTab === "politics"
-        ? displayedVideosRaw.filter((video) => isStrictPoliticsVideo(video))
       : displayedVideosRaw;
   const statusMessage = statusMessages[activeTab];
   const isCurrentTabLoading = tabLoading[activeTab];
@@ -468,6 +466,9 @@ export default function VideosPage() {
           </button>
         ))}
       </div>
+      {activeTab === "politics" ? (
+        <div className="chip chip-accent reels-status">POLITICS TAB RENDERING</div>
+      ) : null}
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
       {isCurrentTabLoading && hasLoadedOnce ? (
         <div className="muted reels-inline-status">Refreshing videos...</div>
