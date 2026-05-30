@@ -436,6 +436,11 @@ export default function VideosPage() {
       {isCurrentTabLoading && hasLoadedOnce ? (
         <div className="muted reels-inline-status">Refreshing videos...</div>
       ) : null}
+      {activeTab === "technology" ? (
+        <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
+          <strong>TECHNOLOGY TAB RENDERING</strong>
+        </div>
+      ) : null}
 
       {isLoading && !hasLoadedOnce ? (
         <div className="loading-state">

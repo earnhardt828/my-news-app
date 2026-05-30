@@ -1284,9 +1284,9 @@ export async function GET(request: Request) {
     }
 
     if (tab === "technology") {
-      console.log("TECHNOLOGY API HIT");
-      const technologyEntries = searchEntries;
-      console.log("TECHNOLOGY RAW COUNT", technologyEntries.length);
+      console.log("TECHNOLOGY TAB API HIT");
+      const technologyEntries = [...successfulEntries, ...searchEntries];
+      console.log("TECHNOLOGY RAW VIDEOS BEFORE FILTER", technologyEntries.length);
       const rawTechnologyVideos = dedupeVideoItems(
         technologyEntries
           .map((entry) => {
@@ -1315,28 +1315,16 @@ export async function GET(request: Request) {
           })
           .filter((video) => !isBlockedVideo(video))
       );
-      console.log("TECHNOLOGY RAW TITLES", rawTechnologyVideos.map((video) => video.title));
-
-      const filteredTechnologyVideos = rawTechnologyVideos
-        .filter((video) => isStrictTechnologyVideo(video))
-        .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
-        .slice(0, 10);
-      const rejectedTechnologyVideos = rawTechnologyVideos.filter(
-        (video) => !isStrictTechnologyVideo(video)
-      );
-
-      console.log("TECHNOLOGY FILTERED COUNT", filteredTechnologyVideos.length);
-      console.log("TECHNOLOGY ACCEPTED TITLES", filteredTechnologyVideos.map((video) => video.title));
-      console.log("TECHNOLOGY REJECTED TITLES", rejectedTechnologyVideos.map((video) => video.title));
-      console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
-      console.log("TECHNOLOGY FINAL TITLES", filteredTechnologyVideos.map((video) => video.title));
+      const testTechnologyVideos = rawTechnologyVideos.slice(0, 10);
+      console.log("TECHNOLOGY RETURNING UNFILTERED TEST VIDEOS");
+      console.log("TECHNOLOGY TEST VIDEO COUNT", testTechnologyVideos.length);
 
       return Response.json({
-        videos: filteredTechnologyVideos,
+        videos: testTechnologyVideos,
         fallback: false,
         fetchFailed: false,
         message:
-          filteredTechnologyVideos.length === 0
+          testTechnologyVideos.length === 0
             ? "No technology videos available right now."
             : undefined,
       });
