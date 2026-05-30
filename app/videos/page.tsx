@@ -121,6 +121,14 @@ export default function VideosPage() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "technology") {
+      return;
+    }
+
+    console.log("TECHNOLOGY RENDER FILTERED COUNT", displayedVideos.length);
+  }, [activeTab, displayedVideos.length]);
+
+  useEffect(() => {
     setReturnState(readVideoReturnState());
   }, []);
 

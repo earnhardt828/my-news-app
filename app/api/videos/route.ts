@@ -91,7 +91,9 @@ const POLITICS_TAB_SEARCH_QUERIES = [
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
   "tech news",
+  "technology news",
   "AI news",
+  "artificial intelligence news",
   "Apple technology",
   "Google AI",
   "Microsoft AI",
@@ -100,6 +102,8 @@ const TECHNOLOGY_TAB_SEARCH_QUERIES = [
   "cybersecurity news",
   "gadget news",
   "semiconductor news",
+  "software news",
+  "startup news",
 ] as const;
 
 function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedItem[] {
@@ -1280,9 +1284,11 @@ export async function GET(request: Request) {
     }
 
     if (tab === "technology") {
-      console.log("TECHNOLOGY RAW COUNT", allEntries.length);
+      console.log("TECHNOLOGY API HIT");
+      const technologyEntries = searchEntries;
+      console.log("TECHNOLOGY RAW COUNT", technologyEntries.length);
       const rawTechnologyVideos = dedupeVideoItems(
-        allEntries
+        technologyEntries
           .map((entry) => {
             const inferredCategory = inferVideoCategory(entry.title, entry.creator, category);
 
@@ -1315,7 +1321,9 @@ export async function GET(request: Request) {
         .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
         .slice(0, 10);
 
+      console.log("TECHNOLOGY FILTERED COUNT", filteredTechnologyVideos.length);
       console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
+      console.log("TECHNOLOGY FINAL TITLES", filteredTechnologyVideos.map((video) => video.title));
 
       return Response.json({
         videos: filteredTechnologyVideos,

@@ -1,7 +1,7 @@
 const TECH_STRONG_CONTEXT_PATTERN =
   /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device)\b/i;
 const TECH_REJECTED_CONTEXT_PATTERN =
-  /\b(politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|war|court|election|local news|world news)\b/i;
+  /\b(politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|war|court|election|local news|world news|movie|music|food|travel)\b/i;
 
 const POLITICS_STRONG_CONTEXT_PATTERN =
   /\b(politics?|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news|washington post politics|new york times politics|npr politics|the hill)\b/i;
