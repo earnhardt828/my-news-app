@@ -8037,7 +8037,7 @@ export default function Home() {
         }
         const supplementalArticles = myNewsCategorySupplementalArticles[category] ?? [];
         const mergedCategoryArticles =
-          category === "NASCAR" || isDedicatedMlbCategory(category)
+          category === "NASCAR" || isDedicatedMlbCategory(category) || category === "Politics"
             ? [...supplementalArticles]
             : dedupeArticlesByContent([
                 ...categorySectionArticles,
@@ -8051,31 +8051,37 @@ export default function Home() {
 
           return isDedicatedMlbCategory(category)
             ? isDedicatedMlbArticle(article, "article")
+            : category === "Politics"
+              ? isStrictPoliticsArticle(article)
             : articleMatchesSelectedCategory(article, category);
         });
 
         const rankedArticles = [...matchingArticles].sort((leftArticle, rightArticle) => {
           const leftScore =
             getArticlePriorityScore(leftArticle) +
-            getCategoryMatchScore(category, [
-              leftArticle.title,
-              leftArticle.description,
-              leftArticle.source,
-              leftArticle.category,
-              leftArticle.url,
-              leftArticle.content,
-            ]) *
+            (category === "Politics"
+              ? (isStrictPoliticsArticle(leftArticle) ? 6 : 0)
+              : getCategoryMatchScore(category, [
+                  leftArticle.title,
+                  leftArticle.description,
+                  leftArticle.source,
+                  leftArticle.category,
+                  leftArticle.url,
+                  leftArticle.content,
+                ])) *
               20;
           const rightScore =
             getArticlePriorityScore(rightArticle) +
-            getCategoryMatchScore(category, [
-              rightArticle.title,
-              rightArticle.description,
-              rightArticle.source,
-              rightArticle.category,
-              rightArticle.url,
-              rightArticle.content,
-            ]) *
+            (category === "Politics"
+              ? (isStrictPoliticsArticle(rightArticle) ? 6 : 0)
+              : getCategoryMatchScore(category, [
+                  rightArticle.title,
+                  rightArticle.description,
+                  rightArticle.source,
+                  rightArticle.category,
+                  rightArticle.url,
+                  rightArticle.content,
+                ])) *
               20;
           return rightScore - leftScore;
         });
@@ -8187,17 +8193,21 @@ export default function Home() {
 
     normalizedSelectedCategories.forEach((category) => {
       const categoryPool =
-        category === "NASCAR" || isDedicatedMlbCategory(category)
+        category === "NASCAR" || isDedicatedMlbCategory(category) || category === "Politics"
           ? (myNewsCategorySupplementalArticles[category] ?? []).filter((article) =>
               isDedicatedMlbCategory(category)
                 ? isDedicatedMlbArticle(article, "lead")
+                : category === "Politics"
+                  ? isStrictPoliticsArticle(article)
                 : articleMatchesSelectedCategory(article, category)
             )
           : dedupeArticlesByContent([
               ...categorySectionArticles,
               ...(myNewsCategorySupplementalArticles[category] ?? []),
             ]).filter((article) =>
-              articleMatchesSelectedCategory(article, category)
+              category === "Politics"
+                ? isStrictPoliticsArticle(article)
+                : articleMatchesSelectedCategory(article, category)
             );
       const visibleSectionArticles =
         myNewsCategorySections.find((section) => section.category === category)?.articles ?? [];
@@ -8379,7 +8389,25 @@ export default function Home() {
           if (category === "Politics") {
             console.log("MY NEWS POLITICS FETCH START");
             const fetchStartedAt = Date.now();
-            const response = await fetch(`/api/videos?tab=politics`);
+            const politicsVideoResponse = await Promise.race([
+              fetch(`/api/videos?tab=politics`),
+              new Promise<Response | null>((resolve) => {
+                window.setTimeout(() => resolve(null), 4500);
+              }),
+            ]);
+
+            if (!politicsVideoResponse) {
+              console.log("POLITICS FETCH TIME MS", Date.now() - fetchStartedAt);
+              if (!isCancelled) {
+                setMyNewsCategoryVideoStatus((prev) => ({
+                  ...prev,
+                  [category]: { loading: false, error: true },
+                }));
+              }
+              return [category, [] as VideoItem[]] as const;
+            }
+
+            const response = politicsVideoResponse;
 
             if (!response.ok) {
               console.log("POLITICS FETCH TIME MS", Date.now() - fetchStartedAt);
@@ -8410,7 +8438,7 @@ export default function Home() {
 
             console.log("POLITICS VIDEO RAW COUNT", mergedVideos.length);
             console.log("POLITICS VIDEO FINAL COUNT", relevantVideos.length);
-            console.log("MY NEWS POLITICS VIDEO COUNT", relevantVideos.length);
+            console.log("POLITICS MY NEWS VIDEO COUNT", relevantVideos.length);
             console.log("POLITICS FETCH TIME MS", Date.now() - fetchStartedAt);
             if (!isCancelled) {
               setMyNewsCategoryVideoStatus((prev) => ({
@@ -8599,6 +8627,27 @@ export default function Home() {
 
       const selectedVideos = selectSourceBalancedVideos(
         matchingVideos.sort((left, right) => {
+          if (category === "Politics") {
+            const preferredSourcePattern =
+              /\b(pbs newshour|cnn|fox news|nbc news|abc news|cbs news|reuters|associated press|ap|politico)\b/i;
+            const localCharlottePattern = /\b(wcnc charlotte|queen city news|charlotte)\b/i;
+            const leftSource = `${left.creator} ${left.title}`;
+            const rightSource = `${right.creator} ${right.title}`;
+            const leftPreferred = preferredSourcePattern.test(leftSource) ? 1 : 0;
+            const rightPreferred = preferredSourcePattern.test(rightSource) ? 1 : 0;
+
+            if (rightPreferred !== leftPreferred) {
+              return rightPreferred - leftPreferred;
+            }
+
+            const leftLocalCharlotte = localCharlottePattern.test(leftSource) ? 1 : 0;
+            const rightLocalCharlotte = localCharlottePattern.test(rightSource) ? 1 : 0;
+
+            if (leftLocalCharlotte !== rightLocalCharlotte) {
+              return leftLocalCharlotte - rightLocalCharlotte;
+            }
+          }
+
           const leftCategoryScore = getCategoryMatchScore(category, [
             left.title,
             left.creator,
@@ -8636,7 +8685,11 @@ export default function Home() {
       }
 
       if (category === "Politics") {
-        console.log("MY NEWS POLITICS VIDEO COUNT", selectedVideos.length);
+        console.log("POLITICS MY NEWS VIDEO COUNT", selectedVideos.length);
+        console.log(
+          "POLITICS VIDEO SOURCE BALANCE",
+          selectedVideos.map((video) => video.creator)
+        );
       }
 
       selectedVideos.forEach((video) => usedVideoIds.add(video.id));

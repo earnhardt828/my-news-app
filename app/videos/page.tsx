@@ -466,9 +466,6 @@ export default function VideosPage() {
           </button>
         ))}
       </div>
-      {activeTab === "politics" ? (
-        <div className="chip chip-accent reels-status">POLITICS TAB RENDERING</div>
-      ) : null}
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
       {isCurrentTabLoading && hasLoadedOnce ? (
         <div className="muted reels-inline-status">Refreshing videos...</div>
