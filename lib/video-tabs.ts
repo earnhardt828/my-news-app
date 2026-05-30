@@ -1,7 +1,6 @@
 export type SharedVideoTab =
   | "news"
   | "sports"
-  | "business"
   | "celebrity"
   | "technology"
   | "politics"
@@ -9,6 +8,7 @@ export type SharedVideoTab =
 
 export const TECH_VIDEOS_DISABLED = true;
 export const CELEBRITY_VIDEOS_DISABLED = true;
+export const AUTO_VIDEOS_DISABLED = true;
 
 export const SHARED_VIDEO_CATEGORIES: Array<{
   label: string;
@@ -27,21 +27,6 @@ export const SHARED_VIDEO_CATEGORIES: Array<{
     value: "sports",
     apiTab: "sports",
     keywords: ["sports", "highlights", "game", "league", "score"],
-  },
-  {
-    label: "Business",
-    value: "business",
-    apiTab: "business",
-    keywords: [
-      "business",
-      "economy",
-      "markets",
-      "stocks",
-      "finance",
-      "earnings",
-      "wall street",
-      "investing",
-    ],
   },
   {
     label: "Celebrity",
@@ -123,10 +108,6 @@ export function resolveVideoCategoryForMyNewsCategory(category: string): SharedV
 
   if (normalized === "politics") {
     return "politics";
-  }
-
-  if (normalized === "business") {
-    return "business";
   }
 
   if (normalized === "world") {

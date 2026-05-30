@@ -4,6 +4,7 @@ export const VIDEO_RETURN_PENDING_KEY = "graffiti-video-return-pending";
 import type { SharedVideoTab } from "./video-tabs";
 
 export {
+  AUTO_VIDEOS_DISABLED,
   CELEBRITY_VIDEOS_DISABLED,
   resolveVideoCategoryForMyNewsCategory,
   SHARED_VIDEO_CATEGORIES,
