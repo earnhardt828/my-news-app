@@ -438,7 +438,7 @@ export default function VideosPage() {
       ) : null}
       {activeTab === "technology" ? (
         <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-          <strong>TECHNOLOGY TAB RENDERING</strong>
+          <strong>TECHNOLOGY SOURCE-BASED FEED ACTIVE</strong>
         </div>
       ) : null}
 

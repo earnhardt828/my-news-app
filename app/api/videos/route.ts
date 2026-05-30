@@ -91,18 +91,21 @@ const POLITICS_TAB_SEARCH_QUERIES = [
   "Politico video",
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
-  "tech",
-  "technology",
-  "AI",
-  "Apple",
-  "Google",
-  "Microsoft",
-  "OpenAI",
-  "Nvidia",
-  "cybersecurity",
-  "The Verge",
-  "TechCrunch",
-  "CNET",
+  "The Verge latest",
+  "TechCrunch latest",
+  "Wired technology",
+  "CNET technology",
+  "Engadget latest",
+  "Ars Technica latest",
+  "Bloomberg Technology",
+  "CNBC Tech",
+  "OpenAI news",
+  "Nvidia AI news",
+  "Apple technology",
+  "Google AI",
+  "Microsoft AI",
+  "cybersecurity news",
+  "semiconductor news",
 ] as const;
 
 function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedItem[] {
@@ -1283,9 +1286,9 @@ export async function GET(request: Request) {
     }
 
     if (tab === "technology") {
-      console.log("TECHNOLOGY COPIED POLITICS PATH");
+      console.log("TECHNOLOGY SOURCE-BASED FEED ACTIVE");
       console.log("TECHNOLOGY QUERY USED", searchTerms);
-      const technologyEntries = allEntries;
+      const technologyEntries = searchEntries;
       const rawTechnologyVideos = dedupeVideoItems(
         technologyEntries
           .map((entry) => {
@@ -1314,33 +1317,21 @@ export async function GET(request: Request) {
           })
           .filter((video) => !isBlockedVideo(video))
       );
-      const politicsRejectedTechnologyVideos = rawTechnologyVideos.filter((video) => {
-        const haystack = [
-          video.title,
-          video.creator,
-          video.category,
-          video.watchUrl,
-          video.thumbnailUrl,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        const hasPoliticsContext =
-          /\b(politics?|political|trump|biden|white house|congress|senate|supreme court|election|campaign|government|policy|president)\b/.test(
-            haystack
-          );
-
-        return hasPoliticsContext && !isTechnologyTabVideo(video);
-      });
       const filteredTechnologyVideos = rawTechnologyVideos
         .filter((video) => isTechnologyTabVideo(video))
         .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
         .slice(0, 10);
       console.log("TECHNOLOGY RAW COUNT", rawTechnologyVideos.length);
+      console.log("TECHNOLOGY RAW TITLES", rawTechnologyVideos.map((video) => video.title));
       console.log(
-        "TECHNOLOGY POLITICS REJECTED",
-        politicsRejectedTechnologyVideos.map((video) => video.title)
+        "TECHNOLOGY ACCEPTED TITLES",
+        filteredTechnologyVideos.map((video) => video.title)
+      );
+      console.log(
+        "TECHNOLOGY REJECTED TITLES",
+        rawTechnologyVideos
+          .filter((video) => !isTechnologyTabVideo(video))
+          .map((video) => video.title)
       );
       console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
       console.log("TECHNOLOGY FINAL TITLES", filteredTechnologyVideos.map((video) => video.title));

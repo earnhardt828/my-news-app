@@ -2,7 +2,6 @@ import {
   hasStrictPoliticsContext,
   hasStrictTechnologyContext,
   hasTechnologyTabContext,
-  hasTechnologyTabTrustedSourceContext,
   hasStrictWorldContext,
 } from "./category-matching";
 
@@ -39,16 +38,6 @@ export function isStrictTechnologyVideo(video: FilterableVideo) {
 
 export function isTechnologyTabVideo(video: FilterableVideo) {
   return hasTechnologyTabContext([
-    video.title,
-    video.creator,
-    video.category,
-    video.watchUrl,
-    video.thumbnailUrl,
-  ]);
-}
-
-export function isTechnologyTrustedSourceVideo(video: FilterableVideo) {
-  return hasTechnologyTabTrustedSourceContext([
     video.title,
     video.creator,
     video.category,
@@ -95,6 +84,14 @@ export function getTechnologyVideoScore(video: FilterableVideo) {
 
   if (/(technology|tech|developer|device launch|chip|robot)/.test(haystack)) {
     score += 90;
+  }
+
+  if (
+    /(the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|marques brownlee|mkbhd|linus tech tips|wsj tech)/.test(
+      haystack
+    )
+  ) {
+    score += 140;
   }
 
   if (video.category === "Tech") {

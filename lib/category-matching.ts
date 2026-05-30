@@ -3,13 +3,17 @@ const TECH_STRONG_CONTEXT_PATTERN =
 const TECH_REJECTED_CONTEXT_PATTERN =
   /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|recipe|travel|weather forecast|movie gossip|music video)\b/i;
 const TECH_TAB_STRONG_CONTEXT_PATTERN =
-  /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device|the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech)\b/i;
+  /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device|the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|marques brownlee|mkbhd|linus tech tips|wsj tech)\b/i;
 const TECH_TAB_TRUSTED_SOURCE_PATTERN =
-  /\b(the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech)\b/i;
+  /\b(the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|marques brownlee|mkbhd|linus tech tips|wsj tech)\b/i;
 const TECH_TAB_REJECTED_CONTEXT_PATTERN =
   /\b(espn|sports?|nba|nfl|mlb|nhl|mls|soccer|basketball|football|baseball)\b/i;
 const TECH_TAB_POLITICS_CONTEXT_PATTERN =
   /\b(politics?|political|trump|biden|white house|congress|senate|supreme court|election|campaign|government|policy|president)\b/i;
+const TECH_TAB_OTHER_REJECTED_CONTEXT_PATTERN =
+  /\b(court|crime|celebrity|weather|world news)\b/i;
+const TECH_TAB_COMPANY_TOPIC_OVERRIDE_PATTERN =
+  /\b(apple|google|microsoft|openai|nvidia|ai|artificial intelligence|cybersecurity|chip|semiconductor)\b/i;
 
 const POLITICS_STRONG_CONTEXT_PATTERN =
   /\b(politics?|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news|washington post politics|new york times politics|npr politics|the hill)\b/i;
@@ -50,12 +54,18 @@ export function hasTechnologyTabContext(values: Array<string | null | undefined>
   const hasStrongContext = TECH_TAB_STRONG_CONTEXT_PATTERN.test(haystack);
   const hasRejectedSportsContext = TECH_TAB_REJECTED_CONTEXT_PATTERN.test(haystack);
   const hasPoliticsContext = TECH_TAB_POLITICS_CONTEXT_PATTERN.test(haystack);
+  const hasOtherRejectedContext = TECH_TAB_OTHER_REJECTED_CONTEXT_PATTERN.test(haystack);
+  const hasCompanyTopicOverride = TECH_TAB_COMPANY_TOPIC_OVERRIDE_PATTERN.test(haystack);
 
   if (hasRejectedSportsContext) {
     return false;
   }
 
-  if (hasPoliticsContext && !hasStrongContext) {
+  if (hasPoliticsContext && !hasCompanyTopicOverride) {
+    return false;
+  }
+
+  if (hasOtherRejectedContext && !hasCompanyTopicOverride) {
     return false;
   }
 
