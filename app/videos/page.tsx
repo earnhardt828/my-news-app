@@ -20,6 +20,11 @@ import {
   type VideoApiItem,
   type VideoItem,
 } from "../../lib/video-feed";
+import {
+  isStrictPoliticsVideo,
+  isStrictTechnologyVideo,
+  isStrictWorldVideo,
+} from "../../lib/video-filters";
 
 const actionIconProps = {
   width: 20,
@@ -32,73 +37,6 @@ const actionIconProps = {
   strokeLinejoin: "round" as const,
   "aria-hidden": true,
 };
-
-function isStrictTechnologyVideo(video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">) {
-  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
-    video.thumbnailUrl ?? ""
-  }`.toLowerCase();
-
-  const hasStrongTechContext =
-    /\b(technology|tech|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device)\b/.test(
-      haystack
-    );
-  const hasRejectedContext =
-    /\b(politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|war|court|election|local news|world news)\b/.test(
-      haystack
-    );
-
-  if (hasRejectedContext && !hasStrongTechContext) {
-    return false;
-  }
-
-  return hasStrongTechContext;
-}
-
-function isStrictPoliticsVideo(
-  video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">
-) {
-  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
-    video.thumbnailUrl ?? ""
-  }`.toLowerCase();
-
-  const hasPoliticsContext =
-    /\b(politics?|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news)\b/.test(
-      haystack
-    );
-  const hasRejectedContext =
-    /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather forecast|movie|music|gaming)\b/.test(
-      haystack
-    );
-
-  if (hasRejectedContext && !hasPoliticsContext) {
-    return false;
-  }
-
-  return hasPoliticsContext;
-}
-
-function isStrictWorldVideo(
-  video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">
-) {
-  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
-    video.thumbnailUrl ?? ""
-  }`.toLowerCase();
-
-  const hasWorldContext =
-    /\b(world news|international|global|foreign affairs|europe|middle east|asia|africa|united nations|bbc|reuters|associated press|ap\b|al jazeera|dw news|france 24|sky news|cnn international)\b/.test(
-      haystack
-    );
-  const hasRejectedContext =
-    /\b(local sports|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|recipe|travel vlog|gaming|movie|music gossip|weather forecast)\b/.test(
-      haystack
-    );
-
-  if (hasRejectedContext && !hasWorldContext) {
-    return false;
-  }
-
-  return hasWorldContext;
-}
 
 type VideoTab = SharedVideoTab;
 
@@ -173,36 +111,6 @@ export default function VideosPage() {
         : "news";
   const requestedVideoId = searchParams.get("video");
   const [returnState, setReturnState] = useState<VideoReturnState | null>(null);
-
-  useEffect(() => {
-    console.log("VIDEO PAGE ACTIVE TABS", SHARED_VIDEO_CATEGORIES.map((tab) => tab.value));
-  }, []);
-
-  useEffect(() => {
-    if (activeTab !== "technology") {
-      if (activeTab !== "politics" && activeTab !== "world") {
-        return;
-      }
-    }
-
-    if (activeTab === "technology") {
-      console.log("TECHNOLOGY RENDER RAW COUNT", displayedVideosRaw.length);
-      console.log("TECHNOLOGY RENDER STRICT COUNT", displayedVideos.length);
-      console.log("TECHNOLOGY RENDER RAW TITLES", displayedVideosRaw.map((video) => video.title));
-      console.log("TECHNOLOGY RENDER FILTERED TITLES", displayedVideos.map((video) => video.title));
-      console.log("TECHNOLOGY RENDER FINAL COUNT", displayedVideos.length);
-      return;
-    }
-
-    if (activeTab === "world") {
-      console.log("WORLD VIDEO TAB ACTIVE");
-      console.log("WORLD API RAW COUNT", displayedVideosRaw.length);
-      console.log("WORLD API STRICT COUNT", displayedVideos.length);
-      return;
-    }
-
-    console.log("POLITICS VIDEO TAB ACTIVE");
-  }, [activeTab, displayedVideos, displayedVideosRaw]);
 
   useEffect(() => {
     setReturnState(readVideoReturnState());

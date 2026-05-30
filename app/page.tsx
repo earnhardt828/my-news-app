@@ -1,6 +1,7 @@
 "use client";
 
 import LoadingScreen from "./components/loading-screen";
+import CategoryVideoRow from "./components/category-video-row";
 import LargeImageArticleCard from "./components/large-image-article-card";
 import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
@@ -41,6 +42,11 @@ import {
   consumePendingVideoReturnState,
   saveVideoReturnState,
 } from "../lib/video-navigation";
+import {
+  hasStrictPoliticsContext,
+  hasStrictTechnologyContext,
+  hasStrictWorldContext,
+} from "../lib/category-matching";
 import {
   FAVORITE_TEAMS_BY_LEAGUE,
   TEAM_PICKER_LEAGUES,
@@ -84,6 +90,11 @@ import {
   type SharedVideoTab,
 } from "../lib/video-navigation";
 import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../lib/video-feed";
+import {
+  isStrictPoliticsVideo,
+  isStrictTechnologyVideo,
+  isStrictWorldVideo,
+} from "../lib/video-filters";
 
 const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
@@ -3561,67 +3572,6 @@ function isStrictMlbVideo(video: VideoItem) {
   return getStrictMlbVideoRejectionReason(video) === null;
 }
 
-const TECH_STRONG_CONTEXT_PATTERN =
-  /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|semiconductor|robot|app|device)\b/i;
-const TECH_REJECTED_CONTEXT_PATTERN =
-  /\b(world news|politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|war|court|election|local news)\b/i;
-const POLITICS_STRONG_CONTEXT_PATTERN =
-  /\b(politics?|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news|washington post politics|new york times politics|npr politics|the hill)\b/i;
-const POLITICS_REJECTED_CONTEXT_PATTERN =
-  /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather forecast|movie|music|gaming)\b/i;
-const WORLD_STRONG_CONTEXT_PATTERN =
-  /\b(world news|international|global|foreign affairs|europe|middle east|asia|africa|united nations|bbc|reuters|associated press|ap\b|al jazeera|dw news|france 24|sky news|cnn international|cnn world|reuters world|ap world|bbc world|npr world|new york times world|washington post world)\b/i;
-const WORLD_REJECTED_CONTEXT_PATTERN =
-  /\b(local sports|sportscenter|nfl|nba|nhl|mlb|mls|celebrity|hollywood|recipe|travel vlog|gaming|movie|music gossip|weather forecast)\b/i;
-
-function hasStrictTechnologyContext(values: Array<string | null | undefined>) {
-  const haystack = values.filter(Boolean).join(" ").toLowerCase();
-  const hasStrongContext = TECH_STRONG_CONTEXT_PATTERN.test(haystack);
-  const hasRejectedContext = TECH_REJECTED_CONTEXT_PATTERN.test(haystack);
-
-  if (!hasStrongContext) {
-    return false;
-  }
-
-  if (hasRejectedContext && !hasStrongContext) {
-    return false;
-  }
-
-  return true;
-}
-
-function hasStrictPoliticsContext(values: Array<string | null | undefined>) {
-  const haystack = values.filter(Boolean).join(" ").toLowerCase();
-  const hasStrongContext = POLITICS_STRONG_CONTEXT_PATTERN.test(haystack);
-  const hasRejectedContext = POLITICS_REJECTED_CONTEXT_PATTERN.test(haystack);
-
-  if (!hasStrongContext) {
-    return false;
-  }
-
-  if (hasRejectedContext && !hasStrongContext) {
-    return false;
-  }
-
-  return true;
-}
-
-function hasStrictWorldContext(values: Array<string | null | undefined>) {
-  const haystack = values.filter(Boolean).join(" ").toLowerCase();
-  const hasStrongContext = WORLD_STRONG_CONTEXT_PATTERN.test(haystack);
-  const hasRejectedContext = WORLD_REJECTED_CONTEXT_PATTERN.test(haystack);
-
-  if (!hasStrongContext) {
-    return false;
-  }
-
-  if (hasRejectedContext && !hasStrongContext) {
-    return false;
-  }
-
-  return true;
-}
-
 function isStrictTechnologyArticle(article: Article) {
   return hasStrictTechnologyContext([
     article.title,
@@ -3652,36 +3602,6 @@ function isStrictWorldArticle(article: Article) {
     article.category,
     article.url,
     article.content,
-  ]);
-}
-
-function isStrictTechnologyVideo(video: VideoItem) {
-  return hasStrictTechnologyContext([
-    video.title,
-    video.creator,
-    video.category,
-    video.watchUrl,
-    video.thumbnailUrl,
-  ]);
-}
-
-function isStrictPoliticsVideo(video: VideoItem) {
-  return hasStrictPoliticsContext([
-    video.title,
-    video.creator,
-    video.category,
-    video.watchUrl,
-    video.thumbnailUrl,
-  ]);
-}
-
-function isStrictWorldVideo(video: VideoItem) {
-  return hasStrictWorldContext([
-    video.title,
-    video.creator,
-    video.category,
-    video.watchUrl,
-    video.thumbnailUrl,
   ]);
 }
 
@@ -11547,14 +11467,11 @@ export default function Home() {
 
   const renderMyNewsCategoryVideosRow = (
     category: string,
-    categoryVideos: VideoItem[],
-    options?: { sourceVariable?: string }
+    categoryVideos: VideoItem[]
   ) => {
-    const isMlbRow = isDedicatedMlbCategory(category);
     const isTechnologyRow = normalizeSelectedCategoryName(category) === "Tech";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const isWorldRow = normalizeSelectedCategoryName(category) === "World";
-    const videoStatus = myNewsCategoryVideoStatus[category] ?? { loading: false, error: false };
     const videosToRender = isDedicatedMlbCategory(category)
       ? categoryVideos.filter((video) => isDedicatedMlbVideo(video))
       : isTechnologyRow
@@ -11565,121 +11482,27 @@ export default function Home() {
         ? categoryVideos.filter((video) => isStrictWorldVideo(video))
       : categoryVideos;
 
-    if (isMlbRow) {
-      console.log("RENDERING MLB VIDEO ROW");
-      console.log(
-        "VIDEO SOURCE VARIABLE:",
-        options?.sourceVariable ?? "myNewsCategoryVideoSections[section.category]"
-      );
-      console.log("VIDEO TITLES:", videosToRender.map((video) => video.title));
-      console.log("MLB VIDEOS RENDERED COUNT", videosToRender.length);
-    }
-
-    if (isTechnologyRow) {
-      console.log("MY NEWS TECH VIDEO FEED USED", options?.sourceVariable ?? "/api/videos?tab=technology");
-      console.log("MY NEWS TECH VIDEO COUNT", videosToRender.length);
-      console.log("MY NEWS TECH VIDEO TITLES", videosToRender.map((video) => video.title));
-      console.log("MY NEWS TECH RENDER COUNT", videosToRender.length);
-      console.log("TECHNOLOGY RENDER RAW TITLES", categoryVideos.map((video) => video.title));
-      console.log("TECHNOLOGY RENDER FILTERED TITLES", videosToRender.map((video) => video.title));
-      console.log("TECHNOLOGY RENDER FINAL COUNT", videosToRender.length);
-    }
-
     if (!isTechnologyRow && !isPoliticsRow && !isWorldRow && videosToRender.length === 0) {
       return null;
     }
 
-    const label = `${getCategoryLabel(category)} Videos`;
-    const normalizedCategoryKey = category.toLowerCase().replace(/\s+/g, "-");
-
     return (
-      <section className="home-section-block home-section-plain quick-watch-row mynews-category-videos-row">
-        <div className="home-section-header">
-          <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">{label}</strong>
-          </div>
-        </div>
-        {isMlbRow ? (
-          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-            <strong>MY NEWS MLB VIDEOS</strong>
-            <span>MLB TEST VIDEO RENDER PATH</span>
-          </div>
-        ) : null}
-        {isTechnologyRow && videosToRender.length === 0 ? (
-          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-            <strong>No technology videos available right now.</strong>
-          </div>
-        ) : null}
-        {isPoliticsRow && videosToRender.length === 0 ? (
-          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-            <strong>
-              {videoStatus.loading
-                ? "Loading politics videos..."
-                : videoStatus.error
-                  ? "Could not load politics videos right now."
-                  : "No politics videos available right now."}
-            </strong>
-          </div>
-        ) : null}
-        {isWorldRow && videosToRender.length === 0 ? (
-          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-            <strong>
-              {videoStatus.loading
-                ? "Loading world videos..."
-                : videoStatus.error
-                  ? "No world videos available right now."
-                  : "No world videos available right now."}
-            </strong>
-          </div>
-        ) : null}
-        <div className="quick-watch-scroll" role="list" aria-label={label}>
-          {videosToRender.map((video) => {
-            if (isMlbRow) {
-              console.log("MLB RENDERED VIDEO CARD TITLE", video.title);
-            }
-
-            return (
-              <div
-                key={`mynews-category-video-${normalizedCategoryKey}-${video.id}`}
-                className="quick-watch-item"
-                role="listitem"
-              >
-                <VideoFeedCard
-                  video={video}
-                  isAutoplaying={
-                    (isTechnologyRow
-                      ? activeMyNewsTechVideoKey ===
-                        `mynews-category-${normalizedCategoryKey}:${video.id}`
-                      : autoplayTrendingVideoKeys.includes(
-                          `mynews-category-${normalizedCategoryKey}:${video.id}`
-                        )) && !video.fallback
-                  }
-                  onToggleLike={handleToggleVideoLike}
-                  onToggleSave={handleToggleVideoSave}
-                  onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                  onOpenPlayer={(videoId) =>
-                    handleOpenFeedVideo(videoId, resolveMyNewsCategoryVideoTab(category))
-                  }
-                  frameRef={(node) => {
-                    trendingVideoFrameRefs.current[
-                      `mynews-category-${normalizedCategoryKey}:${video.id}`
-                    ] = node;
-                  }}
-                  autoplayKey={`mynews-category-${normalizedCategoryKey}:${video.id}`}
-                  previewDurationMs={null}
-                  label={label}
-                  hideActions
-                  useRelativeTime
-                  className="video-card-inline quick-watch-video-card"
-                  variant="article"
-                  useUniformTallFrame={isMlbRow}
-                  useUniformWideFrame={isTechnologyRow}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      <CategoryVideoRow
+        category={category}
+        videos={videosToRender}
+        videoStatus={myNewsCategoryVideoStatus[category]}
+        activeTechnologyVideoKey={activeMyNewsTechVideoKey}
+        autoplayTrendingVideoKeys={autoplayTrendingVideoKeys}
+        onToggleLike={handleToggleVideoLike}
+        onToggleSave={handleToggleVideoSave}
+        onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+        onOpenPlayer={(videoId, nextCategory) =>
+          handleOpenFeedVideo(videoId, resolveMyNewsCategoryVideoTab(nextCategory))
+        }
+        setFrameRef={(autoplayKey, node) => {
+          trendingVideoFrameRefs.current[autoplayKey] = node;
+        }}
+      />
     );
   };
 
@@ -14080,12 +13903,7 @@ export default function Home() {
                         section.category,
                         isDedicatedMlbSection
                           ? dedicatedMlbVideos
-                          : myNewsCategoryVideoSections[section.category] ?? [],
-                        {
-                          sourceVariable: isDedicatedMlbSection
-                            ? "myNewsCategorySupplementalVideos[section.category]"
-                            : "myNewsCategoryVideoSections[section.category]",
-                        }
+                          : myNewsCategoryVideoSections[section.category] ?? []
                       )}
 
                       {index < filteredSections.length - 1
