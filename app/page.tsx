@@ -183,6 +183,32 @@ const MY_NEWS_BUSINESS_ARTICLE_QUERIES = [
   "Yahoo Finance",
   "stock market news",
 ] as const;
+const MY_NEWS_WEATHER_ARTICLE_QUERIES = [
+  "Weather Channel",
+  "Fox Weather",
+  "NOAA weather",
+  "AccuWeather news",
+  "weather news",
+  "severe weather",
+  "hurricane news",
+  "tornado news",
+  "winter storm news",
+  "climate weather impacts",
+  "Reuters weather",
+  "AP weather",
+] as const;
+const MY_NEWS_TRAVEL_ARTICLE_QUERIES = [
+  "travel news",
+  "travel + leisure",
+  "Conde Nast Traveler",
+  "Lonely Planet",
+  "airline news",
+  "hotel news",
+  "tourism news",
+  "destination travel",
+  "Reuters travel",
+  "AP travel",
+] as const;
 const MY_NEWS_GOLF_ARTICLE_QUERIES = [
   "golf news",
   "PGA Tour news",
@@ -397,6 +423,7 @@ const NFL_VIDEOS_DISABLED = true;
 const NHL_VIDEOS_DISABLED = true;
 const MLS_VIDEOS_DISABLED = true;
 const COLLEGE_BASKETBALL_VIDEOS_DISABLED = true;
+const NASCAR_VIDEOS_DISABLED = true;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
 function buildNhlFallbackVideos(): VideoItem[] {
@@ -1674,6 +1701,72 @@ async function getBusinessArticles() {
   return dedupeArticlesByContent(
     payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
   ).filter((article) => isStrictBusinessArticle(article));
+}
+
+async function getWeatherArticles() {
+  const payloads = await Promise.allSettled(
+    MY_NEWS_WEATHER_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validWeatherArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictWeatherArticle(article));
+
+  console.log("WEATHER ARTICLE FINAL COUNT", validWeatherArticles.length);
+  return validWeatherArticles;
+}
+
+async function getTravelArticles() {
+  const payloads = await Promise.allSettled(
+    MY_NEWS_TRAVEL_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validTravelArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictTravelArticle(article));
+
+  console.log("TRAVEL ARTICLE FINAL COUNT", validTravelArticles.length);
+  return validTravelArticles;
 }
 
 async function getAutoArticles() {
@@ -4116,6 +4209,86 @@ function isStrictWorldArticle(article: Article) {
   ]);
 }
 
+function isStrictWeatherArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasWeatherTerms =
+    /\b(weather|storm|hurricane|tornado|forecast|flood|heat wave|cold front|noaa|severe weather|winter storm)\b/.test(
+      haystack
+    );
+  const hasWeatherSourceTerms =
+    /\b(weather channel|fox weather|noaa weather|accuweather|reuters weather|ap weather)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(local politics|celebrity|hollywood|sports|movie|music)\b/.test(haystack);
+  const hasConditionalRejectedTerms = /\b(politics|election|campaign|government|science)\b/.test(haystack);
+  const hasWeatherOverride =
+    /\b(weather|storm|hurricane|tornado|forecast|flood|heat wave|cold front|noaa|severe weather|winter storm)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms) {
+    return false;
+  }
+
+  if (hasConditionalRejectedTerms && !hasWeatherOverride) {
+    return false;
+  }
+
+  return hasWeatherTerms || hasWeatherSourceTerms;
+}
+
+function isStrictTravelArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasTravelTerms =
+    /\b(travel|tourism|airline|destination|vacation|hotel|cruise|airport|tourism industry)\b/.test(
+      haystack
+    );
+  const hasTravelSourceTerms =
+    /\b(travel \+ leisure|conde nast traveler|lonely planet|reuters travel|ap travel)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(celebrity|gossip|food|recipe|politics|election|campaign)\b/.test(haystack);
+  const hasConditionalRejectedTerms = /\b(business|economy|finance)\b/.test(haystack);
+  const hasTravelOverride =
+    /\b(travel|tourism|airline|destination|vacation|hotel|cruise|airport|tourism industry)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms) {
+    return false;
+  }
+
+  if (hasConditionalRejectedTerms && !hasTravelOverride) {
+    return false;
+  }
+
+  return hasTravelTerms || hasTravelSourceTerms;
+}
+
 function isStrictNflArticle(article: Article) {
   const haystack = [
     article.title,
@@ -4640,6 +4813,42 @@ function getWorldLargeCardSelection(articles: Article[]) {
     title: selectedCandidate?.article.title ?? null,
     source: selectedCandidate?.article.source ?? null,
     imageUrl: selectedCandidate?.imageUrl ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getWeatherLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictWeather: isStrictWeatherArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictWeather && candidate.image);
+
+  console.log("WEATHER LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getTravelLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictTravel: isStrictTravelArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictTravel && candidate.image);
+
+  console.log("TRAVEL LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
   });
 
   return selectedCandidate?.article ?? null;
@@ -9004,6 +9213,10 @@ export default function Home() {
           ? "dedicated-mlb"
           : category === "NASCAR"
             ? "dedicated-nascar"
+            : category === "Weather"
+              ? "dedicated-weather"
+            : category === "Travel"
+              ? "dedicated-travel"
             : category === "NFL"
               ? "dedicated-nfl"
             : category === "NHL"
@@ -9032,6 +9245,8 @@ export default function Home() {
         const supplementalArticles = myNewsCategorySupplementalArticles[category] ?? [];
         const mergedCategoryArticles =
           category === "NASCAR" ||
+          category === "Weather" ||
+          category === "Travel" ||
           isDedicatedMlbCategory(category) ||
           category === "NFL" ||
           category === "NHL" ||
@@ -9056,6 +9271,12 @@ export default function Home() {
 
           return isDedicatedMlbCategory(category)
             ? isDedicatedMlbArticle(article, "article")
+            : category === "NASCAR"
+              ? articleMatchesSelectedCategory(article, "NASCAR")
+            : category === "Weather"
+              ? isStrictWeatherArticle(article)
+            : category === "Travel"
+              ? isStrictTravelArticle(article)
             : category === "NFL"
               ? isStrictNflArticle(article)
             : category === "NHL"
@@ -9086,6 +9307,10 @@ export default function Home() {
             getArticlePriorityScore(leftArticle) +
             (category === "Sports"
               ? (isBroadSportsArticle(leftArticle) && !isSportsBettingAd(leftArticle) ? 6 : 0)
+              : category === "Weather"
+                ? (isStrictWeatherArticle(leftArticle) ? 6 : 0)
+              : category === "Travel"
+                ? (isStrictTravelArticle(leftArticle) ? 6 : 0)
               : category === "NFL"
                 ? (isStrictNflArticle(leftArticle) ? 6 : 0)
               : category === "NHL"
@@ -9119,6 +9344,10 @@ export default function Home() {
             getArticlePriorityScore(rightArticle) +
             (category === "Sports"
               ? (isBroadSportsArticle(rightArticle) && !isSportsBettingAd(rightArticle) ? 6 : 0)
+              : category === "Weather"
+                ? (isStrictWeatherArticle(rightArticle) ? 6 : 0)
+              : category === "Travel"
+                ? (isStrictTravelArticle(rightArticle) ? 6 : 0)
               : category === "NFL"
                 ? (isStrictNflArticle(rightArticle) ? 6 : 0)
               : category === "NHL"
@@ -9172,6 +9401,8 @@ export default function Home() {
             section.category === "College Basketball" ||
             section.category === "Golf" ||
             section.category === "Science" ||
+            section.category === "Weather" ||
+            section.category === "Travel" ||
             section.category === "Sports" ||
             section.category === "Politics" ||
             section.category === "World") &&
@@ -9297,6 +9528,8 @@ export default function Home() {
     normalizedSelectedCategories.forEach((category) => {
       const categoryPool =
         category === "NASCAR" ||
+        category === "Weather" ||
+        category === "Travel" ||
         isDedicatedMlbCategory(category) ||
         category === "NFL" ||
         category === "NHL" ||
@@ -9311,6 +9544,12 @@ export default function Home() {
           ? (myNewsCategorySupplementalArticles[category] ?? []).filter((article) =>
               isDedicatedMlbCategory(category)
                 ? isDedicatedMlbArticle(article, "lead")
+                : category === "NASCAR"
+                  ? articleMatchesSelectedCategory(article, "NASCAR")
+                : category === "Weather"
+                  ? isStrictWeatherArticle(article)
+                : category === "Travel"
+                  ? isStrictTravelArticle(article)
                 : category === "NFL"
                   ? isStrictNflArticle(article)
                 : category === "NHL"
@@ -9341,6 +9580,10 @@ export default function Home() {
             ]).filter((article) =>
               category === "Business"
                 ? isStrictBusinessArticle(article)
+              : category === "Weather"
+                ? isStrictWeatherArticle(article)
+              : category === "Travel"
+                ? isStrictTravelArticle(article)
               : category === "NFL"
                 ? isStrictNflArticle(article)
               : category === "NHL"
@@ -9371,6 +9614,22 @@ export default function Home() {
         leadMap[category] = {
           article: nascarSelection?.article ?? null,
           imageSrcOverride: nascarSelection?.imageSrc ?? null,
+        };
+        return;
+      }
+
+      if (category === "Weather") {
+        leadMap[category] = {
+          article: getWeatherLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
+      if (category === "Travel") {
+        leadMap[category] = {
+          article: getTravelLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
         };
         return;
       }
@@ -9525,6 +9784,8 @@ export default function Home() {
                 loading:
                   category === "Auto" ||
                   category === "Business" ||
+                  category === "Weather" ||
+                  category === "Travel" ||
                   category === "NHL" ||
                   category === "MLS" ||
                   category === "College Football" ||
@@ -9544,6 +9805,8 @@ export default function Home() {
         !normalizedSelectedCategories.includes("Auto") &&
         !normalizedSelectedCategories.includes("Business") &&
         !normalizedSelectedCategories.includes("NASCAR") &&
+        !normalizedSelectedCategories.includes("Weather") &&
+        !normalizedSelectedCategories.includes("Travel") &&
         !normalizedSelectedCategories.includes("MLB") &&
         !normalizedSelectedCategories.includes("NHL") &&
         !normalizedSelectedCategories.includes("MLS") &&
@@ -9573,6 +9836,22 @@ export default function Home() {
               console.log("NASCAR ARTICLE RAW COUNT", validNascarArticles.length);
               console.log("NASCAR ARTICLE VALID COUNT", validNascarArticles.length);
               return ["NASCAR", validNascarArticles] as const;
+            })
+          );
+        }
+
+        if (normalizedSelectedCategories.includes("Weather")) {
+          articleTasks.push(
+            getWeatherArticles().then((validWeatherArticles) => {
+              return ["Weather", validWeatherArticles] as const;
+            })
+          );
+        }
+
+        if (normalizedSelectedCategories.includes("Travel")) {
+          articleTasks.push(
+            getTravelArticles().then((validTravelArticles) => {
+              return ["Travel", validTravelArticles] as const;
             })
           );
         }
@@ -12897,6 +13176,7 @@ export default function Home() {
     const isNhlRow = normalizeSelectedCategoryName(category) === "NHL";
     const isMlsRow = normalizeSelectedCategoryName(category) === "MLS";
     const isCollegeBasketballRow = normalizeSelectedCategoryName(category) === "College Basketball";
+    const isNascarRow = normalizeSelectedCategoryName(category) === "NASCAR";
     const isCelebrityRow = normalizeSelectedCategoryName(category) === "Celebrity";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const isWorldRow = normalizeSelectedCategoryName(category) === "World";
@@ -12904,6 +13184,10 @@ export default function Home() {
       return null;
     }
     if (CELEBRITY_VIDEOS_DISABLED && isCelebrityRow) {
+      return null;
+    }
+    if (isNascarRow && NASCAR_VIDEOS_DISABLED) {
+      console.log("NASCAR VIDEOS DISABLED");
       return null;
     }
     if (isMlbRow && MLB_VIDEOS_DISABLED) {
@@ -15187,6 +15471,8 @@ export default function Home() {
                   const isCollegeBasketballSection = section.category === "College Basketball";
                   const isGolfSection = section.category === "Golf";
                   const isScienceSection = section.category === "Science";
+                  const isWeatherSection = section.category === "Weather";
+                  const isTravelSection = section.category === "Travel";
                   const isSportsSection = section.category === "Sports";
                   const isPoliticsSection = section.category === "Politics";
                   const isWorldSection = section.category === "World";
@@ -15351,6 +15637,8 @@ export default function Home() {
                                 isCollegeBasketballSection ||
                                 isGolfSection ||
                                 isScienceSection ||
+                                isWeatherSection ||
+                                isTravelSection ||
                                 isSportsSection ||
                                 isPoliticsSection ||
                                 isWorldSection) &&
@@ -15372,6 +15660,10 @@ export default function Home() {
                                               ? "Loading golf stories..."
                                               : isScienceSection
                                                 ? "Loading science stories..."
+                                                : isWeatherSection
+                                                  ? "Loading weather stories..."
+                                                  : isTravelSection
+                                                    ? "Loading travel stories..."
                                     : isSportsSection
                                       ? "Loading sports stories..."
                                       : isWorldSection
