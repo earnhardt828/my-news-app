@@ -63,6 +63,17 @@ const POLITICS_TAB_SEARCH_QUERIES = [
   "Supreme Court latest",
   "election latest",
 ] as const;
+const POLITICS_FALLBACK_NEWS_QUERIES = [
+  "politics latest video",
+  "White House latest video",
+  "Congress latest video",
+  "election latest video",
+  "Supreme Court latest video",
+  "Politico video",
+  "PBS NewsHour politics",
+  "CNN Politics",
+  "Fox News Politics",
+] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
   "tech news",
   "AI news",
@@ -892,6 +903,10 @@ function dedupeVideoItems(videos: VideoFeedItem[]) {
   );
 }
 
+function dedupeEntriesByVideoId(entries: RssFeedEntry[]) {
+  return Array.from(new Map(entries.map((entry) => [entry.videoId, entry])).values());
+}
+
 function getPublishedAfterIso(daysAgo: number) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - daysAgo);
@@ -1296,6 +1311,7 @@ export async function GET(request: Request) {
         )
       )
     ).flat();
+    let effectiveEntries = searchEntries;
     if (tab === "politics") {
       console.log("POLITICS VIDEOS RAW COUNT", searchEntries.length);
     }
@@ -1317,17 +1333,38 @@ export async function GET(request: Request) {
       console.error("YouTube RSS feed failures:", failedFeeds);
     }
 
-    const allEntries = useSpecializedSearchOnly ? searchEntries : [...successfulEntries, ...searchEntries];
+    if (tab === "politics" && searchEntries.length === 0) {
+      console.log("POLITICS VIDEO PRIMARY FAILED");
+      const fallbackEntries = (
+        await Promise.all(
+          POLITICS_FALLBACK_NEWS_QUERIES.map(async (term) =>
+            fetchVideosForSearchQuery(term).catch((error) => {
+              console.error("Politics fallback video search failed:", error);
+              return [] as RssFeedEntry[];
+            })
+          )
+        )
+      ).flat();
+
+      if (fallbackEntries.length > 0) {
+        console.log("POLITICS VIDEO FALLBACK USED");
+        effectiveEntries = dedupeEntriesByVideoId(fallbackEntries);
+      }
+    }
+
+    const allEntries = useSpecializedSearchOnly
+      ? effectiveEntries
+      : [...successfulEntries, ...searchEntries];
 
     if (allEntries.length === 0) {
-      if (tab === "technology" || tab === "politics") {
-        return Response.json({
-          videos: [],
-          fallback: false,
-          fetchFailed: true,
-          message:
-            tab === "politics"
-              ? "Could not load politics videos right now."
+    if (tab === "technology" || tab === "politics") {
+      return Response.json({
+        videos: [],
+        fallback: false,
+        fetchFailed: false,
+        message:
+          tab === "politics"
+            ? "No politics videos available right now."
               : "No technology videos available right now.",
         });
       }
@@ -1387,8 +1424,8 @@ export async function GET(request: Request) {
         fallback: false,
         fetchFailed: true,
         message:
-          tab === "politics"
-            ? "Could not load politics videos right now."
+            tab === "politics"
+              ? "No politics videos available right now."
             : "No technology videos available right now.",
       });
     }

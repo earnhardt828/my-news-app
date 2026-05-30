@@ -120,20 +120,28 @@ const MLB_SECTION_VIDEO_QUERIES = [
   "home run highlights",
 ] as const;
 const MY_NEWS_POLITICS_ARTICLE_QUERIES = [
+  "politics",
+  "U.S. politics",
+  "White House",
+  "Congress",
+  "Senate",
+  "Supreme Court",
+  "election",
+  "campaign",
+  "government",
+  "policy",
   "AP Politics",
   "Reuters Politics",
+  "Politico",
   "CNN Politics",
   "Fox News Politics",
   "NBC Politics",
   "ABC Politics",
   "CBS Politics",
-  "Washington Post Politics",
-  "New York Times Politics",
   "NPR Politics",
   "The Hill",
-  "Politico",
-  "White House",
-  "Congress",
+  "Washington Post Politics",
+  "New York Times Politics",
 ] as const;
 const POLITICS_LARGE_CARD_FALLBACK_IMAGE = "/category-images/politics.png";
 const NHL_SECTION_ARTICLE_QUERIES = [
@@ -1227,11 +1235,11 @@ async function getMlbArticles() {
 async function getPoliticsArticles() {
   const startedAt = Date.now();
   const fetchPoliticsQuery = async (query: string) => {
-    const timeoutMs = 3000;
+    const timeoutMs = 5000;
 
     return await Promise.race([
       fetch(
-        `/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=6`,
+        `/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=8`,
         {
           cache: "no-store",
           headers: { Accept: "application/json" },
@@ -1268,7 +1276,7 @@ async function getPoliticsArticles() {
   console.log("POLITICS ARTICLE COUNT", validPoliticsArticles.length);
   console.log("POLITICS ARTICLES FINAL COUNT", validPoliticsArticles.length);
   console.log("MY NEWS POLITICS ARTICLE COUNT", validPoliticsArticles.length);
-  console.log("POLITICS FETCH TIME MS", Date.now() - startedAt);
+  console.log("POLITICS ARTICLE FETCH TIME", Date.now() - startedAt);
 
   return validPoliticsArticles;
 }
