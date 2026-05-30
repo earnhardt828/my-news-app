@@ -49,16 +49,21 @@ type VideoFeedItem = {
 type VideoFeedTab = "all" | "news" | "politics" | "sports" | "celebrity" | "technology";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
 const POLITICS_TAB_SEARCH_QUERIES = [
-  "U.S. politics",
+  "politics news",
   "White House news",
   "Congress news",
-  "Senate news",
-  "Supreme Court news",
   "election news",
+  "Supreme Court news",
   "campaign news",
-  "government policy news",
-  "Politico latest",
+  "government news",
+  "AP Politics",
   "Reuters Politics",
+  "CNN Politics",
+  "Fox News Politics",
+  "NBC News Politics",
+  "ABC News Politics",
+  "CBS News Politics",
+  "Politico video",
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
   "tech news",
@@ -1113,8 +1118,8 @@ function filterAndSortVideos(
   }
 
   if (options.tab === "politics") {
-    console.log("POLITICS VIDEO RAW COUNT", categoryFiltered.length);
-    console.log("POLITICS VIDEO FINAL COUNT", tabFiltered.length);
+    console.log("POLITICS API RAW COUNT", categoryFiltered.length);
+    console.log("POLITICS API STRICT COUNT", tabFiltered.length);
   }
 
   console.log("VIDEO FILTERED COUNT", {

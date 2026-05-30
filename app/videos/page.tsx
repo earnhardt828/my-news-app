@@ -151,14 +151,21 @@ export default function VideosPage() {
 
   useEffect(() => {
     if (activeTab !== "technology") {
+      if (activeTab !== "politics") {
+        return;
+      }
+    }
+
+    if (activeTab === "technology") {
+      console.log("TECHNOLOGY RENDER RAW COUNT", displayedVideosRaw.length);
+      console.log("TECHNOLOGY RENDER STRICT COUNT", displayedVideos.length);
+      console.log("TECHNOLOGY RENDER RAW TITLES", displayedVideosRaw.map((video) => video.title));
+      console.log("TECHNOLOGY RENDER FILTERED TITLES", displayedVideos.map((video) => video.title));
+      console.log("TECHNOLOGY RENDER FINAL COUNT", displayedVideos.length);
       return;
     }
 
-    console.log("TECHNOLOGY RENDER RAW COUNT", displayedVideosRaw.length);
-    console.log("TECHNOLOGY RENDER STRICT COUNT", displayedVideos.length);
-    console.log("TECHNOLOGY RENDER RAW TITLES", displayedVideosRaw.map((video) => video.title));
-    console.log("TECHNOLOGY RENDER FILTERED TITLES", displayedVideos.map((video) => video.title));
-    console.log("TECHNOLOGY RENDER FINAL COUNT", displayedVideos.length);
+    console.log("POLITICS VIDEO TAB ACTIVE");
   }, [activeTab, displayedVideos, displayedVideosRaw]);
 
   useEffect(() => {

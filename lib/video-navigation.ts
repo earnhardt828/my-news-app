@@ -31,18 +31,6 @@ export const SHARED_VIDEO_CATEGORIES: Array<{
     ],
   },
   {
-    label: "Sports",
-    value: "sports",
-    apiTab: "sports",
-    keywords: ["sports", "highlights", "game", "league", "score"],
-  },
-  {
-    label: "Celebrity",
-    value: "celebrity",
-    apiTab: "celebrity",
-    keywords: ["celebrity", "entertainment", "hollywood", "music", "movies"],
-  },
-  {
     label: "Technology",
     value: "technology",
     apiTab: "technology",
@@ -56,6 +44,18 @@ export const SHARED_VIDEO_CATEGORIES: Array<{
       "OpenAI",
       "Nvidia",
     ],
+  },
+  {
+    label: "Sports",
+    value: "sports",
+    apiTab: "sports",
+    keywords: ["sports", "highlights", "game", "league", "score"],
+  },
+  {
+    label: "Celebrity",
+    value: "celebrity",
+    apiTab: "celebrity",
+    keywords: ["celebrity", "entertainment", "hollywood", "music", "movies"],
   },
 ];
 

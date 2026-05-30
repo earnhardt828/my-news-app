@@ -120,25 +120,16 @@ const MLB_SECTION_VIDEO_QUERIES = [
   "home run highlights",
 ] as const;
 const MY_NEWS_POLITICS_ARTICLE_QUERIES = [
-  "U.S. politics",
-  "White House news",
-  "Congress news",
-  "Senate news",
-  "Supreme Court news",
-  "election news",
-  "campaign news",
-  "government policy news",
-  "Politico latest",
-  "Reuters Politics",
   "AP Politics",
+  "Reuters Politics",
   "CNN Politics",
   "Fox News Politics",
   "NBC Politics",
-  "ABC Politics",
-  "CBS Politics",
-  "Washington Post Politics",
-  "New York Times Politics",
+  "Politico",
+  "White House",
+  "Congress",
 ] as const;
+const POLITICS_LARGE_CARD_FALLBACK_IMAGE = "/category-images/politics.png";
 const NHL_SECTION_ARTICLE_QUERIES = [
   "NHL news",
   "hockey news",
@@ -1228,34 +1219,46 @@ async function getMlbArticles() {
 }
 
 async function getPoliticsArticles() {
-  const payloads = await Promise.all(
-    MY_NEWS_POLITICS_ARTICLE_QUERIES.map(async (query) => {
-      const response = await fetch(
-        `/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=8`,
+  const fetchPoliticsQuery = async (query: string) => {
+    const timeoutMs = 3000;
+
+    return await Promise.race([
+      fetch(
+        `/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=6`,
         {
           cache: "no-store",
           headers: { Accept: "application/json" },
         }
-      );
+      ).then(async (response) => {
+        if (!response.ok) {
+          return [] as Article[];
+        }
 
-      if (!response.ok) {
-        return [] as Article[];
-      }
+        const payload = normalizeNewsPayload(
+          (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+        );
 
-      const payload = normalizeNewsPayload(
-        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
-      );
+        return hydrateFeedArticles(payload.articles);
+      }),
+      new Promise<Article[]>((resolve) => {
+        window.setTimeout(() => resolve([]), timeoutMs);
+      }),
+    ]);
+  };
 
-      return hydrateFeedArticles(payload.articles);
-    })
+  const payloads = await Promise.allSettled(
+    MY_NEWS_POLITICS_ARTICLE_QUERIES.map((query) => fetchPoliticsQuery(query))
   );
 
-  const mergedPoliticsArticles = dedupeArticlesByContent(payloads.flat());
+  const mergedPoliticsArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  );
   const validPoliticsArticles = mergedPoliticsArticles.filter((article) =>
     isStrictPoliticsArticle(article)
   );
 
   console.log("POLITICS ARTICLE COUNT", validPoliticsArticles.length);
+  console.log("MY NEWS POLITICS ARTICLE COUNT", validPoliticsArticles.length);
 
   return validPoliticsArticles;
 }
@@ -3640,14 +3643,27 @@ function getPoliticsLargeCardSelection(articles: Article[]) {
   }));
 
   const selectedCandidate = candidates.find((candidate) => candidate.isStrictPolitics && candidate.hasImage);
+  const fallbackCandidate = selectedCandidate
+    ? null
+    : candidates.find((candidate) => candidate.isStrictPolitics);
 
   console.log("POLITICS LARGE CARD SELECTED", {
-    title: selectedCandidate?.article.title ?? null,
-    source: selectedCandidate?.article.source ?? null,
-    imageUrl: selectedCandidate?.imageUrl ?? null,
+    title: (selectedCandidate ?? fallbackCandidate)?.article.title ?? null,
+    source: (selectedCandidate ?? fallbackCandidate)?.article.source ?? null,
+    imageUrl: selectedCandidate?.imageUrl ?? POLITICS_LARGE_CARD_FALLBACK_IMAGE,
+  });
+  console.log("MY NEWS POLITICS LARGE CARD SELECTED", {
+    title: (selectedCandidate ?? fallbackCandidate)?.article.title ?? null,
+    source: (selectedCandidate ?? fallbackCandidate)?.article.source ?? null,
+    imageUrl: selectedCandidate?.imageUrl ?? (fallbackCandidate ? POLITICS_LARGE_CARD_FALLBACK_IMAGE : null),
   });
 
-  return selectedCandidate?.article ?? null;
+  return fallbackCandidate || selectedCandidate
+    ? {
+        article: (selectedCandidate ?? fallbackCandidate)?.article ?? null,
+        imageSrc: selectedCandidate?.imageUrl ?? POLITICS_LARGE_CARD_FALLBACK_IMAGE,
+      }
+    : null;
 }
 
 function isStrictNhlVideo(video: VideoItem) {
@@ -8192,9 +8208,10 @@ export default function Home() {
       }
 
       if (category === "Politics") {
+        const politicsSelection = getPoliticsLargeCardSelection(categoryPool);
         leadMap[category] = {
-          article: getPoliticsLargeCardSelection(categoryPool),
-          imageSrcOverride: null,
+          article: politicsSelection?.article ?? null,
+          imageSrcOverride: politicsSelection?.imageSrc ?? null,
         };
         return;
       }
@@ -8313,6 +8330,7 @@ export default function Home() {
           }
 
           if (category === "Politics") {
+            console.log("MY NEWS POLITICS FETCH START");
             const response = await fetch(`/api/videos?tab=politics`);
 
             if (!response.ok) {
@@ -8334,6 +8352,7 @@ export default function Home() {
 
             console.log("POLITICS VIDEO RAW COUNT", mergedVideos.length);
             console.log("POLITICS VIDEO FINAL COUNT", relevantVideos.length);
+            console.log("MY NEWS POLITICS VIDEO COUNT", relevantVideos.length);
             return [category, relevantVideos] as const;
           }
 
