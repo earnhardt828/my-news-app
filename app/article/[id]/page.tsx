@@ -6,7 +6,6 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
-import SourceBadge from "../../components/source-badge";
 import SourceHeaderMark from "../../components/source-header-mark";
 import { apiFetch } from "../../../lib/api-base";
 import {
@@ -21,7 +20,7 @@ import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { cleanDisplayText } from "../../../lib/display-text";
 import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
-import { hasMappedSourceLogo, slugifySourceName } from "../../../lib/source-logos";
+import { getSourceBoxLogoUrl, slugifySourceName } from "../../../lib/source-logos";
 import { supabase } from "../../../lib/supabase";
 
 type ArticleRecord = {
@@ -877,6 +876,7 @@ export default function ArticleDetailPage() {
   const [activeCompareIndex, setActiveCompareIndex] = useState(0);
   const [showCompareTutorial, setShowCompareTutorial] = useState(false);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
+  const [failedArticleBoxImages, setFailedArticleBoxImages] = useState<Record<string, true>>({});
   const [commentSortMode, setCommentSortMode] = useState<"top" | "newest">("top");
   const [isCommentSortSheetOpen, setIsCommentSortSheetOpen] = useState(false);
   const [commentInput, setCommentInput] = useState("");
@@ -2001,10 +2001,14 @@ export default function ArticleDetailPage() {
     : article;
   const selectedArticleImage = compareArticle ? getBestArticleImage(compareArticle) : null;
   const articleImageSrc = selectedArticleImage?.src ?? null;
+  const articleBoxLogoSrc = getSourceBoxLogoUrl(compareArticle.source);
   console.log("IMAGE URL USED", articleImageSrc);
   const articleImageFailureKey = articleImageSrc
     ? `${compareArticle?.id ?? article.id}:${articleImageSrc}`
     : `${compareArticle?.id ?? article.id}:none`;
+  const articleBoxLogoFailureKey = articleBoxLogoSrc
+    ? `${compareArticle?.source}:${articleBoxLogoSrc}`
+    : `${compareArticle?.source}:none`;
   const shouldShowArticleImage =
     Boolean(articleImageSrc) &&
     !failedArticleImages[articleImageFailureKey] &&
@@ -2013,7 +2017,7 @@ export default function ArticleDetailPage() {
       selectedArticleImage?.source ?? ""
     );
   const shouldShowSourceLogoFallback =
-    !shouldShowArticleImage && hasMappedSourceLogo(compareArticle.source);
+    Boolean(articleBoxLogoSrc) && !failedArticleBoxImages[articleBoxLogoFailureKey];
   const rawContent = compareArticle.content?.trim() ?? "";
   const rawDescription = compareArticle.description?.trim() ?? "";
   const cleanedContent = rawContent
@@ -2127,9 +2131,27 @@ export default function ArticleDetailPage() {
                   }}
                 />
               </div>
-            ) : shouldShowSourceLogoFallback ? (
+            ) : shouldShowSourceLogoFallback && articleBoxLogoSrc ? (
               <div className="article-detail-inline-image-wrap article-detail-inline-image-wrap-fallback">
-                <SourceBadge sourceName={compareArticle.source} showInitialFallback={false} />
+                <img
+                  src={articleBoxLogoSrc}
+                  alt={`${compareArticle.source} image`}
+                  className="article-thumb-image article-detail-inline-image article-card-box-logo-image"
+                  loading="lazy"
+                  decoding="async"
+                  onError={() => {
+                    setFailedArticleBoxImages((prev) => {
+                      if (prev[articleBoxLogoFailureKey]) {
+                        return prev;
+                      }
+
+                      return {
+                        ...prev,
+                        [articleBoxLogoFailureKey]: true,
+                      };
+                    });
+                  }}
+                />
               </div>
             ) : null}
           </div>

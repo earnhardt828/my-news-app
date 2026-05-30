@@ -202,6 +202,7 @@ export function normalizeSourceLogoName(sourceName: string) {
     .toLowerCase()
     .replace(/&/g, "and")
     .replace(/\.com\b/g, "")
+    .replace(/^the\s+/g, "")
     .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, "-");
 }
@@ -212,18 +213,28 @@ function normalizeSourceLookupKey(sourceName: string) {
     .toLowerCase()
     .replace(/&/g, "and")
     .replace(/\.com\b/g, "")
+    .replace(/^the\s+/g, "")
     .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function buildArticleHeaderLogoCandidates(sourceName: string) {
+function buildSourceLogoCandidates(sourceName: string) {
   const trimmed = sourceName.trim();
   if (!trimmed) {
     return [];
   }
 
-  const normalized = normalizeSourceLogoName(trimmed);
+  const normalizedBase = trimmed
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\.com\b/g, "")
+    .replace(/[’']/g, "")
+    .replace(/[^\w\s-]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const normalized = normalizedBase;
   const withoutLeadingThe = normalized.replace(/^the-/, "");
   const lookupKey = normalizeSourceLookupKey(trimmed);
   const withoutCom = withoutLeadingThe.replace(/-com$/, "");
@@ -245,8 +256,27 @@ function buildArticleHeaderLogoCandidates(sourceName: string) {
     candidates.add("ap");
   }
 
+  if (lookupKey === "wall street journal" || lookupKey === "the wall street journal") {
+    candidates.add("wall-street-journal");
+    candidates.add("the-wall-street-journal");
+    candidates.add("the-wallstreet-journal");
+    candidates.add("wsj");
+  }
+
+  if (lookupKey === "new york times" || lookupKey === "the new york times") {
+    candidates.add("new-york-times");
+    candidates.add("the-new-york-times");
+  }
+
+  if (lookupKey === "washington post" || lookupKey === "the washington post") {
+    candidates.add("washington-post");
+    candidates.add("the-washington-post");
+    candidates.add("the-washinton-post");
+  }
+
   if (lookupKey === "mlb" || lookupKey === "mlb com") {
     candidates.add("mlb");
+    candidates.add("mlbcom");
   }
 
   if (lookupKey === "nfl" || lookupKey === "nfl com") {
@@ -333,7 +363,7 @@ export function getSourceHeaderLogoUrl(sourceName: string) {
     return mappedLogo;
   }
 
-  const candidates = buildArticleHeaderLogoCandidates(sourceName);
+  const candidates = buildSourceLogoCandidates(sourceName);
   return candidates[0] ? `/news-logo-head/${candidates[0]}.png` : null;
 }
 
@@ -344,7 +374,7 @@ export function getSourceHeaderDarkLogoUrl(sourceName: string) {
     return mappedLogo;
   }
 
-  const candidates = buildArticleHeaderLogoCandidates(sourceName);
+  const candidates = buildSourceLogoCandidates(sourceName);
   return candidates[0] ? `/news-logo-head-dark/${candidates[0]}.png` : null;
 }
 
@@ -362,7 +392,14 @@ export function hasMappedSourceLogo(sourceName: string) {
 }
 
 export function getSourceBoxLogoUrl(sourceName: string) {
-  return findMappedLogoUrl(sourceBoxLogoMap, sourceName);
+  const mappedLogo = findMappedLogoUrl(sourceBoxLogoMap, sourceName);
+
+  if (mappedLogo) {
+    return mappedLogo;
+  }
+
+  const candidates = buildSourceLogoCandidates(sourceName);
+  return candidates[0] ? `/logos-for-boxes/${candidates[0]}.png` : null;
 }
 
 export function hasMappedSourceBoxLogo(sourceName: string) {
