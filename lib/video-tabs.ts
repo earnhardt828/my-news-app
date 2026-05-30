@@ -6,6 +6,8 @@ export type SharedVideoTab =
   | "politics"
   | "world";
 
+export const TECH_VIDEOS_DISABLED = true;
+
 export const SHARED_VIDEO_CATEGORIES: Array<{
   label: string;
   value: SharedVideoTab;

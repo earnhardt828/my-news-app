@@ -6,6 +6,7 @@ import type { SharedVideoTab } from "./video-tabs";
 export {
   resolveVideoCategoryForMyNewsCategory,
   SHARED_VIDEO_CATEGORIES,
+  TECH_VIDEOS_DISABLED,
   type SharedVideoTab,
 } from "./video-tabs";
 

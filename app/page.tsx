@@ -87,6 +87,7 @@ import {
 } from "../lib/categories";
 import {
   resolveVideoCategoryForMyNewsCategory,
+  TECH_VIDEOS_DISABLED,
   type SharedVideoTab,
 } from "../lib/video-navigation";
 import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../lib/video-feed";
@@ -8612,6 +8613,9 @@ export default function Home() {
           const isTechnologyCategory = normalizeSelectedCategoryName(category) === "Tech";
 
           if (isTechnologyCategory) {
+            if (TECH_VIDEOS_DISABLED) {
+              return [category, [] as VideoItem[]] as const;
+            }
             try {
               console.log("MY NEWS TECH FETCH START");
               console.log("MY NEWS TECH VIDEO FEED USED", "/api/videos?tab=technology");
@@ -11472,6 +11476,9 @@ export default function Home() {
     const isTechnologyRow = normalizeSelectedCategoryName(category) === "Tech";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const isWorldRow = normalizeSelectedCategoryName(category) === "World";
+    if (TECH_VIDEOS_DISABLED && isTechnologyRow) {
+      return null;
+    }
     const videosToRender = isDedicatedMlbCategory(category)
       ? categoryVideos.filter((video) => isDedicatedMlbVideo(video))
       : isTechnologyRow

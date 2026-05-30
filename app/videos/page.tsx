@@ -10,6 +10,7 @@ import {
   readVideoReturnState,
   savePendingVideoReturnState,
   SHARED_VIDEO_CATEGORIES,
+  TECH_VIDEOS_DISABLED,
   type SharedVideoTab,
   type VideoReturnState,
 } from "../../lib/video-navigation";
@@ -87,6 +88,13 @@ export default function VideosPage() {
   });
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const visibleTabs = useMemo(
+    () =>
+      SHARED_VIDEO_CATEGORIES.filter((tab) =>
+        TECH_VIDEOS_DISABLED ? tab.value !== "technology" : true
+      ),
+    []
+  );
 
   const displayedVideosRaw = videosByTab[activeTab];
   const displayedVideos =
@@ -106,15 +114,15 @@ export default function VideosPage() {
         ? "politics"
       : searchParams.get("tab") === "celebrity"
         ? "celebrity"
-        : searchParams.get("tab") === "technology"
+        : searchParams.get("tab") === "technology" && !TECH_VIDEOS_DISABLED
           ? "technology"
         : "news";
   const requestedVideoId = searchParams.get("video");
   const [returnState, setReturnState] = useState<VideoReturnState | null>(null);
 
   useEffect(() => {
-    console.log("VIDEO PAGE ACTIVE TABS", SHARED_VIDEO_CATEGORIES.map((tab) => tab.value));
-  }, []);
+    console.log("VIDEO PAGE ACTIVE TABS", visibleTabs.map((tab) => tab.value));
+  }, [visibleTabs]);
 
   useEffect(() => {
     console.log("VIDEO PAGE ACTIVE TAB", activeTab);
@@ -368,7 +376,7 @@ export default function VideosPage() {
       return;
     }
 
-    const tabs = SHARED_VIDEO_CATEGORIES.map((tab) => tab.value);
+    const tabs = visibleTabs.map((tab) => tab.value);
     const currentIndex = tabs.indexOf(activeTab);
     const nextTab = tabs[diffX < 0 ? currentIndex + 1 : currentIndex - 1];
     if (nextTab) {
@@ -417,7 +425,7 @@ export default function VideosPage() {
         </button>
       ) : null}
       <div className="videos-page-tab-row" role="tablist" aria-label="Video categories">
-        {SHARED_VIDEO_CATEGORIES.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.value}
             type="button"
