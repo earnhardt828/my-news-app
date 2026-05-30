@@ -2,6 +2,8 @@ import {
   hasStrictPoliticsContext,
   hasStrictTechnologyContext,
   hasTechnologyTabContext,
+  hasTechnologyTabTierOneContext,
+  hasTechnologyTabTierTwoContext,
   hasStrictWorldContext,
 } from "./category-matching";
 
@@ -46,6 +48,26 @@ export function isTechnologyTabVideo(video: FilterableVideo) {
   ]);
 }
 
+export function isTechnologyTierOneVideo(video: FilterableVideo) {
+  return hasTechnologyTabTierOneContext([
+    video.title,
+    video.creator,
+    video.category,
+    video.watchUrl,
+    video.thumbnailUrl,
+  ]);
+}
+
+export function isTechnologyTierTwoVideo(video: FilterableVideo) {
+  return hasTechnologyTabTierTwoContext(video.title, [
+    video.title,
+    video.creator,
+    video.category,
+    video.watchUrl,
+    video.thumbnailUrl,
+  ]);
+}
+
 export function isStrictPoliticsVideo(video: FilterableVideo) {
   return hasStrictPoliticsContext([
     video.title,
@@ -72,6 +94,14 @@ export function getTechnologyVideoScore(video: FilterableVideo) {
 
   if (!isTechnologyTabVideo(video)) {
     return -1000;
+  }
+
+  if (isTechnologyTierOneVideo(video)) {
+    score += 220;
+  }
+
+  if (isTechnologyTierTwoVideo(video)) {
+    score += 120;
   }
 
   if (

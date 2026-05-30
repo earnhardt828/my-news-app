@@ -5,13 +5,15 @@ const TECH_REJECTED_CONTEXT_PATTERN =
 const TECH_TAB_STRONG_CONTEXT_PATTERN =
   /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device|the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|marques brownlee|mkbhd|linus tech tips|wsj tech)\b/i;
 const TECH_TAB_TRUSTED_SOURCE_PATTERN =
-  /\b(the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|marques brownlee|mkbhd|linus tech tips|wsj tech)\b/i;
+  /\b(the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|cnbc technology|marques brownlee|mkbhd|linus tech tips|wsj tech|wall street journal tech|digital trends|tom's guide)\b/i;
+const TECH_TAB_TOPIC_PATTERN =
+  /\b(tech|technology|ai|artificial intelligence|openai|chatgpt|apple|iphone|google|microsoft|nvidia|cybersecurity|software|robot|app|device|gadget|chip|semiconductor|tesla)\b/i;
 const TECH_TAB_REJECTED_CONTEXT_PATTERN =
   /\b(espn|sports?|nba|nfl|mlb|nhl|mls|soccer|basketball|football|baseball)\b/i;
 const TECH_TAB_POLITICS_CONTEXT_PATTERN =
   /\b(politics?|political|trump|biden|white house|congress|senate|supreme court|election|campaign|government|policy|president)\b/i;
 const TECH_TAB_OTHER_REJECTED_CONTEXT_PATTERN =
-  /\b(court|crime|celebrity|weather|world news)\b/i;
+  /\b(court|crime|celebrity|weather|local news|world news)\b/i;
 const TECH_TAB_COMPANY_TOPIC_OVERRIDE_PATTERN =
   /\b(apple|google|microsoft|openai|nvidia|ai|artificial intelligence|cybersecurity|chip|semiconductor)\b/i;
 
@@ -51,35 +53,57 @@ export function hasStrictTechnologyContext(values: Array<string | null | undefin
 
 export function hasTechnologyTabContext(values: Array<string | null | undefined>) {
   const haystack = values.filter(Boolean).join(" ").toLowerCase();
-  const hasStrongContext = TECH_TAB_STRONG_CONTEXT_PATTERN.test(haystack);
+  return TECH_TAB_STRONG_CONTEXT_PATTERN.test(haystack);
+}
+
+export function hasTechnologyTabTierOneContext(values: Array<string | null | undefined>) {
+  const haystack = values.filter(Boolean).join(" ").toLowerCase();
+  const hasTrustedSource = TECH_TAB_TRUSTED_SOURCE_PATTERN.test(haystack);
   const hasRejectedSportsContext = TECH_TAB_REJECTED_CONTEXT_PATTERN.test(haystack);
   const hasPoliticsContext = TECH_TAB_POLITICS_CONTEXT_PATTERN.test(haystack);
   const hasOtherRejectedContext = TECH_TAB_OTHER_REJECTED_CONTEXT_PATTERN.test(haystack);
   const hasCompanyTopicOverride = TECH_TAB_COMPANY_TOPIC_OVERRIDE_PATTERN.test(haystack);
 
+  if (!hasTrustedSource) {
+    return false;
+  }
+
   if (hasRejectedSportsContext) {
     return false;
   }
 
-  if (hasPoliticsContext && !hasCompanyTopicOverride) {
+  if ((hasPoliticsContext || hasOtherRejectedContext) && !hasCompanyTopicOverride) {
     return false;
   }
 
-  if (hasOtherRejectedContext && !hasCompanyTopicOverride) {
-    return false;
-  }
-
-  return hasStrongContext;
+  return true;
 }
 
-export function hasTechnologyTabTrustedSourceContext(values: Array<string | null | undefined>) {
+export function hasTechnologyTabTierTwoContext(
+  title: string | null | undefined,
+  values: Array<string | null | undefined>
+) {
   const haystack = values.filter(Boolean).join(" ").toLowerCase();
+  const normalizedTitle = (title ?? "").toLowerCase();
+  const hasTopicInTitle = TECH_TAB_TOPIC_PATTERN.test(normalizedTitle);
+  const hasRejectedSportsContext = TECH_TAB_REJECTED_CONTEXT_PATTERN.test(haystack);
+  const hasPoliticsContext = TECH_TAB_POLITICS_CONTEXT_PATTERN.test(haystack);
+  const hasOtherRejectedContext = TECH_TAB_OTHER_REJECTED_CONTEXT_PATTERN.test(haystack);
+  const hasCompanyTopicOverride = TECH_TAB_COMPANY_TOPIC_OVERRIDE_PATTERN.test(haystack);
 
-  if (TECH_TAB_REJECTED_CONTEXT_PATTERN.test(haystack)) {
+  if (!hasTopicInTitle) {
     return false;
   }
 
-  return TECH_TAB_TRUSTED_SOURCE_PATTERN.test(haystack);
+  if (hasRejectedSportsContext) {
+    return false;
+  }
+
+  if ((hasPoliticsContext || hasOtherRejectedContext) && !hasCompanyTopicOverride) {
+    return false;
+  }
+
+  return true;
 }
 
 export function hasStrictPoliticsContext(values: Array<string | null | undefined>) {

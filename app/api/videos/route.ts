@@ -8,6 +8,8 @@ import {
   getTechnologyVideoScore,
   getWorldVideoScore,
   isTechnologyTabVideo,
+  isTechnologyTierOneVideo,
+  isTechnologyTierTwoVideo,
   isStrictPoliticsVideo,
   isStrictTechnologyVideo,
   isStrictWorldVideo,
@@ -1286,7 +1288,6 @@ export async function GET(request: Request) {
     }
 
     if (tab === "technology") {
-      console.log("TECHNOLOGY SOURCE-BASED FEED ACTIVE");
       console.log("TECHNOLOGY QUERY USED", searchTerms);
       const technologyEntries = searchEntries;
       const rawTechnologyVideos = dedupeVideoItems(
@@ -1317,11 +1318,28 @@ export async function GET(request: Request) {
           })
           .filter((video) => !isBlockedVideo(video))
       );
-      const filteredTechnologyVideos = rawTechnologyVideos
-        .filter((video) => isTechnologyTabVideo(video))
+      const tierOneTechnologyVideos = rawTechnologyVideos
+        .filter((video) => isTechnologyTierOneVideo(video))
         .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
         .slice(0, 10);
+      const tierTwoTechnologyVideos =
+        tierOneTechnologyVideos.length >= 4
+          ? []
+          : rawTechnologyVideos
+              .filter(
+                (video) =>
+                  !tierOneTechnologyVideos.some((tierOneVideo) => tierOneVideo.id === video.id) &&
+                  isTechnologyTierTwoVideo(video)
+              )
+              .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
+              .slice(0, 10);
+      const filteredTechnologyVideos = dedupeVideoItems([
+        ...tierOneTechnologyVideos,
+        ...tierTwoTechnologyVideos,
+      ]).slice(0, 10);
       console.log("TECHNOLOGY RAW COUNT", rawTechnologyVideos.length);
+      console.log("TECHNOLOGY TIER 1 COUNT", tierOneTechnologyVideos.length);
+      console.log("TECHNOLOGY TIER 2 COUNT", tierTwoTechnologyVideos.length);
       console.log("TECHNOLOGY RAW TITLES", rawTechnologyVideos.map((video) => video.title));
       console.log(
         "TECHNOLOGY ACCEPTED TITLES",
@@ -1330,7 +1348,7 @@ export async function GET(request: Request) {
       console.log(
         "TECHNOLOGY REJECTED TITLES",
         rawTechnologyVideos
-          .filter((video) => !isTechnologyTabVideo(video))
+          .filter((video) => !filteredTechnologyVideos.some((acceptedVideo) => acceptedVideo.id === video.id))
           .map((video) => video.title)
       );
       console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
