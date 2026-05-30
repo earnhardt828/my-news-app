@@ -43,6 +43,7 @@ import {
   saveVideoReturnState,
 } from "../lib/video-navigation";
 import {
+  hasStrictBusinessContext,
   hasStrictPoliticsContext,
   hasStrictTechnologyContext,
   hasStrictWorldContext,
@@ -93,6 +94,7 @@ import {
 } from "../lib/video-navigation";
 import { normalizeVideoFeedItems, type VideoApiItem, type VideoItem } from "../lib/video-feed";
 import {
+  isStrictBusinessVideo,
   isStrictPoliticsVideo,
   isStrictTechnologyVideo,
   isStrictWorldVideo,
@@ -141,6 +143,16 @@ const MY_NEWS_POLITICS_ARTICLE_QUERIES = [
   "Fox News Politics",
   "White House",
   "Congress",
+] as const;
+const MY_NEWS_BUSINESS_ARTICLE_QUERIES = [
+  "business",
+  "AP Business",
+  "Reuters Business",
+  "Bloomberg",
+  "CNBC",
+  "Wall Street Journal",
+  "Yahoo Finance",
+  "stock market news",
 ] as const;
 const MY_NEWS_WORLD_ARTICLE_QUERIES = [
   "world news",
@@ -1296,6 +1308,36 @@ async function getPoliticsArticles() {
   console.log("POLITICS TOTAL BLOCKING TIME", Date.now() - startedAt);
 
   return validPoliticsArticles;
+}
+
+async function getBusinessArticles() {
+  const payloads = await Promise.allSettled(
+    MY_NEWS_BUSINESS_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  return dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictBusinessArticle(article));
 }
 
 async function getWorldArticles() {
@@ -3596,6 +3638,17 @@ function isStrictPoliticsArticle(article: Article) {
   ]);
 }
 
+function isStrictBusinessArticle(article: Article) {
+  return hasStrictBusinessContext([
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]);
+}
+
 function isStrictWorldArticle(article: Article) {
   return hasStrictWorldContext([
     article.title,
@@ -3693,6 +3746,24 @@ function getPoliticsLargeCardSelection(articles: Article[]) {
         imageSrc: selectedCandidate?.imageUrl ?? POLITICS_LARGE_CARD_FALLBACK_IMAGE,
       }
     : null;
+}
+
+function getBusinessLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictBusiness: isStrictBusinessArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictBusiness && candidate.image);
+
+  console.log("BUSINESS LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
 }
 
 function getWorldLargeCardSelection(articles: Article[]) {
@@ -8269,6 +8340,8 @@ export default function Home() {
           ? (myNewsCategorySupplementalArticles[category] ?? []).filter((article) =>
               isDedicatedMlbCategory(category)
                 ? isDedicatedMlbArticle(article, "lead")
+                : category === "Business"
+                  ? isStrictBusinessArticle(article)
                 : category === "Politics"
                   ? isStrictPoliticsArticle(article)
                 : category === "World"
@@ -8279,7 +8352,9 @@ export default function Home() {
               ...categorySectionArticles,
               ...(myNewsCategorySupplementalArticles[category] ?? []),
             ]).filter((article) =>
-              category === "Politics"
+              category === "Business"
+                ? isStrictBusinessArticle(article)
+              : category === "Politics"
                 ? isStrictPoliticsArticle(article)
               : category === "World"
                 ? isStrictWorldArticle(article)
@@ -8309,6 +8384,14 @@ export default function Home() {
       if (category === "Tech") {
         leadMap[category] = {
           article: getTechLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
+      if (category === "Business") {
+        leadMap[category] = {
+          article: getBusinessLargeCardSelection(categoryPool),
           imageSrcOverride: null,
         };
         return;
@@ -8363,12 +8446,17 @@ export default function Home() {
           ...Object.fromEntries(
             normalizedSelectedCategories.map((category) => [
               category,
-              { loading: category === "Politics" || category === "World", error: false },
+              {
+                loading:
+                  category === "Business" || category === "Politics" || category === "World",
+                error: false,
+              },
             ])
           ),
         }));
       }
       if (
+        !normalizedSelectedCategories.includes("Business") &&
         !normalizedSelectedCategories.includes("NASCAR") &&
         !normalizedSelectedCategories.includes("MLB") &&
         !normalizedSelectedCategories.includes("Politics") &&
@@ -8409,6 +8497,14 @@ export default function Home() {
           );
         }
 
+        if (normalizedSelectedCategories.includes("Business")) {
+          articleTasks.push(
+            getBusinessArticles().then((validBusinessArticles) => {
+              return ["Business", validBusinessArticles] as const;
+            })
+          );
+        }
+
         if (normalizedSelectedCategories.includes("Politics")) {
           articleTasks.push(
             getPoliticsArticles().then((validPoliticsArticles) => {
@@ -8444,6 +8540,7 @@ export default function Home() {
           setMyNewsCategoryArticleStatus((prev) => ({
             ...prev,
             Politics: { loading: false, error: true },
+            Business: { loading: false, error: true },
             World: { loading: false, error: true },
           }));
         }
@@ -8608,6 +8705,46 @@ export default function Home() {
             }
 
             console.log("MY NEWS WORLD VIDEO COUNT", relevantVideos.length);
+            return [category, relevantVideos] as const;
+          }
+
+          if (category === "Business") {
+            const response = await fetch(`/api/videos?tab=business`);
+
+            if (!response.ok) {
+              if (!isCancelled) {
+                setMyNewsCategoryVideoStatus((prev) => ({
+                  ...prev,
+                  [category]: { loading: false, error: true },
+                }));
+              }
+              return [category, [] as VideoItem[]] as const;
+            }
+
+            const data = (await response.json()) as {
+              videos?: VideoItem[];
+              fetchFailed?: boolean;
+            };
+            const mergedVideos = dedupeVideosBySourceTitleAndUrl(
+              Array.isArray(data.videos) ? data.videos : []
+            );
+            const relevantVideos = selectRecentCategoryVideos(
+              mergedVideos.filter((video) => isStrictBusinessVideo(video)),
+              4
+            ).sort(
+              (left, right) =>
+                getPublishedAtTimestamp(right.publishedAt) -
+                getPublishedAtTimestamp(left.publishedAt)
+            );
+
+            if (!isCancelled) {
+              setMyNewsCategoryVideoStatus((prev) => ({
+                ...prev,
+                [category]: { loading: false, error: Boolean(data.fetchFailed) },
+              }));
+            }
+
+            console.log("MY NEWS BUSINESS VIDEO COUNT", relevantVideos.length);
             return [category, relevantVideos] as const;
           }
 
@@ -8806,6 +8943,7 @@ export default function Home() {
       const mergedCategoryVideos =
         category === "NASCAR" ||
         isDedicatedMlbCategory(category) ||
+        category === "Business" ||
         category === "Politics" ||
         category === "World"
           ? [...supplementalVideos]
@@ -8822,6 +8960,8 @@ export default function Home() {
 
           return isDedicatedMlbCategory(category)
             ? isDedicatedMlbVideo(video)
+            : category === "Business"
+              ? isStrictBusinessVideo(video)
             : category === "Politics"
               ? isStrictPoliticsVideo(video)
             : category === "World"
@@ -8857,6 +8997,17 @@ export default function Home() {
           if (category === "World") {
             const preferredSourcePattern =
               /\b(bbc|reuters|associated press|ap|al jazeera|dw news|france 24|sky news|cnn international|united nations)\b/i;
+            const leftPreferred = preferredSourcePattern.test(`${left.creator} ${left.title}`) ? 1 : 0;
+            const rightPreferred = preferredSourcePattern.test(`${right.creator} ${right.title}`) ? 1 : 0;
+
+            if (rightPreferred !== leftPreferred) {
+              return rightPreferred - leftPreferred;
+            }
+          }
+
+          if (category === "Business") {
+            const preferredSourcePattern =
+              /\b(cnbc|bloomberg|reuters|wall street journal|yahoo finance|federal reserve)\b/i;
             const leftPreferred = preferredSourcePattern.test(`${left.creator} ${left.title}`) ? 1 : 0;
             const rightPreferred = preferredSourcePattern.test(`${right.creator} ${right.title}`) ? 1 : 0;
 
@@ -8911,6 +9062,10 @@ export default function Home() {
 
       if (category === "World") {
         console.log("MY NEWS WORLD VIDEO COUNT", selectedVideos.length);
+      }
+
+      if (category === "Business") {
+        console.log("MY NEWS BUSINESS VIDEO COUNT", selectedVideos.length);
       }
 
       selectedVideos.forEach((video) => usedVideoIds.add(video.id));
@@ -11511,6 +11666,7 @@ export default function Home() {
     categoryVideos: VideoItem[]
   ) => {
     const isTechnologyRow = normalizeSelectedCategoryName(category) === "Tech";
+    const isBusinessRow = normalizeSelectedCategoryName(category) === "Business";
     const isCelebrityRow = normalizeSelectedCategoryName(category) === "Celebrity";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const isWorldRow = normalizeSelectedCategoryName(category) === "World";
@@ -11522,6 +11678,8 @@ export default function Home() {
     }
     const videosToRender = isDedicatedMlbCategory(category)
       ? categoryVideos.filter((video) => isDedicatedMlbVideo(video))
+      : isBusinessRow
+        ? categoryVideos.filter((video) => isStrictBusinessVideo(video))
       : isTechnologyRow
         ? categoryVideos.filter((video) => isStrictTechnologyVideo(video))
       : isPoliticsRow

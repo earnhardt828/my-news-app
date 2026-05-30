@@ -1,4 +1,5 @@
 import {
+  hasStrictBusinessContext,
   hasStrictPoliticsContext,
   hasStrictTechnologyContext,
   hasTechnologyTabContext,
@@ -89,6 +90,16 @@ export function isStrictPoliticsVideo(video: FilterableVideo) {
   ]);
 }
 
+export function isStrictBusinessVideo(video: FilterableVideo) {
+  return hasStrictBusinessContext([
+    video.title,
+    video.creator,
+    video.category,
+    video.watchUrl,
+    video.thumbnailUrl,
+  ]);
+}
+
 export function isStrictWorldVideo(video: FilterableVideo) {
   return hasStrictWorldContext([
     video.title,
@@ -141,6 +152,41 @@ export function getTechnologyVideoScore(video: FilterableVideo) {
 
   if (video.orientation === "horizontal") {
     score += 50;
+  }
+
+  return score;
+}
+
+export function getBusinessVideoScore(video: FilterableVideo) {
+  const haystack = getVideoHaystack(video).toLowerCase();
+  let score = 0;
+
+  if (!isStrictBusinessVideo(video)) {
+    return -1000;
+  }
+
+  if (
+    /(cnbc|bloomberg|reuters business|ap business|associated press business|wall street journal|yahoo finance|federal reserve|wall street|stock market|markets today)/.test(
+      haystack
+    )
+  ) {
+    score += 170;
+  }
+
+  if (
+    /(business|economy|markets?|stocks?|finance|earnings|investing|inflation|interest rates|banking)/.test(
+      haystack
+    )
+  ) {
+    score += 100;
+  }
+
+  if (video.category === "Business") {
+    score += 72;
+  }
+
+  if (video.orientation === "horizontal") {
+    score += 40;
   }
 
   return score;

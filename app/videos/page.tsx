@@ -23,6 +23,7 @@ import {
   type VideoItem,
 } from "../../lib/video-feed";
 import {
+  isStrictBusinessVideo,
   isTechnologyTabVideo,
   isStrictPoliticsVideo,
   isStrictWorldVideo,
@@ -48,6 +49,7 @@ export default function VideosPage() {
   const [activeTab, setActiveTab] = useState<VideoTab>("news");
   const [videosByTab, setVideosByTab] = useState<Record<VideoTab, VideoItem[]>>({
     news: initialVideos,
+    business: [],
     world: [],
     politics: [],
     sports: [],
@@ -63,6 +65,7 @@ export default function VideosPage() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [tabLoading, setTabLoading] = useState<Record<VideoTab, boolean>>({
     news: true,
+    business: false,
     world: false,
     politics: false,
     sports: false,
@@ -71,6 +74,7 @@ export default function VideosPage() {
   });
   const [statusMessages, setStatusMessages] = useState<Record<VideoTab, string>>({
     news: "",
+    business: "",
     world: "",
     politics: "",
     sports: "",
@@ -81,6 +85,7 @@ export default function VideosPage() {
   const hasLoadedOnceRef = useRef(false);
   const loadedTabsRef = useRef<Record<VideoTab, boolean>>({
     news: false,
+    business: false,
     world: false,
     politics: false,
     sports: false,
@@ -93,14 +98,22 @@ export default function VideosPage() {
     () =>
       SHARED_VIDEO_CATEGORIES.filter((tab) =>
         (TECH_VIDEOS_DISABLED ? tab.value !== "technology" : true) &&
-        (CELEBRITY_VIDEOS_DISABLED ? tab.value !== "celebrity" : true)
+        (CELEBRITY_VIDEOS_DISABLED ? tab.value !== "celebrity" : true) &&
+        !(
+          tab.value === "business" &&
+          loadedTabsRef.current.business &&
+          videosByTab.business.length === 0 &&
+          activeTab !== "business"
+        )
       ),
-    []
+    [activeTab, videosByTab.business.length]
   );
 
   const displayedVideosRaw = videosByTab[activeTab];
   const displayedVideos =
-    activeTab === "technology"
+    activeTab === "business"
+      ? displayedVideosRaw.filter((video) => isStrictBusinessVideo(video))
+      : activeTab === "technology"
       ? displayedVideosRaw.filter((video) => isTechnologyTabVideo(video))
       : activeTab === "world"
         ? displayedVideosRaw.filter((video) => isStrictWorldVideo(video))
@@ -110,6 +123,8 @@ export default function VideosPage() {
   const requestedTab =
     searchParams.get("tab") === "sports"
       ? "sports"
+      : searchParams.get("tab") === "business"
+        ? "business"
       : searchParams.get("tab") === "world"
         ? "world"
       : searchParams.get("tab") === "politics"
@@ -131,11 +146,16 @@ export default function VideosPage() {
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab !== "technology") {
+    if (activeTab !== "technology" && activeTab !== "business") {
       return;
     }
 
-    console.log("TECHNOLOGY RENDER FILTERED COUNT", displayedVideos.length);
+    if (activeTab === "technology") {
+      console.log("TECHNOLOGY RENDER FILTERED COUNT", displayedVideos.length);
+      return;
+    }
+
+    console.log("BUSINESS VIDEO FINAL COUNT", displayedVideos.length);
   }, [activeTab, displayedVideos.length]);
 
   useEffect(() => {
@@ -189,7 +209,7 @@ export default function VideosPage() {
         [tab]:
           tab === "sports"
             ? "Could not load live sports videos right now."
-            : tab === "world" || tab === "technology"
+            : tab === "world" || tab === "technology" || tab === "business"
               ? "Could not load videos right now."
             : tab === "politics"
               ? "Could not load live politics videos right now."
@@ -329,6 +349,7 @@ export default function VideosPage() {
 
     setVideosByTab((prev) => ({
       news: updateVideos(prev.news),
+      business: updateVideos(prev.business),
       world: updateVideos(prev.world),
       politics: updateVideos(prev.politics),
       sports: updateVideos(prev.sports),
@@ -345,6 +366,7 @@ export default function VideosPage() {
 
     setVideosByTab((prev) => ({
       news: updateVideos(prev.news),
+      business: updateVideos(prev.business),
       world: updateVideos(prev.world),
       politics: updateVideos(prev.politics),
       sports: updateVideos(prev.sports),
@@ -458,6 +480,8 @@ export default function VideosPage() {
           <strong>
             {activeTab === "sports"
               ? "No sports videos yet"
+              : activeTab === "business"
+                ? statusMessage || "No business videos available right now."
               : activeTab === "world"
                 ? statusMessage || "No world videos available right now."
               : activeTab === "politics"

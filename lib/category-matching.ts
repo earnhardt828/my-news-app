@@ -22,6 +22,11 @@ const POLITICS_STRONG_CONTEXT_PATTERN =
 const POLITICS_REJECTED_CONTEXT_PATTERN =
   /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather forecast|movie|music|gaming)\b/i;
 
+const BUSINESS_STRONG_CONTEXT_PATTERN =
+  /\b(business|economy|markets?|stocks?|stock market|company|companies|earnings|finance|wall street|investing|inflation|interest rates|federal reserve|banking|cnbc|bloomberg|reuters business|ap business|associated press business|wall street journal|yahoo finance)\b/i;
+const BUSINESS_REJECTED_CONTEXT_PATTERN =
+  /\b(sports?|espn|nba|nfl|mlb|nhl|mls|celebrity|hollywood|recipe|travel|weather|forecast|gaming|movie|music)\b/i;
+
 const WORLD_STRONG_CONTEXT_PATTERN =
   /\b(world news|international|global|foreign affairs|europe|middle east|asia|africa|united nations|bbc|reuters|associated press|ap\b|al jazeera|dw news|france 24|sky news|cnn international|cnn world|reuters world|ap world|bbc world|npr world|new york times world|washington post world)\b/i;
 const WORLD_REJECTED_CONTEXT_PATTERN =
@@ -131,6 +136,10 @@ export function hasTechnologyTabTierTwoContext(
 
 export function hasStrictPoliticsContext(values: Array<string | null | undefined>) {
   return hasStrictContext(values, POLITICS_STRONG_CONTEXT_PATTERN, POLITICS_REJECTED_CONTEXT_PATTERN);
+}
+
+export function hasStrictBusinessContext(values: Array<string | null | undefined>) {
+  return hasStrictContext(values, BUSINESS_STRONG_CONTEXT_PATTERN, BUSINESS_REJECTED_CONTEXT_PATTERN);
 }
 
 export function hasStrictWorldContext(values: Array<string | null | undefined>) {
