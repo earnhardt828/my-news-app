@@ -92,16 +92,15 @@ const POLITICS_TAB_SEARCH_QUERIES = [
   "Politico video",
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
+  "tech",
   "technology",
-  "tech news",
-  "technology news",
-  "AI news",
-  "Apple technology news",
-  "Google AI news",
-  "Microsoft AI news",
-  "OpenAI news",
-  "Nvidia news",
-  "cybersecurity news",
+  "AI",
+  "Apple",
+  "Google",
+  "Microsoft",
+  "OpenAI",
+  "Nvidia",
+  "cybersecurity",
   "The Verge",
   "TechCrunch",
   "CNET",
@@ -1285,8 +1284,9 @@ export async function GET(request: Request) {
     }
 
     if (tab === "technology") {
-      console.log("TECHNOLOGY API HIT");
-      const technologyEntries = searchEntries;
+      console.log("TECHNOLOGY COPIED POLITICS PATH");
+      console.log("TECHNOLOGY QUERY USED", searchTerms);
+      const technologyEntries = allEntries;
       const rawTechnologyVideos = dedupeVideoItems(
         technologyEntries
           .map((entry) => {
@@ -1328,28 +1328,8 @@ export async function GET(request: Request) {
               .slice(0, 10);
       const filteredTechnologyVideos = trustedSourceTechnologyVideos;
       console.log("TECHNOLOGY RAW COUNT", rawTechnologyVideos.length);
-      console.log(
-        "TECHNOLOGY FILTERED COUNT",
-        filteredTechnologyVideos.length
-      );
-      console.log(
-        "TECHNOLOGY RAW TITLES",
-        rawTechnologyVideos.map((video) => video.title)
-      );
-      console.log(
-        "TECHNOLOGY ACCEPTED TITLES",
-        filteredTechnologyVideos.map((video) => video.title)
-      );
-      console.log(
-        "TECHNOLOGY REJECTED TITLES",
-        rawTechnologyVideos
-          .filter((video) => !isTechnologyTabVideo(video))
-          .map((video) => video.title)
-      );
-      console.log(
-        "TECHNOLOGY FINAL TITLES",
-        filteredTechnologyVideos.map((video) => video.title)
-      );
+      console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
+      console.log("TECHNOLOGY FINAL TITLES", filteredTechnologyVideos.map((video) => video.title));
 
       return Response.json({
         videos: filteredTechnologyVideos,
