@@ -4,6 +4,7 @@ import {
   hasTechnologyTabContext,
   hasTechnologyTabTierOneContext,
   hasTechnologyTabTierTwoContext,
+  hasTechnologyTabWhitelistedSourceContext,
   hasStrictWorldContext,
 } from "./category-matching";
 
@@ -60,6 +61,16 @@ export function isTechnologyTierOneVideo(video: FilterableVideo) {
 
 export function isTechnologyTierTwoVideo(video: FilterableVideo) {
   return hasTechnologyTabTierTwoContext(video.title, [
+    video.title,
+    video.creator,
+    video.category,
+    video.watchUrl,
+    video.thumbnailUrl,
+  ]);
+}
+
+export function isTechnologyWhitelistedSourceVideo(video: FilterableVideo) {
+  return hasTechnologyTabWhitelistedSourceContext([
     video.title,
     video.creator,
     video.category,

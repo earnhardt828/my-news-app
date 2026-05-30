@@ -5,7 +5,7 @@ const TECH_REJECTED_CONTEXT_PATTERN =
 const TECH_TAB_STRONG_CONTEXT_PATTERN =
   /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device|the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|marques brownlee|mkbhd|linus tech tips|wsj tech)\b/i;
 const TECH_TAB_TRUSTED_SOURCE_PATTERN =
-  /\b(the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|cnbc technology|marques brownlee|mkbhd|linus tech tips|wsj tech|wall street journal tech|digital trends|tom's guide)\b/i;
+  /\b(the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|cnbc technology|wsj|wall street journal|wsj tech|marques brownlee|mkbhd|linus tech tips|digital trends|tom's guide|pcmag|mit technology review)\b/i;
 const TECH_TAB_TOPIC_PATTERN =
   /\b(tech|technology|ai|artificial intelligence|openai|chatgpt|apple|iphone|google|microsoft|nvidia|cybersecurity|software|robot|app|device|gadget|chip|semiconductor|tesla)\b/i;
 const TECH_TAB_REJECTED_CONTEXT_PATTERN =
@@ -57,6 +57,29 @@ export function hasTechnologyTabContext(values: Array<string | null | undefined>
 }
 
 export function hasTechnologyTabTierOneContext(values: Array<string | null | undefined>) {
+  const haystack = values.filter(Boolean).join(" ").toLowerCase();
+  const hasTrustedSource = TECH_TAB_TRUSTED_SOURCE_PATTERN.test(haystack);
+  const hasRejectedSportsContext = TECH_TAB_REJECTED_CONTEXT_PATTERN.test(haystack);
+  const hasPoliticsContext = TECH_TAB_POLITICS_CONTEXT_PATTERN.test(haystack);
+  const hasOtherRejectedContext = TECH_TAB_OTHER_REJECTED_CONTEXT_PATTERN.test(haystack);
+  const hasCompanyTopicOverride = TECH_TAB_COMPANY_TOPIC_OVERRIDE_PATTERN.test(haystack);
+
+  if (!hasTrustedSource) {
+    return false;
+  }
+
+  if (hasRejectedSportsContext) {
+    return false;
+  }
+
+  if ((hasPoliticsContext || hasOtherRejectedContext) && !hasCompanyTopicOverride) {
+    return false;
+  }
+
+  return true;
+}
+
+export function hasTechnologyTabWhitelistedSourceContext(values: Array<string | null | undefined>) {
   const haystack = values.filter(Boolean).join(" ").toLowerCase();
   const hasTrustedSource = TECH_TAB_TRUSTED_SOURCE_PATTERN.test(haystack);
   const hasRejectedSportsContext = TECH_TAB_REJECTED_CONTEXT_PATTERN.test(haystack);

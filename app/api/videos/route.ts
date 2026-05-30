@@ -10,6 +10,7 @@ import {
   isTechnologyTabVideo,
   isTechnologyTierOneVideo,
   isTechnologyTierTwoVideo,
+  isTechnologyWhitelistedSourceVideo,
   isStrictPoliticsVideo,
   isStrictTechnologyVideo,
   isStrictWorldVideo,
@@ -93,14 +94,18 @@ const POLITICS_TAB_SEARCH_QUERIES = [
   "Politico video",
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
-  "technology",
-  "tech news",
-  "AI news",
-  "Apple",
-  "Google",
-  "Microsoft",
-  "OpenAI",
-  "Nvidia",
+  "The Verge",
+  "TechCrunch",
+  "Wired technology",
+  "CNET technology",
+  "Engadget",
+  "Ars Technica",
+  "Bloomberg Technology",
+  "CNBC Tech",
+  "MKBHD",
+  "Linus Tech Tips",
+  "WSJ Tech",
+  "MIT Technology Review",
 ] as const;
 
 function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedItem[] {
@@ -1311,26 +1316,35 @@ export async function GET(request: Request) {
           })
           .filter((video) => !isBlockedVideo(video))
       );
-      console.log("TECH RAW COUNT", rawTechnologyVideos.length);
-      rawTechnologyVideos.slice(0, 50).forEach((video) => {
-        console.log("TECH RAW VIDEO TITLE", video.title);
-        console.log("TECH RAW VIDEO CREATOR", video.creator);
-        console.log("TECH RAW VIDEO CATEGORY", video.category);
-        console.log("TECH RAW VIDEO URL", video.watchUrl);
-      });
+      const filteredTechnologyVideos = rawTechnologyVideos
+        .filter((video) => isTechnologyWhitelistedSourceVideo(video))
+        .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
+        .slice(0, 10);
       console.log(
-        "TECH RAW SOURCE LIST",
+        "TECH WHITELIST ACCEPTED SOURCES",
         Array.from(
-          new Set(rawTechnologyVideos.map((video) => video.creator).filter(Boolean))
+          new Set(filteredTechnologyVideos.map((video) => video.creator).filter(Boolean))
         )
       );
+      console.log(
+        "TECH WHITELIST REJECTED SOURCES",
+        Array.from(
+          new Set(
+            rawTechnologyVideos
+              .filter((video) => !isTechnologyWhitelistedSourceVideo(video))
+              .map((video) => video.creator)
+              .filter(Boolean)
+          )
+        )
+      );
+      console.log("TECH FINAL COUNT", filteredTechnologyVideos.length);
 
       return Response.json({
-        videos: rawTechnologyVideos,
+        videos: filteredTechnologyVideos,
         fallback: false,
         fetchFailed: false,
         message:
-          rawTechnologyVideos.length === 0
+          filteredTechnologyVideos.length === 0
             ? "No technology videos available right now."
             : undefined,
       });
