@@ -8656,6 +8656,39 @@ export default function Home() {
             }
           }
 
+          const isCelebrityCategory = normalizeSelectedCategoryName(category) === "Celebrity";
+
+          if (isCelebrityCategory) {
+            try {
+              const response = await fetch(`/api/videos?tab=celebrity`);
+              if (!response.ok) {
+                return [category, [] as VideoItem[]] as const;
+              }
+
+              const data = (await response.json()) as { videos?: VideoItem[]; fetchFailed?: boolean };
+              const mergedVideos = dedupeVideosBySourceTitleAndUrl(
+                Array.isArray(data.videos) ? data.videos : []
+              );
+              const relevantVideos = selectRecentCategoryVideos(mergedVideos, 4).sort(
+                (left, right) =>
+                  getPublishedAtTimestamp(right.publishedAt) -
+                  getPublishedAtTimestamp(left.publishedAt)
+              );
+
+              if (!isCancelled) {
+                setMyNewsCategoryVideoStatus((prev) => ({
+                  ...prev,
+                  [category]: { loading: false, error: Boolean(data.fetchFailed) },
+                }));
+              }
+
+              return [category, relevantVideos] as const;
+            } catch (error) {
+              console.error("Failed to load Celebrity videos from shared tab feed", error);
+              return [category, [] as VideoItem[]] as const;
+            }
+          }
+
           const queries = getMyNewsCategoryVideoQueries(category);
 
           const queryResults = await Promise.all(

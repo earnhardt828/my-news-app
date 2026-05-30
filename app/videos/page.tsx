@@ -461,7 +461,7 @@ export default function VideosPage() {
               : activeTab === "politics"
                 ? statusMessage || "No politics videos available right now."
               : activeTab === "celebrity"
-                ? "No celebrity videos yet"
+                ? statusMessage || "No celebrity videos available right now."
                 : activeTab === "technology"
                   ? "No technology videos available right now."
                 : "No news videos yet"}

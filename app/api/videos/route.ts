@@ -93,6 +93,20 @@ const POLITICS_TAB_SEARCH_QUERIES = [
   "CBS News politics",
   "Politico video",
 ] as const;
+const CELEBRITY_TAB_SEARCH_QUERIES = [
+  "celebrity news",
+  "entertainment news",
+  "E News celebrity",
+  "Entertainment Tonight",
+  "People celebrity",
+  "TMZ celebrity",
+  "Page Six celebrity",
+  "Hollywood Reporter celebrity",
+  "Variety celebrity",
+  "Billboard celebrity",
+  "Deadline Hollywood",
+  "Us Weekly celebrity",
+] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
   "The Verge",
   "TechCrunch",
@@ -1146,7 +1160,8 @@ export async function GET(request: Request) {
 
   try {
     console.log("VIDEO API TAB HIT", tab);
-    const useSpecializedSearchOnly = tab === "technology" || tab === "world";
+    const useSpecializedSearchOnly =
+      tab === "technology" || tab === "world" || tab === "celebrity";
     const results = await Promise.allSettled(APPROVED_CHANNELS.map((channel) => fetchVideosForChannel(channel)));
 
     const successfulEntries = results.flatMap((result) =>
@@ -1157,6 +1172,8 @@ export async function GET(request: Request) {
         ? [searchTerm]
         : tab === "world"
           ? [...WORLD_TAB_SEARCH_QUERIES]
+          : tab === "celebrity"
+            ? [...CELEBRITY_TAB_SEARCH_QUERIES]
           : [...TECHNOLOGY_TAB_SEARCH_QUERIES]
       : searchTerm
         ? [searchTerm]
@@ -1285,6 +1302,65 @@ export async function GET(request: Request) {
       });
     }
 
+    if (tab === "celebrity") {
+      const celebrityEntries = searchEntries;
+      const rawCelebrityVideos = dedupeVideoItems(
+        celebrityEntries
+          .map((entry) => {
+            const inferredCategory = inferVideoCategory(entry.title, entry.creator, category);
+
+            return {
+              id: entry.videoId,
+              youtubeId: entry.videoId,
+              title: entry.title,
+              creator: entry.creator,
+              category: inferredCategory,
+              orientation: inferVideoOrientation(entry.thumbnailWidth, entry.thumbnailHeight, {
+                title: entry.title,
+                thumbnailUrl: entry.thumbnailUrl,
+                watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+              }),
+              views: 0,
+              likes: 0,
+              comments: 0,
+              thumbnailUrl: entry.thumbnailUrl,
+              publishedAt: entry.publishedAt,
+              watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+              embedUrl: `https://www.youtube-nocookie.com/embed/${entry.videoId}?autoplay=1`,
+              fallback: false,
+            } satisfies VideoFeedItem;
+          })
+          .filter((video) => !isBlockedVideo(video))
+      );
+      const filteredCelebrityVideos = rawCelebrityVideos
+        .filter((video) => isStrictCelebrityVideo(video))
+        .sort((left, right) => getCelebrityVideoScore(right) - getCelebrityVideoScore(left))
+        .slice(0, 10);
+
+      console.log("CELEBRITY RAW COUNT", rawCelebrityVideos.length);
+      console.log("CELEBRITY FILTERED COUNT", filteredCelebrityVideos.length);
+      console.log(
+        "CELEBRITY FINAL TITLES",
+        filteredCelebrityVideos.map((video) => video.title)
+      );
+      console.log(
+        "CELEBRITY REJECTED TITLES",
+        rawCelebrityVideos
+          .filter((video) => !isStrictCelebrityVideo(video))
+          .map((video) => video.title)
+      );
+
+      return Response.json({
+        videos: filteredCelebrityVideos,
+        fallback: false,
+        fetchFailed: false,
+        message:
+          filteredCelebrityVideos.length === 0
+            ? "No celebrity videos available right now."
+            : undefined,
+      });
+    }
+
     if (tab === "technology") {
       console.log("TECHNOLOGY QUERY USED", searchTerms);
       const technologyEntries = searchEntries;
@@ -1364,7 +1440,6 @@ export async function GET(request: Request) {
       tab:
         tab === "sports" ||
         tab === "news" ||
-        tab === "celebrity" ||
         tab === "weather"
           ? tab
           : "all",
