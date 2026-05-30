@@ -1139,10 +1139,9 @@ export async function GET(request: Request) {
     | "world";
 
   try {
+    console.log("VIDEO API TAB HIT", tab);
     const useSpecializedSearchOnly = tab === "technology" || tab === "world";
-    const results = useSpecializedSearchOnly
-      ? []
-      : await Promise.allSettled(APPROVED_CHANNELS.map((channel) => fetchVideosForChannel(channel)));
+    const results = await Promise.allSettled(APPROVED_CHANNELS.map((channel) => fetchVideosForChannel(channel)));
 
     const successfulEntries = results.flatMap((result) =>
       result.status === "fulfilled" ? result.value : []
@@ -1184,11 +1183,10 @@ export async function GET(request: Request) {
       console.error("YouTube RSS feed failures:", failedFeeds);
     }
 
-    const allEntries = useSpecializedSearchOnly
-      ? searchEntries
-      : [...successfulEntries, ...searchEntries];
+    const allEntries = [...successfulEntries, ...searchEntries];
 
     if (tab === "world") {
+      console.log("WORLD RAW COUNT", allEntries.length);
       const rawWorldVideos = dedupeVideoItems(
         allEntries
           .map((entry) => {
@@ -1222,6 +1220,8 @@ export async function GET(request: Request) {
         .filter((video) => isStrictWorldVideo(video))
         .sort((left, right) => getWorldVideoScore(right) - getWorldVideoScore(left))
         .slice(0, 10);
+
+      console.log("WORLD FINAL COUNT", filteredWorldVideos.length);
 
       return Response.json({
         videos: filteredWorldVideos,
@@ -1280,6 +1280,7 @@ export async function GET(request: Request) {
     }
 
     if (tab === "technology") {
+      console.log("TECHNOLOGY RAW COUNT", allEntries.length);
       const rawTechnologyVideos = dedupeVideoItems(
         allEntries
           .map((entry) => {
@@ -1313,6 +1314,8 @@ export async function GET(request: Request) {
         .filter((video) => isStrictTechnologyVideo(video))
         .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
         .slice(0, 10);
+
+      console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
 
       return Response.json({
         videos: filteredTechnologyVideos,
@@ -1366,12 +1369,7 @@ export async function GET(request: Request) {
         videos: [],
         fallback: false,
         fetchFailed: true,
-        message:
-          tab === "politics"
-            ? "No politics videos available right now."
-            : tab === "world"
-              ? "No world videos available right now."
-              : "No technology videos available right now.",
+        message: tab === "politics" ? "No politics videos available right now." : "Could not load videos right now.",
       });
     }
 

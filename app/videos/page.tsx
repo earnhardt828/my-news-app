@@ -113,6 +113,14 @@ export default function VideosPage() {
   const [returnState, setReturnState] = useState<VideoReturnState | null>(null);
 
   useEffect(() => {
+    console.log("VIDEO PAGE ACTIVE TABS", SHARED_VIDEO_CATEGORIES.map((tab) => tab.value));
+  }, []);
+
+  useEffect(() => {
+    console.log("VIDEO PAGE ACTIVE TAB", activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
     setReturnState(readVideoReturnState());
   }, []);
 
@@ -129,7 +137,9 @@ export default function VideosPage() {
     setTabLoading((prev) => ({ ...prev, [tab]: true }));
 
     try {
-      const response = await apiFetch(`/api/videos?tab=${tab}`);
+      const fetchUrl = `/api/videos?tab=${tab}`;
+      console.log("VIDEO PAGE FETCH URL", fetchUrl);
+      const response = await apiFetch(fetchUrl);
       const data = (await response.json()) as {
         videos?: VideoApiItem[];
         fallback?: boolean;
@@ -151,7 +161,7 @@ export default function VideosPage() {
       }));
       loadedTabsRef.current[tab] = true;
     } catch (error) {
-        console.error(`Error loading ${tab} video feed:`, error);
+      console.error(`Error loading ${tab} video feed:`, error);
       setVideosByTab((prev) => ({
         ...prev,
         [tab]: tab === "news" ? initialVideos : [],
@@ -161,14 +171,12 @@ export default function VideosPage() {
         [tab]:
           tab === "sports"
             ? "Could not load live sports videos right now."
-            : tab === "world"
-              ? "Could not load live world videos right now."
+            : tab === "world" || tab === "technology"
+              ? "Could not load videos right now."
             : tab === "politics"
               ? "Could not load live politics videos right now."
             : tab === "celebrity"
               ? "Could not load live celebrity videos right now."
-              : tab === "technology"
-                ? "Could not load live technology videos right now."
               : "Could not load live videos, so the current feed is shown instead.",
       }));
     } finally {
