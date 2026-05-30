@@ -5767,6 +5767,9 @@ export default function Home() {
 
       const newsData = newsPayload?.articles ?? [];
       hasLiveNewsResponse = true;
+      if (feedMode === "sports") {
+        console.log("SPORTS LOCAL FETCH COUNT", newsData.length);
+      }
       if (feedMode === "local") {
         console.log("LOCAL FETCH ARTICLE COUNT", newsData.length);
       }
@@ -5786,6 +5789,11 @@ export default function Home() {
         console.log("TRENDING FETCH ERROR", emptyResponseError);
         if (feedMode === "local") {
           console.error("LOCAL FETCH ERROR", emptyResponseError);
+        }
+        if (feedMode === "sports" && sportsPreviewArticles.length > 0) {
+          setFeedLoadError(null);
+          setIsInitialFeedLoading(false);
+          return;
         }
         if (cachedFeed) {
           setFeedLoadError(
@@ -5991,8 +5999,17 @@ export default function Home() {
             : replace
               ? mergedArticles
               : mergeArticlesByIdentity(prev, mergedArticles);
+        if (feedMode === "sports" && replace && mergedArticles.length === 0 && prev.length > 0) {
+          console.log("SPORTS STATE UPDATE SOURCE", "live-feed-empty-ignored");
+          console.log("SPORTS STATE UPDATE COUNT", prev.length);
+          return prev;
+        }
         console.log("ARTICLES USED", nextArticles);
         console.log("TRENDING FINAL COUNT", nextArticles.length);
+        if (feedMode === "sports") {
+          console.log("SPORTS STATE UPDATE SOURCE", replace ? "live-feed-replace" : "live-feed-merge");
+          console.log("SPORTS STATE UPDATE COUNT", nextArticles.length);
+        }
         if (nextArticles.length > 0 && !bypassDirectFeedCache) {
           writeCachedFeedPayload(feedCacheKey, {
             articles: nextArticles,
@@ -6905,7 +6922,7 @@ export default function Home() {
     let isCancelled = false;
 
     async function loadTrendingPreviewSections() {
-      if (sortMode !== "trending") {
+      if (sortMode !== "trending" && sortMode !== "sports") {
         setBreakingPreviewArticles([]);
         setSportsPreviewArticles([]);
         setCelebrityPreviewArticles([]);
@@ -6925,14 +6942,16 @@ export default function Home() {
         return;
       }
 
-      setIsBreakingPreviewLoading(true);
       setIsSportsPreviewLoading(true);
-      setIsCelebrityPreviewLoading(true);
-      setIsTechnologyPreviewLoading(true);
-      setIsBusinessPreviewLoading(true);
-      setIsCarsPreviewLoading(true);
-      setIsFoodPreviewLoading(true);
-      setIsSciencePreviewLoading(true);
+      if (sortMode === "trending") {
+        setIsBreakingPreviewLoading(true);
+        setIsCelebrityPreviewLoading(true);
+        setIsTechnologyPreviewLoading(true);
+        setIsBusinessPreviewLoading(true);
+        setIsCarsPreviewLoading(true);
+        setIsFoodPreviewLoading(true);
+        setIsSciencePreviewLoading(true);
+      }
 
       try {
         const [
@@ -6945,49 +6964,63 @@ export default function Home() {
           foodResponse,
           scienceResponse,
         ] = await Promise.all([
-          fetch(
-            `/api/news?mode=search&query=${encodeURIComponent(
-              BREAKING_NEWS_FEED_QUERY
-            )}&pageSize=20`,
-            {
-              cache: "no-store",
-              headers: { Accept: "application/json" },
-            }
-          ),
+          sortMode === "trending"
+            ? fetch(
+                `/api/news?mode=search&query=${encodeURIComponent(
+                  BREAKING_NEWS_FEED_QUERY
+                )}&pageSize=20`,
+                {
+                  cache: "no-store",
+                  headers: { Accept: "application/json" },
+                }
+              )
+            : Promise.resolve(null),
           fetch("/api/news?mode=sports&pageSize=25", {
             cache: "no-store",
             headers: { Accept: "application/json" },
           }),
-          fetch("/api/news?mode=celebrity&pageSize=25", {
-            cache: "no-store",
-            headers: { Accept: "application/json" },
-          }),
-          fetch("/api/news?mode=technology&pageSize=25", {
-            cache: "no-store",
-            headers: { Accept: "application/json" },
-          }),
-          fetch("/api/news?mode=business&pageSize=25", {
-            cache: "no-store",
-            headers: { Accept: "application/json" },
-          }),
-          fetch(
-            `/api/news?mode=search&query=${encodeURIComponent(AUTO_FEED_QUERY)}&pageSize=25`,
-            {
+          sortMode === "trending"
+            ? fetch("/api/news?mode=celebrity&pageSize=25", {
+                cache: "no-store",
+                headers: { Accept: "application/json" },
+              })
+            : Promise.resolve(null),
+          sortMode === "trending"
+            ? fetch("/api/news?mode=technology&pageSize=25", {
+                cache: "no-store",
+                headers: { Accept: "application/json" },
+              })
+            : Promise.resolve(null),
+          sortMode === "trending"
+            ? fetch("/api/news?mode=business&pageSize=25", {
+                cache: "no-store",
+                headers: { Accept: "application/json" },
+              })
+            : Promise.resolve(null),
+          sortMode === "trending"
+            ? fetch(
+                `/api/news?mode=search&query=${encodeURIComponent(AUTO_FEED_QUERY)}&pageSize=25`,
+                {
+                  cache: "no-store",
+                  headers: { Accept: "application/json" },
+                }
+              )
+            : Promise.resolve(null),
+          sortMode === "trending"
+            ? fetch("/api/news?mode=food&pageSize=25", {
               cache: "no-store",
               headers: { Accept: "application/json" },
-            }
-          ),
-          fetch("/api/news?mode=food&pageSize=25", {
-            cache: "no-store",
-            headers: { Accept: "application/json" },
-          }),
-          fetch(
-            `/api/news?mode=search&query=${encodeURIComponent(SCIENCE_FEED_QUERY)}&pageSize=25`,
-            {
-              cache: "no-store",
-              headers: { Accept: "application/json" },
-            }
-          ),
+            })
+            : Promise.resolve(null),
+          sortMode === "trending"
+            ? fetch(
+                `/api/news?mode=search&query=${encodeURIComponent(SCIENCE_FEED_QUERY)}&pageSize=25`,
+                {
+                  cache: "no-store",
+                  headers: { Accept: "application/json" },
+                }
+              )
+            : Promise.resolve(null),
         ]);
 
         const [
@@ -7000,20 +7033,30 @@ export default function Home() {
           foodPayload,
           sciencePayload,
         ] = await Promise.all([
-          breakingResponse.ok ? breakingResponse.json().catch(() => null) : Promise.resolve(null),
-          sportsResponse.ok ? sportsResponse.json().catch(() => null) : Promise.resolve(null),
-          celebrityResponse.ok
+          breakingResponse && "ok" in breakingResponse && breakingResponse.ok
+            ? breakingResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          sportsResponse && "ok" in sportsResponse && sportsResponse.ok
+            ? sportsResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          celebrityResponse && "ok" in celebrityResponse && celebrityResponse.ok
             ? celebrityResponse.json().catch(() => null)
             : Promise.resolve(null),
-          technologyResponse.ok
+          technologyResponse && "ok" in technologyResponse && technologyResponse.ok
             ? technologyResponse.json().catch(() => null)
             : Promise.resolve(null),
-          businessResponse.ok
+          businessResponse && "ok" in businessResponse && businessResponse.ok
             ? businessResponse.json().catch(() => null)
             : Promise.resolve(null),
-          carsResponse.ok ? carsResponse.json().catch(() => null) : Promise.resolve(null),
-          foodResponse.ok ? foodResponse.json().catch(() => null) : Promise.resolve(null),
-          scienceResponse.ok ? scienceResponse.json().catch(() => null) : Promise.resolve(null),
+          carsResponse && "ok" in carsResponse && carsResponse.ok
+            ? carsResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          foodResponse && "ok" in foodResponse && foodResponse.ok
+            ? foodResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          scienceResponse && "ok" in scienceResponse && scienceResponse.ok
+            ? scienceResponse.json().catch(() => null)
+            : Promise.resolve(null),
         ]);
 
         if (isCancelled) {
@@ -7077,36 +7120,47 @@ export default function Home() {
             ).filter((article) => articleMatchesSelectedCategory(article, "Science"))
           : [];
 
-        setBreakingPreviewArticles(nextBreakingArticles);
-        setSportsPreviewArticles(nextSportsArticles);
-        setCelebrityPreviewArticles(nextCelebrityArticles);
-        setTechnologyPreviewArticles(nextTechnologyArticles);
-        setBusinessPreviewArticles(nextBusinessArticles);
-        setCarsPreviewArticles(nextCarsArticles);
-        setFoodPreviewArticles(nextFoodArticles);
-        setSciencePreviewArticles(nextScienceArticles);
+        if (sortMode === "trending") {
+          setBreakingPreviewArticles(nextBreakingArticles);
+          setCelebrityPreviewArticles(nextCelebrityArticles);
+          setTechnologyPreviewArticles(nextTechnologyArticles);
+          setBusinessPreviewArticles(nextBusinessArticles);
+          setCarsPreviewArticles(nextCarsArticles);
+          setFoodPreviewArticles(nextFoodArticles);
+          setSciencePreviewArticles(nextScienceArticles);
+        }
+        console.log("SPORTS BROAD FETCH COUNT", nextSportsArticles.length);
+        setSportsPreviewArticles((prev) => {
+          const nextValue = nextSportsArticles.length > 0 ? nextSportsArticles : prev;
+          console.log("SPORTS STATE UPDATE SOURCE", "broad-preview");
+          console.log("SPORTS STATE UPDATE COUNT", nextValue.length);
+          return nextValue;
+        });
       } catch (error) {
         console.error("TRENDING SECTION PREVIEW LOAD FAILED", error);
         if (!isCancelled) {
-          setBreakingPreviewArticles([]);
-          setSportsPreviewArticles([]);
-          setCelebrityPreviewArticles([]);
-          setTechnologyPreviewArticles([]);
-          setBusinessPreviewArticles([]);
-          setCarsPreviewArticles([]);
-          setFoodPreviewArticles([]);
-          setSciencePreviewArticles([]);
+          if (sortMode === "trending") {
+            setBreakingPreviewArticles([]);
+            setCelebrityPreviewArticles([]);
+            setTechnologyPreviewArticles([]);
+            setBusinessPreviewArticles([]);
+            setCarsPreviewArticles([]);
+            setFoodPreviewArticles([]);
+            setSciencePreviewArticles([]);
+          }
         }
       } finally {
         if (!isCancelled) {
-          setIsBreakingPreviewLoading(false);
+          if (sortMode === "trending") {
+            setIsBreakingPreviewLoading(false);
+            setIsCelebrityPreviewLoading(false);
+            setIsTechnologyPreviewLoading(false);
+            setIsBusinessPreviewLoading(false);
+            setIsCarsPreviewLoading(false);
+            setIsFoodPreviewLoading(false);
+            setIsSciencePreviewLoading(false);
+          }
           setIsSportsPreviewLoading(false);
-          setIsCelebrityPreviewLoading(false);
-          setIsTechnologyPreviewLoading(false);
-          setIsBusinessPreviewLoading(false);
-          setIsCarsPreviewLoading(false);
-          setIsFoodPreviewLoading(false);
-          setIsSciencePreviewLoading(false);
         }
       }
     }
@@ -15749,6 +15803,16 @@ export default function Home() {
   }
 
   if (sortMode === "sports") {
+    const showSportsEmptyState =
+      sportsTabArticles.length === 0 &&
+      localSportsArticles.length === 0 &&
+      !isLoading &&
+      !isSportsPreviewLoading;
+
+    if (showSportsEmptyState) {
+      console.log("SPORTS EMPTY MESSAGE SHOWN", true);
+    }
+
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("sports")}
@@ -15763,7 +15827,7 @@ export default function Home() {
             </div>
           </div>
 
-          {sportsTabArticles.length === 0 ? (
+          {showSportsEmptyState ? (
             <div className="empty-state compact-empty-state">
               <strong>No sports stories yet</strong>
               <span>Check back shortly for fresh sports coverage.</span>
