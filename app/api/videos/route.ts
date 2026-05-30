@@ -49,21 +49,19 @@ type VideoFeedItem = {
 type VideoFeedTab = "all" | "news" | "politics" | "sports" | "celebrity" | "technology";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
 const POLITICS_TAB_SEARCH_QUERIES = [
-  "politics news",
-  "White House news",
-  "Congress news",
-  "election news",
-  "Supreme Court news",
-  "campaign news",
-  "government news",
-  "AP Politics",
-  "Reuters Politics",
-  "CNN Politics",
-  "Fox News Politics",
-  "NBC News Politics",
-  "ABC News Politics",
-  "CBS News Politics",
+  "CNN politics latest",
+  "Fox News politics latest",
+  "NBC News politics latest",
+  "ABC News politics latest",
+  "CBS News politics latest",
+  "PBS NewsHour politics",
+  "Reuters politics",
+  "AP politics",
   "Politico video",
+  "White House latest",
+  "Congress latest",
+  "Supreme Court latest",
+  "election latest",
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
   "tech news",
@@ -262,9 +260,9 @@ const TECHNOLOGY_POSITIVE_PATTERN =
 const TECHNOLOGY_REJECTED_PATTERN =
   /(world news|politics|election|senate|congress|president|war|sportscenter|nfl|nba|mlb|nhl|mls|hockey|football|basketball|baseball|celebrity|hollywood|red carpet|weather|forecast|storm|crime|shooting|generic breaking news)/;
 const POLITICS_POSITIVE_PATTERN =
-  /(politics|political|white house|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|ap politics|reuters politics|cnn politics|fox news politics|nbc politics|abc politics|cbs politics|washington post politics|new york times politics)/;
+  /(politics|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news|washington post politics|new york times politics)/;
 const POLITICS_REJECTED_PATTERN =
-  /(sportscenter|nfl|nba|nhl|mlb|mls|hockey|football|basketball|baseball|celebrity|hollywood|red carpet|food network|recipe|travel|weather|forecast|storm|technology|tech|ai|software|crime scene|shooting)/;
+  /(sportscenter|nfl|nba|nhl|mlb|mls|hockey|football|basketball|baseball|celebrity|hollywood|red carpet|food network|recipe|travel|weather forecast|movie|music|gaming)/;
 
 const BLOCKED_VIDEO_SOURCE_PATTERN = /\b(kanak news|kanak news odisha)\b/i;
 const BLOCKED_VIDEO_URL_PATTERN = /kanaknews\.com/i;
@@ -1298,6 +1296,9 @@ export async function GET(request: Request) {
         )
       )
     ).flat();
+    if (tab === "politics") {
+      console.log("POLITICS VIDEOS RAW COUNT", searchEntries.length);
+    }
     const failedFeeds = results
       .map((result, index) =>
         result.status === "rejected"
@@ -1323,9 +1324,10 @@ export async function GET(request: Request) {
         return Response.json({
           videos: [],
           fallback: false,
+          fetchFailed: true,
           message:
             tab === "politics"
-              ? "No politics videos available right now."
+              ? "Could not load politics videos right now."
               : "No technology videos available right now.",
         });
       }
@@ -1356,6 +1358,7 @@ export async function GET(request: Request) {
         return Response.json({
           videos: [],
           fallback: false,
+          fetchFailed: false,
           message:
             tab === "politics"
               ? "No politics videos available right now."
@@ -1373,6 +1376,7 @@ export async function GET(request: Request) {
     return Response.json({
       videos,
       fallback: false,
+      fetchFailed: false,
     });
   } catch (error) {
     console.error("Error loading RSS news videos:", error);
@@ -1381,9 +1385,10 @@ export async function GET(request: Request) {
       return Response.json({
         videos: [],
         fallback: false,
+        fetchFailed: true,
         message:
           tab === "politics"
-            ? "No politics videos available right now."
+            ? "Could not load politics videos right now."
             : "No technology videos available right now.",
       });
     }

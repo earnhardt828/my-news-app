@@ -62,11 +62,11 @@ function isStrictPoliticsVideo(
   }`.toLowerCase();
 
   const hasPoliticsContext =
-    /\b(politics?|political|white house|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|ap politics|reuters politics|cnn politics|fox news politics|nbc politics|abc politics|cbs politics)\b/.test(
+    /\b(politics?|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news)\b/.test(
       haystack
     );
   const hasRejectedContext =
-    /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather|forecast|storm|technology|tech|ai|software|crime)\b/.test(
+    /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather forecast|movie|music|gaming)\b/.test(
       haystack
     );
 
@@ -190,6 +190,7 @@ export default function VideosPage() {
         videos?: VideoApiItem[];
         fallback?: boolean;
         message?: string;
+        fetchFailed?: boolean;
       };
 
       const normalizedVideos = normalizeVideoFeedItems(data.videos).filter((video) =>
@@ -202,7 +203,7 @@ export default function VideosPage() {
       }));
       setStatusMessages((prev) => ({
         ...prev,
-        [tab]: data.fallback ? data.message ?? "" : "",
+        [tab]: data.fallback || data.fetchFailed ? data.message ?? "" : "",
       }));
       loadedTabsRef.current[tab] = true;
     } catch (error) {
@@ -485,7 +486,7 @@ export default function VideosPage() {
             {activeTab === "sports"
               ? "No sports videos yet"
               : activeTab === "politics"
-                ? "No politics videos available right now."
+                ? statusMessage || "No politics videos available right now."
               : activeTab === "celebrity"
                 ? "No celebrity videos yet"
                 : activeTab === "technology"

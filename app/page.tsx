@@ -125,6 +125,12 @@ const MY_NEWS_POLITICS_ARTICLE_QUERIES = [
   "CNN Politics",
   "Fox News Politics",
   "NBC Politics",
+  "ABC Politics",
+  "CBS Politics",
+  "Washington Post Politics",
+  "New York Times Politics",
+  "NPR Politics",
+  "The Hill",
   "Politico",
   "White House",
   "Congress",
@@ -1219,6 +1225,7 @@ async function getMlbArticles() {
 }
 
 async function getPoliticsArticles() {
+  const startedAt = Date.now();
   const fetchPoliticsQuery = async (query: string) => {
     const timeoutMs = 3000;
 
@@ -1257,8 +1264,11 @@ async function getPoliticsArticles() {
     isStrictPoliticsArticle(article)
   );
 
+  console.log("POLITICS ARTICLES RAW COUNT", mergedPoliticsArticles.length);
   console.log("POLITICS ARTICLE COUNT", validPoliticsArticles.length);
+  console.log("POLITICS ARTICLES FINAL COUNT", validPoliticsArticles.length);
   console.log("MY NEWS POLITICS ARTICLE COUNT", validPoliticsArticles.length);
+  console.log("POLITICS FETCH TIME MS", Date.now() - startedAt);
 
   return validPoliticsArticles;
 }
@@ -3500,9 +3510,9 @@ const TECH_STRONG_CONTEXT_PATTERN =
 const TECH_REJECTED_CONTEXT_PATTERN =
   /\b(world news|politics?|crime|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|weather|forecast|storm|war|court|election|local news)\b/i;
 const POLITICS_STRONG_CONTEXT_PATTERN =
-  /\b(politics?|political|white house|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|ap politics|reuters politics|cnn politics|fox news politics|nbc politics|abc politics|cbs politics|washington post politics|new york times politics)\b/i;
+  /\b(politics?|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news|washington post politics|new york times politics|npr politics|the hill)\b/i;
 const POLITICS_REJECTED_CONTEXT_PATTERN =
-  /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather|forecast|storm|technology|tech|ai|software|crime)\b/i;
+  /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|food|recipe|travel|weather forecast|movie|music|gaming)\b/i;
 
 function hasStrictTechnologyContext(values: Array<string | null | undefined>) {
   const haystack = values.filter(Boolean).join(" ").toLowerCase();
@@ -4096,6 +4106,9 @@ export default function Home() {
   >({});
   const [myNewsCategorySupplementalVideos, setMyNewsCategorySupplementalVideos] = useState<
     Record<string, VideoItem[]>
+  >({});
+  const [myNewsCategoryVideoStatus, setMyNewsCategoryVideoStatus] = useState<
+    Record<string, { loading: boolean; error: boolean }>
   >({});
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -8234,15 +8247,18 @@ export default function Home() {
     if (sortMode !== "mynews" || normalizedSelectedCategories.length === 0) {
       setMyNewsCategorySupplementalArticles({});
       setMyNewsCategorySupplementalVideos({});
+      setMyNewsCategoryVideoStatus({});
       return;
     }
 
     let isCancelled = false;
 
     const loadSupplementalCategoryArticles = async () => {
-      const articleEntries: Array<[string, Article[]]> = [];
-
-      if (!normalizedSelectedCategories.includes("NASCAR") && !normalizedSelectedCategories.includes("MLB")) {
+      if (
+        !normalizedSelectedCategories.includes("NASCAR") &&
+        !normalizedSelectedCategories.includes("MLB") &&
+        !normalizedSelectedCategories.includes("Politics")
+      ) {
         if (!isCancelled) {
           setMyNewsCategorySupplementalArticles({});
         }
@@ -8253,27 +8269,42 @@ export default function Home() {
         if (isCancelled) {
           return;
         }
+        const articleTasks: Array<Promise<readonly [string, Article[]]>> = [];
+
         if (normalizedSelectedCategories.includes("NASCAR")) {
-          const validNascarArticles = await getNascarArticles();
-          console.log("NASCAR ARTICLE RAW COUNT", validNascarArticles.length);
-          console.log("NASCAR ARTICLE VALID COUNT", validNascarArticles.length);
-          articleEntries.push(["NASCAR", validNascarArticles]);
+          articleTasks.push(
+            getNascarArticles().then((validNascarArticles) => {
+              console.log("NASCAR ARTICLE RAW COUNT", validNascarArticles.length);
+              console.log("NASCAR ARTICLE VALID COUNT", validNascarArticles.length);
+              return ["NASCAR", validNascarArticles] as const;
+            })
+          );
         }
 
         if (normalizedSelectedCategories.includes("MLB")) {
-          console.log("FORCE MLB DEDICATED ROUTE ACTIVE");
-          const validMlbArticles = await getMlbArticles();
-          console.log("MY NEWS CATEGORY ROUTE", {
-            category: "MLB",
-            routeUsed: "dedicated-mlb",
-          });
-          articleEntries.push(["MLB", validMlbArticles]);
+          articleTasks.push(
+            getMlbArticles().then((validMlbArticles) => {
+              console.log("FORCE MLB DEDICATED ROUTE ACTIVE");
+              console.log("MY NEWS CATEGORY ROUTE", {
+                category: "MLB",
+                routeUsed: "dedicated-mlb",
+              });
+              return ["MLB", validMlbArticles] as const;
+            })
+          );
         }
 
         if (normalizedSelectedCategories.includes("Politics")) {
-          const validPoliticsArticles = await getPoliticsArticles();
-          articleEntries.push(["Politics", validPoliticsArticles]);
+          articleTasks.push(
+            getPoliticsArticles().then((validPoliticsArticles) => {
+              return ["Politics", validPoliticsArticles] as const;
+            })
+          );
         }
+
+        const articleEntries = (
+          await Promise.allSettled(articleTasks)
+        ).flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
 
         setMyNewsCategorySupplementalArticles(Object.fromEntries(articleEntries));
       } catch (error) {
@@ -8286,6 +8317,14 @@ export default function Home() {
     };
 
     const loadSupplementalCategoryVideos = async () => {
+      if (!isCancelled) {
+        setMyNewsCategoryVideoStatus((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            normalizedSelectedCategories.map((category) => [category, { loading: true, error: false }])
+          ),
+        }));
+      }
       // Articles usually arrive with stronger category/source metadata, but video feeds are noisier.
       // We compensate here with category-specific queries plus stricter title/source/url matching.
       const categoryVideoEntries = await Promise.all(
@@ -8331,13 +8370,24 @@ export default function Home() {
 
           if (category === "Politics") {
             console.log("MY NEWS POLITICS FETCH START");
+            const fetchStartedAt = Date.now();
             const response = await fetch(`/api/videos?tab=politics`);
 
             if (!response.ok) {
+              console.log("POLITICS FETCH TIME MS", Date.now() - fetchStartedAt);
+              if (!isCancelled) {
+                setMyNewsCategoryVideoStatus((prev) => ({
+                  ...prev,
+                  [category]: { loading: false, error: true },
+                }));
+              }
               return [category, [] as VideoItem[]] as const;
             }
 
-            const data = (await response.json()) as { videos?: VideoItem[] };
+            const data = (await response.json()) as {
+              videos?: VideoItem[];
+              fetchFailed?: boolean;
+            };
             const mergedVideos = dedupeVideosBySourceTitleAndUrl(
               Array.isArray(data.videos) ? data.videos : []
             );
@@ -8353,6 +8403,13 @@ export default function Home() {
             console.log("POLITICS VIDEO RAW COUNT", mergedVideos.length);
             console.log("POLITICS VIDEO FINAL COUNT", relevantVideos.length);
             console.log("MY NEWS POLITICS VIDEO COUNT", relevantVideos.length);
+            console.log("POLITICS FETCH TIME MS", Date.now() - fetchStartedAt);
+            if (!isCancelled) {
+              setMyNewsCategoryVideoStatus((prev) => ({
+                ...prev,
+                [category]: { loading: false, error: Boolean(data.fetchFailed) },
+              }));
+            }
             return [category, relevantVideos] as const;
           }
 
@@ -8474,6 +8531,15 @@ export default function Home() {
       }
 
       setMyNewsCategorySupplementalVideos(Object.fromEntries(categoryVideoEntries));
+      setMyNewsCategoryVideoStatus((prev) => ({
+        ...prev,
+        ...Object.fromEntries(
+          categoryVideoEntries.map(([category]) => [
+            category,
+            prev[category]?.error ? prev[category] : { loading: false, error: false },
+          ])
+        ),
+      }));
     };
 
     void loadSupplementalCategoryArticles();
@@ -11166,6 +11232,7 @@ export default function Home() {
     const isMlbRow = isDedicatedMlbCategory(category);
     const isTechnologyRow = normalizeSelectedCategoryName(category) === "Tech";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
+    const videoStatus = myNewsCategoryVideoStatus[category] ?? { loading: false, error: false };
     const videosToRender = isDedicatedMlbCategory(category)
       ? categoryVideos.filter((video) => isDedicatedMlbVideo(video))
       : isTechnologyRow
@@ -11221,7 +11288,13 @@ export default function Home() {
         ) : null}
         {isPoliticsRow && videosToRender.length === 0 ? (
           <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-            <strong>No politics videos available right now.</strong>
+            <strong>
+              {videoStatus.loading
+                ? "Loading politics videos..."
+                : videoStatus.error
+                  ? "Could not load politics videos right now."
+                  : "No politics videos available right now."}
+            </strong>
           </div>
         ) : null}
         <div className="quick-watch-scroll" role="list" aria-label={label}>
