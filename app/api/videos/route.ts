@@ -1315,13 +1315,19 @@ export async function GET(request: Request) {
           })
           .filter((video) => !isBlockedVideo(video))
       );
+      console.log("TECHNOLOGY RAW TITLES", rawTechnologyVideos.map((video) => video.title));
 
       const filteredTechnologyVideos = rawTechnologyVideos
         .filter((video) => isStrictTechnologyVideo(video))
         .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
         .slice(0, 10);
+      const rejectedTechnologyVideos = rawTechnologyVideos.filter(
+        (video) => !isStrictTechnologyVideo(video)
+      );
 
       console.log("TECHNOLOGY FILTERED COUNT", filteredTechnologyVideos.length);
+      console.log("TECHNOLOGY ACCEPTED TITLES", filteredTechnologyVideos.map((video) => video.title));
+      console.log("TECHNOLOGY REJECTED TITLES", rejectedTechnologyVideos.map((video) => video.title));
       console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
       console.log("TECHNOLOGY FINAL TITLES", filteredTechnologyVideos.map((video) => video.title));
 
