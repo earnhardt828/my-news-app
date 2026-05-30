@@ -8,7 +8,6 @@ import {
   getTechnologyVideoScore,
   getWorldVideoScore,
   isTechnologyTabVideo,
-  isTechnologyTrustedSourceVideo,
   isStrictPoliticsVideo,
   isStrictTechnologyVideo,
   isStrictWorldVideo,
@@ -1315,19 +1314,34 @@ export async function GET(request: Request) {
           })
           .filter((video) => !isBlockedVideo(video))
       );
-      const strictTechnologyVideos = rawTechnologyVideos
+      const politicsRejectedTechnologyVideos = rawTechnologyVideos.filter((video) => {
+        const haystack = [
+          video.title,
+          video.creator,
+          video.category,
+          video.watchUrl,
+          video.thumbnailUrl,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        const hasPoliticsContext =
+          /\b(politics?|political|trump|biden|white house|congress|senate|supreme court|election|campaign|government|policy|president)\b/.test(
+            haystack
+          );
+
+        return hasPoliticsContext && !isTechnologyTabVideo(video);
+      });
+      const filteredTechnologyVideos = rawTechnologyVideos
         .filter((video) => isTechnologyTabVideo(video))
         .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
         .slice(0, 10);
-      const trustedSourceTechnologyVideos =
-        strictTechnologyVideos.length >= 3
-          ? strictTechnologyVideos
-          : rawTechnologyVideos
-              .filter((video) => isTechnologyTrustedSourceVideo(video))
-              .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
-              .slice(0, 10);
-      const filteredTechnologyVideos = trustedSourceTechnologyVideos;
       console.log("TECHNOLOGY RAW COUNT", rawTechnologyVideos.length);
+      console.log(
+        "TECHNOLOGY POLITICS REJECTED",
+        politicsRejectedTechnologyVideos.map((video) => video.title)
+      );
       console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
       console.log("TECHNOLOGY FINAL TITLES", filteredTechnologyVideos.map((video) => video.title));
 
