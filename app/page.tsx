@@ -86,6 +86,7 @@ import {
   getDisplayCategory,
 } from "../lib/categories";
 import {
+  CELEBRITY_VIDEOS_DISABLED,
   resolveVideoCategoryForMyNewsCategory,
   TECH_VIDEOS_DISABLED,
   type SharedVideoTab,
@@ -8659,6 +8660,9 @@ export default function Home() {
           const isCelebrityCategory = normalizeSelectedCategoryName(category) === "Celebrity";
 
           if (isCelebrityCategory) {
+            if (CELEBRITY_VIDEOS_DISABLED) {
+              return [category, [] as VideoItem[]] as const;
+            }
             try {
               const response = await fetch(`/api/videos?tab=celebrity`);
               if (!response.ok) {
@@ -11507,9 +11511,13 @@ export default function Home() {
     categoryVideos: VideoItem[]
   ) => {
     const isTechnologyRow = normalizeSelectedCategoryName(category) === "Tech";
+    const isCelebrityRow = normalizeSelectedCategoryName(category) === "Celebrity";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const isWorldRow = normalizeSelectedCategoryName(category) === "World";
     if (TECH_VIDEOS_DISABLED && isTechnologyRow) {
+      return null;
+    }
+    if (CELEBRITY_VIDEOS_DISABLED && isCelebrityRow) {
       return null;
     }
     const videosToRender = isDedicatedMlbCategory(category)

@@ -7,6 +7,7 @@ import { apiFetch } from "../../lib/api-base";
 import ShareButton from "../components/share-button";
 import SourceBadge from "../components/source-badge";
 import {
+  CELEBRITY_VIDEOS_DISABLED,
   readVideoReturnState,
   savePendingVideoReturnState,
   SHARED_VIDEO_CATEGORIES,
@@ -91,7 +92,8 @@ export default function VideosPage() {
   const visibleTabs = useMemo(
     () =>
       SHARED_VIDEO_CATEGORIES.filter((tab) =>
-        TECH_VIDEOS_DISABLED ? tab.value !== "technology" : true
+        (TECH_VIDEOS_DISABLED ? tab.value !== "technology" : true) &&
+        (CELEBRITY_VIDEOS_DISABLED ? tab.value !== "celebrity" : true)
       ),
     []
   );
@@ -112,7 +114,7 @@ export default function VideosPage() {
         ? "world"
       : searchParams.get("tab") === "politics"
         ? "politics"
-      : searchParams.get("tab") === "celebrity"
+      : searchParams.get("tab") === "celebrity" && !CELEBRITY_VIDEOS_DISABLED
         ? "celebrity"
         : searchParams.get("tab") === "technology" && !TECH_VIDEOS_DISABLED
           ? "technology"
