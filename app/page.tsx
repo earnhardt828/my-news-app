@@ -255,15 +255,7 @@ const NBA_SECTION_VIDEO_QUERIES = [
   "NBA Finals highlights",
 ] as const;
 const NFL_SECTION_ARTICLE_QUERIES = [
-  "NFL news",
-  "NFL latest",
-  "football news",
-  "NFL injuries",
-  "NFL offseason",
-  "NFL draft",
-  "NFL training camp",
-  "NFL teams",
-  "NFL.com latest",
+  "NFL.com",
   "ESPN NFL",
   "AP NFL",
   "Reuters NFL",
@@ -273,6 +265,12 @@ const NFL_SECTION_ARTICLE_QUERIES = [
   "Yahoo Sports NFL",
   "Bleacher Report NFL",
   "Sports Illustrated NFL",
+  "The Athletic NFL",
+  "NFL draft",
+  "NFL injuries",
+  "NFL offseason",
+  "NFL training camp",
+  "NFL teams",
 ] as const;
 const NFL_SECTION_VIDEO_QUERIES = [
   "NFL highlights",
@@ -341,6 +339,8 @@ const MY_NEWS_MLB_VIDEO_QUERIES = [
   "Astros highlights",
   "Rangers highlights",
 ] as const;
+const MLB_VIDEOS_DISABLED = true;
+const NFL_VIDEOS_DISABLED = true;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
 function buildNhlFallbackVideos(): VideoItem[] {
@@ -1282,8 +1282,42 @@ async function getMlbArticles() {
 
   console.log("MLB DEDICATED ARTICLES RAW", mergedMlbArticles.length);
   console.log("MLB DEDICATED ARTICLES VALID", validMlbArticles.length);
+  console.log("MLB ARTICLE FINAL COUNT", validMlbArticles.length);
 
   return validMlbArticles;
+}
+
+async function getNflArticles() {
+  const payloads = await Promise.allSettled(
+    NFL_SECTION_ARTICLE_QUERIES.map(async (query) => {
+      const response = await Promise.race([
+        fetch(`/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=8`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        new Promise<Response | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 3000);
+        }),
+      ]);
+
+      if (!response || !response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  const validNflArticles = dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  ).filter((article) => isStrictNflArticle(article));
+
+  console.log("NFL ARTICLE FINAL COUNT", validNflArticles.length);
+  return validNflArticles;
 }
 
 async function getPoliticsArticles() {
@@ -3809,6 +3843,39 @@ function isStrictWorldArticle(article: Article) {
   ]);
 }
 
+function isStrictNflArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasNflTerms =
+    /\b(nfl|national football league|nfl\.com|football|quarterback|touchdown|super bowl|training camp|draft|injuries|offseason)\b/.test(
+      haystack
+    );
+  const hasNflSourceTerms =
+    /\b(nfl\.com|espn nfl|ap nfl|reuters nfl|cbs sports nfl|nbc sports nfl|fox sports nfl|yahoo sports nfl|bleacher report nfl|sports illustrated nfl|the athletic nfl)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(odds|betting|sportsbook|parlay|spread pick|over\/under|bonus code|promo code|celebrity|hollywood|movie|music|tv show|supergirl)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms || isSportsBettingAd(article)) {
+    return false;
+  }
+
+  return hasNflTerms || hasNflSourceTerms;
+}
+
 function getTechLargeCardSelection(articles: Article[]) {
   const candidates = articles.map((article) => ({
     article,
@@ -3925,6 +3992,24 @@ function getAutoLargeCardSelection(articles: Article[]) {
     .find((candidate) => candidate.isStrictAuto && candidate.image);
 
   console.log("AUTO LARGE CARD SELECTED", {
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
+}
+
+function getNflLargeCardSelection(articles: Article[]) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+      isStrictNfl: isStrictNflArticle(article),
+    }))
+    .find((candidate) => candidate.isStrictNfl && candidate.image);
+
+  console.log("NFL LARGE CARD SELECTED", {
     title: selectedCandidate?.article.title ?? null,
     source: selectedCandidate?.article.source ?? null,
     imageUrl: selectedCandidate?.image?.src ?? null,
@@ -8329,6 +8414,8 @@ export default function Home() {
           ? "dedicated-mlb"
           : category === "NASCAR"
             ? "dedicated-nascar"
+            : category === "NFL"
+              ? "dedicated-nfl"
             : category === "Sports"
               ? "dedicated-sports"
             : category === "World"
@@ -8344,6 +8431,7 @@ export default function Home() {
         const mergedCategoryArticles =
           category === "NASCAR" ||
           isDedicatedMlbCategory(category) ||
+          category === "NFL" ||
           category === "Sports" ||
           category === "Politics" ||
           category === "World"
@@ -8360,6 +8448,8 @@ export default function Home() {
 
           return isDedicatedMlbCategory(category)
             ? isDedicatedMlbArticle(article, "article")
+            : category === "NFL"
+              ? isStrictNflArticle(article)
             : category === "Sports"
               ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
             : category === "Auto"
@@ -8376,6 +8466,8 @@ export default function Home() {
             getArticlePriorityScore(leftArticle) +
             (category === "Sports"
               ? (isBroadSportsArticle(leftArticle) && !isSportsBettingAd(leftArticle) ? 6 : 0)
+              : category === "NFL"
+                ? (isStrictNflArticle(leftArticle) ? 6 : 0)
               : category === "Auto"
               ? (isStrictAutoArticle(leftArticle) ? 6 : 0)
               : category === "Politics"
@@ -8395,6 +8487,8 @@ export default function Home() {
             getArticlePriorityScore(rightArticle) +
             (category === "Sports"
               ? (isBroadSportsArticle(rightArticle) && !isSportsBettingAd(rightArticle) ? 6 : 0)
+              : category === "NFL"
+                ? (isStrictNflArticle(rightArticle) ? 6 : 0)
               : category === "Auto"
               ? (isStrictAutoArticle(rightArticle) ? 6 : 0)
               : category === "Politics"
@@ -8554,12 +8648,15 @@ export default function Home() {
       const categoryPool =
         category === "NASCAR" ||
         isDedicatedMlbCategory(category) ||
+        category === "NFL" ||
         category === "Sports" ||
         category === "Politics" ||
         category === "World"
           ? (myNewsCategorySupplementalArticles[category] ?? []).filter((article) =>
               isDedicatedMlbCategory(category)
                 ? isDedicatedMlbArticle(article, "lead")
+                : category === "NFL"
+                  ? isStrictNflArticle(article)
                 : category === "Sports"
                   ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
                 : category === "Business"
@@ -8576,6 +8673,8 @@ export default function Home() {
             ]).filter((article) =>
               category === "Business"
                 ? isStrictBusinessArticle(article)
+              : category === "NFL"
+                ? isStrictNflArticle(article)
               : category === "Sports"
                 ? isBroadSportsArticle(article) && !isSportsBettingAd(article)
               : category === "Politics"
@@ -8616,6 +8715,14 @@ export default function Home() {
       if (category === "Auto") {
         leadMap[category] = {
           article: getAutoLargeCardSelection(categoryPool),
+          imageSrcOverride: null,
+        };
+        return;
+      }
+
+      if (category === "NFL") {
+        leadMap[category] = {
+          article: getNflLargeCardSelection(categoryPool),
           imageSrcOverride: null,
         };
         return;
@@ -8743,6 +8850,14 @@ export default function Home() {
           );
         }
 
+        if (normalizedSelectedCategories.includes("NFL")) {
+          articleTasks.push(
+            getNflArticles().then((validNflArticles) => {
+              return ["NFL", validNflArticles] as const;
+            })
+          );
+        }
+
         if (normalizedSelectedCategories.includes("Business")) {
           articleTasks.push(
             getBusinessArticles().then((validBusinessArticles) => {
@@ -8847,20 +8962,25 @@ export default function Home() {
           }
 
           if (category === "MLB") {
-            console.log("FORCE MLB DEDICATED ROUTE ACTIVE");
-            const relevantVideos = await getMlbVideos();
-            console.log("MLB DEDICATED VIDEOS CALLED");
-            console.log("MY NEWS CATEGORY ROUTE", {
-              category: "MLB",
-              routeUsed: "dedicated-mlb",
-            });
-            console.log("MLB DEDICATED VIDEOS RAW COUNT", relevantVideos.length);
-            console.log("MLB DEDICATED VIDEOS VALID COUNT", relevantVideos.length);
-            console.log(
-              "MLB DEDICATED VIDEOS TITLES",
-              relevantVideos.slice(0, 10).map((video) => video.title)
-            );
-            return [category, relevantVideos] as const;
+            console.log("MLB VIDEOS DISABLED");
+            if (!isCancelled) {
+              setMyNewsCategoryVideoStatus((prev) => ({
+                ...prev,
+                [category]: { loading: false, error: false },
+              }));
+            }
+            return [category, [] as VideoItem[]] as const;
+          }
+
+          if (category === "NFL") {
+            console.log("NFL VIDEOS DISABLED");
+            if (!isCancelled) {
+              setMyNewsCategoryVideoStatus((prev) => ({
+                ...prev,
+                [category]: { loading: false, error: false },
+              }));
+            }
+            return [category, [] as VideoItem[]] as const;
           }
 
           if (category === "Politics") {
@@ -11944,6 +12064,8 @@ export default function Home() {
     const isTechnologyRow = normalizeSelectedCategoryName(category) === "Tech";
     const isBusinessRow = normalizeSelectedCategoryName(category) === "Business";
     const isAutoRow = normalizeSelectedCategoryName(category) === "Auto";
+    const isMlbRow = normalizeSelectedCategoryName(category) === "MLB";
+    const isNflRow = normalizeSelectedCategoryName(category) === "NFL";
     const isCelebrityRow = normalizeSelectedCategoryName(category) === "Celebrity";
     const isPoliticsRow = normalizeSelectedCategoryName(category) === "Politics";
     const isWorldRow = normalizeSelectedCategoryName(category) === "World";
@@ -11951,6 +12073,14 @@ export default function Home() {
       return null;
     }
     if (CELEBRITY_VIDEOS_DISABLED && isCelebrityRow) {
+      return null;
+    }
+    if (isMlbRow && MLB_VIDEOS_DISABLED) {
+      console.log("MLB VIDEOS DISABLED");
+      return null;
+    }
+    if (isNflRow && NFL_VIDEOS_DISABLED) {
+      console.log("NFL VIDEOS DISABLED");
       return null;
     }
     if (isBusinessRow || (AUTO_VIDEOS_DISABLED && isAutoRow)) {
@@ -12870,11 +13000,6 @@ export default function Home() {
               <strong className="profile-section-title home-section-title">{label}</strong>
             </div>
           </div>
-          {sectionKey === "MLB" ? (
-            <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-              <strong>SPORTS MLB VIDEOS</strong>
-            </div>
-          ) : null}
           <div className="empty-state compact-empty-state">
             <strong>Videos loading…</strong>
           </div>
@@ -12889,11 +13014,6 @@ export default function Home() {
             <strong className="profile-section-title home-section-title">{label}</strong>
           </div>
         </div>
-        {sectionKey === "MLB" ? (
-          <div className="empty-state compact-empty-state" style={{ marginBottom: "12px" }}>
-            <strong>SPORTS MLB VIDEOS</strong>
-          </div>
-        ) : null}
         <div className="quick-watch-scroll" role="list" aria-label={`${label} videos`}>
           {filteredLeagueVideos.map((video, index) => (
             <div key={`${sectionKey}-video-${video.id}`} className="quick-watch-item" role="listitem">
@@ -12919,7 +13039,7 @@ export default function Home() {
                 hideActions
                 useRelativeTime
                 className="video-card-inline quick-watch-video-card"
-                useUniformTallFrame={sectionKey === "NHL"}
+                useUniformWideFrame
                 variant="article"
               />
             </div>

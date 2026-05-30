@@ -29,6 +29,7 @@ export default function CategoryVideoRow({
   setFrameRef,
 }: CategoryVideoRowProps) {
   const isMlbRow = category === "MLB";
+  const isSportsRow = category === "Sports";
   const isTechnologyRow = category === "Tech";
   const isPoliticsRow = category === "Politics";
   const isWorldRow = category === "World";
@@ -102,7 +103,7 @@ export default function CategoryVideoRow({
                 className="video-card-inline quick-watch-video-card"
                 variant="article"
                 useUniformTallFrame={isMlbRow}
-                useUniformWideFrame={isTechnologyRow}
+                useUniformWideFrame={isTechnologyRow || isSportsRow}
               />
             </div>
           );
