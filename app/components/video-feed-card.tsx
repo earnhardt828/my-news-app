@@ -301,9 +301,7 @@ export default function VideoFeedCard({
                 />
               ) : null}
               <div className="video-frame-overlay">
-                <span className="video-play-badge" aria-hidden="true">
-                  ▶
-                </span>
+                <span className="video-play-badge" aria-hidden="true" />
               </div>
               <div className="video-card-title-overlay">
                 <h3 className="video-card-title-overlay-text">{video.title}</h3>
@@ -422,9 +420,7 @@ export default function VideoFeedCard({
                 />
               ) : null}
               <div className="video-frame-overlay">
-                <span className="video-play-badge" aria-hidden="true">
-                  ▶
-                </span>
+                <span className="video-play-badge" aria-hidden="true" />
                 <span className="video-live-pill">
                   {video.fallback ? "Placeholder video" : "Tap to play"}
                 </span>

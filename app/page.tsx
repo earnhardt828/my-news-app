@@ -121,27 +121,13 @@ const MLB_SECTION_VIDEO_QUERIES = [
 ] as const;
 const MY_NEWS_POLITICS_ARTICLE_QUERIES = [
   "politics",
-  "U.S. politics",
-  "White House",
-  "Congress",
-  "Senate",
-  "Supreme Court",
-  "election",
-  "campaign",
-  "government",
-  "policy",
   "AP Politics",
   "Reuters Politics",
   "Politico",
   "CNN Politics",
   "Fox News Politics",
-  "NBC Politics",
-  "ABC Politics",
-  "CBS Politics",
-  "NPR Politics",
-  "The Hill",
-  "Washington Post Politics",
-  "New York Times Politics",
+  "White House",
+  "Congress",
 ] as const;
 const POLITICS_LARGE_CARD_FALLBACK_IMAGE = "/category-images/politics.png";
 const NHL_SECTION_ARTICLE_QUERIES = [
@@ -1234,8 +1220,9 @@ async function getMlbArticles() {
 
 async function getPoliticsArticles() {
   const startedAt = Date.now();
+  console.log("POLITICS MY NEWS LOAD START");
   const fetchPoliticsQuery = async (query: string) => {
-    const timeoutMs = 5000;
+    const timeoutMs = 3000;
 
     return await Promise.race([
       fetch(
@@ -1275,8 +1262,11 @@ async function getPoliticsArticles() {
   console.log("POLITICS ARTICLES RAW COUNT", mergedPoliticsArticles.length);
   console.log("POLITICS ARTICLE COUNT", validPoliticsArticles.length);
   console.log("POLITICS ARTICLES FINAL COUNT", validPoliticsArticles.length);
+  console.log("POLITICS ARTICLE FINAL COUNT", validPoliticsArticles.length);
   console.log("MY NEWS POLITICS ARTICLE COUNT", validPoliticsArticles.length);
-  console.log("POLITICS ARTICLE FETCH TIME", Date.now() - startedAt);
+  console.log("POLITICS ARTICLES READY MS", Date.now() - startedAt);
+  console.log("POLITICS FETCH TIME MS", Date.now() - startedAt);
+  console.log("POLITICS TOTAL BLOCKING TIME", Date.now() - startedAt);
 
   return validPoliticsArticles;
 }
@@ -4115,6 +4105,9 @@ export default function Home() {
   const [myNewsCategorySupplementalVideos, setMyNewsCategorySupplementalVideos] = useState<
     Record<string, VideoItem[]>
   >({});
+  const [myNewsCategoryArticleStatus, setMyNewsCategoryArticleStatus] = useState<
+    Record<string, { loading: boolean; error: boolean }>
+  >({});
   const [myNewsCategoryVideoStatus, setMyNewsCategoryVideoStatus] = useState<
     Record<string, { loading: boolean; error: boolean }>
   >({});
@@ -5441,7 +5434,10 @@ export default function Home() {
 
       try {
         const responses = await Promise.allSettled(
-          categories.slice(0, 8).map(async (category) => {
+          categories
+            .slice(0, 8)
+            .filter((category) => normalizeSelectedCategoryName(category) !== "Politics")
+            .map(async (category) => {
             const response = await apiFetch(
               `/api/news?mode=myfeed&category=${encodeURIComponent(category)}&page=1&pageSize=8`
             );
@@ -5455,7 +5451,7 @@ export default function Home() {
                 (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
             );
-          })
+            })
         );
 
         if (isCancelled) {
@@ -8094,7 +8090,16 @@ export default function Home() {
           articles: selectedArticles,
         };
       })
-      .filter((section) => section.articles.length > 0);
+      .filter((section) => {
+        if (section.articles.length > 0) {
+          return true;
+        }
+
+        return (
+          section.category === "Politics" &&
+          Boolean(myNewsCategoryArticleStatus.Politics?.loading || myNewsCategoryArticleStatus.Politics?.error)
+        );
+      });
 
     return [
       ...sections,
@@ -8105,7 +8110,12 @@ export default function Home() {
         ),
       },
     ];
-  }, [categorySectionArticles, myNewsCategorySupplementalArticles, normalizedSelectedCategories]);
+  }, [
+    categorySectionArticles,
+    myNewsCategoryArticleStatus,
+    myNewsCategorySupplementalArticles,
+    normalizedSelectedCategories,
+  ]);
 
   const myNewsCategorySourceSuggestions = useMemo(() => {
     const suggestions: Record<string, string[]> = {};
@@ -8264,6 +8274,7 @@ export default function Home() {
   useEffect(() => {
     if (sortMode !== "mynews" || normalizedSelectedCategories.length === 0) {
       setMyNewsCategorySupplementalArticles({});
+      setMyNewsCategoryArticleStatus({});
       setMyNewsCategorySupplementalVideos({});
       setMyNewsCategoryVideoStatus({});
       return;
@@ -8272,6 +8283,14 @@ export default function Home() {
     let isCancelled = false;
 
     const loadSupplementalCategoryArticles = async () => {
+      if (!isCancelled) {
+        setMyNewsCategoryArticleStatus((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            normalizedSelectedCategories.map((category) => [category, { loading: category === "Politics", error: false }])
+          ),
+        }));
+      }
       if (
         !normalizedSelectedCategories.includes("NASCAR") &&
         !normalizedSelectedCategories.includes("MLB") &&
@@ -8325,11 +8344,21 @@ export default function Home() {
         ).flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
 
         setMyNewsCategorySupplementalArticles(Object.fromEntries(articleEntries));
+        setMyNewsCategoryArticleStatus((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            articleEntries.map(([category]) => [category, { loading: false, error: false }])
+          ),
+        }));
       } catch (error) {
         console.error("MY NEWS DEDICATED ARTICLE SUPPLEMENT LOAD FAILED", error);
 
         if (!isCancelled) {
           setMyNewsCategorySupplementalArticles({});
+          setMyNewsCategoryArticleStatus((prev) => ({
+            ...prev,
+            Politics: { loading: false, error: true },
+          }));
         }
       }
     };
@@ -8439,6 +8468,7 @@ export default function Home() {
             console.log("POLITICS VIDEO RAW COUNT", mergedVideos.length);
             console.log("POLITICS VIDEO FINAL COUNT", relevantVideos.length);
             console.log("POLITICS MY NEWS VIDEO COUNT", relevantVideos.length);
+            console.log("POLITICS VIDEOS READY MS", Date.now() - fetchStartedAt);
             console.log("POLITICS FETCH TIME MS", Date.now() - fetchStartedAt);
             if (!isCancelled) {
               setMyNewsCategoryVideoStatus((prev) => ({
@@ -13627,6 +13657,11 @@ export default function Home() {
                 .filter((section) => section.category !== "Recommended for You")
                 .map((section, index, filteredSections) => {
                   const isDedicatedMlbSection = isDedicatedMlbCategory(section.category);
+                  const isPoliticsSection = section.category === "Politics";
+                  const politicsArticleStatus = myNewsCategoryArticleStatus[section.category] ?? {
+                    loading: false,
+                    error: false,
+                  };
                   const dedicatedMlbArticles = isDedicatedMlbSection
                     ? selectSourceBalancedArticles(
                         (myNewsCategorySupplementalArticles[section.category] ?? [])
@@ -13777,6 +13812,14 @@ export default function Home() {
                                   excludeArticleKey: leadArticleKey,
                                 }
                               )}
+                              {isPoliticsSection &&
+                              !leadArticle &&
+                              section.articles.length === 0 &&
+                              politicsArticleStatus.loading ? (
+                                <div className="muted" style={{ padding: "4px 0 0" }}>
+                                  Loading politics stories...
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })()}

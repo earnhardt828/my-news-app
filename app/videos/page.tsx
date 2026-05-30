@@ -534,9 +534,7 @@ export default function VideosPage() {
                       aria-label={`Play ${video.title}`}
                     >
                       <div className="reel-play-overlay">
-                        <span className="video-play-badge" aria-hidden="true">
-                          ▶
-                        </span>
+                        <span className="video-play-badge" aria-hidden="true" />
                       </div>
                     </button>
                   )}
