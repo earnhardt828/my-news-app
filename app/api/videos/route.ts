@@ -1281,7 +1281,7 @@ export async function GET(request: Request) {
       console.log("POLITICS TAB API HIT", { searchTerm, category });
     }
 
-    const useSpecializedSearchOnly = tab === "technology" || tab === "politics";
+    const useSpecializedSearchOnly = tab === "technology";
     const results = useSpecializedSearchOnly
       ? []
       : await Promise.allSettled(APPROVED_CHANNELS.map((channel) => fetchVideosForChannel(channel)));
@@ -1292,9 +1292,7 @@ export async function GET(request: Request) {
     const searchTerms = useSpecializedSearchOnly
       ? searchTerm
         ? [searchTerm]
-        : tab === "politics"
-          ? [...POLITICS_TAB_SEARCH_QUERIES]
-          : [...TECHNOLOGY_TAB_SEARCH_QUERIES]
+        : [...TECHNOLOGY_TAB_SEARCH_QUERIES]
       : searchTerm
         ? [searchTerm]
         : [];
@@ -1308,11 +1306,10 @@ export async function GET(request: Request) {
         )
       )
     ).flat();
-    let effectiveEntries = searchEntries;
     if (tab === "politics") {
       console.log(
         "POLITICS RAW VIDEOS BEFORE FILTER",
-        searchEntries.slice(0, 10).map((entry) => ({
+        successfulEntries.slice(0, 10).map((entry) => ({
           title: entry.title,
           creator: entry.creator,
           videoId: entry.videoId,
@@ -1337,25 +1334,8 @@ export async function GET(request: Request) {
       console.error("YouTube RSS feed failures:", failedFeeds);
     }
 
-    if (tab === "politics" && searchEntries.length === 0) {
-      const fallbackEntries = (
-        await Promise.all(
-          POLITICS_FALLBACK_NEWS_QUERIES.map(async (term) =>
-            fetchVideosForSearchQuery(term).catch((error) => {
-              console.error("Politics fallback video search failed:", error);
-              return [] as RssFeedEntry[];
-            })
-          )
-        )
-      ).flat();
-
-      if (fallbackEntries.length > 0) {
-        effectiveEntries = dedupeEntriesByVideoId(fallbackEntries);
-      }
-    }
-
     const allEntries = useSpecializedSearchOnly
-      ? effectiveEntries
+      ? searchEntries
       : [...successfulEntries, ...searchEntries];
 
     if (tab === "politics") {
@@ -1389,12 +1369,13 @@ export async function GET(request: Request) {
       ).slice(0, 10);
 
       console.log(
-        "POLITICS RETURNING UNFILTERED TEST VIDEOS",
+        "POLITICS RETURNING NEWS TEST VIDEOS",
         unfilteredPoliticsVideos.map((video) => ({
           title: video.title,
           creator: video.creator,
         }))
       );
+      console.log("POLITICS TEST VIDEO COUNT", unfilteredPoliticsVideos.length);
 
       return Response.json({
         videos: unfilteredPoliticsVideos,
