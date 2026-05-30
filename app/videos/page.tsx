@@ -21,8 +21,8 @@ import {
   type VideoItem,
 } from "../../lib/video-feed";
 import {
+  isTechnologyTabVideo,
   isStrictPoliticsVideo,
-  isStrictTechnologyVideo,
   isStrictWorldVideo,
 } from "../../lib/video-filters";
 
@@ -91,7 +91,7 @@ export default function VideosPage() {
   const displayedVideosRaw = videosByTab[activeTab];
   const displayedVideos =
     activeTab === "technology"
-      ? displayedVideosRaw.filter((video) => isStrictTechnologyVideo(video))
+      ? displayedVideosRaw.filter((video) => isTechnologyTabVideo(video))
       : activeTab === "world"
         ? displayedVideosRaw.filter((video) => isStrictWorldVideo(video))
       : displayedVideosRaw;

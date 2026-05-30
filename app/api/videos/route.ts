@@ -7,6 +7,8 @@ import {
   getPoliticsVideoScore,
   getTechnologyVideoScore,
   getWorldVideoScore,
+  isTechnologyTabVideo,
+  isTechnologyTrustedSourceVideo,
   isStrictPoliticsVideo,
   isStrictTechnologyVideo,
   isStrictWorldVideo,
@@ -90,20 +92,19 @@ const POLITICS_TAB_SEARCH_QUERIES = [
   "Politico video",
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
+  "technology",
   "tech news",
   "technology news",
   "AI news",
-  "artificial intelligence news",
-  "Apple technology",
-  "Google AI",
-  "Microsoft AI",
+  "Apple technology news",
+  "Google AI news",
+  "Microsoft AI news",
   "OpenAI news",
-  "Nvidia AI",
+  "Nvidia news",
   "cybersecurity news",
-  "gadget news",
-  "semiconductor news",
-  "software news",
-  "startup news",
+  "The Verge",
+  "TechCrunch",
+  "CNET",
 ] as const;
 
 function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedItem[] {
@@ -1314,10 +1315,18 @@ export async function GET(request: Request) {
           })
           .filter((video) => !isBlockedVideo(video))
       );
-      const filteredTechnologyVideos = rawTechnologyVideos
-        .filter((video) => isStrictTechnologyVideo(video))
+      const strictTechnologyVideos = rawTechnologyVideos
+        .filter((video) => isTechnologyTabVideo(video))
         .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
         .slice(0, 10);
+      const trustedSourceTechnologyVideos =
+        strictTechnologyVideos.length >= 3
+          ? strictTechnologyVideos
+          : rawTechnologyVideos
+              .filter((video) => isTechnologyTrustedSourceVideo(video))
+              .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
+              .slice(0, 10);
+      const filteredTechnologyVideos = trustedSourceTechnologyVideos;
       console.log("TECHNOLOGY RAW COUNT", rawTechnologyVideos.length);
       console.log(
         "TECHNOLOGY FILTERED COUNT",
@@ -1334,7 +1343,7 @@ export async function GET(request: Request) {
       console.log(
         "TECHNOLOGY REJECTED TITLES",
         rawTechnologyVideos
-          .filter((video) => !isStrictTechnologyVideo(video))
+          .filter((video) => !isTechnologyTabVideo(video))
           .map((video) => video.title)
       );
       console.log(

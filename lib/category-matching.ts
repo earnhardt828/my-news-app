@@ -2,6 +2,12 @@ const TECH_STRONG_CONTEXT_PATTERN =
   /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device|the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech)\b/i;
 const TECH_REJECTED_CONTEXT_PATTERN =
   /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|recipe|travel|weather forecast|movie gossip|music video)\b/i;
+const TECH_TAB_STRONG_CONTEXT_PATTERN =
+  /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device|the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech)\b/i;
+const TECH_TAB_TRUSTED_SOURCE_PATTERN =
+  /\b(the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech)\b/i;
+const TECH_TAB_REJECTED_CONTEXT_PATTERN =
+  /\b(espn|sports?|nba|nfl|mlb|nhl|mls|soccer|basketball|football|baseball)\b/i;
 
 const POLITICS_STRONG_CONTEXT_PATTERN =
   /\b(politics?|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news|washington post politics|new york times politics|npr politics|the hill)\b/i;
@@ -35,6 +41,29 @@ function hasStrictContext(
 
 export function hasStrictTechnologyContext(values: Array<string | null | undefined>) {
   return hasStrictContext(values, TECH_STRONG_CONTEXT_PATTERN, TECH_REJECTED_CONTEXT_PATTERN);
+}
+
+export function hasTechnologyTabContext(values: Array<string | null | undefined>) {
+  const haystack = values.filter(Boolean).join(" ").toLowerCase();
+  const hasStrongContext = TECH_TAB_STRONG_CONTEXT_PATTERN.test(haystack);
+  const hasTrustedSource = TECH_TAB_TRUSTED_SOURCE_PATTERN.test(haystack);
+  const hasRejectedSportsContext = TECH_TAB_REJECTED_CONTEXT_PATTERN.test(haystack);
+
+  if (hasRejectedSportsContext) {
+    return false;
+  }
+
+  return hasStrongContext || hasTrustedSource;
+}
+
+export function hasTechnologyTabTrustedSourceContext(values: Array<string | null | undefined>) {
+  const haystack = values.filter(Boolean).join(" ").toLowerCase();
+
+  if (TECH_TAB_REJECTED_CONTEXT_PATTERN.test(haystack)) {
+    return false;
+  }
+
+  return TECH_TAB_TRUSTED_SOURCE_PATTERN.test(haystack);
 }
 
 export function hasStrictPoliticsContext(values: Array<string | null | undefined>) {
