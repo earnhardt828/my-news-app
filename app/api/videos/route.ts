@@ -93,21 +93,14 @@ const POLITICS_TAB_SEARCH_QUERIES = [
   "Politico video",
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
-  "The Verge latest",
-  "TechCrunch latest",
-  "Wired technology",
-  "CNET technology",
-  "Engadget latest",
-  "Ars Technica latest",
-  "Bloomberg Technology",
-  "CNBC Tech",
-  "OpenAI news",
-  "Nvidia AI news",
-  "Apple technology",
-  "Google AI",
-  "Microsoft AI",
-  "cybersecurity news",
-  "semiconductor news",
+  "technology",
+  "tech news",
+  "AI news",
+  "Apple",
+  "Google",
+  "Microsoft",
+  "OpenAI",
+  "Nvidia",
 ] as const;
 
 function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedItem[] {
@@ -1318,48 +1311,26 @@ export async function GET(request: Request) {
           })
           .filter((video) => !isBlockedVideo(video))
       );
-      const tierOneTechnologyVideos = rawTechnologyVideos
-        .filter((video) => isTechnologyTierOneVideo(video))
-        .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
-        .slice(0, 10);
-      const tierTwoTechnologyVideos =
-        tierOneTechnologyVideos.length >= 4
-          ? []
-          : rawTechnologyVideos
-              .filter(
-                (video) =>
-                  !tierOneTechnologyVideos.some((tierOneVideo) => tierOneVideo.id === video.id) &&
-                  isTechnologyTierTwoVideo(video)
-              )
-              .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
-              .slice(0, 10);
-      const filteredTechnologyVideos = dedupeVideoItems([
-        ...tierOneTechnologyVideos,
-        ...tierTwoTechnologyVideos,
-      ]).slice(0, 10);
-      console.log("TECHNOLOGY RAW COUNT", rawTechnologyVideos.length);
-      console.log("TECHNOLOGY TIER 1 COUNT", tierOneTechnologyVideos.length);
-      console.log("TECHNOLOGY TIER 2 COUNT", tierTwoTechnologyVideos.length);
-      console.log("TECHNOLOGY RAW TITLES", rawTechnologyVideos.map((video) => video.title));
+      console.log("TECH RAW COUNT", rawTechnologyVideos.length);
+      rawTechnologyVideos.slice(0, 50).forEach((video) => {
+        console.log("TECH RAW VIDEO TITLE", video.title);
+        console.log("TECH RAW VIDEO CREATOR", video.creator);
+        console.log("TECH RAW VIDEO CATEGORY", video.category);
+        console.log("TECH RAW VIDEO URL", video.watchUrl);
+      });
       console.log(
-        "TECHNOLOGY ACCEPTED TITLES",
-        filteredTechnologyVideos.map((video) => video.title)
+        "TECH RAW SOURCE LIST",
+        Array.from(
+          new Set(rawTechnologyVideos.map((video) => video.creator).filter(Boolean))
+        )
       );
-      console.log(
-        "TECHNOLOGY REJECTED TITLES",
-        rawTechnologyVideos
-          .filter((video) => !filteredTechnologyVideos.some((acceptedVideo) => acceptedVideo.id === video.id))
-          .map((video) => video.title)
-      );
-      console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
-      console.log("TECHNOLOGY FINAL TITLES", filteredTechnologyVideos.map((video) => video.title));
 
       return Response.json({
-        videos: filteredTechnologyVideos,
+        videos: rawTechnologyVideos,
         fallback: false,
         fetchFailed: false,
         message:
-          filteredTechnologyVideos.length === 0
+          rawTechnologyVideos.length === 0
             ? "No technology videos available right now."
             : undefined,
       });
