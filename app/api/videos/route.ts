@@ -49,30 +49,23 @@ type VideoFeedItem = {
 type VideoFeedTab = "all" | "news" | "politics" | "sports" | "celebrity" | "technology";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
 const POLITICS_TAB_SEARCH_QUERIES = [
-  "CNN politics latest",
-  "Fox News politics latest",
-  "NBC News politics latest",
-  "ABC News politics latest",
-  "CBS News politics latest",
-  "PBS NewsHour politics",
-  "Reuters politics",
-  "AP politics",
-  "Politico video",
+  "politics latest",
   "White House latest",
   "Congress latest",
-  "Supreme Court latest",
   "election latest",
+  "Supreme Court latest",
+  "PBS NewsHour politics",
+  "CNN politics",
+  "Fox News politics",
+  "NBC News politics",
+  "ABC News politics",
+  "CBS News politics",
+  "Politico video",
 ] as const;
 const POLITICS_FALLBACK_NEWS_QUERIES = [
-  "politics latest video",
-  "White House latest video",
-  "Congress latest video",
-  "election latest video",
-  "Supreme Court latest video",
-  "Politico video",
-  "PBS NewsHour politics",
-  "CNN Politics",
-  "Fox News Politics",
+  "politics",
+  "White House",
+  "Congress",
 ] as const;
 const TECHNOLOGY_TAB_SEARCH_QUERIES = [
   "tech news",
@@ -271,7 +264,7 @@ const TECHNOLOGY_POSITIVE_PATTERN =
 const TECHNOLOGY_REJECTED_PATTERN =
   /(world news|politics|election|senate|congress|president|war|sportscenter|nfl|nba|mlb|nhl|mls|hockey|football|basketball|baseball|celebrity|hollywood|red carpet|weather|forecast|storm|crime|shooting|generic breaking news)/;
 const POLITICS_POSITIVE_PATTERN =
-  /(politics|political|white house|trump|biden|congress|senate|house|supreme court|election|campaign|president|governor|mayor|policy|government|politico|pbs newshour|ap politics|associated press|reuters politics|reuters|cnn politics|cnn|fox news politics|fox news|nbc politics|nbc news|abc politics|abc news|cbs politics|cbs news|washington post politics|new york times politics)/;
+  /(politics|political|white house|congress|senate|house|supreme court|election|campaign|president|government|policy|politico|pbs newshour|cnn|fox news|nbc news|abc news|cbs news)/;
 const POLITICS_REJECTED_PATTERN =
   /(sportscenter|nfl|nba|nhl|mlb|mls|hockey|football|basketball|baseball|celebrity|hollywood|red carpet|food network|recipe|travel|weather forecast|movie|music|gaming)/;
 
@@ -1284,6 +1277,10 @@ export async function GET(request: Request) {
     | "politics";
 
   try {
+    if (tab === "politics") {
+      console.log("POLITICS VIDEOS API HIT", { searchTerm, category });
+    }
+
     const useSpecializedSearchOnly = tab === "technology" || tab === "politics";
     const results = useSpecializedSearchOnly
       ? []
@@ -1312,6 +1309,7 @@ export async function GET(request: Request) {
       )
     ).flat();
     let effectiveEntries = searchEntries;
+    let usedPoliticsFallback = false;
     if (tab === "politics") {
       console.log("POLITICS VIDEOS RAW COUNT", searchEntries.length);
     }
@@ -1333,7 +1331,7 @@ export async function GET(request: Request) {
       console.error("YouTube RSS feed failures:", failedFeeds);
     }
 
-    if (tab === "politics" && searchEntries.length === 0) {
+    const loadPoliticsFallbackEntries = async () => {
       console.log("POLITICS VIDEO PRIMARY FAILED");
       const fallbackEntries = (
         await Promise.all(
@@ -1348,8 +1346,15 @@ export async function GET(request: Request) {
 
       if (fallbackEntries.length > 0) {
         console.log("POLITICS VIDEO FALLBACK USED");
-        effectiveEntries = dedupeEntriesByVideoId(fallbackEntries);
+        usedPoliticsFallback = true;
+        return dedupeEntriesByVideoId(fallbackEntries);
       }
+
+      return [] as RssFeedEntry[];
+    };
+
+    if (tab === "politics" && searchEntries.length === 0) {
+      effectiveEntries = await loadPoliticsFallbackEntries();
     }
 
     const allEntries = useSpecializedSearchOnly
@@ -1357,14 +1362,14 @@ export async function GET(request: Request) {
       : [...successfulEntries, ...searchEntries];
 
     if (allEntries.length === 0) {
-    if (tab === "technology" || tab === "politics") {
-      return Response.json({
-        videos: [],
-        fallback: false,
-        fetchFailed: false,
-        message:
-          tab === "politics"
-            ? "No politics videos available right now."
+      if (tab === "technology" || tab === "politics") {
+        return Response.json({
+          videos: [],
+          fallback: false,
+          fetchFailed: false,
+          message:
+            tab === "politics"
+              ? "No politics videos available right now."
               : "No technology videos available right now.",
         });
       }
@@ -1376,7 +1381,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const videos = filterAndSortVideos(allEntries, {
+    let videos = filterAndSortVideos(allEntries, {
       category,
       searchTerm,
       tab:
@@ -1389,6 +1394,22 @@ export async function GET(request: Request) {
           ? tab
           : "all",
     });
+
+    if (tab === "politics" && videos.length === 0 && !usedPoliticsFallback) {
+      const fallbackEntries = await loadPoliticsFallbackEntries();
+      if (fallbackEntries.length > 0) {
+        videos = filterAndSortVideos(fallbackEntries, {
+          category,
+          searchTerm,
+          tab: "politics",
+        });
+      }
+    }
+
+    if (tab === "politics") {
+      console.log("POLITICS VIDEOS FILTERED COUNT", videos.length);
+      console.log("POLITICS VIDEOS FINAL TITLES", videos.map((video) => video.title));
+    }
 
     if (videos.length === 0) {
       if (tab === "technology" || tab === "politics") {
