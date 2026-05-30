@@ -1362,12 +1362,22 @@ export async function GET(request: Request) {
     | "world";
 
   try {
+    console.log("VIDEO API TAB HIT", tab);
+
     if (tab === "politics") {
       console.log("POLITICS TAB API HIT", { searchTerm, category });
     }
 
     if (tab === "world") {
       console.log("WORLD VIDEO TAB ACTIVE", { searchTerm, category });
+    }
+
+    if (tab === "technology") {
+      console.log("VIDEO API TAB HIT technology");
+    }
+
+    if (tab === "world") {
+      console.log("VIDEO API TAB HIT world");
     }
 
     const useSpecializedSearchOnly = tab === "technology" || tab === "world";
@@ -1460,6 +1470,7 @@ export async function GET(request: Request) {
         .slice(0, 10);
 
       console.log("WORLD API STRICT COUNT", filteredWorldVideos.length);
+      console.log("WORLD FINAL COUNT", filteredWorldVideos.length);
 
       return Response.json({
         videos: filteredWorldVideos,
@@ -1529,17 +1540,57 @@ export async function GET(request: Request) {
       });
     }
 
-    if (allEntries.length === 0) {
-      if (tab === "technology") {
-        return Response.json({
-          videos: [],
-          fallback: false,
-          fetchFailed: false,
-          message:
-            "No technology videos available right now.",
-        });
-      }
+    if (tab === "technology") {
+      console.log("TECHNOLOGY API RAW COUNT", allEntries.length);
+      const rawTechnologyVideos = dedupeVideoItems(
+        allEntries
+          .map((entry) => {
+            const inferredCategory = inferVideoCategory(entry.title, entry.creator, category);
 
+            return {
+              id: entry.videoId,
+              youtubeId: entry.videoId,
+              title: entry.title,
+              creator: entry.creator,
+              category: inferredCategory,
+              orientation: inferVideoOrientation(entry.thumbnailWidth, entry.thumbnailHeight, {
+                title: entry.title,
+                thumbnailUrl: entry.thumbnailUrl,
+                watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+              }),
+              views: 0,
+              likes: 0,
+              comments: 0,
+              thumbnailUrl: entry.thumbnailUrl,
+              publishedAt: entry.publishedAt,
+              watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+              embedUrl: `https://www.youtube-nocookie.com/embed/${entry.videoId}?autoplay=1`,
+              fallback: false,
+            } satisfies VideoFeedItem;
+          })
+          .filter((video) => !isBlockedVideo(video))
+      );
+
+      const filteredTechnologyVideos = rawTechnologyVideos
+        .filter((video) => isStrictTechnologyVideo(video))
+        .sort((left, right) => getTechnologyVideoScore(right) - getTechnologyVideoScore(left))
+        .slice(0, 10);
+
+      console.log("TECHNOLOGY API STRICT COUNT", filteredTechnologyVideos.length);
+      console.log("TECHNOLOGY FINAL COUNT", filteredTechnologyVideos.length);
+
+      return Response.json({
+        videos: filteredTechnologyVideos,
+        fallback: false,
+        fetchFailed: false,
+        message:
+          filteredTechnologyVideos.length === 0
+            ? "No technology videos available right now."
+            : undefined,
+      });
+    }
+
+    if (allEntries.length === 0) {
       return Response.json({
         videos: buildFallbackVideosForTab(tab),
         fallback: true,
@@ -1554,23 +1605,12 @@ export async function GET(request: Request) {
         tab === "sports" ||
         tab === "news" ||
         tab === "celebrity" ||
-        tab === "weather" ||
-        tab === "technology"
+        tab === "weather"
           ? tab
           : "all",
     });
 
     if (videos.length === 0) {
-      if (tab === "technology") {
-        return Response.json({
-          videos: [],
-          fallback: false,
-          fetchFailed: false,
-          message:
-            "No technology videos available right now.",
-        });
-      }
-
       return Response.json({
         videos: buildFallbackVideosForTab(tab),
         fallback: true,
