@@ -1306,16 +1306,6 @@ export async function GET(request: Request) {
         )
       )
     ).flat();
-    if (tab === "politics") {
-      console.log(
-        "POLITICS RAW VIDEOS BEFORE FILTER",
-        successfulEntries.slice(0, 10).map((entry) => ({
-          title: entry.title,
-          creator: entry.creator,
-          videoId: entry.videoId,
-        }))
-      );
-    }
     const failedFeeds = results
       .map((result, index) =>
         result.status === "rejected"
@@ -1339,7 +1329,11 @@ export async function GET(request: Request) {
       : [...successfulEntries, ...searchEntries];
 
     if (tab === "politics") {
-      const unfilteredPoliticsVideos = dedupeVideoItems(
+      console.log("POLITICS RAW COUNT", allEntries.length);
+    }
+
+    if (tab === "politics") {
+      const rawPoliticsVideos = dedupeVideoItems(
         allEntries
           .map((entry) => {
             const inferredCategory = inferVideoCategory(entry.title, entry.creator, category);
@@ -1366,21 +1360,32 @@ export async function GET(request: Request) {
             } satisfies VideoFeedItem;
           })
           .filter((video) => !isBlockedVideo(video))
-      ).slice(0, 10);
+      );
+      const filteredPoliticsVideos = rawPoliticsVideos
+        .filter((video) => isStrictPoliticsVideo(video))
+        .sort((left, right) => getPoliticsVideoScore(right) - getPoliticsVideoScore(left))
+        .slice(0, 10);
+      const rejectedSportsCount = rawPoliticsVideos.filter((video) =>
+        /\b(sports?|espn|nba|nfl|mlb|nhl|mls|basketball|football|baseball|hockey|soccer|weather|celebrity|movie|music|recipe|travel)\b/i.test(
+          getVideoSearchHaystack(video)
+        )
+      ).length;
 
       console.log(
-        "POLITICS RETURNING NEWS TEST VIDEOS",
-        unfilteredPoliticsVideos.map((video) => ({
-          title: video.title,
-          creator: video.creator,
-        }))
+        "POLITICS FINAL TITLES",
+        filteredPoliticsVideos.map((video) => video.title)
       );
-      console.log("POLITICS TEST VIDEO COUNT", unfilteredPoliticsVideos.length);
+      console.log("POLITICS FILTERED COUNT", filteredPoliticsVideos.length);
+      console.log("POLITICS REJECTED SPORTS COUNT", rejectedSportsCount);
 
       return Response.json({
-        videos: unfilteredPoliticsVideos,
+        videos: filteredPoliticsVideos,
         fallback: false,
         fetchFailed: false,
+        message:
+          filteredPoliticsVideos.length === 0
+            ? "No politics videos available right now."
+            : undefined,
       });
     }
 
