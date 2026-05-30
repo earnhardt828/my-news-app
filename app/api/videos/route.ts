@@ -46,8 +46,26 @@ type VideoFeedItem = {
   fallback: boolean;
 };
 
-type VideoFeedTab = "all" | "news" | "politics" | "sports" | "celebrity" | "technology";
+type VideoFeedTab = "all" | "news" | "world" | "politics" | "sports" | "celebrity" | "technology";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
+const WORLD_TAB_SEARCH_QUERIES = [
+  "world news latest",
+  "international news latest",
+  "BBC World News",
+  "Reuters world news",
+  "AP international news",
+  "CNN international",
+  "Al Jazeera English world news",
+  "DW News world",
+  "France 24 English",
+  "Sky News world",
+  "United Nations news",
+  "global conflict news",
+  "Europe news",
+  "Middle East news",
+  "Asia news",
+  "Africa news",
+] as const;
 const POLITICS_TAB_SEARCH_QUERIES = [
   "politics latest",
   "White House latest",
@@ -163,6 +181,10 @@ function buildFallbackVideosForTab(tab: WeatherCapableVideoFeedTab): VideoFeedIt
     return [];
   }
 
+  if (tab === "world") {
+    return [];
+  }
+
   if (tab === "weather") {
     return [
       {
@@ -263,6 +285,10 @@ const TECHNOLOGY_POSITIVE_PATTERN =
   /(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|chip|chips|semiconductor|semiconductors|robot|robots|developer|developers|coding|cloud computing|device launch)/;
 const TECHNOLOGY_REJECTED_PATTERN =
   /(world news|politics|election|senate|congress|president|war|sportscenter|nfl|nba|mlb|nhl|mls|hockey|football|basketball|baseball|celebrity|hollywood|red carpet|weather|forecast|storm|crime|shooting|generic breaking news)/;
+const WORLD_POSITIVE_PATTERN =
+  /(world news|international|global|foreign affairs|europe|middle east|asia|africa|united nations|bbc|reuters|associated press|\bap\b|al jazeera|dw news|france 24|sky news|cnn international)/;
+const WORLD_REJECTED_PATTERN =
+  /(local sports|sportscenter|nfl|nba|nhl|mlb|mls|hockey|football|basketball|baseball|celebrity|hollywood|recipe|travel vlog|gaming|movie|music gossip|weather forecast)/;
 const POLITICS_POSITIVE_PATTERN =
   /(politics|political|white house|congress|senate|house|supreme court|election|campaign|president|government|policy|politico|pbs newshour|cnn|fox news|nbc news|abc news|cbs news)/;
 const POLITICS_REJECTED_PATTERN =
@@ -770,6 +796,53 @@ function isStrictPoliticsVideo(
   return hasPoliticsContext;
 }
 
+function isStrictWorldVideo(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+  const hasWorldContext = WORLD_POSITIVE_PATTERN.test(haystack);
+  const hasRejectedContext = WORLD_REJECTED_PATTERN.test(haystack);
+
+  if (hasRejectedContext && !hasWorldContext) {
+    return false;
+  }
+
+  return hasWorldContext;
+}
+
+function getWorldVideoScore(
+  video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
+) {
+  const haystack = getVideoSearchHaystack(video);
+  let score = 0;
+
+  if (!isStrictWorldVideo(video)) {
+    return -1000;
+  }
+
+  if (
+    /(bbc|reuters|associated press|\bap\b|al jazeera|dw news|france 24|sky news|cnn international|united nations)/.test(
+      haystack
+    )
+  ) {
+    score += 165;
+  }
+
+  if (/(world news|international|global|foreign affairs|europe|middle east|asia|africa)/.test(haystack)) {
+    score += 110;
+  }
+
+  if (video.category === "News") {
+    score += 60;
+  }
+
+  if (video.orientation === "horizontal") {
+    score += 40;
+  }
+
+  return score;
+}
+
 function getPoliticsVideoScore(
   video: Pick<VideoFeedItem, "title" | "creator" | "category" | "orientation">
 ) {
@@ -1092,6 +1165,8 @@ function filterAndSortVideos(
   const tabFiltered =
     options.tab === "sports"
       ? categoryFiltered.filter((video) => isStrictSportsVideo(video))
+      : options.tab === "world"
+        ? categoryFiltered.filter((video) => isStrictWorldVideo(video))
       : options.tab === "politics"
         ? categoryFiltered.filter((video) => isStrictPoliticsVideo(video))
       : options.tab === "celebrity"
@@ -1126,6 +1201,11 @@ function filterAndSortVideos(
   if (options.tab === "politics") {
     console.log("POLITICS API RAW COUNT", categoryFiltered.length);
     console.log("POLITICS API STRICT COUNT", tabFiltered.length);
+  }
+
+  if (options.tab === "world") {
+    console.log("WORLD API RAW COUNT", categoryFiltered.length);
+    console.log("WORLD API STRICT COUNT", tabFiltered.length);
   }
 
   console.log("VIDEO FILTERED COUNT", {
@@ -1174,7 +1254,7 @@ function filterAndSortVideos(
         });
 
   const deduped = dedupeVideoItems(
-    options.tab === "technology" || options.tab === "politics"
+    options.tab === "technology" || options.tab === "politics" || options.tab === "world"
       ? tabFiltered
       : tabFiltered.length >= minimumTargetCount
         ? tabFiltered
@@ -1187,6 +1267,8 @@ function filterAndSortVideos(
         ? getSportsVideoScore(b) - getSportsVideoScore(a)
         : options.tab === "politics"
           ? getPoliticsVideoScore(b) - getPoliticsVideoScore(a)
+        : options.tab === "world"
+          ? getWorldVideoScore(b) - getWorldVideoScore(a)
         : options.tab === "celebrity"
           ? getCelebrityVideoScore(b) - getCelebrityVideoScore(a)
         : options.tab === "technology"
@@ -1234,12 +1316,14 @@ function filterAndSortVideos(
     (video) => getVideoTimestamp(video.publishedAt) >= fourteenDayCutoff
   );
 
-  if (options.tab === "technology" || options.tab === "politics") {
+  if (options.tab === "technology" || options.tab === "politics" || options.tab === "world") {
     const finalTechnologyVideos = diversifyVideoSources(withinFourteenDays);
     if (options.tab === "technology") {
       console.log("TECHNOLOGY VIDEO FINAL COUNT", finalTechnologyVideos.length);
-    } else {
+    } else if (options.tab === "politics") {
       console.log("POLITICS VIDEO FINAL COUNT", finalTechnologyVideos.length);
+    } else {
+      console.log("WORLD VIDEO FINAL COUNT", finalTechnologyVideos.length);
     }
     console.log("VIDEO FINAL COUNT", {
       tab: options.tab,
@@ -1274,14 +1358,19 @@ export async function GET(request: Request) {
   const tab = (requestUrl.searchParams.get("tab")?.trim().toLowerCase() ?? "all") as
     | WeatherCapableVideoFeedTab
     | "technology"
-    | "politics";
+    | "politics"
+    | "world";
 
   try {
     if (tab === "politics") {
       console.log("POLITICS TAB API HIT", { searchTerm, category });
     }
 
-    const useSpecializedSearchOnly = tab === "technology";
+    if (tab === "world") {
+      console.log("WORLD VIDEO TAB ACTIVE", { searchTerm, category });
+    }
+
+    const useSpecializedSearchOnly = tab === "technology" || tab === "world";
     const results = useSpecializedSearchOnly
       ? []
       : await Promise.allSettled(APPROVED_CHANNELS.map((channel) => fetchVideosForChannel(channel)));
@@ -1292,7 +1381,9 @@ export async function GET(request: Request) {
     const searchTerms = useSpecializedSearchOnly
       ? searchTerm
         ? [searchTerm]
-        : [...TECHNOLOGY_TAB_SEARCH_QUERIES]
+        : tab === "world"
+          ? [...WORLD_TAB_SEARCH_QUERIES]
+          : [...TECHNOLOGY_TAB_SEARCH_QUERIES]
       : searchTerm
         ? [searchTerm]
         : [];
@@ -1330,6 +1421,55 @@ export async function GET(request: Request) {
 
     if (tab === "politics") {
       console.log("POLITICS RAW COUNT", allEntries.length);
+    }
+
+    if (tab === "world") {
+      console.log("WORLD API RAW COUNT", allEntries.length);
+      const rawWorldVideos = dedupeVideoItems(
+        allEntries
+          .map((entry) => {
+            const inferredCategory = inferVideoCategory(entry.title, entry.creator, category);
+
+            return {
+              id: entry.videoId,
+              youtubeId: entry.videoId,
+              title: entry.title,
+              creator: entry.creator,
+              category: inferredCategory,
+              orientation: inferVideoOrientation(entry.thumbnailWidth, entry.thumbnailHeight, {
+                title: entry.title,
+                thumbnailUrl: entry.thumbnailUrl,
+                watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+              }),
+              views: 0,
+              likes: 0,
+              comments: 0,
+              thumbnailUrl: entry.thumbnailUrl,
+              publishedAt: entry.publishedAt,
+              watchUrl: `https://www.youtube.com/watch?v=${entry.videoId}`,
+              embedUrl: `https://www.youtube-nocookie.com/embed/${entry.videoId}?autoplay=1`,
+              fallback: false,
+            } satisfies VideoFeedItem;
+          })
+          .filter((video) => !isBlockedVideo(video))
+      );
+
+      const filteredWorldVideos = rawWorldVideos
+        .filter((video) => isStrictWorldVideo(video))
+        .sort((left, right) => getWorldVideoScore(right) - getWorldVideoScore(left))
+        .slice(0, 10);
+
+      console.log("WORLD API STRICT COUNT", filteredWorldVideos.length);
+
+      return Response.json({
+        videos: filteredWorldVideos,
+        fallback: false,
+        fetchFailed: false,
+        message:
+          filteredWorldVideos.length === 0
+            ? "No world videos available right now."
+            : undefined,
+      });
     }
 
     if (tab === "politics") {
@@ -1446,15 +1586,17 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Error loading RSS news videos:", error);
 
-    if (tab === "technology" || tab === "politics") {
+    if (tab === "technology" || tab === "politics" || tab === "world") {
       return Response.json({
         videos: [],
         fallback: false,
         fetchFailed: true,
         message:
-            tab === "politics"
-              ? "No politics videos available right now."
-            : "No technology videos available right now.",
+          tab === "politics"
+            ? "No politics videos available right now."
+            : tab === "world"
+              ? "No world videos available right now."
+              : "No technology videos available right now.",
       });
     }
 

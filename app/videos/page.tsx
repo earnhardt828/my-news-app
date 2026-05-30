@@ -77,6 +77,29 @@ function isStrictPoliticsVideo(
   return hasPoliticsContext;
 }
 
+function isStrictWorldVideo(
+  video: Pick<VideoItem, "title" | "creator" | "category" | "watchUrl" | "thumbnailUrl">
+) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl} ${
+    video.thumbnailUrl ?? ""
+  }`.toLowerCase();
+
+  const hasWorldContext =
+    /\b(world news|international|global|foreign affairs|europe|middle east|asia|africa|united nations|bbc|reuters|associated press|ap\b|al jazeera|dw news|france 24|sky news|cnn international)\b/.test(
+      haystack
+    );
+  const hasRejectedContext =
+    /\b(local sports|sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|recipe|travel vlog|gaming|movie|music gossip|weather forecast)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedContext && !hasWorldContext) {
+    return false;
+  }
+
+  return hasWorldContext;
+}
+
 type VideoTab = SharedVideoTab;
 
 export default function VideosPage() {
@@ -85,6 +108,7 @@ export default function VideosPage() {
   const [activeTab, setActiveTab] = useState<VideoTab>("news");
   const [videosByTab, setVideosByTab] = useState<Record<VideoTab, VideoItem[]>>({
     news: initialVideos,
+    world: [],
     politics: [],
     sports: [],
     celebrity: [],
@@ -99,6 +123,7 @@ export default function VideosPage() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [tabLoading, setTabLoading] = useState<Record<VideoTab, boolean>>({
     news: true,
+    world: false,
     politics: false,
     sports: false,
     celebrity: false,
@@ -106,6 +131,7 @@ export default function VideosPage() {
   });
   const [statusMessages, setStatusMessages] = useState<Record<VideoTab, string>>({
     news: "",
+    world: "",
     politics: "",
     sports: "",
     celebrity: "",
@@ -115,6 +141,7 @@ export default function VideosPage() {
   const hasLoadedOnceRef = useRef(false);
   const loadedTabsRef = useRef<Record<VideoTab, boolean>>({
     news: false,
+    world: false,
     politics: false,
     sports: false,
     celebrity: false,
@@ -127,12 +154,16 @@ export default function VideosPage() {
   const displayedVideos =
     activeTab === "technology"
       ? displayedVideosRaw.filter((video) => isStrictTechnologyVideo(video))
+      : activeTab === "world"
+        ? displayedVideosRaw.filter((video) => isStrictWorldVideo(video))
       : displayedVideosRaw;
   const statusMessage = statusMessages[activeTab];
   const isCurrentTabLoading = tabLoading[activeTab];
   const requestedTab =
     searchParams.get("tab") === "sports"
       ? "sports"
+      : searchParams.get("tab") === "world"
+        ? "world"
       : searchParams.get("tab") === "politics"
         ? "politics"
       : searchParams.get("tab") === "celebrity"
@@ -149,7 +180,7 @@ export default function VideosPage() {
 
   useEffect(() => {
     if (activeTab !== "technology") {
-      if (activeTab !== "politics") {
+      if (activeTab !== "politics" && activeTab !== "world") {
         return;
       }
     }
@@ -160,6 +191,13 @@ export default function VideosPage() {
       console.log("TECHNOLOGY RENDER RAW TITLES", displayedVideosRaw.map((video) => video.title));
       console.log("TECHNOLOGY RENDER FILTERED TITLES", displayedVideos.map((video) => video.title));
       console.log("TECHNOLOGY RENDER FINAL COUNT", displayedVideos.length);
+      return;
+    }
+
+    if (activeTab === "world") {
+      console.log("WORLD VIDEO TAB ACTIVE");
+      console.log("WORLD API RAW COUNT", displayedVideosRaw.length);
+      console.log("WORLD API STRICT COUNT", displayedVideos.length);
       return;
     }
 
@@ -215,6 +253,8 @@ export default function VideosPage() {
         [tab]:
           tab === "sports"
             ? "Could not load live sports videos right now."
+            : tab === "world"
+              ? "Could not load live world videos right now."
             : tab === "politics"
               ? "Could not load live politics videos right now."
             : tab === "celebrity"
@@ -355,6 +395,7 @@ export default function VideosPage() {
 
     setVideosByTab((prev) => ({
       news: updateVideos(prev.news),
+      world: updateVideos(prev.world),
       politics: updateVideos(prev.politics),
       sports: updateVideos(prev.sports),
       celebrity: updateVideos(prev.celebrity),
@@ -370,6 +411,7 @@ export default function VideosPage() {
 
     setVideosByTab((prev) => ({
       news: updateVideos(prev.news),
+      world: updateVideos(prev.world),
       politics: updateVideos(prev.politics),
       sports: updateVideos(prev.sports),
       celebrity: updateVideos(prev.celebrity),
@@ -483,6 +525,8 @@ export default function VideosPage() {
           <strong>
             {activeTab === "sports"
               ? "No sports videos yet"
+              : activeTab === "world"
+                ? statusMessage || "No world videos available right now."
               : activeTab === "politics"
                 ? statusMessage || "No politics videos available right now."
               : activeTab === "celebrity"
