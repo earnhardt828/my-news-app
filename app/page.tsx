@@ -75,6 +75,7 @@ import {
 import { isCommentAllowed } from "../lib/moderation";
 import {
   getSourceBoxLogoUrl,
+  getSourceRectangleLogoUrl,
   hasMappedSourceLogo,
   slugifySourceName,
 } from "../lib/source-logos";
@@ -186,63 +187,47 @@ const MY_NEWS_BUSINESS_ARTICLE_QUERIES = [
 const MY_NEWS_WEATHER_ARTICLE_QUERIES = [
   "Weather Channel",
   "Fox Weather",
-  "NOAA weather",
-  "AccuWeather news",
-  "weather news",
+  "NOAA",
+  "AccuWeather",
   "severe weather",
   "hurricane news",
   "tornado news",
   "winter storm news",
-  "climate weather impacts",
+  "flood news",
   "Reuters weather",
   "AP weather",
 ] as const;
 const MY_NEWS_TRAVEL_ARTICLE_QUERIES = [
   "travel news",
-  "travel + leisure",
+  "Travel + Leisure",
   "Conde Nast Traveler",
   "Lonely Planet",
+  "tourism news",
   "airline news",
   "hotel news",
-  "tourism news",
   "destination travel",
   "Reuters travel",
   "AP travel",
 ] as const;
 const MY_NEWS_GOLF_ARTICLE_QUERIES = [
-  "golf news",
-  "PGA Tour news",
+  "PGA Tour",
   "LPGA news",
-  "Masters golf",
-  "U.S. Open golf",
-  "British Open golf",
-  "The Open Championship golf",
-  "Ryder Cup news",
   "Golf Channel",
   "ESPN Golf",
   "CBS Sports Golf",
   "NBC Sports Golf",
-  "Yahoo Sports Golf",
   "AP Golf",
   "Reuters Golf",
 ] as const;
 const MY_NEWS_SCIENCE_ARTICLE_QUERIES = [
-  "science news",
-  "NASA news",
-  "space news",
-  "climate science",
-  "astronomy news",
-  "physics news",
-  "biology research",
-  "medical science",
-  "Scientific American",
-  "Nature science",
+  "NASA",
   "Science Magazine",
+  "Nature",
+  "Scientific American",
   "Live Science",
   "Space.com",
-  "National Geographic science",
-  "AP Science",
   "Reuters Science",
+  "AP Science",
 ] as const;
 const COLLEGE_BASKETBALL_ARTICLE_QUERIES = [
   "college basketball news",
@@ -10330,7 +10315,7 @@ export default function Home() {
 
           if (category === "College Basketball") {
             if (COLLEGE_BASKETBALL_VIDEOS_DISABLED) {
-              console.log("COLLEGE BASKETBALL VIDEOS DISABLED");
+              console.log("COLLEGE_BASKETBALL_VIDEOS_DISABLED");
             }
             if (!isCancelled) {
               setMyNewsCategoryVideoStatus((prev) => ({
@@ -12510,6 +12495,10 @@ export default function Home() {
     sortMode,
   ]);
 
+  useEffect(() => {
+    console.log("RECTANGLE LOGOS SYNCED");
+  }, []);
+
   const topPollsSection = useMemo(
     () =>
       [...myFeedPolls]
@@ -13289,7 +13278,7 @@ export default function Home() {
       return null;
     }
     if (isCollegeBasketballRow && COLLEGE_BASKETBALL_VIDEOS_DISABLED) {
-      console.log("COLLEGE BASKETBALL VIDEOS DISABLED");
+      console.log("COLLEGE_BASKETBALL_VIDEOS_DISABLED");
       return null;
     }
     if (isBusinessRow || (AUTO_VIDEOS_DISABLED && isAutoRow)) {
@@ -13470,7 +13459,6 @@ export default function Home() {
         </div>
         <div className="featured-stories-scroll" role="list" aria-label="Featured articles">
           {rowArticles.map((article) => {
-            const routeId = getArticleRouteId(article);
             const selectedImage = getBestArticleImage(article);
             const imageSrc =
               selectedImage.src && !usedImageSources.has(selectedImage.src)
@@ -13481,48 +13469,9 @@ export default function Home() {
               usedImageSources.add(imageSrc);
             }
 
-            if (!routeId) {
-              return null;
-            }
-
-            return (
-              <Link
-                key={`featured-${routeId}`}
-                href={`/article/${routeId}/`}
-                className="featured-story-card"
-                role="listitem"
-                onClick={() => {
-                  persistArticleMetadata(article);
-                  saveArticleReturnState({
-                    path: "/",
-                    scrollY: window.scrollY,
-                    source: "home",
-                    sortMode,
-                    selectedLocalCity,
-                    localLocationLabel,
-                  });
-                }}
-              >
-                {imageSrc ? (
-                  <img
-                    src={imageSrc}
-                    alt={cleanDisplayText(article.title)}
-                    className="featured-story-image"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className="featured-story-fallback-brand" aria-hidden="true">
-                    <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                  </div>
-                )}
-                <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
-                <div className="featured-story-copy">
-                  <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
-                  <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                </div>
-              </Link>
-            );
+            return renderFeaturedStoryTile(article, {
+              keyPrefix: "featured",
+            });
           })}
         </div>
       </section>
@@ -13600,6 +13549,87 @@ export default function Home() {
           ))}
         </div>
       </section>
+    );
+  };
+
+  const renderFeaturedStoryTile = (
+    article: Article,
+    options?: {
+      keyPrefix?: string;
+      className?: string;
+    }
+  ) => {
+    const articleRouteId = getArticleRouteId(article);
+    const imageSrc = getBestArticleImage(article).src;
+    const safeSourceName = getSafeSourceLabel(article.source);
+    const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
+    const rectangleLogoFailureKey = rectangleLogoUrl
+      ? `${safeSourceName}:rectangle:${rectangleLogoUrl}`
+      : `${safeSourceName}:rectangle:none`;
+    const shouldUseRectangleLogo =
+      Boolean(rectangleLogoUrl) && !failedArticleBoxImages[rectangleLogoFailureKey];
+
+    if (!articleRouteId) {
+      return null;
+    }
+
+    return (
+      <Link
+        key={`${options?.keyPrefix ?? "featured"}-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+        href={`/article/${articleRouteId}/`}
+        className={`featured-story-card ${options?.className ?? ""}`.trim()}
+        role="listitem"
+        onClick={() => {
+          persistArticleMetadata(article);
+          saveArticleReturnState({
+            path: "/",
+            scrollY: window.scrollY,
+            source: "home",
+            sortMode,
+            selectedLocalCity,
+            localLocationLabel,
+          });
+        }}
+      >
+        {imageSrc ? (
+          <img
+            src={imageSrc}
+            alt={cleanDisplayText(article.title)}
+            className="featured-story-image"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : shouldUseRectangleLogo && rectangleLogoUrl ? (
+          <img
+            src={rectangleLogoUrl}
+            alt={`${safeSourceName} logo`}
+            className="featured-story-image featured-story-rectangle-logo"
+            loading="lazy"
+            decoding="async"
+            onError={() => {
+              setFailedArticleBoxImages((prev) => {
+                if (prev[rectangleLogoFailureKey]) {
+                  return prev;
+                }
+
+                return {
+                  ...prev,
+                  [rectangleLogoFailureKey]: true,
+                };
+              });
+            }}
+          />
+        ) : (
+          <div className="featured-story-fallback-brand" aria-hidden="true">
+            <SourceBadge sourceName={safeSourceName} />
+          </div>
+        )}
+        <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
+        <div className="featured-story-copy">
+          <span className="featured-story-source">{safeSourceName}</span>
+          <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+        </div>
+      </Link>
     );
   };
 
@@ -14193,13 +14223,76 @@ export default function Home() {
     );
   };
 
+  const getSportsLeagueLargeCardArticle = (
+    sectionKey: SportsSectionKey,
+    sectionArticles: Article[]
+  ) => {
+    if (sectionArticles.length === 0) {
+      if (["MLB", "NFL", "NHL", "MLS", "NBA"].includes(sectionKey)) {
+        console.log(`SPORTS LARGE CARD SELECTED ${sectionKey}`, null);
+      }
+      return null;
+    }
+
+    const mlbLargeCardSelection =
+      sectionKey === "MLB" ? getMlbLargeCardSelection(sectionArticles) : null;
+    const selectedArticle =
+      sectionKey === "MLB"
+        ? mlbLargeCardSelection && mlbLargeCardSelection.imageSrc !== "/category-images/mlb.png"
+          ? mlbLargeCardSelection.article
+          : null
+        : sectionKey === "NFL"
+          ? getNflLargeCardSelection(sectionArticles)
+          : sectionKey === "NHL"
+            ? getNhlLargeCardSelection(sectionArticles)
+            : sectionKey === "MLS"
+              ? getMlsLargeCardSelection(sectionArticles)
+              : sectionKey === "NBA"
+                ? sectionArticles
+                    .map((article) => ({
+                      article,
+                      image: getLargeImageCardImageCandidate(article),
+                      matches: matchesSportsSectionArticle(
+                        article,
+                        SPORTS_SECTION_CONFIGS.find((section) => section.key === "NBA")!
+                      ),
+                    }))
+                    .find((candidate) => candidate.matches && candidate.image && !isSportsBettingAd(candidate.article))
+                    ?.article ?? null
+                : null;
+
+    if (["MLB", "NFL", "NHL", "MLS", "NBA"].includes(sectionKey)) {
+      console.log(`SPORTS LARGE CARD SELECTED ${sectionKey}`, selectedArticle?.title ?? null);
+    }
+
+    return selectedArticle;
+  };
+
   const renderSportsLeagueVideos = (
     sectionKey: SportsSectionKey,
     label: string,
     leagueVideos: VideoItem[]
   ) => {
+    if (sectionKey === "NHL") {
+      console.log("NHL QUICK WATCH DISABLED");
+      return null;
+    }
+
+    if (sectionKey === "NFL") {
+      console.log("NFL QUICK WATCH DISABLED");
+      return null;
+    }
+
     const filteredLeagueVideos =
       sectionKey === "MLB" ? leagueVideos.filter((video) => isStrictMlbVideo(video)) : leagueVideos;
+    const shouldCenterMlbQuickWatch =
+      sectionKey === "MLB" && filteredLeagueVideos.length > 0 && filteredLeagueVideos.length <= 2;
+
+    if (shouldCenterMlbQuickWatch) {
+      console.log("SPORTS MLB QUICK WATCH CENTERED", {
+        count: filteredLeagueVideos.length,
+      });
+    }
 
     if (filteredLeagueVideos.length === 0) {
       return (
@@ -14223,7 +14316,11 @@ export default function Home() {
             <strong className="profile-section-title home-section-title">{label}</strong>
           </div>
         </div>
-        <div className="quick-watch-scroll" role="list" aria-label={`${label} videos`}>
+        <div
+          className={`quick-watch-scroll ${shouldCenterMlbQuickWatch ? "quick-watch-scroll-centered" : ""}`.trim()}
+          role="list"
+          aria-label={`${label} videos`}
+        >
           {filteredLeagueVideos.map((video, index) => (
             <div key={`${sectionKey}-video-${video.id}`} className="quick-watch-item" role="listitem">
               <VideoFeedCard
@@ -15916,53 +16013,11 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="featured-stories-scroll" role="list" aria-label="Featured sports stories">
-                    {sportsFeaturedArticles.map((article) => {
-                      const articleRouteId = getArticleRouteId(article);
-                      const imageSrc = getBestArticleImage(article).src;
-
-                      if (!articleRouteId) {
-                        return null;
-                      }
-
-                      return (
-                        <Link
-                          key={`featured-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                          href={`/article/${articleRouteId}/`}
-                          className="featured-story-card"
-                          role="listitem"
-                          onClick={() => {
-                            persistArticleMetadata(article);
-                            saveArticleReturnState({
-                              path: "/",
-                              scrollY: window.scrollY,
-                              source: "home",
-                              sortMode,
-                              selectedLocalCity,
-                              localLocationLabel,
-                            });
-                          }}
-                        >
-                          {imageSrc ? (
-                            <img
-                              src={imageSrc}
-                              alt={cleanDisplayText(article.title)}
-                              className="featured-story-image"
-                              loading="lazy"
-                              decoding="async"
-                            />
-                          ) : (
-                            <div className="featured-story-fallback-brand" aria-hidden="true">
-                              <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                            </div>
-                          )}
-                          <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
-                          <div className="featured-story-copy">
-                            <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
-                            <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                          </div>
-                        </Link>
-                      );
-                    })}
+                    {sportsFeaturedArticles.map((article) =>
+                      renderFeaturedStoryTile(article, {
+                        keyPrefix: "featured-sports",
+                      })
+                    )}
                   </div>
                 </section>
               ) : null}
@@ -16006,22 +16061,38 @@ export default function Home() {
                     )
                   ) : null}
 
-                  {section.articles.length > 0 ? (
-                    <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
-                      {section.articles.map((article) => (
-                        <div
-                          key={`sports-section-article-${section.key}-${
-                            article.id || article.url || getArticleDeduplicationKey(article)
-                          }`}
-                        >
-                          {renderCompactSideImageArticle(article, {
-                            className: "sports-league-compact-card",
-                            imageFallbackLabel: section.label,
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
+                  {(() => {
+                    const largeCardArticle = getSportsLeagueLargeCardArticle(section.key, section.articles);
+                    const compactArticles = largeCardArticle
+                      ? section.articles.filter(
+                          (article) =>
+                            getArticleDeduplicationKey(article) !==
+                            getArticleDeduplicationKey(largeCardArticle)
+                        )
+                      : section.articles;
+
+                    return (
+                      <>
+                        {largeCardArticle ? renderLargeImageArticleCard(largeCardArticle) : null}
+                        {compactArticles.length > 0 ? (
+                          <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
+                            {compactArticles.map((article) => (
+                              <div
+                                key={`sports-section-article-${section.key}-${
+                                  article.id || article.url || getArticleDeduplicationKey(article)
+                                }`}
+                              >
+                                {renderCompactSideImageArticle(article, {
+                                  className: "sports-league-compact-card",
+                                  imageFallbackLabel: section.label,
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    );
+                  })()}
 
                   {renderSportsLeagueVideos(
                     section.key,
@@ -16102,53 +16173,11 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="featured-stories-scroll" role="list" aria-label="Featured celebrity stories">
-                    {featuredCelebrityArticles.map((article) => {
-                      const articleRouteId = getArticleRouteId(article);
-                      const imageSrc = getBestArticleImage(article).src;
-
-                      if (!articleRouteId) {
-                        return null;
-                      }
-
-                      return (
-                        <Link
-                          key={`featured-celebrity-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                          href={`/article/${articleRouteId}/`}
-                          className="featured-story-card"
-                          role="listitem"
-                          onClick={() => {
-                            persistArticleMetadata(article);
-                            saveArticleReturnState({
-                              path: "/",
-                              scrollY: window.scrollY,
-                              source: "home",
-                              sortMode,
-                              selectedLocalCity,
-                              localLocationLabel,
-                            });
-                          }}
-                        >
-                          {imageSrc ? (
-                            <img
-                              src={imageSrc}
-                              alt={cleanDisplayText(article.title)}
-                              className="featured-story-image"
-                              loading="lazy"
-                              decoding="async"
-                            />
-                          ) : (
-                            <div className="featured-story-fallback-brand" aria-hidden="true">
-                              <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                            </div>
-                          )}
-                          <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
-                          <div className="featured-story-copy">
-                            <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
-                            <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                          </div>
-                        </Link>
-                      );
-                    })}
+                    {featuredCelebrityArticles.map((article) =>
+                      renderFeaturedStoryTile(article, {
+                        keyPrefix: "featured-celebrity",
+                      })
+                    )}
                   </div>
                 </section>
               ) : null}
@@ -16727,58 +16756,12 @@ export default function Home() {
               </div>
             ) : (
               <div className="featured-stories-scroll" role="list" aria-label="Recipes">
-                {foodSectionArticles.recipes.map((article) => {
-                  const routeId = getArticleRouteId(article);
-                  const selectedImage = getBestArticleImage(article);
-                  const imageSrc = selectedImage.src;
-
-                  if (!routeId) {
-                    return null;
-                  }
-
-                  return (
-                    <Link
-                      key={`recipe-${routeId}`}
-                      href={`/article/${routeId}/`}
-                      className="featured-story-card food-recipe-card"
-                      role="listitem"
-                      onClick={() => {
-                        persistArticleMetadata(article);
-                        saveArticleReturnState({
-                          path: "/",
-                          scrollY: window.scrollY,
-                          source: "home",
-                          sortMode,
-                          selectedLocalCity,
-                          localLocationLabel,
-                        });
-                      }}
-                    >
-                      {imageSrc ? (
-                        <img
-                          src={imageSrc}
-                          alt={cleanDisplayText(article.title)}
-                          className="featured-story-image"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : (
-                        <div className="featured-story-fallback-brand" aria-hidden="true">
-                          <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                        </div>
-                      )}
-                      <div
-                        className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`}
-                      />
-                      <div className="featured-story-copy">
-                        <span className="featured-story-source">
-                          {getDisplaySourceLabel(article)}
-                        </span>
-                        <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                      </div>
-                    </Link>
-                  );
-                })}
+                {foodSectionArticles.recipes.map((article) =>
+                  renderFeaturedStoryTile(article, {
+                    keyPrefix: "recipe",
+                    className: "food-recipe-card",
+                  })
+                )}
               </div>
             )}
           </section>
@@ -17180,58 +17163,12 @@ export default function Home() {
             </div>
 
             <div className="featured-stories-scroll" role="list" aria-label="Best restaurants">
-              {localLifestyleSections.bestRestaurants.map((article) => {
-                const routeId = getArticleRouteId(article);
-                const selectedImage = getBestArticleImage(article);
-                const imageSrc = selectedImage.src;
-
-                if (!routeId) {
-                  return null;
-                }
-
-                return (
-                  <Link
-                    key={`local-restaurant-${routeId}`}
-                    href={`/article/${routeId}/`}
-                    className="featured-story-card food-recipe-card"
-                    role="listitem"
-                    onClick={() => {
-                      persistArticleMetadata(article);
-                      saveArticleReturnState({
-                        path: "/",
-                        scrollY: window.scrollY,
-                        source: "home",
-                        sortMode,
-                        selectedLocalCity,
-                        localLocationLabel,
-                      });
-                    }}
-                  >
-                    {imageSrc ? (
-                      <img
-                        src={imageSrc}
-                        alt={cleanDisplayText(article.title)}
-                        className="featured-story-image"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    ) : (
-                      <div className="featured-story-fallback-brand" aria-hidden="true">
-                        <SourceBadge sourceName={getSafeSourceLabel(article.source)} />
-                      </div>
-                    )}
-                    <div
-                      className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`}
-                    />
-                    <div className="featured-story-copy">
-                      <span className="featured-story-source">
-                        {getDisplaySourceLabel(article)}
-                      </span>
-                      <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
-                    </div>
-                  </Link>
-                );
-              })}
+              {localLifestyleSections.bestRestaurants.map((article) =>
+                renderFeaturedStoryTile(article, {
+                  keyPrefix: "local-restaurant",
+                  className: "food-recipe-card",
+                })
+              )}
             </div>
           </section>
         ) : null}

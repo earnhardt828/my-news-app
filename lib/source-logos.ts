@@ -196,6 +196,22 @@ export const sourceBoxLogoMap: Record<string, string> = {
   "Local Weather": "/logos-for-boxes/weather-news.png",
 };
 
+export const sourceRectangleLogoMap: Record<string, string> = {
+  CNN: "/rectangle-logos/cnn.png",
+  "Fox News": "/rectangle-logos/fox-news.png",
+  Reuters: "/rectangle-logos/reuters.png",
+  AP: "/rectangle-logos/ap-news.png",
+  "AP News": "/rectangle-logos/ap-news.png",
+  "Associated Press": "/rectangle-logos/ap-news.png",
+  "The Washington Post": "/rectangle-logos/washington-post.png",
+  "Washington Post": "/rectangle-logos/washington-post.png",
+  "New York Times": "/rectangle-logos/new-york-times.png",
+  "The New York Times": "/rectangle-logos/new-york-times.png",
+  "CBS Sports": "/rectangle-logos/cbs-sports.png",
+  TMZ: "/rectangle-logos/tmz.png",
+  "Yahoo Sports": "/rectangle-logos/yahoo-sports.png",
+};
+
 export function normalizeSourceLogoName(sourceName: string) {
   return sourceName
     .trim()
@@ -404,6 +420,17 @@ export function getSourceBoxLogoUrl(sourceName: string) {
 
 export function hasMappedSourceBoxLogo(sourceName: string) {
   return Boolean(findMappedLogoUrl(sourceBoxLogoMap, sourceName));
+}
+
+export function getSourceRectangleLogoUrl(sourceName: string) {
+  const mappedLogo = findMappedLogoUrl(sourceRectangleLogoMap, sourceName);
+
+  if (mappedLogo) {
+    return mappedLogo;
+  }
+
+  const candidates = buildSourceLogoCandidates(sourceName);
+  return candidates[0] ? `/rectangle-logos/${candidates[0]}.png` : null;
 }
 
 export function getSourceInitial(sourceName: string) {
