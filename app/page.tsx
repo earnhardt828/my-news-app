@@ -4863,8 +4863,10 @@ function isStrictNhlVideo(video: VideoItem) {
 
 function isStrictNbaVideo(video: VideoItem) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  const hasRejectedBasketballTerms =
+    /\b(wnba|women'?s basketball|college basketball|ncaa|high school basketball)\b/.test(haystack);
   const hasCoreNbaTerms =
-    /(nba|basketball|nba\.com|espn nba|tnt nba|nba on espn|dunk|buzzer beater|playoff|finals)/.test(
+    /(nba|national basketball association|basketball|nba\.com|espn nba|tnt nba|nba on espn|dunk|buzzer beater|playoff|playoffs|finals|nba finals)/.test(
       haystack
     );
   const hasNbaTeamTerms =
@@ -4880,7 +4882,27 @@ function isStrictNbaVideo(video: VideoItem) {
       haystack
     );
 
-  return !hasRejectedTerms && (hasPreferredSource || hasCoreNbaTerms || (hasNbaTeamTerms && /\b(basketball|nba|dunk|buzzer beater|finals|playoff)\b/.test(haystack)));
+  return (
+    !hasRejectedBasketballTerms &&
+    !hasRejectedTerms &&
+    (hasPreferredSource ||
+      hasCoreNbaTerms ||
+      (hasNbaTeamTerms && /\b(basketball|nba|dunk|buzzer beater|finals|playoff|playoffs)\b/.test(haystack)))
+  );
+}
+
+function isStrictMlsVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  const hasMlsTerms =
+    /\b(mls|major league soccer|mlssoccer|inter miami|charlotte fc|lafc|atlanta united|fc cincinnati|seattle sounders|la galaxy|new york red bulls|new york city fc)\b/.test(
+      haystack
+    );
+  const hasRejectedSoccerTerms =
+    /\b(premier league|champions league|la liga|bundesliga|serie a|ligue 1|world cup|euros|copa america|uefa|fifa|arsenal|chelsea|liverpool|manchester united|manchester city|real madrid|barcelona|bayern)\b/.test(
+      haystack
+    );
+
+  return hasMlsTerms && !hasRejectedSoccerTerms;
 }
 
 function matchesFavoriteLeagueTeamName(text: string, league: FavoriteLeagueKey) {
@@ -4981,11 +5003,11 @@ function matchesSportsSectionVideo(video: VideoItem, section: SportsSectionConfi
   if (section.key === "NHL") {
     return isStrictNhlVideo(video);
   }
+  if (section.key === "MLS") {
+    return isStrictMlsVideo(video);
+  }
 
   if (section.key === "MLB" && matchesFavoriteLeagueTeamName(haystack, "MLB")) {
-    return true;
-  }
-  if (section.key === "MLS" && matchesFavoriteLeagueTeamName(haystack, "MLS")) {
     return true;
   }
   return section.videoPattern.test(haystack);
@@ -11924,11 +11946,29 @@ export default function Home() {
           return rightFavoriteBoost - leftFavoriteBoost;
         }
 
+        const leftImageBoost = Number(Boolean(getLargeImageCardImageCandidate(leftArticle)));
+        const rightImageBoost = Number(Boolean(getLargeImageCardImageCandidate(rightArticle)));
+
+        if (rightImageBoost !== leftImageBoost) {
+          return rightImageBoost - leftImageBoost;
+        }
+
+        const leftBettingPenalty = Number(isSportsBettingAd(leftArticle));
+        const rightBettingPenalty = Number(isSportsBettingAd(rightArticle));
+
+        if (leftBettingPenalty !== rightBettingPenalty) {
+          return leftBettingPenalty - rightBettingPenalty;
+        }
+
         return getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle);
       });
 
       const sectionArticleLimit = section.key === "NBA" || section.key === "MLS" ? 6 : 5;
       const selectedArticles = selectSourceBalancedArticles(sortedArticles, sectionArticleLimit);
+      console.log("SPORTS SECTION RANKED ARTICLES", {
+        section: section.key,
+        count: selectedArticles.length,
+      });
       selectedArticles.forEach((article) => {
         usedArticleKeys.add(getArticleDeduplicationKey(article));
       });
@@ -11950,7 +11990,8 @@ export default function Home() {
         return matchesSportsSectionVideo(video, section);
       });
 
-      const sectionVideoLimit = section.key === "NFL" ? 6 : section.key === "MLB" ? 6 : 5;
+      const sectionVideoLimit =
+        section.key === "NFL" ? 6 : section.key === "MLB" ? 6 : section.key === "MLS" ? 1 : 5;
       const selectedVideos = selectSourceBalancedVideos(candidateVideos, sectionVideoLimit);
       selectedVideos.forEach((video) => {
         usedVideoKeys.add(video.id);
@@ -14283,10 +14324,44 @@ export default function Home() {
       return null;
     }
 
+    if (sectionKey === "COLLEGE_FOOTBALL") {
+      console.log("COLLEGE FOOTBALL QUICK WATCH REMOVED");
+      return null;
+    }
+
+    const nbaRejectedWnbaCount =
+      sectionKey === "NBA"
+        ? leagueVideos.filter((video) =>
+            /\b(wnba|women'?s basketball|college basketball|ncaa|high school basketball)\b/i.test(
+              `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`
+            )
+          ).length
+        : 0;
     const filteredLeagueVideos =
-      sectionKey === "MLB" ? leagueVideos.filter((video) => isStrictMlbVideo(video)) : leagueVideos;
+      sectionKey === "MLB"
+        ? leagueVideos.filter((video) => isStrictMlbVideo(video))
+        : sectionKey === "NBA"
+          ? leagueVideos.filter((video) => isStrictNbaVideo(video))
+          : sectionKey === "MLS"
+            ? leagueVideos.filter((video) => isStrictMlsVideo(video)).slice(0, 1)
+            : leagueVideos;
     const shouldCenterMlbQuickWatch =
       sectionKey === "MLB" && filteredLeagueVideos.length > 0 && filteredLeagueVideos.length <= 2;
+    const shouldCenterNbaQuickWatch =
+      sectionKey === "NBA" && filteredLeagueVideos.length > 0 && filteredLeagueVideos.length <= 2;
+
+    if (sectionKey === "NBA") {
+      console.log("NBA QUICK WATCH VALID COUNT", filteredLeagueVideos.length);
+      console.log("NBA QUICK WATCH REMOVED WNBA", nbaRejectedWnbaCount);
+    }
+
+    if (sectionKey === "MLS") {
+      console.log("MLS VIDEO VALID COUNT", filteredLeagueVideos.length);
+      if (filteredLeagueVideos.length === 0) {
+        console.log("MLS VIDEO SECTION HIDDEN");
+        return null;
+      }
+    }
 
     if (shouldCenterMlbQuickWatch) {
       console.log("SPORTS MLB QUICK WATCH CENTERED", {
@@ -14294,19 +14369,14 @@ export default function Home() {
       });
     }
 
+    if (shouldCenterNbaQuickWatch) {
+      console.log("NBA QUICK WATCH CENTERED", {
+        count: filteredLeagueVideos.length,
+      });
+    }
+
     if (filteredLeagueVideos.length === 0) {
-      return (
-        <section className="home-section-block home-section-plain quick-watch-row">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">{label}</strong>
-            </div>
-          </div>
-          <div className="empty-state compact-empty-state">
-            <strong>Videos loading…</strong>
-          </div>
-        </section>
-      );
+      return null;
     }
 
     return (
@@ -14317,7 +14387,9 @@ export default function Home() {
           </div>
         </div>
         <div
-          className={`quick-watch-scroll ${shouldCenterMlbQuickWatch ? "quick-watch-scroll-centered" : ""}`.trim()}
+          className={`quick-watch-scroll ${
+            shouldCenterMlbQuickWatch || shouldCenterNbaQuickWatch ? "quick-watch-scroll-centered" : ""
+          }`.trim()}
           role="list"
           aria-label={`${label} videos`}
         >
@@ -16076,13 +16148,14 @@ export default function Home() {
                         {largeCardArticle ? renderLargeImageArticleCard(largeCardArticle) : null}
                         {compactArticles.length > 0 ? (
                           <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
-                            {compactArticles.map((article) => (
+                            {compactArticles.map((article, index) => (
                               <div
                                 key={`sports-section-article-${section.key}-${
                                   article.id || article.url || getArticleDeduplicationKey(article)
                                 }`}
                               >
                                 {renderCompactSideImageArticle(article, {
+                                  showRank: index + 1,
                                   className: "sports-league-compact-card",
                                   imageFallbackLabel: section.label,
                                 })}
