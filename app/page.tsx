@@ -5987,6 +5987,7 @@ export default function Home() {
   const foodLatestSectionRef = useRef<HTMLElement | null>(null);
   const scienceSectionRef = useRef<HTMLElement | null>(null);
   const carsSectionRef = useRef<HTMLElement | null>(null);
+  const trendingEntertainmentSectionRef = useRef<HTMLElement | null>(null);
   const topTabButtonRefs = useRef<Partial<Record<SwipeableSortMode, HTMLButtonElement | null>>>({});
   const articleLongPressTimerRef = useRef<number | null>(null);
   const [isMoreSportsVideosVisible, setIsMoreSportsVideosVisible] = useState(false);
@@ -7919,7 +7920,7 @@ export default function Home() {
     let isCancelled = false;
 
     async function loadPopularMusicAlbums() {
-      if (sortMode !== "celebrity") {
+      if (sortMode !== "celebrity" && sortMode !== "trending") {
         setPopularMusicAlbums([]);
         return;
       }
@@ -13585,11 +13586,15 @@ export default function Home() {
   }, [entertainmentSectionContent.movies]);
 
   const popularMusicSliderArticles = useMemo(() => {
-    const rawCandidates = dedupeArticlesByContent([
-      ...entertainmentSectionFeeds.music,
-      ...entertainmentSectionContent.music,
-      ...celebrityTabArticles,
-    ])
+    const rawCandidates = dedupeArticlesByContent(
+      sortMode === "trending"
+        ? [...celebrityPreviewArticles, ...visibleArticles.slice(0, 60)]
+        : [
+            ...entertainmentSectionFeeds.music,
+            ...entertainmentSectionContent.music,
+            ...celebrityTabArticles,
+          ]
+    )
       .filter((article) => isEntertainmentMusicArticle(article))
       .sort(
         (leftArticle, rightArticle) =>
@@ -13606,7 +13611,54 @@ export default function Home() {
     console.log("POPULAR MUSIC SLIDER_VISIBLE", imageCandidates.length >= 2);
 
     return imageCandidates.slice(0, 10);
-  }, [celebrityTabArticles, entertainmentSectionContent.music, entertainmentSectionFeeds.music]);
+  }, [
+    celebrityPreviewArticles,
+    celebrityTabArticles,
+    entertainmentSectionContent.music,
+    entertainmentSectionFeeds.music,
+    sortMode,
+    visibleArticles,
+  ]);
+
+  const trendingEntertainmentArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as Article[];
+    }
+
+    const filteredArticles = dedupeArticlesByContent([
+      ...celebrityPreviewArticles,
+      ...visibleArticles.slice(0, 80),
+    ])
+      .filter((article) => isEntertainmentRelevantArticle(article))
+      .sort(
+        (leftArticle, rightArticle) =>
+          scoreEntertainmentArticleBySources(rightArticle, ENTERTAINMENT_CELEBRITY_QUERIES, "celebrity") -
+          scoreEntertainmentArticleBySources(leftArticle, ENTERTAINMENT_CELEBRITY_QUERIES, "celebrity")
+      );
+
+    const selectedArticles = selectSourceBalancedArticles(filteredArticles, 8);
+    console.log("TRENDING ENTERTAINMENT ARTICLE COUNT", selectedArticles.length);
+    return selectedArticles;
+  }, [celebrityPreviewArticles, sortMode, visibleArticles]);
+
+  const trendingEntertainmentLeadArticle = useMemo(() => {
+    if (sortMode !== "trending") {
+      return null;
+    }
+
+    const selectedArticle = getEntertainmentSectionLeadArticle(
+      "celebrity",
+      trendingEntertainmentArticles,
+      ENTERTAINMENT_CELEBRITY_QUERIES,
+      "celebrity"
+    );
+
+    console.log(
+      "TRENDING ENTERTAINMENT LARGE CARD SELECTED",
+      selectedArticle ? selectedArticle.title : null
+    );
+    return selectedArticle;
+  }, [sortMode, trendingEntertainmentArticles]);
 
   useEffect(() => {
     if (sortMode === "celebrity") {
@@ -16725,6 +16777,13 @@ export default function Home() {
             <button
               className="toolbar-pill"
               type="button"
+              onClick={() => scrollSectionIntoView(trendingEntertainmentSectionRef)}
+            >
+              Entertainment
+            </button>
+            <button
+              className="toolbar-pill"
+              type="button"
               onClick={() => scrollSectionIntoView(scienceSectionRef)}
             >
               Science
@@ -16933,6 +16992,50 @@ export default function Home() {
           keyPrefix: "featured-videos-above-weather",
           playerTab: "news",
         })}
+
+        <section ref={trendingEntertainmentSectionRef} className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Entertainment</strong>
+            </div>
+          </div>
+          {trendingEntertainmentArticles.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No entertainment stories yet</strong>
+              <span>Check back shortly for fresh entertainment coverage.</span>
+            </div>
+          ) : (
+            <div className="stack home-section-list top-trending-card-rail">
+              {trendingEntertainmentLeadArticle ? renderLargeImageArticleCard(trendingEntertainmentLeadArticle) : null}
+              {trendingEntertainmentArticles
+                .filter((article) =>
+                  trendingEntertainmentLeadArticle
+                    ? getArticleDeduplicationKey(article) !==
+                      getArticleDeduplicationKey(trendingEntertainmentLeadArticle)
+                    : true
+                )
+                .slice(0, 5)
+                .map((article, index) => (
+                  <div
+                    key={`trending-entertainment-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                  >
+                    {renderCompactSideImageArticle(article, {
+                      imageFallbackLabel: "Entertainment",
+                      showRank: index + 1,
+                    })}
+                  </div>
+                ))}
+              {popularMusicAlbums.length >= 3 || popularMusicSliderArticles.length >= 2
+                ? renderPopularMusicSlider(popularMusicAlbums, popularMusicSliderArticles)
+                : null}
+            </div>
+          )}
+          {(() => {
+            console.log("TRENDING ENTERTAINMENT MUSIC SLIDER COUNT", Math.max(popularMusicAlbums.length, popularMusicSliderArticles.length));
+            console.log("TRENDING ENTERTAINMENT SECTION_RENDERED", true);
+            return null;
+          })()}
+        </section>
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
