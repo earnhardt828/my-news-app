@@ -2965,6 +2965,51 @@ function isBroadSportsArticle(article: Pick<Article, "title" | "description" | "
   );
 }
 
+function getSportsLeagueOrTeamFallbackImageUrl(article: Pick<Article, "title" | "description" | "source" | "category">) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
+
+  const mlbTeamMap: Array<[RegExp, string]> = [
+    [/\byankees\b/, "/team-logos/mlb-yankees.png"],
+    [/\bdodgers\b/, "/team-logos/mlb-dodgers.png"],
+    [/\bbraves\b/, "/team-logos/mlb-braves.png"],
+    [/\bastros\b/, "/team-logos/mlb-astros.png"],
+    [/\brangers\b/, "/team-logos/mlb-rangers.png"],
+    [/\bcubs\b/, "/team-logos/mlb-cubs.png"],
+    [/\bmets\b/, "/team-logos/mlb-mets.png"],
+    [/\bphillies\b/, "/team-logos/mlb-phillies.png"],
+    [/\bred sox\b/, "/team-logos/mlb-red-sox.png"],
+    [/\bpadres\b/, "/team-logos/mlb-padres.png"],
+  ];
+
+  for (const [pattern, url] of mlbTeamMap) {
+    if (pattern.test(haystack)) {
+      return url;
+    }
+  }
+
+  if (/\bmlb|baseball\b/.test(haystack)) {
+    return "/category-images/mlb.png";
+  }
+
+  if (/\bnfl|super bowl|afc|nfc|football\b/.test(haystack)) {
+    return "/category-images/nfl.png";
+  }
+
+  if (/\bnba|basketball\b/.test(haystack)) {
+    return "/category-images/sports.png";
+  }
+
+  if (/\bnhl|hockey|stanley cup\b/.test(haystack)) {
+    return "/category-images/nhl.png";
+  }
+
+  if (/\bmls|major league soccer|soccer|inter miami|charlotte fc|lafc|atlanta united|fc cincinnati|seattle sounders\b/.test(haystack)) {
+    return "/category-images/mls.png";
+  }
+
+  return getCategoryImageUrl("Sports");
+}
+
 function filterArticlesBySelectedCategories(articles: Article[], selectedCategories: string[]) {
   if (selectedCategories.length === 0) {
     return {
@@ -9938,6 +9983,7 @@ export default function Home() {
         isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
       const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
       const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
+      const leagueOrTeamImageUrl = getSportsLeagueOrTeamFallbackImageUrl(article);
 
       return {
         article,
@@ -9947,11 +9993,13 @@ export default function Home() {
             ? "box-logo"
             : rectangleLogoUrl
               ? "rectangle-logo"
+              : leagueOrTeamImageUrl
+                ? "league-team-fallback"
               : hasMappedSourceLogo(safeSourceName)
                 ? "source-badge"
                 : "category-fallback",
         hasRealImage,
-        hasFallbackImage: Boolean(boxLogoUrl || rectangleLogoUrl),
+        hasFallbackImage: Boolean(boxLogoUrl || rectangleLogoUrl || leagueOrTeamImageUrl),
       };
     });
 
@@ -9960,6 +10008,9 @@ export default function Home() {
       realImageCount: diagnostics.filter((entry) => entry.hasRealImage).length,
       fallbackImageCount: diagnostics.filter(
         (entry) => !entry.hasRealImage && entry.hasFallbackImage
+      ).length,
+      noImageCount: diagnostics.filter(
+        (entry) => !entry.hasRealImage && !entry.hasFallbackImage
       ).length,
     };
   }, [sportsTabArticles]);
@@ -9973,6 +10024,7 @@ export default function Home() {
     console.log("SPORTS FALLBACK IMAGE COUNT", sportsImageDiagnostics.fallbackImageCount);
     console.log("SPORTS CARD REAL IMAGE COUNT", sportsImageDiagnostics.realImageCount);
     console.log("SPORTS CARD FALLBACK IMAGE COUNT", sportsImageDiagnostics.fallbackImageCount);
+    console.log("SPORTS NO_IMAGE_COUNT", sportsImageDiagnostics.noImageCount);
   }, [sportsImageDiagnostics]);
 
   const celebrityTabArticles = useMemo(() => {
@@ -12773,6 +12825,14 @@ export default function Home() {
         ) && isBreakingNewsEligible(article)
       );
     });
+    const broaderBreakingArticles = dedupeArticlesByContent([
+      ...breakingPreviewArticles,
+      ...visibleArticles.slice(0, 80),
+    ]).filter(
+      (article) =>
+        !isLowInformationLiveStreamArticle(article) &&
+        (isBreakingNewsEligible(article) || isHighQualityBreakingRecentArticle(article))
+    );
     const highSignalTrustedArticles = trustedBreakingArticles.filter((article) =>
       BREAKING_NEWS_REQUIRED_PATTERN.test(
         `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${article.category}`
@@ -12789,13 +12849,9 @@ export default function Home() {
           ? recentMajorTrustedArticles
         : trustedBreakingArticles.length >= 5
           ? trustedBreakingArticles
-          : breakingPreviewArticles.filter(
-              (article) =>
-                !isLowInformationLiveStreamArticle(article) &&
-                (isBreakingNewsEligible(article) || isHighQualityBreakingRecentArticle(article))
-            );
+          : broaderBreakingArticles;
 
-    return selectSourceBalancedArticles(
+    const selectedBreakingArticles = selectSourceBalancedArticles(
       candidateArticles
         .filter((article) => {
           if (topTrendingKeys.has(getArticleDeduplicationKey(article))) {
@@ -12822,7 +12878,10 @@ export default function Home() {
         }),
       5
     ).slice(0, 5);
-  }, [breakingPreviewArticles, sortMode, topTenTrendingArticles]);
+
+    console.log("BREAKING NEWS FINAL COUNT", selectedBreakingArticles.length);
+    return selectedBreakingArticles;
+  }, [breakingPreviewArticles, sortMode, topTenTrendingArticles, visibleArticles]);
 
   const breakingNewsLeadArticle = useMemo(() => {
     const firstArticle = breakingNewsPreviewArticles[0];
@@ -12840,6 +12899,18 @@ export default function Home() {
     const imageFailureKey = `${firstArticle.id}:${selectedImage.src}`;
     return failedArticleImages[imageFailureKey] ? null : firstArticle;
   }, [breakingNewsPreviewArticles, failedArticleImages]);
+
+  useEffect(() => {
+    console.log(
+      "BREAKING NEWS LARGE CARD SELECTED",
+      breakingNewsLeadArticle
+        ? {
+            title: breakingNewsLeadArticle.title,
+            source: breakingNewsLeadArticle.source,
+          }
+        : null
+    );
+  }, [breakingNewsLeadArticle]);
 
   const topTenTrendingLeadArticle = useMemo(() => {
     const firstArticle = topTenTrendingArticles[0];
@@ -15710,10 +15781,7 @@ export default function Home() {
   };
 
   const trendingWeatherLeadArticle = useMemo(() => {
-    const candidateArticles = [
-      ...trendingWeatherSections.nationalWeather,
-      ...trendingWeatherSections.localWeather,
-    ]
+    const candidateArticles = [...trendingWeatherSections.nationalWeather]
       .filter((article) => isStrictWeatherArticle(article))
       .sort((leftArticle, rightArticle) => {
         const rightScore =
@@ -15726,7 +15794,19 @@ export default function Home() {
       });
 
     return candidateArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
-  }, [trendingWeatherSections.localWeather, trendingWeatherSections.nationalWeather]);
+  }, [trendingWeatherSections.nationalWeather]);
+
+  useEffect(() => {
+    console.log(
+      "WEATHER GLOBAL LARGE CARD SELECTED",
+      trendingWeatherLeadArticle
+        ? {
+            title: trendingWeatherLeadArticle.title,
+            source: trendingWeatherLeadArticle.source,
+          }
+        : null
+    );
+  }, [trendingWeatherLeadArticle]);
 
   const trendingSportsLeadArticle = useMemo(() => {
     const candidateArticles = sportsTabArticles
@@ -16841,10 +16921,16 @@ export default function Home() {
     const selectedImage = getBestArticleImage(article);
     const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
     const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
+    const sportsFallbackImageUrl = isBroadSportsArticle(article)
+      ? getSportsLeagueOrTeamFallbackImageUrl(article)
+      : null;
     const boxLogoFailureKey = boxLogoUrl ? `${safeSourceName}:${boxLogoUrl}` : `${safeSourceName}:none`;
     const rectangleLogoFailureKey = rectangleLogoUrl
       ? `${safeSourceName}:${rectangleLogoUrl}:rectangle`
       : `${safeSourceName}:rectangle:none`;
+    const sportsFallbackFailureKey = sportsFallbackImageUrl
+      ? `${safeSourceName}:${sportsFallbackImageUrl}:sports`
+      : `${safeSourceName}:sports:none`;
     const shouldUseImage =
       Boolean(selectedImage.src) &&
       isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
@@ -16852,12 +16938,16 @@ export default function Home() {
       Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
     const shouldUseRectangleLogoFallback =
       Boolean(rectangleLogoUrl) && !failedArticleBoxImages[rectangleLogoFailureKey];
+    const shouldUseSportsFallbackImage =
+      Boolean(sportsFallbackImageUrl) && !failedArticleBoxImages[sportsFallbackFailureKey];
     const compactImageSourceUsed = shouldUseImage
       ? selectedImage.source ?? "real"
       : shouldUseBoxLogoFallback
         ? "box-logo"
         : shouldUseRectangleLogoFallback
           ? "rectangle-logo"
+          : shouldUseSportsFallbackImage
+            ? "sports-fallback"
         : hasMappedSourceLogo(safeSourceName)
           ? "source-badge"
           : "category-fallback";
@@ -16992,6 +17082,26 @@ export default function Home() {
                     return {
                       ...prev,
                       [rectangleLogoFailureKey]: true,
+                    };
+                  });
+                }}
+              />
+            ) : shouldUseSportsFallbackImage && sportsFallbackImageUrl ? (
+              <img
+                src={sportsFallbackImageUrl}
+                alt={`${safeCategoryName} image`}
+                className="top-trending-list-image"
+                loading="lazy"
+                decoding="async"
+                onError={() => {
+                  setFailedArticleBoxImages((prev) => {
+                    if (prev[sportsFallbackFailureKey]) {
+                      return prev;
+                    }
+
+                    return {
+                      ...prev,
+                      [sportsFallbackFailureKey]: true,
                     };
                   });
                 }}
@@ -17413,13 +17523,6 @@ export default function Home() {
             </div>
           </div>
 
-          {trendingWeatherLeadArticle ? (
-            <div className="stack" style={{ gap: "10px", marginBottom: "16px" }}>
-              <strong className="profile-section-title home-section-title">Weather Around the World</strong>
-              {renderLargeImageArticleCard(trendingWeatherLeadArticle)}
-            </div>
-          ) : null}
-
           <div className="stack local-feed-shell">
             <div className="home-weather-card">
               <div className="stack" style={{ gap: "4px" }}>
@@ -17545,6 +17648,13 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : null}
+
+            {trendingWeatherLeadArticle ? (
+              <div className="stack" style={{ gap: "10px", marginBottom: "8px" }}>
+                <strong className="profile-section-title home-section-title">Weather Around the World</strong>
+                {renderLargeImageArticleCard(trendingWeatherLeadArticle)}
               </div>
             ) : null}
 
