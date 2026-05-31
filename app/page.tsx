@@ -844,6 +844,10 @@ const BREAKING_NEWS_TRUSTED_SOURCES = [
 ] as const;
 const BREAKING_NEWS_REQUIRED_PATTERN =
   /\b(breaking|live updates?|developing|urgent|major|confirmed|emergency|shooting|killed|dead|attack|court ruling|government|election|war|disaster|emergency|severe weather|economy)\b/i;
+const BREAKING_NEWS_URGENCY_PATTERN =
+  /\b(breaking|live updates?|developing|urgent|just in|alert|confirmed|ongoing|minutes ago|today|latest)\b/i;
+const BREAKING_NEWS_ANALYSIS_PATTERN =
+  /\b(opinion|analysis|explainer|what to know|how to watch|preview|editorial)\b/i;
 const BREAKING_NEWS_SOFT_STORY_PATTERN =
   /\b(ice cream|food|recipe|restaurant|travel|vacation|celebrity|hollywood|fashion|music awards|movie premiere|gossip|lifestyle|wellness|shopping|matchup|preview|recap|rankings|odds|sports betting|betting line|parlay|spread pick|over\/under|entertainment)\b/i;
 const BREAKING_NEWS_SPORTS_PATTERN =
@@ -3683,6 +3687,23 @@ function getBreakingNewsSourcePriority(article: Article) {
   return 0;
 }
 
+function isPublishedTodayInNewYork(publishedAt?: string | null) {
+  const timestamp = getPublishedAtTimestamp(publishedAt);
+
+  if (!timestamp) {
+    return false;
+  }
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(timestamp) === formatter.format(Date.now());
+}
+
 function isBreakingNewsEligible(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
     article.category ?? ""
@@ -3696,8 +3717,17 @@ function isBreakingNewsEligible(article: Article) {
     return false;
   }
 
+  if (BREAKING_NEWS_ANALYSIS_PATTERN.test(haystack)) {
+    return false;
+  }
+
+  if (cleanDisplayText(article.category).trim().toLowerCase() === "search") {
+    return false;
+  }
+
   return (
     BREAKING_NEWS_REQUIRED_PATTERN.test(haystack) ||
+    BREAKING_NEWS_URGENCY_PATTERN.test(haystack) ||
     /\b(breaking news|live blog|live updates|developing story|just in)\b/i.test(haystack)
   );
 }
@@ -3715,12 +3745,28 @@ function getBreakingNewsRelevanceScore(article: Article) {
     score += 180;
   }
 
+  if (BREAKING_NEWS_URGENCY_PATTERN.test(haystack)) {
+    score += 150;
+  }
+
   if (/\b(breaking news|live blog|live updates|developing story|just in)\b/i.test(haystack)) {
     score += 120;
   }
 
   if (BREAKING_NEWS_SOFT_STORY_PATTERN.test(haystack)) {
     return -2500;
+  }
+
+  if (BREAKING_NEWS_ANALYSIS_PATTERN.test(haystack)) {
+    return -1800;
+  }
+
+  if (cleanDisplayText(article.category).trim().toLowerCase() === "search") {
+    return -1200;
+  }
+
+  if (isPublishedTodayInNewYork(article.publishedAt)) {
+    score += 90;
   }
 
   score += Math.max(
@@ -9814,6 +9860,54 @@ export default function Home() {
     });
   }, [localLocationLabel, localQuery, sortMode, sportsPreviewArticles, visibleArticles]);
 
+  const sportsImageDiagnostics = useMemo(() => {
+    const sportsArticles = sportsTabArticles.filter(
+      (article) => isBroadSportsArticle(article) && !isSportsBettingAd(article)
+    );
+
+    const diagnostics = sportsArticles.map((article) => {
+      const safeSourceName = getSafeSourceLabel(article.source);
+      const selectedImage = getBestArticleImage(article);
+      const hasRealImage =
+        Boolean(selectedImage.src) &&
+        isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
+      const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
+      const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
+
+      return {
+        article,
+        imageSource: hasRealImage
+          ? selectedImage.source ?? "real"
+          : boxLogoUrl
+            ? "box-logo"
+            : rectangleLogoUrl
+              ? "rectangle-logo"
+              : hasMappedSourceLogo(safeSourceName)
+                ? "source-badge"
+                : "category-fallback",
+        hasRealImage,
+        hasFallbackImage: Boolean(boxLogoUrl || rectangleLogoUrl),
+      };
+    });
+
+    return {
+      diagnostics,
+      realImageCount: diagnostics.filter((entry) => entry.hasRealImage).length,
+      fallbackImageCount: diagnostics.filter(
+        (entry) => !entry.hasRealImage && entry.hasFallbackImage
+      ).length,
+    };
+  }, [sportsTabArticles]);
+
+  useEffect(() => {
+    if (sportsImageDiagnostics.diagnostics.length === 0) {
+      return;
+    }
+
+    console.log("SPORTS REAL IMAGE COUNT", sportsImageDiagnostics.realImageCount);
+    console.log("SPORTS FALLBACK IMAGE COUNT", sportsImageDiagnostics.fallbackImageCount);
+  }, [sportsImageDiagnostics]);
+
   const celebrityTabArticles = useMemo(() => {
     if (sortMode === "celebrity") {
       const sectionFeedArticles = [
@@ -12634,6 +12728,16 @@ export default function Home() {
     ).slice(0, 5);
   }, [breakingPreviewArticles, sortMode, topTenTrendingArticles]);
 
+  const breakingNewsLeadArticle = useMemo(() => {
+    const firstArticle = breakingNewsPreviewArticles[0];
+    return firstArticle && getLargeImageCardImage(firstArticle) ? firstArticle : null;
+  }, [breakingNewsPreviewArticles, failedArticleImages]);
+
+  const topTenTrendingLeadArticle = useMemo(() => {
+    const firstArticle = topTenTrendingArticles[0];
+    return firstArticle && getLargeImageCardImage(firstArticle) ? firstArticle : null;
+  }, [failedArticleImages, topTenTrendingArticles]);
+
   const myNewsFeaturedArticles = useMemo(() => {
     if (sortMode !== "trending") {
       return [] as Article[];
@@ -15089,6 +15193,15 @@ export default function Home() {
       return null;
     }
 
+    const rankedBreakingArticles = breakingNewsLeadArticle
+      ? breakingNewsPreviewArticles
+          .filter(
+            (article) =>
+              getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(breakingNewsLeadArticle)
+          )
+          .slice(0, 4)
+      : breakingNewsPreviewArticles.slice(0, 5);
+
     return (
       <section className="home-section-block home-section-plain">
         <div className="home-section-header">
@@ -15098,10 +15211,16 @@ export default function Home() {
             </strong>
           </div>
         </div>
-        {renderArticleSectionWithLargeLead(breakingNewsPreviewArticles, {
-          limit: 6,
-          categoryLabelOverride: "Breaking",
-        })}
+        <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
+          {breakingNewsLeadArticle ? renderLargeImageArticleCard(breakingNewsLeadArticle) : null}
+          {rankedBreakingArticles.map((article, index) => (
+            <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
+              {renderCompactSideImageArticle(article, {
+                showRank: breakingNewsLeadArticle ? index + 2 : index + 1,
+              })}
+            </div>
+          ))}
+        </div>
       </section>
     );
   };
@@ -16593,6 +16712,21 @@ export default function Home() {
       isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
     const shouldUseBoxLogoFallback =
       Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
+    const compactImageSourceUsed = shouldUseImage
+      ? selectedImage.source ?? "real"
+      : shouldUseBoxLogoFallback
+        ? "box-logo"
+        : hasMappedSourceLogo(safeSourceName)
+          ? "source-badge"
+          : "category-fallback";
+
+    if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
+      console.log("SPORTS IMAGE SOURCE USED", {
+        title: cleanDisplayText(article.title),
+        source: safeSourceName,
+        imageSource: compactImageSourceUsed,
+      });
+    }
 
     return (
       <article
@@ -16975,9 +17109,19 @@ export default function Home() {
             </div>
           </div>
           <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
-            {topTenTrendingArticles.map((article, index) => (
+            {topTenTrendingLeadArticle ? renderLargeImageArticleCard(topTenTrendingLeadArticle) : null}
+            {(topTenTrendingLeadArticle
+              ? topTenTrendingArticles.filter(
+                  (article) =>
+                    getArticleDeduplicationKey(article) !==
+                    getArticleDeduplicationKey(topTenTrendingLeadArticle)
+                )
+              : topTenTrendingArticles
+            ).map((article, index) => (
               <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                {renderCompactSideImageArticle(article, { showRank: index + 1 })}
+                {renderCompactSideImageArticle(article, {
+                  showRank: topTenTrendingLeadArticle ? index + 2 : index + 1,
+                })}
               </div>
             ))}
           </div>

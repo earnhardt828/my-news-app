@@ -3,6 +3,7 @@ export type ArticleImageFields = {
   urlToImage?: string | null;
   imageUrl?: string | null;
   image?: string | null;
+  media?: string | null;
   mediaContent?: string | null;
   enclosureUrl?: string | null;
   ogImage?: string | null;
@@ -15,6 +16,7 @@ export type ArticleImageSource =
   | "urlToImage"
   | "imageUrl"
   | "image"
+  | "media"
   | "mediaContent"
   | "enclosureUrl"
   | "ogImage"
@@ -107,6 +109,7 @@ export function getBestArticleImage(article: ArticleImageFields) {
     ["cardImage", normalizeImageValue(article.cardImage)],
     ["ogImage", normalizeImageValue(article.ogImage)],
     ["thumbnail", normalizeImageValue(article.thumbnail)],
+    ["media", normalizeImageValue(article.media)],
     ["mediaContent", normalizeImageValue(article.mediaContent)],
     ["enclosureUrl", normalizeImageValue(article.enclosureUrl)],
     ["urlToImage", normalizeImageValue(article.urlToImage)],
@@ -142,6 +145,7 @@ export function isLikelyHighQualityArticleImage(
   return (
     source === "thumbnail" ||
     source === "cardImage" ||
+    source === "media" ||
     source === "enclosureUrl" ||
     source === "urlToImage" ||
     source === "imageUrl" ||
