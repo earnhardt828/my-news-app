@@ -3266,6 +3266,86 @@ input {
   font-weight: 700;
 }
 
+.popular-music-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 2px 0 6px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.popular-music-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.popular-music-card {
+  flex: 0 0 min(58vw, 220px);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  box-shadow: 0 12px 24px rgba(20, 33, 61, 0.08);
+  scroll-snap-align: start;
+}
+
+.popular-music-card-art-shell {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-muted) 88%, white);
+}
+
+.popular-music-card-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.popular-music-rank {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.82);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.popular-music-card-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.popular-music-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.28;
+  color: var(--foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.popular-music-card-artist {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-soft);
+  letter-spacing: 0.01em;
+}
+
 .podcast-player-shell {
   display: grid;
   gap: 18px;

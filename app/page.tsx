@@ -2607,6 +2607,8 @@ type LikeUser = {
   username: string | null;
 };
 
+type EntertainmentSectionKey = "gossip" | "music" | "tv" | "celebrity" | "movies";
+
 type DbComment = {
   id: number;
   article_id: number;
@@ -5416,6 +5418,19 @@ function scoreEntertainmentArticleBySources(
   return sourceHits * 80 + imageBoost + relevanceBoost + recencyBoost;
 }
 
+function getEntertainmentPopularMusicCardMeta(article: Article) {
+  const title = cleanDisplayText(article.title);
+  const safeSource = getSafeSourceLabel(article.source);
+  const quotedMatch = title.match(/[“"']([^"”']{3,80})[”"']/);
+  const byMatch = title.match(/\bby ([A-Z0-9][^,|:;-]{2,48})/i);
+
+  return {
+    title: quotedMatch?.[1]?.trim() || title,
+    artist: byMatch?.[1]?.trim() || safeSource,
+    source: safeSource,
+  };
+}
+
 async function fetchEntertainmentArticlesForQueries(queries: readonly string[]) {
   const payloads = await Promise.allSettled(
     queries.map(async (query) => {
@@ -5918,6 +5933,15 @@ export default function Home() {
     tv: [],
     celebrity: [],
     movies: [],
+  });
+  const [entertainmentLeadCards, setEntertainmentLeadCards] = useState<
+    Record<EntertainmentSectionKey, Article | null>
+  >({
+    gossip: null,
+    music: null,
+    tv: null,
+    celebrity: null,
+    movies: null,
   });
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
@@ -13506,6 +13530,24 @@ export default function Home() {
     return sliderArticles.slice(0, 10);
   }, [entertainmentSectionContent.movies]);
 
+  const popularMusicSliderArticles = useMemo(() => {
+    const sliderCandidates = dedupeArticlesByContent([
+      ...entertainmentSectionFeeds.music,
+      ...entertainmentSectionContent.music,
+    ])
+      .filter(
+        (article) =>
+          isEntertainmentMusicArticle(article) && Boolean(getLargeImageCardImageCandidate(article))
+      )
+      .sort(
+        (leftArticle, rightArticle) =>
+          scoreEntertainmentArticleBySources(rightArticle, ENTERTAINMENT_MUSIC_QUERIES, "music") -
+          scoreEntertainmentArticleBySources(leftArticle, ENTERTAINMENT_MUSIC_QUERIES, "music")
+      );
+
+    return sliderCandidates.slice(0, 10);
+  }, [entertainmentSectionContent.music, entertainmentSectionFeeds.music]);
+
   useEffect(() => {
     if (sortMode === "celebrity") {
       console.log("ENTERTAINMENT SECTION ORDER", [
@@ -13518,6 +13560,145 @@ export default function Home() {
       ]);
     }
   }, [sortMode]);
+
+  useEffect(() => {
+    if (sortMode !== "celebrity") {
+      setEntertainmentLeadCards({
+        gossip: null,
+        music: null,
+        tv: null,
+        celebrity: null,
+        movies: null,
+      });
+      return;
+    }
+
+    setEntertainmentLeadCards((previousState) => {
+      const nextState = { ...previousState };
+      let hasChanges = false;
+
+      const sectionConfigs: Array<{
+        key: EntertainmentSectionKey;
+        articles: Article[];
+        sourceTerms: readonly string[];
+        kind: "music" | "tv" | "movies" | "gossip" | "celebrity";
+        matcher: (article: Article) => boolean;
+      }> = [
+        {
+          key: "gossip",
+          articles: entertainmentSectionContent.gossip,
+          sourceTerms: ENTERTAINMENT_CELEBRITY_QUERIES,
+          kind: "gossip",
+          matcher: isEntertainmentGossipArticle,
+        },
+        {
+          key: "music",
+          articles: entertainmentSectionContent.music,
+          sourceTerms: ENTERTAINMENT_MUSIC_QUERIES,
+          kind: "music",
+          matcher: isEntertainmentMusicArticle,
+        },
+        {
+          key: "tv",
+          articles: entertainmentSectionContent.tvShows,
+          sourceTerms: ENTERTAINMENT_TV_QUERIES,
+          kind: "tv",
+          matcher: isEntertainmentTvArticle,
+        },
+        {
+          key: "celebrity",
+          articles: entertainmentSectionContent.celebrity,
+          sourceTerms: ENTERTAINMENT_CELEBRITY_QUERIES,
+          kind: "celebrity",
+          matcher: isEntertainmentCelebrityArticle,
+        },
+        {
+          key: "movies",
+          articles: entertainmentSectionContent.movies,
+          sourceTerms: ENTERTAINMENT_MOVIES_QUERIES,
+          kind: "movies",
+          matcher: isEntertainmentMoviesArticle,
+        },
+      ];
+
+      sectionConfigs.forEach(({ key, articles, sourceTerms, kind, matcher }) => {
+        const nextCandidate = getEntertainmentSectionLeadArticle(key, articles, sourceTerms, kind);
+        const previousArticle = previousState[key];
+        const previousStillValid =
+          Boolean(previousArticle) &&
+          matcher(previousArticle as Article) &&
+          Boolean(getLargeImageCardImageCandidate(previousArticle as Article));
+
+        if (!previousArticle && nextCandidate) {
+          nextState[key] = nextCandidate;
+          hasChanges = true;
+          console.log("ENTERTAINMENT LARGE CARD INITIAL", {
+            section: key,
+            title: nextCandidate.title,
+          });
+          if (key === "gossip") {
+            console.log("GOSSIP LARGE CARD SELECTED", nextCandidate.title);
+          }
+          return;
+        }
+
+        if (previousArticle && previousStillValid) {
+          if (!nextCandidate) {
+            console.log("ENTERTAINMENT LARGE CARD OVERWRITE_BLOCKED", {
+              section: key,
+              kept: previousArticle.title,
+              attempted: null,
+            });
+            console.log("ENTERTAINMENT LARGE CARD KEPT", {
+              section: key,
+              title: previousArticle.title,
+            });
+            return;
+          }
+
+          const previousScore = scoreEntertainmentArticleBySources(previousArticle, sourceTerms, kind);
+          const nextScore = scoreEntertainmentArticleBySources(nextCandidate, sourceTerms, kind);
+
+          if (nextScore > previousScore) {
+            nextState[key] = nextCandidate;
+            hasChanges = true;
+            console.log("ENTERTAINMENT LARGE CARD INITIAL", {
+              section: key,
+              title: nextCandidate.title,
+            });
+            if (key === "gossip") {
+              console.log("GOSSIP LARGE CARD SELECTED", nextCandidate.title);
+            }
+          } else {
+            console.log("ENTERTAINMENT LARGE CARD OVERWRITE_BLOCKED", {
+              section: key,
+              kept: previousArticle.title,
+              attempted: nextCandidate.title,
+            });
+            console.log("ENTERTAINMENT LARGE CARD KEPT", {
+              section: key,
+              title: previousArticle.title,
+            });
+          }
+          return;
+        }
+
+        if (nextCandidate) {
+          nextState[key] = nextCandidate;
+          hasChanges = true;
+          console.log("ENTERTAINMENT LARGE CARD INITIAL", {
+            section: key,
+            title: nextCandidate.title,
+          });
+          if (key === "gossip") {
+            console.log("GOSSIP LARGE CARD SELECTED", nextCandidate.title);
+          }
+        }
+      });
+
+      return hasChanges ? nextState : previousState;
+    });
+  }, [entertainmentSectionContent, sortMode]);
 
   const localSectionArticles = useMemo(() => {
     if (sortMode !== "local") {
@@ -15004,6 +15185,68 @@ export default function Home() {
           );
         })}
       </div>
+    );
+  };
+
+  const renderPopularMusicSlider = (musicArticles: Article[]) => {
+    if (musicArticles.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Popular Music</strong>
+          </div>
+        </div>
+        <div className="popular-music-scroll" role="list" aria-label="Popular music">
+          {musicArticles.map((article, index) => {
+            const articleRouteId = getArticleRouteId(article);
+            const imageSrc = getBestArticleImage(article).src;
+            const musicMeta = getEntertainmentPopularMusicCardMeta(article);
+
+            if (!articleRouteId || !imageSrc) {
+              return null;
+            }
+
+            return (
+              <Link
+                key={`popular-music-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                href={`/article/${articleRouteId}/`}
+                className="popular-music-card"
+                role="listitem"
+                onClick={() => {
+                  persistArticleMetadata(article);
+                  saveArticleReturnState({
+                    path: "/",
+                    scrollY: window.scrollY,
+                    source: "home",
+                    sortMode,
+                    selectedLocalCity,
+                    localLocationLabel,
+                  });
+                }}
+              >
+                <div className="popular-music-card-art-shell">
+                  <img
+                    src={imageSrc}
+                    alt={musicMeta.title}
+                    className="popular-music-card-art"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span className="popular-music-rank">#{index + 1}</span>
+                </div>
+                <div className="popular-music-card-copy">
+                  <strong className="popular-music-card-title">{musicMeta.title}</strong>
+                  <span className="popular-music-card-artist">{musicMeta.artist}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
     );
   };
 
@@ -17751,12 +17994,7 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">Gossip</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle(
-                      "gossip",
-                      entertainmentSectionContent.gossip,
-                      ENTERTAINMENT_CELEBRITY_QUERIES,
-                      "gossip"
-                    );
+                    const leadArticle = entertainmentLeadCards.gossip;
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.gossip.filter(
                           (article) =>
@@ -17782,18 +18020,15 @@ export default function Home() {
                 </section>
               ) : null}
 
+              {popularMusicSliderArticles.length > 0 ? renderPopularMusicSlider(popularMusicSliderArticles) : null}
+
               {entertainmentSectionContent.music.length > 0 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
                     <strong className="profile-section-title home-section-title">Music</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle(
-                      "music",
-                      entertainmentSectionContent.music,
-                      ENTERTAINMENT_MUSIC_QUERIES,
-                      "music"
-                    );
+                    const leadArticle = entertainmentLeadCards.music;
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.music.filter(
                           (article) =>
@@ -17825,12 +18060,7 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">TV Shows</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle(
-                      "tv",
-                      entertainmentSectionContent.tvShows,
-                      ENTERTAINMENT_TV_QUERIES,
-                      "tv"
-                    );
+                    const leadArticle = entertainmentLeadCards.tv;
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.tvShows.filter(
                           (article) =>
@@ -17862,12 +18092,7 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">Celebrity</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle(
-                      "celebrity",
-                      entertainmentSectionContent.celebrity,
-                      ENTERTAINMENT_CELEBRITY_QUERIES,
-                      "celebrity"
-                    );
+                    const leadArticle = entertainmentLeadCards.celebrity;
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.celebrity.filter(
                           (article) =>
@@ -17903,12 +18128,7 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">Movies</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle(
-                      "movies",
-                      entertainmentSectionContent.movies,
-                      ENTERTAINMENT_MOVIES_QUERIES,
-                      "movies"
-                    );
+                    const leadArticle = entertainmentLeadCards.movies;
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.movies.filter(
                           (article) =>
