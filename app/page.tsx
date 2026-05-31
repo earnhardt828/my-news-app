@@ -5444,6 +5444,7 @@ export default function Home() {
       }
 
       setIsSportsScoresLoading(true);
+      console.log("SPORTS SCORES FETCH START");
 
       try {
         console.log("SPORTS SCORES DATE USED", getTodayDayKey());
@@ -5459,6 +5460,13 @@ export default function Home() {
           return;
         }
 
+        console.log("SPORTS SCORES RAW COUNT", {
+          NFL: payload.leagues.NFL?.length ?? 0,
+          NBA: payload.leagues.NBA?.length ?? 0,
+          MLB: payload.leagues.MLB?.length ?? 0,
+          NHL: payload.leagues.NHL?.length ?? 0,
+          MLS: payload.leagues.MLS?.length ?? 0,
+        });
         setAreSportsScoresAvailable(payload.providerConfigured);
         setSportsScoresByLeague({
           NFL: payload.leagues.NFL ?? [],
@@ -5469,6 +5477,7 @@ export default function Home() {
         });
       } catch (error) {
         console.error("SPORTS SCORES LOAD FAILED", error);
+        console.log("SPORTS SCORES ERROR", error instanceof Error ? error.message : String(error));
 
         if (!isMounted) {
           return;
@@ -5515,6 +5524,31 @@ export default function Home() {
 
     return filteredScores;
   }, [sportsScoresByLeague]);
+
+  const sportsScoresDisplayByLeague = useMemo(() => {
+    const displayScores = {
+      NFL:
+        sportsScoresTodayByLeague.NFL.length > 0 ? sportsScoresTodayByLeague.NFL : sportsScoresByLeague.NFL,
+      NBA:
+        sportsScoresTodayByLeague.NBA.length > 0 ? sportsScoresTodayByLeague.NBA : sportsScoresByLeague.NBA,
+      MLB:
+        sportsScoresTodayByLeague.MLB.length > 0 ? sportsScoresTodayByLeague.MLB : sportsScoresByLeague.MLB,
+      NHL:
+        sportsScoresTodayByLeague.NHL.length > 0 ? sportsScoresTodayByLeague.NHL : sportsScoresByLeague.NHL,
+      MLS:
+        sportsScoresTodayByLeague.MLS.length > 0 ? sportsScoresTodayByLeague.MLS : sportsScoresByLeague.MLS,
+    } satisfies Record<SportsScoreLeague, SportsScoreGame[]>;
+
+    console.log("SPORTS SCORES FINAL COUNT", {
+      NFL: displayScores.NFL.length,
+      NBA: displayScores.NBA.length,
+      MLB: displayScores.MLB.length,
+      NHL: displayScores.NHL.length,
+      MLS: displayScores.MLS.length,
+    });
+
+    return displayScores;
+  }, [sportsScoresByLeague, sportsScoresTodayByLeague]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -11923,7 +11957,7 @@ export default function Home() {
     const seenGameIds = new Set<string>();
 
     favoriteTeams.forEach((team) => {
-      const leagueGames = sportsScoresTodayByLeague[team.league] ?? [];
+      const leagueGames = sportsScoresDisplayByLeague[team.league] ?? [];
       const teamName = team.team_name.toLowerCase();
       const matchingGame = leagueGames.find(
         (game) =>
@@ -11940,10 +11974,10 @@ export default function Home() {
     });
 
     return matchedGames;
-  }, [favoriteTeams, sportsScoresTodayByLeague]);
+  }, [favoriteTeams, sportsScoresDisplayByLeague]);
 
   const topSportsGames = useMemo(() => {
-    return Object.values(sportsScoresTodayByLeague)
+    return Object.values(sportsScoresDisplayByLeague)
       .flat()
       .sort((left, right) => {
         const statusRank = (game: SportsScoreGame) =>
@@ -11959,7 +11993,7 @@ export default function Home() {
         return rightTime - leftTime;
       })
       .slice(0, 8);
-  }, [sportsScoresTodayByLeague]);
+  }, [sportsScoresDisplayByLeague]);
 
   const sportsLeagueSections = useMemo(() => {
     if (sortMode !== "sports") {
@@ -12090,7 +12124,7 @@ export default function Home() {
       const visibleVideos = section.key === "MORE" ? [] : selectedVideos;
 
       const scores = section.scoreLeague
-        ? [...(sportsScoresTodayByLeague[section.scoreLeague] ?? [])].sort((left, right) => {
+        ? [...(sportsScoresDisplayByLeague[section.scoreLeague] ?? [])].sort((left, right) => {
             const normalizedFavoriteNames = new Set(
               favoriteLeagueTeams.map((team) => team.team_name.toLowerCase())
             );
@@ -12121,7 +12155,7 @@ export default function Home() {
         videos: visibleVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresTodayByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresDisplayByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -12250,12 +12284,22 @@ export default function Home() {
     return usedKeys;
   }, [sportsFeaturedArticles, sportsLeagueSections]);
 
+  const featuredSportsArticleKeys = useMemo(() => {
+    const usedKeys = new Set<string>();
+
+    sportsFeaturedArticles.forEach((article) => {
+      usedKeys.add(getArticleDeduplicationKey(article));
+    });
+
+    return usedKeys;
+  }, [sportsFeaturedArticles]);
+
   const sportsSectionSeparatorArticles = useMemo(() => {
     if (sortMode !== "sports" || sportsLeagueSections.length === 0) {
       return {} as Partial<Record<SportsSectionKey, Article | null>>;
     }
 
-    const usedKeys = new Set(usedSportsSectionArticleKeys);
+    const usedKeys = new Set(featuredSportsArticleKeys);
     const separatorBySectionKey: Partial<Record<SportsSectionKey, Article | null>> = {};
     const candidates = [...sportsStandardArticles]
       .filter((article) => {
@@ -12295,21 +12339,35 @@ export default function Home() {
     });
 
     return separatorBySectionKey;
-  }, [sortMode, sportsLeagueSections, sportsStandardArticles, usedSportsSectionArticleKeys]);
+  }, [featuredSportsArticleKeys, sortMode, sportsLeagueSections, sportsStandardArticles]);
+
+  const sportsSectionSeparatorArticleKeys = useMemo(() => {
+    const usedKeys = new Set<string>();
+
+    Object.values(sportsSectionSeparatorArticles).forEach((article) => {
+      if (article) {
+        usedKeys.add(getArticleDeduplicationKey(article));
+      }
+    });
+
+    return usedKeys;
+  }, [sportsSectionSeparatorArticles]);
 
   const sportsVerticalSeparatorVideos = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as VideoItem[];
     }
 
-    const filteredVideos = sportsVideoPool.filter((video) => {
+    const filteredVideos = sportsVideos.filter((video) => {
       const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
       const hasSportsContext =
         /\b(sports|espn|nba|nfl|mlb|nhl|mls|college football|college basketball|golf|nascar|playoffs|championship|highlights|game)\b/.test(
           haystack
         );
       const hasRejectedContext =
-        /\b(politics?|celebrity|food|weather|crime|tech|business)\b/.test(haystack);
+        /\b(politics?|celebrity|food|weather|crime|tech|business|world news|local news)\b/.test(
+          haystack
+        ) && !/\b(local sports|sports)\b/.test(haystack);
 
       return hasSportsContext && !hasRejectedContext;
     });
@@ -12326,7 +12384,7 @@ export default function Home() {
     });
 
     return selectSourceBalancedVideos(sortedVideos, 4, 1);
-  }, [sortMode, sportsVideoPool]);
+  }, [sortMode, sportsVideos]);
 
   const favoriteTeamNewsArticles = useMemo(() => {
     if (sortMode !== "sports" || favoriteTeams.length === 0) {
@@ -14305,7 +14363,7 @@ export default function Home() {
       return null;
     }
 
-    const leagueGames = sportsScoresTodayByLeague[expandedScoresLeague] ?? [];
+    const leagueGames = sportsScoresDisplayByLeague[expandedScoresLeague] ?? [];
     const groupedGames = leagueGames.reduce<Record<string, SportsScoreGame[]>>((accumulator, game) => {
       const dateKey = game.scheduledAt
         ? new Intl.DateTimeFormat("en-US", {
@@ -16382,13 +16440,17 @@ export default function Home() {
                               getArticleDeduplicationKey(largeCardArticle)
                           )
                         : section.articles;
+                      const dedupedCompactArticles = compactArticles.filter(
+                        (article) =>
+                          !sportsSectionSeparatorArticleKeys.has(getArticleDeduplicationKey(article))
+                      );
 
                       return (
                         <>
                           {largeCardArticle ? renderLargeImageArticleCard(largeCardArticle) : null}
-                          {compactArticles.length > 0 ? (
+                          {dedupedCompactArticles.length > 0 ? (
                             <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
-                              {compactArticles.map((article, index) => (
+                              {dedupedCompactArticles.map((article, index) => (
                                 <div
                                   key={`sports-section-article-${section.key}-${
                                     article.id || article.url || getArticleDeduplicationKey(article)
