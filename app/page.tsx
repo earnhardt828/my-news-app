@@ -410,6 +410,8 @@ const NHL_VIDEOS_DISABLED = true;
 const MLS_VIDEOS_DISABLED = true;
 const COLLEGE_BASKETBALL_VIDEOS_DISABLED = true;
 const NASCAR_VIDEOS_DISABLED = true;
+const SPORTS_SCORE_CARDS_DISABLED = true;
+const FEATURED_SPORTS_DISABLED = true;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
 function buildNhlFallbackVideos(): VideoItem[] {
@@ -3280,6 +3282,44 @@ function getArticleDeduplicationKey(article: Pick<Article, "id" | "url" | "title
   return `title:${article.source.trim().toLowerCase()}:${normalizedTitle}`;
 }
 
+function getSportsArticleDuplicateKeys(article: Pick<Article, "url" | "title" | "source">) {
+  const normalizedUrl = (() => {
+    try {
+      if (!article.url?.trim()) {
+        return "";
+      }
+      const parsed = new URL(article.url.trim());
+      parsed.hash = "";
+      [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "fbclid",
+        "gclid",
+      ].forEach((key) => parsed.searchParams.delete(key));
+      return parsed.toString().toLowerCase();
+    } catch {
+      return article.url?.trim().toLowerCase() ?? "";
+    }
+  })();
+
+  const normalizedTitle = cleanDisplayText(article.title ?? "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const normalizedSource = cleanDisplayText(article.source ?? "").toLowerCase().trim();
+
+  return [
+    normalizedUrl ? `url:${normalizedUrl}` : null,
+    normalizedTitle ? `title:${normalizedTitle}` : null,
+    normalizedTitle && normalizedSource ? `source-title:${normalizedSource}:${normalizedTitle}` : null,
+    normalizedTitle ? `normalized-title:${normalizedTitle}` : null,
+  ].filter((value): value is string => Boolean(value));
+}
+
 function mergeArticlesByIdentity(existing: Article[], incoming: Article[]) {
   const merged = [...existing];
   const existingIndexByKey = new Map(
@@ -3953,7 +3993,7 @@ const SPORTS_SECTION_CONFIGS: SportsSectionConfig[] = [
   },
   {
     key: "MMA",
-    label: "MMA",
+    label: "Fighting",
     articlePattern:
       /(mma|ufc|bellator|pfl|boxing|knockout|submission|weigh in|octagon|fight card|combat sports|mma fighting)/i,
     videoPattern:
@@ -4959,6 +4999,70 @@ function isStrictNbaVideo(video: VideoItem) {
   );
 }
 
+function isStrictNbaArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasNbaTerms =
+    /\b(nba|national basketball association|nba\.com|nba playoffs|nba finals|knicks|cavaliers|thunder|spurs|lakers|celtics|warriors|nuggets|mavericks|suns|bucks|76ers|sixers|heat|bulls|clippers|grizzlies|hawks|hornets|jazz|kings|magic|nets|pacers|pelicans|pistons|raptors|rockets|trail blazers|wizards)\b/.test(
+      haystack
+    );
+  const hasSourceTerms =
+    /\b(espn nba|nba\.com|ap nba|reuters nba|cbs sports nba|nbc sports nba|fox sports nba|yahoo sports nba|bleacher report nba)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(wnba|women'?s basketball|college basketball|ncaa basketball|high school basketball|odds|betting|sportsbook|parlay|spread pick|over\/under|promo code|bonus code)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms || isSportsBettingAd(article)) {
+    return false;
+  }
+
+  return hasNbaTerms || hasSourceTerms;
+}
+
+function isStrictFightingArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasFightingTerms =
+    /\b(ufc|mma|boxing|combat sports|fight|fighter|title fight|knockout|bout)\b/.test(haystack);
+  const hasSourceTerms =
+    /\b(espn mma|espn boxing|ufc\.com|mma fighting|bloody elbow|boxingscene|dazn boxing|ap boxing|reuters boxing)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(wwe|pro wrestling|sports betting|odds|betting|sportsbook|parlay|spread pick|over\/under|celebrity fight)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms || isSportsBettingAd(article)) {
+    return false;
+  }
+
+  return hasFightingTerms || hasSourceTerms;
+}
+
 function isStrictMlsVideo(video: VideoItem) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
   const hasMlsTerms =
@@ -4993,7 +5097,7 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
   if (section.key === "MLB" && matchesFavoriteLeagueTeamName(haystack, "MLB")) {
     return true;
   }
-  if (section.key === "NBA" && matchesFavoriteLeagueTeamName(haystack, "NBA")) {
+  if (section.key === "NBA" && matchesFavoriteLeagueTeamName(haystack, "NBA") && isStrictNbaArticle(article)) {
     return true;
   }
   if (section.key === "MLS" && matchesFavoriteLeagueTeamName(haystack, "MLS")) {
@@ -5014,6 +5118,9 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
   if (section.key === "MOTORSPORTS" && articleMatchesSelectedCategory(article, "NASCAR")) {
     return true;
   }
+  if (section.key === "MMA" && isStrictFightingArticle(article)) {
+    return true;
+  }
 
   const sourceMatchedBySection =
     section.key === "MLB"
@@ -5021,7 +5128,7 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
           haystack
         )
       : section.key === "NBA"
-        ? /\b(nba\.com|basketball|espn nba|bleacher report nba|yahoo sports nba|cbs sports nba|nbc sports nba)\b/i.test(
+        ? /\b(nba\.com|basketball|espn nba|bleacher report nba|yahoo sports nba|cbs sports nba|nbc sports nba|fox sports nba|ap nba|reuters nba)\b/i.test(
             haystack
           )
         : section.key === "NFL"
@@ -5049,12 +5156,20 @@ function matchesSportsSectionArticle(article: Article, section: SportsSectionCon
                         haystack
                       )
                 : section.key === "MMA"
-                  ? /\b(mma|ufc|boxing|mma fighting|bellator|octagon|fight night)\b/i.test(
+                  ? /\b(ufc|mma|boxing|combat sports|espn mma|espn boxing|ufc\.com|mma fighting|bloody elbow|boxingscene|dazn boxing|ap boxing|reuters boxing|fight|fighter|title fight|knockout|bout)\b/i.test(
                       haystack
                     )
                 : /\b(motorsport\.com|motorsport|nascar|formula 1|formula1|f1|indycar|golf|tennis|olympics|sports car|grand prix|race)\b/i.test(
                     haystack
                   );
+
+  if (section.key === "NBA") {
+    return isStrictNbaArticle(article);
+  }
+
+  if (section.key === "MMA") {
+    return isStrictFightingArticle(article);
+  }
 
   return section.articlePattern.test(haystack) || sourceMatchedBySection;
 }
@@ -12008,10 +12123,12 @@ export default function Home() {
     }
 
     const usedArticleKeys = new Set<string>();
+    const usedSportsDuplicateKeys = new Set<string>();
     const usedVideoKeys = new Set<string>();
 
     sportsFeaturedArticles.forEach((article) => {
       usedArticleKeys.add(getArticleDeduplicationKey(article));
+      getSportsArticleDuplicateKeys(article).forEach((key) => usedSportsDuplicateKeys.add(key));
     });
 
     return SPORTS_SECTION_CONFIGS.map((section) => {
@@ -12041,6 +12158,16 @@ export default function Home() {
 
       const candidateArticles = mergeArticlesByIdentity(sportsStandardArticles, supplementalArticles).filter((article) => {
         if (usedArticleKeys.has(getArticleDeduplicationKey(article))) {
+          return false;
+        }
+
+        const duplicateKeys = getSportsArticleDuplicateKeys(article);
+        if (duplicateKeys.some((key) => usedSportsDuplicateKeys.has(key))) {
+          console.log("SPORTS DUPLICATE ARTICLE REMOVED", {
+            section: section.key,
+            title: article.title,
+            source: article.source,
+          });
           return false;
         }
 
@@ -12096,6 +12223,7 @@ export default function Home() {
       });
       selectedArticles.forEach((article) => {
         usedArticleKeys.add(getArticleDeduplicationKey(article));
+        getSportsArticleDuplicateKeys(article).forEach((key) => usedSportsDuplicateKeys.add(key));
       });
 
       const candidateVideos = dedupeVideosBySourceTitleAndUrl([
@@ -12384,6 +12512,47 @@ export default function Home() {
     });
 
     return selectSourceBalancedVideos(sortedVideos, 4, 1);
+  }, [sortMode, sportsVideos]);
+
+  const sportsHighlightsVideos = useMemo(() => {
+    if (sortMode !== "sports") {
+      return [] as VideoItem[];
+    }
+
+    const filteredVideos = sportsVideos.filter((video) => {
+      const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+      const hasSportsContext =
+        /\b(espn|sports|nba finals|nba playoffs|mlb highlights|nhl playoffs|nfl highlights|mls highlights|ufc highlights|boxing highlights|nascar highlights|college football highlights|college basketball highlights|playoffs|championship|highlights)\b/.test(
+          haystack
+        );
+      const hasRejectedContext =
+        /\b(politics?|celebrity|tech|business|weather|crime)\b/.test(haystack);
+
+      return hasSportsContext && !hasRejectedContext;
+    });
+
+    const sortedVideos = [...filteredVideos].sort((leftVideo, rightVideo) => {
+      const score = (video: VideoItem) => {
+        const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+        let value = 0;
+
+        if (/\b(finals|playoffs|championship|highlights)\b/.test(haystack)) {
+          value += 120;
+        }
+        if (/\b(espn|cbs sports|nbc sports|fox sports|bleacher report|ufc|mlb|nfl|nba|nhl|mls|nascar)\b/.test(haystack)) {
+          value += 80;
+        }
+        if (video.orientation === "vertical") {
+          value += 30;
+        }
+
+        return value;
+      };
+
+      return score(rightVideo) - score(leftVideo);
+    });
+
+    return selectSourceBalancedVideos(sortedVideos, 5, 1);
   }, [sortMode, sportsVideos]);
 
   const favoriteTeamNewsArticles = useMemo(() => {
@@ -14721,6 +14890,54 @@ export default function Home() {
     );
   };
 
+  const renderSportsHighlightsSection = () => {
+    if (sportsHighlightsVideos.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Top Highlights</strong>
+          </div>
+        </div>
+        <div
+          className="quick-watch-scroll quick-watch-scroll-centered"
+          role="list"
+          aria-label="Top sports highlights"
+        >
+          {sportsHighlightsVideos.map((video) => (
+            <div key={`sports-highlights-${video.id}`} className="quick-watch-item" role="listitem">
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`sports-highlights:${video.id}`) &&
+                  !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "sports")}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[`sports-highlights:${video.id}`] = node;
+                }}
+                autoplayKey={`sports-highlights:${video.id}`}
+                previewDurationMs={null}
+                label="Top Highlights"
+                hideActions
+                useRelativeTime
+                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
+                useUniformTallFrame
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   const renderTeamPickerModal = () => {
     if (!isTeamPickerOpen) {
       return null;
@@ -16352,26 +16569,28 @@ export default function Home() {
                 )}
               </section>
 
-              <section className="home-section-block home-section-plain">
-                <div className="home-section-header">
-                  <div className="stack" style={{ gap: "4px" }}>
-                    <strong className="profile-section-title home-section-title">Current Games</strong>
-                    <span className="muted">Live and upcoming matchups for the leagues you follow.</span>
+              {!SPORTS_SCORE_CARDS_DISABLED ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Current Games</strong>
+                      <span className="muted">Live and upcoming matchups for the leagues you follow.</span>
+                    </div>
                   </div>
-                </div>
 
-                {isSportsScoresLoading ? (
-                  <div className="muted">Loading current games...</div>
-                ) : (
-                  renderSportsScoreRow(
-                    favoriteTeamGames.length > 0 ? favoriteTeamGames : topSportsGames,
-                    "Favorite team current games",
-                    "Scores unavailable right now."
-                  )
-                )}
-              </section>
+                  {isSportsScoresLoading ? (
+                    <div className="muted">Loading current games...</div>
+                  ) : (
+                    renderSportsScoreRow(
+                      favoriteTeamGames.length > 0 ? favoriteTeamGames : topSportsGames,
+                      "Favorite team current games",
+                      "Scores unavailable right now."
+                    )
+                  )}
+                </section>
+              ) : null}
 
-              {sportsFeaturedArticles.length > 0 ? (
+              {!FEATURED_SPORTS_DISABLED && sportsFeaturedArticles.length > 0 ? (
                 <section className="home-section-block home-section-plain featured-stories-row">
                   <div className="home-section-header">
                     <div className="stack" style={{ gap: "4px" }}>
@@ -16388,11 +16607,10 @@ export default function Home() {
                 </section>
               ) : null}
 
+              {renderSportsHighlightsSection()}
+
               {sportsLeagueSections.map((section) => (
                 <Fragment key={`sports-section-group-${section.key}`}>
-                  {sportsSectionSeparatorArticles[section.key]
-                    ? renderLargeImageArticleCard(sportsSectionSeparatorArticles[section.key]!)
-                    : null}
                   <section
                     key={`sports-section-${section.key}`}
                     className="home-section-block home-section-plain"
@@ -16432,7 +16650,12 @@ export default function Home() {
                     ) : null}
 
                     {(() => {
+                      const separatorArticle = sportsSectionSeparatorArticles[section.key] ?? null;
                       const largeCardArticle = getSportsLeagueLargeCardArticle(section.key, section.articles);
+                      const shouldRenderSeparatorArticle =
+                        separatorArticle &&
+                        getArticleDeduplicationKey(separatorArticle) !==
+                          (largeCardArticle ? getArticleDeduplicationKey(largeCardArticle) : "");
                       const compactArticles = largeCardArticle
                         ? section.articles.filter(
                             (article) =>
@@ -16447,6 +16670,9 @@ export default function Home() {
 
                       return (
                         <>
+                          {shouldRenderSeparatorArticle
+                            ? renderLargeImageArticleCard(separatorArticle)
+                            : null}
                           {largeCardArticle ? renderLargeImageArticleCard(largeCardArticle) : null}
                           {dedupedCompactArticles.length > 0 ? (
                             <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
