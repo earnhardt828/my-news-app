@@ -601,7 +601,7 @@ function isDedicatedMlbCategory(category: string) {
   return normalized === "MLB" || slug === "baseball" || slug === "major-league-baseball";
 }
 const CELEBRITY_FEED_QUERY =
-  "celebrity news | celebrity gossip | entertainment news | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard";
+  "entertainment news | celebrity news | celebrity gossip | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard | Rolling Stone | Vulture | IndieWire | Screen Rant | Collider | TheWrap | Hollywood Life | Pitchfork | Complex | NME | TVLine | Deadline TV | Variety TV | Billboard Music | Rolling Stone Music";
 const TECHNOLOGY_FEED_QUERY =
   "technology news | AI news | tech startups | Apple news | Google news | Microsoft news | cybersecurity news | social media news | The Verge | TechCrunch | Wired | Ars Technica | Engadget | CNET | CNBC Tech | Bloomberg Technology";
 const TRAVEL_FEED_QUERY =
@@ -5094,6 +5094,27 @@ function isStrictFightingArticle(article: Article) {
   }
 
   return hasFightingTerms || hasSourceTerms;
+}
+
+function getEntertainmentSectionLeadArticle(
+  section: "music" | "tv" | "movies" | "gossip" | "celebrity",
+  articles: Article[]
+) {
+  const selectedCandidate = articles
+    .map((article) => ({
+      article,
+      image: getLargeImageCardImageCandidate(article),
+    }))
+    .find((candidate) => candidate.image);
+
+  console.log("ENTERTAINMENT LARGE CARD SELECTED", {
+    section,
+    title: selectedCandidate?.article.title ?? null,
+    source: selectedCandidate?.article.source ?? null,
+    imageUrl: selectedCandidate?.image?.src ?? null,
+  });
+
+  return selectedCandidate?.article ?? null;
 }
 
 function isStrictMlsVideo(video: VideoItem) {
@@ -12764,7 +12785,7 @@ export default function Home() {
     [celebrityTabArticles]
   );
 
-  const buildCelebritySection = useCallback(
+  const buildEntertainmentSection = useCallback(
     (
       pattern: RegExp,
       limit: number,
@@ -12782,44 +12803,49 @@ export default function Home() {
     [celebrityTabArticles]
   );
 
-  const celebritySectionContent = useMemo(() => {
+  const entertainmentSectionContent = useMemo(() => {
     const usedKeys = new Set(
       featuredCelebrityArticles.map((article) => getArticleDeduplicationKey(article))
     );
 
-    const movies = buildCelebritySection(
-      /\b(movie|film|box office|hollywood movie|trailer|deadline film|variety film|cinema)\b/i,
+    const music = buildEntertainmentSection(
+      /\b(music|album|song|tour|concert|artist|singer|rapper|billboard|rolling stone|pitchfork|nme)\b/i,
       6,
       usedKeys
     );
-    const music = buildCelebritySection(
-      /\b(music|album|song|tour|billboard|concert|recording artist|grammy)\b/i,
+    const tvShows = buildEntertainmentSection(
+      /\b(tv|television|streaming|netflix|hulu|hbo|max|disney\+|prime video|series|episode|season|tvline|deadline tv|variety tv)\b/i,
       6,
       usedKeys
     );
-    const tvShows = buildCelebritySection(
-      /\b(tv|television|streaming|series|episode|showrunner|season premiere|netflix|hulu|max)\b/i,
+    const movies = buildEntertainmentSection(
+      /\b(movie|movies|film|box office|trailer|cinema|actor|actress|director|marvel|dc|pixar|oscars|indiewire|collider|screen rant|thewrap)\b/i,
       6,
       usedKeys
     );
-    const gossip = buildCelebritySection(
-      /\b(gossip|tmz|people|e news|red carpet|dating|celebrity style|paparazzi)\b/i,
+    const gossip = buildEntertainmentSection(
+      /\b(gossip|celebrity|rumor|dating|breakup|red carpet|page six|tmz|us weekly|e! news|e news)\b/i,
+      6,
+      usedKeys
+    );
+    const celebrity = buildEntertainmentSection(
+      /\b(celebrity|actor|actress|star|hollywood|red carpet|interview|people|entertainment tonight|access hollywood|extra|hollywood life)\b/i,
       6,
       usedKeys
     );
 
-    return { movies, music, tvShows, gossip };
-  }, [buildCelebritySection, featuredCelebrityArticles]);
+    console.log(
+      "ENTERTAINMENT SOURCES COUNT",
+      Array.from(new Set(celebrityTabArticles.map((article) => getSafeSourceLabel(article.source)))).length
+    );
+    console.log("ENTERTAINMENT MUSIC ARTICLE COUNT", music.length);
+    console.log("ENTERTAINMENT TV ARTICLE COUNT", tvShows.length);
+    console.log("ENTERTAINMENT MOVIES ARTICLE COUNT", movies.length);
+    console.log("ENTERTAINMENT GOSSIP ARTICLE COUNT", gossip.length);
+    console.log("ENTERTAINMENT CELEBRITY ARTICLE COUNT", celebrity.length);
 
-  const celebrityPageVideos = useMemo(
-    () =>
-      ensureMinimumVideoCount(
-        celebrityVideos.filter((video) => !video.fallback).slice(0, 8),
-        celebrityVideos.filter((video) => video.fallback),
-        3
-      ),
-    [celebrityVideos]
-  );
+    return { music, tvShows, movies, gossip, celebrity };
+  }, [buildEntertainmentSection, celebrityTabArticles, featuredCelebrityArticles]);
 
   const localSectionArticles = useMemo(() => {
     if (sortMode !== "local") {
@@ -14857,7 +14883,7 @@ export default function Home() {
     sectionArticles: Article[]
   ) => {
     if (sectionArticles.length === 0) {
-      if (["MLB", "NFL", "NHL", "MLS", "NBA"].includes(sectionKey)) {
+      if (["MLB", "NFL", "NHL", "MLS", "NBA", "COLLEGE_FOOTBALL", "COLLEGE_BASKETBALL", "MOTORSPORTS", "MMA", "MORE"].includes(sectionKey)) {
         console.log(`SPORTS LARGE CARD SELECTED ${sectionKey}`, null);
       }
       return null;
@@ -14888,13 +14914,32 @@ export default function Home() {
                     }))
                     .find((candidate) => candidate.matches && candidate.image && !isSportsBettingAd(candidate.article))
                     ?.article ?? null
-                : null;
+                : sectionKey === "COLLEGE_FOOTBALL"
+                  ? getCollegeFootballLargeCardSelection(sectionArticles)
+                  : sectionKey === "COLLEGE_BASKETBALL"
+                    ? getCollegeBasketballLargeCardSelection(sectionArticles)
+                    : sectionKey === "MOTORSPORTS"
+                      ? getNascarLargeCardSelection(sectionArticles)
+                      : sectionKey === "MMA"
+                        ? sectionArticles
+                            .map((article) => ({
+                              article,
+                              image: getLargeImageCardImageCandidate(article),
+                              matches: isStrictFightingArticle(article),
+                            }))
+                            .find((candidate) => candidate.matches && candidate.image && !isSportsBettingAd(candidate.article))
+                            ?.article ?? null
+                        : sectionKey === "MORE"
+                          ? getSportsLargeCardSelection(sectionArticles)
+                          : null;
+    const resolvedSelectedArticle =
+      selectedArticle && "article" in selectedArticle ? selectedArticle.article : selectedArticle;
 
-    if (["MLB", "NFL", "NHL", "MLS", "NBA"].includes(sectionKey)) {
-      console.log(`SPORTS LARGE CARD SELECTED ${sectionKey}`, selectedArticle?.title ?? null);
+    if (["MLB", "NFL", "NHL", "MLS", "NBA", "COLLEGE_FOOTBALL", "COLLEGE_BASKETBALL", "MOTORSPORTS", "MMA", "MORE"].includes(sectionKey)) {
+      console.log(`SPORTS LARGE CARD SELECTED ${sectionKey}`, resolvedSelectedArticle?.title ?? null);
     }
 
-    return selectedArticle;
+    return resolvedSelectedArticle;
   };
 
   const renderSportsLeagueVideos = (
@@ -14937,6 +14982,8 @@ export default function Home() {
       sectionKey === "MLB" && filteredLeagueVideos.length > 0 && filteredLeagueVideos.length <= 2;
     const shouldCenterNbaQuickWatch =
       sectionKey === "NBA" && filteredLeagueVideos.length > 0 && filteredLeagueVideos.length <= 2;
+    const shouldCenterFightingQuickWatch =
+      sectionKey === "MMA" && filteredLeagueVideos.length > 0 && filteredLeagueVideos.length <= 2;
 
     if (sectionKey === "NBA") {
       console.log("NBA QUICK WATCH VALID COUNT", filteredLeagueVideos.length);
@@ -14963,6 +15010,12 @@ export default function Home() {
       });
     }
 
+    if (shouldCenterFightingQuickWatch) {
+      console.log("FIGHTING QUICK WATCH CENTERED", {
+        count: filteredLeagueVideos.length,
+      });
+    }
+
     if (filteredLeagueVideos.length === 0) {
       return null;
     }
@@ -14976,7 +15029,9 @@ export default function Home() {
         </div>
         <div
           className={`quick-watch-scroll ${
-            shouldCenterMlbQuickWatch || shouldCenterNbaQuickWatch ? "quick-watch-scroll-centered" : ""
+            shouldCenterMlbQuickWatch || shouldCenterNbaQuickWatch || shouldCenterFightingQuickWatch
+              ? "quick-watch-scroll-centered"
+              : ""
           }`.trim()}
           role="list"
           aria-label={`${label} videos`}
@@ -15509,7 +15564,7 @@ export default function Home() {
           type="button"
           onClick={() => setSortMode("celebrity")}
         >
-          Celebrity
+          Entertainment
         </button>
         <button
           ref={(node) => {
@@ -15635,8 +15690,8 @@ export default function Home() {
                     ? "My News"
                   : sortMode === "sports"
                     ? "Sports"
-                    : sortMode === "celebrity"
-                      ? "Celebrity"
+                  : sortMode === "celebrity"
+                      ? "Entertainment"
                       : sortMode === "weather"
                         ? "Weather"
                         : sortMode === "technology"
@@ -16886,14 +16941,14 @@ export default function Home() {
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Celebrity</strong>
+              <strong className="profile-section-title home-section-title">Entertainment</strong>
               <span className="home-section-date">{todayLabel}</span>
             </div>
           </div>
 
           {celebrityTabArticles.length === 0 ? (
             <div className="empty-state compact-empty-state">
-              <strong>No celebrity stories yet</strong>
+              <strong>No entertainment stories yet</strong>
               <span>Check back shortly for fresh entertainment coverage.</span>
             </div>
           ) : (
@@ -16903,118 +16958,174 @@ export default function Home() {
                   <div className="home-section-header">
                     <div className="stack" style={{ gap: "4px" }}>
                       <strong className="profile-section-title home-section-title">
-                        Featured Celebrity
+                        Featured Entertainment
                       </strong>
                     </div>
                   </div>
-                  <div className="featured-stories-scroll" role="list" aria-label="Featured celebrity stories">
+                  <div className="featured-stories-scroll" role="list" aria-label="Featured entertainment stories">
                     {featuredCelebrityArticles.map((article) =>
                       renderFeaturedStoryTile(article, {
-                        keyPrefix: "featured-celebrity",
+                        keyPrefix: "featured-entertainment",
                       })
                     )}
                   </div>
                 </section>
               ) : null}
 
-              {celebritySectionContent.movies.length > 0 ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <strong className="profile-section-title home-section-title">Movies</strong>
-                  </div>
-                  <div className="stack home-section-list top-trending-card-rail">
-                    {celebritySectionContent.movies.map((article) => (
-                      <div key={`celeb-movies-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderCompactSideImageArticle(article, { imageFallbackLabel: "Movies" })}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {celebritySectionContent.music.length > 0 ? (
+              {entertainmentSectionContent.music.length > 0 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
                     <strong className="profile-section-title home-section-title">Music</strong>
                   </div>
-                  <div className="stack home-section-list top-trending-card-rail">
-                    {celebritySectionContent.music.map((article) => (
-                      <div key={`celeb-music-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderCompactSideImageArticle(article, { imageFallbackLabel: "Music" })}
+                  {(() => {
+                    const leadArticle = getEntertainmentSectionLeadArticle("music", entertainmentSectionContent.music);
+                    const rankedArticles = leadArticle
+                      ? entertainmentSectionContent.music.filter(
+                          (article) =>
+                            getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+                        )
+                      : entertainmentSectionContent.music;
+
+                    return (
+                      <div className="stack home-section-list top-trending-card-rail">
+                        {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
+                        {rankedArticles.slice(0, 5).map((article, index) => (
+                          <div key={`ent-music-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                            {renderCompactSideImageArticle(article, {
+                              imageFallbackLabel: "Music",
+                              showRank: index + 1,
+                            })}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </section>
               ) : null}
 
-              {celebritySectionContent.tvShows.length > 0 ? (
+              {entertainmentSectionContent.tvShows.length > 0 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
                     <strong className="profile-section-title home-section-title">TV Shows</strong>
                   </div>
-                  <div className="stack home-section-list top-trending-card-rail">
-                    {celebritySectionContent.tvShows.map((article) => (
-                      <div key={`celeb-tv-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderCompactSideImageArticle(article, { imageFallbackLabel: "TV" })}
+                  {(() => {
+                    const leadArticle = getEntertainmentSectionLeadArticle("tv", entertainmentSectionContent.tvShows);
+                    const rankedArticles = leadArticle
+                      ? entertainmentSectionContent.tvShows.filter(
+                          (article) =>
+                            getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+                        )
+                      : entertainmentSectionContent.tvShows;
+
+                    return (
+                      <div className="stack home-section-list top-trending-card-rail">
+                        {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
+                        {rankedArticles.slice(0, 5).map((article, index) => (
+                          <div key={`ent-tv-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                            {renderCompactSideImageArticle(article, {
+                              imageFallbackLabel: "TV Shows",
+                              showRank: index + 1,
+                            })}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </section>
               ) : null}
 
-              {celebritySectionContent.gossip.length > 0 ? (
+              {entertainmentSectionContent.movies.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <strong className="profile-section-title home-section-title">Movies</strong>
+                  </div>
+                  {(() => {
+                    const leadArticle = getEntertainmentSectionLeadArticle("movies", entertainmentSectionContent.movies);
+                    const rankedArticles = leadArticle
+                      ? entertainmentSectionContent.movies.filter(
+                          (article) =>
+                            getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+                        )
+                      : entertainmentSectionContent.movies;
+
+                    return (
+                      <div className="stack home-section-list top-trending-card-rail">
+                        {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
+                        {rankedArticles.slice(0, 5).map((article, index) => (
+                          <div key={`ent-movies-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                            {renderCompactSideImageArticle(article, {
+                              imageFallbackLabel: "Movies",
+                              showRank: index + 1,
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </section>
+              ) : null}
+
+              {entertainmentSectionContent.gossip.length > 0 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
                     <strong className="profile-section-title home-section-title">Gossip</strong>
                   </div>
-                  <div className="stack home-section-list top-trending-card-rail">
-                    {celebritySectionContent.gossip.map((article) => (
-                      <div key={`celeb-gossip-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                        {renderCompactSideImageArticle(article, { imageFallbackLabel: "Gossip" })}
+                  {(() => {
+                    const leadArticle = getEntertainmentSectionLeadArticle("gossip", entertainmentSectionContent.gossip);
+                    const rankedArticles = leadArticle
+                      ? entertainmentSectionContent.gossip.filter(
+                          (article) =>
+                            getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+                        )
+                      : entertainmentSectionContent.gossip;
+
+                    return (
+                      <div className="stack home-section-list top-trending-card-rail">
+                        {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
+                        {rankedArticles.slice(0, 5).map((article, index) => (
+                          <div key={`ent-gossip-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                            {renderCompactSideImageArticle(article, {
+                              imageFallbackLabel: "Gossip",
+                              showRank: index + 1,
+                            })}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </section>
               ) : null}
 
-              <section className="home-section-block home-section-plain quick-watch-row">
-                <div className="home-section-header">
-                  <strong className="profile-section-title home-section-title">Celebrity Videos</strong>
-                </div>
-                {celebrityPageVideos.length > 0 ? (
-                  <div className="quick-watch-scroll" role="list" aria-label="Celebrity videos">
-                    {celebrityPageVideos.map((video) => (
-                      <div key={`celeb-video-${video.id}`} className="quick-watch-item" role="listitem">
-                        <VideoFeedCard
-                          video={video}
-                          isAutoplaying={
-                            autoplayTrendingVideoKeys.includes(`celebrity-videos:${video.id}`) &&
-                            !video.fallback
-                          }
-                          onToggleLike={handleToggleVideoLike}
-                          onToggleSave={handleToggleVideoSave}
-                          onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                          onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "celebrity")}
-                          frameRef={(node) => {
-                            trendingVideoFrameRefs.current[`celebrity-videos:${video.id}`] = node;
-                          }}
-                          autoplayKey={`celebrity-videos:${video.id}`}
-                          previewDurationMs={4000}
-                          label="Celebrity Video"
-                          hideActions
-                          useRelativeTime
-                          className="video-card-inline quick-watch-video-card"
-                          variant="article"
-                        />
+              {entertainmentSectionContent.celebrity.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <strong className="profile-section-title home-section-title">Celebrity</strong>
+                  </div>
+                  {(() => {
+                    const leadArticle = getEntertainmentSectionLeadArticle("celebrity", entertainmentSectionContent.celebrity);
+                    const rankedArticles = leadArticle
+                      ? entertainmentSectionContent.celebrity.filter(
+                          (article) =>
+                            getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+                        )
+                      : entertainmentSectionContent.celebrity;
+
+                    return (
+                      <div className="stack home-section-list top-trending-card-rail">
+                        {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
+                        {rankedArticles.slice(0, 5).map((article, index) => (
+                          <div key={`ent-celebrity-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                            {renderCompactSideImageArticle(article, {
+                              imageFallbackLabel: "Celebrity",
+                              showRank: index + 1,
+                            })}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="empty-state compact-empty-state">
-                    <strong>Videos loading…</strong>
-                  </div>
-                )}
-              </section>
+                    );
+                  })()}
+                </section>
+              ) : null}
             </div>
           )}
         </section>
