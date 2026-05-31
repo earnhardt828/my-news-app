@@ -12730,12 +12730,36 @@ export default function Home() {
 
   const breakingNewsLeadArticle = useMemo(() => {
     const firstArticle = breakingNewsPreviewArticles[0];
-    return firstArticle && getLargeImageCardImage(firstArticle) ? firstArticle : null;
+
+    if (!firstArticle) {
+      return null;
+    }
+
+    const selectedImage = getLargeImageCardImageCandidate(firstArticle);
+
+    if (!selectedImage?.src) {
+      return null;
+    }
+
+    const imageFailureKey = `${firstArticle.id}:${selectedImage.src}`;
+    return failedArticleImages[imageFailureKey] ? null : firstArticle;
   }, [breakingNewsPreviewArticles, failedArticleImages]);
 
   const topTenTrendingLeadArticle = useMemo(() => {
     const firstArticle = topTenTrendingArticles[0];
-    return firstArticle && getLargeImageCardImage(firstArticle) ? firstArticle : null;
+
+    if (!firstArticle) {
+      return null;
+    }
+
+    const selectedImage = getLargeImageCardImageCandidate(firstArticle);
+
+    if (!selectedImage?.src) {
+      return null;
+    }
+
+    const imageFailureKey = `${firstArticle.id}:${selectedImage.src}`;
+    return failedArticleImages[imageFailureKey] ? null : firstArticle;
   }, [failedArticleImages, topTenTrendingArticles]);
 
   const myNewsFeaturedArticles = useMemo(() => {
