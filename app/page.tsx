@@ -711,7 +711,7 @@ const TRAVEL_FEED_QUERY =
 const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
 const SCIENCE_FEED_QUERY =
-  "science news | NASA | Space.com | Scientific American | Nature | Science Magazine | National Geographic science | AP Science | Reuters Science | Live Science | climate science | health science | astronomy | technology science";
+  "science news | NASA news | space news | astronomy news | climate science | physics news | biology research | medical research | Scientific American | Nature | Science Magazine | Live Science | Space.com | National Geographic science | AP Science | Reuters Science";
 const AUTO_FEED_QUERY =
   "car industry news | EV news | auto reviews | car technology | autonomous driving | new vehicle launches | Tesla news | Ford news | GM news | Toyota news | Honda news | BMW news | Mercedes news | Rivian news | Lucid news | Hyundai news | Kia news | Volkswagen news | auto safety | electric vehicle news";
 const BUSINESS_FEED_QUERY =
@@ -824,7 +824,7 @@ const MAJOR_WEATHER_CITY_SUGGESTIONS = [
   "Austin, TX",
 ] as const;
 const BREAKING_NEWS_FEED_QUERY =
-  "breaking news | live updates | just in | developing story | urgent | latest news";
+  "breaking news | live updates | developing story | latest news | AP breaking news | Reuters breaking news | CNN breaking news | NBC News breaking | ABC News breaking | CBS News breaking | BBC breaking news";
 const BREAKING_NEWS_TRUSTED_SOURCES = [
   "AP News",
   "Reuters",
@@ -848,6 +848,10 @@ const BREAKING_NEWS_URGENCY_PATTERN =
   /\b(breaking|live updates?|developing|urgent|just in|alert|confirmed|ongoing|minutes ago|today|latest)\b/i;
 const BREAKING_NEWS_ANALYSIS_PATTERN =
   /\b(opinion|analysis|explainer|what to know|how to watch|preview|editorial)\b/i;
+const LOW_INFORMATION_LIVE_STREAM_PATTERN =
+  /\b(eyewitness news|live streaming video|watch live|live news stream|news live|streaming video|live stream)\b/i;
+const LOW_INFORMATION_STATION_BRANDING_PATTERN =
+  /\b(wabc-tv|ktrk|abc ?7|abc ?13|eyewitness news|action news|local station|live desk)\b/i;
 const BREAKING_NEWS_SOFT_STORY_PATTERN =
   /\b(ice cream|food|recipe|restaurant|travel|vacation|celebrity|hollywood|fashion|music awards|movie premiere|gossip|lifestyle|wellness|shopping|matchup|preview|recap|rankings|odds|sports betting|betting line|parlay|spread pick|over\/under|entertainment)\b/i;
 const BREAKING_NEWS_SPORTS_PATTERN =
@@ -3704,6 +3708,64 @@ function isPublishedTodayInNewYork(publishedAt?: string | null) {
   return formatter.format(timestamp) === formatter.format(Date.now());
 }
 
+function isPublishedWithinHours(publishedAt: string | null | undefined, hours: number) {
+  const timestamp = getPublishedAtTimestamp(publishedAt);
+
+  if (!timestamp) {
+    return false;
+  }
+
+  return Date.now() - timestamp <= hours * 60 * 60 * 1000;
+}
+
+function isLowInformationLiveStreamArticle(article: Pick<Article, "title" | "description" | "source" | "category">) {
+  const title = cleanDisplayText(article.title);
+  const description = cleanDisplayText(article.description ?? "");
+  const source = cleanDisplayText(article.source);
+  const category = cleanDisplayText(article.category ?? "");
+  const haystack = `${title} ${description} ${source} ${category}`;
+
+  if (!LOW_INFORMATION_LIVE_STREAM_PATTERN.test(haystack) && !LOW_INFORMATION_STATION_BRANDING_PATTERN.test(haystack)) {
+    return false;
+  }
+
+  const descriptiveNewsContext =
+    /\b(shooting|storm|hurricane|tornado|flood|fire|election|court|ruling|policy|war|attack|earthquake|wildfire|economy|inflation|strike|protest|nasa|science|research|album|concert|season|series|box office|movie|trailer|trade|injury|playoffs|finals|championship|highlights)\b/i.test(
+      haystack
+    );
+
+  const repeatedBranding =
+    /\s-\s/.test(title) &&
+    /(eyewitness news|live streaming video|watch live|news live|streaming video)/i.test(title);
+
+  return !descriptiveNewsContext || repeatedBranding;
+}
+
+function isHighQualityBreakingRecentArticle(article: Article) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${article.category ?? ""} ${article.source}`;
+
+  if (
+    BREAKING_NEWS_SPORTS_PATTERN.test(haystack) ||
+    BREAKING_NEWS_SOFT_STORY_PATTERN.test(haystack) ||
+    BREAKING_NEWS_ANALYSIS_PATTERN.test(haystack) ||
+    isLowInformationLiveStreamArticle(article)
+  ) {
+    return false;
+  }
+
+  if (getBreakingNewsSourcePriority(article) <= 0) {
+    return false;
+  }
+
+  if (!isPublishedTodayInNewYork(article.publishedAt) && !isPublishedWithinHours(article.publishedAt, 24)) {
+    return false;
+  }
+
+  return /\b(lat(est)?|today|overnight|confirmed|government|election|war|attack|storm|hurricane|flood|earthquake|wildfire|court|ruling|economy|inflation|policy|protest|dead|killed|injured|crash|fire|evacuation)\b/i.test(
+    haystack
+  );
+}
+
 function isBreakingNewsEligible(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${
     article.category ?? ""
@@ -3725,8 +3787,13 @@ function isBreakingNewsEligible(article: Article) {
     return false;
   }
 
+  if (isLowInformationLiveStreamArticle(article)) {
+    return false;
+  }
+
   return (
     BREAKING_NEWS_REQUIRED_PATTERN.test(haystack) ||
+    isHighQualityBreakingRecentArticle(article) ||
     BREAKING_NEWS_URGENCY_PATTERN.test(haystack) ||
     /\b(breaking news|live blog|live updates|developing story|just in)\b/i.test(haystack)
   );
@@ -7907,17 +7974,23 @@ export default function Home() {
               normalizeNewsPayload(
                 sciencePayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
-            ).filter((article) => articleMatchesSelectedCategory(article, "Science"))
+            ).filter(
+              (article) => isStrictScienceArticle(article) && !isLowInformationLiveStreamArticle(article)
+            )
           : [];
 
         if (sortMode === "trending") {
-          setBreakingPreviewArticles(nextBreakingArticles);
+          setBreakingPreviewArticles((prev) =>
+            nextBreakingArticles.length > 0
+              ? nextBreakingArticles.filter((article) => !isLowInformationLiveStreamArticle(article))
+              : prev
+          );
           setCelebrityPreviewArticles(nextCelebrityArticles);
           setTechnologyPreviewArticles(nextTechnologyArticles);
           setBusinessPreviewArticles(nextBusinessArticles);
           setCarsPreviewArticles(nextCarsArticles);
           setFoodPreviewArticles(nextFoodArticles);
-          setSciencePreviewArticles(nextScienceArticles);
+          setSciencePreviewArticles((prev) => (nextScienceArticles.length > 0 ? nextScienceArticles : prev));
         }
         console.log("SPORTS BROAD FETCH COUNT", nextSportsArticles.length);
         setSportsPreviewArticles((prev) => {
@@ -7928,17 +8001,6 @@ export default function Home() {
         });
       } catch (error) {
         console.error("TRENDING SECTION PREVIEW LOAD FAILED", error);
-        if (!isCancelled) {
-          if (sortMode === "trending") {
-            setBreakingPreviewArticles([]);
-            setCelebrityPreviewArticles([]);
-            setTechnologyPreviewArticles([]);
-            setBusinessPreviewArticles([]);
-            setCarsPreviewArticles([]);
-            setFoodPreviewArticles([]);
-            setSciencePreviewArticles([]);
-          }
-        }
       } finally {
         if (!isCancelled) {
           if (sortMode === "trending") {
@@ -9824,7 +9886,10 @@ export default function Home() {
     }
 
     const filteredSportsArticles = rawSportsArticles.filter(
-      (article) => isBroadSportsArticle(article) && !isSportsBettingAd(article)
+      (article) =>
+        isBroadSportsArticle(article) &&
+        !isSportsBettingAd(article) &&
+        !isLowInformationLiveStreamArticle(article)
     );
 
     if (sortMode === "sports") {
@@ -9906,6 +9971,8 @@ export default function Home() {
 
     console.log("SPORTS REAL IMAGE COUNT", sportsImageDiagnostics.realImageCount);
     console.log("SPORTS FALLBACK IMAGE COUNT", sportsImageDiagnostics.fallbackImageCount);
+    console.log("SPORTS CARD REAL IMAGE COUNT", sportsImageDiagnostics.realImageCount);
+    console.log("SPORTS CARD FALLBACK IMAGE COUNT", sportsImageDiagnostics.fallbackImageCount);
   }, [sportsImageDiagnostics]);
 
   const celebrityTabArticles = useMemo(() => {
@@ -10085,11 +10152,18 @@ export default function Home() {
 
   const scienceTabArticles = useMemo(() => {
     if (sortMode === "trending") {
-      return selectSourceBalancedArticles(sciencePreviewArticles.slice(0, 40), 25);
+      const combinedScienceArticles = dedupeArticlesByContent([
+        ...sciencePreviewArticles.slice(0, 40),
+        ...visibleArticles.slice(0, 80),
+      ]).filter(
+        (article) =>
+          isStrictScienceArticle(article) && !isLowInformationLiveStreamArticle(article)
+      );
+      return selectSourceBalancedArticles(combinedScienceArticles, 25);
     }
 
     return [] as Article[];
-  }, [sciencePreviewArticles, sortMode]);
+  }, [sciencePreviewArticles, sortMode, visibleArticles]);
 
   const carsTabArticles = useMemo(() => {
     if (sortMode === "trending") {
@@ -12387,6 +12461,9 @@ export default function Home() {
 
     const localWeather = selectSourceBalancedArticles(
       weatherNewsArticles.filter((article) => {
+        if (isLowInformationLiveStreamArticle(article)) {
+          return false;
+        }
         const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`.toLowerCase();
         return (
           (Boolean(normalizedCityName) && haystack.includes(normalizedCityName)) ||
@@ -12401,6 +12478,9 @@ export default function Home() {
       weatherNewsArticles.filter((article) => {
         const dedupeKey = getArticleDeduplicationKey(article);
         if (localKeys.has(dedupeKey)) {
+          return false;
+        }
+        if (isLowInformationLiveStreamArticle(article)) {
           return false;
         }
 
@@ -12421,7 +12501,9 @@ export default function Home() {
       return visibleArticles;
     }
 
-    const prioritizedArticles = [...visibleArticles];
+    const prioritizedArticles = visibleArticles.filter(
+      (article) => !isLowInformationLiveStreamArticle(article)
+    );
     const diversifiedTopArticles: Article[] = [];
     const selectedSourceUsage = new Map<string, number>();
     let lastSourceKey = "";
@@ -12667,7 +12749,7 @@ export default function Home() {
   }, [myNewsQuickWatchVideos, myNewsVideoPool, sortMode, trendingBreakingFeaturedVideos]);
 
   const topTenTrendingArticles = useMemo(
-    () => balancedTrendingArticles.slice(0, 10),
+    () => balancedTrendingArticles.filter((article) => !isLowInformationLiveStreamArticle(article)).slice(0, 10),
     [balancedTrendingArticles]
   );
 
@@ -12680,24 +12762,38 @@ export default function Home() {
       topTenTrendingArticles.map((article) => getArticleDeduplicationKey(article))
     );
 
-    const trustedBreakingArticles = breakingPreviewArticles.filter(
-      (article) =>
+    const trustedBreakingArticles = breakingPreviewArticles.filter((article) => {
+      if (isLowInformationLiveStreamArticle(article)) {
+        return false;
+      }
+
+      return (
         BREAKING_NEWS_TRUSTED_SOURCES.some((source) =>
           getSafeSourceLabel(article.source).toLowerCase().includes(source.toLowerCase())
         ) && isBreakingNewsEligible(article)
-    );
+      );
+    });
     const highSignalTrustedArticles = trustedBreakingArticles.filter((article) =>
       BREAKING_NEWS_REQUIRED_PATTERN.test(
         `${article.title} ${article.description ?? ""} ${article.content ?? ""} ${article.category}`
       )
     );
+    const recentMajorTrustedArticles = trustedBreakingArticles.filter((article) =>
+      isHighQualityBreakingRecentArticle(article)
+    );
 
     const candidateArticles =
       highSignalTrustedArticles.length >= 3
         ? highSignalTrustedArticles
+        : recentMajorTrustedArticles.length >= 3
+          ? recentMajorTrustedArticles
         : trustedBreakingArticles.length >= 5
           ? trustedBreakingArticles
-          : breakingPreviewArticles.filter((article) => isBreakingNewsEligible(article));
+          : breakingPreviewArticles.filter(
+              (article) =>
+                !isLowInformationLiveStreamArticle(article) &&
+                (isBreakingNewsEligible(article) || isHighQualityBreakingRecentArticle(article))
+            );
 
     return selectSourceBalancedArticles(
       candidateArticles
@@ -13757,7 +13853,10 @@ export default function Home() {
       ...celebrityPreviewArticles,
       ...visibleArticles.slice(0, 80),
     ])
-      .filter((article) => isEntertainmentRelevantArticle(article))
+      .filter(
+        (article) =>
+          isEntertainmentRelevantArticle(article) && !isLowInformationLiveStreamArticle(article)
+      )
       .sort(
         (leftArticle, rightArticle) =>
           scoreEntertainmentArticleBySources(rightArticle, ENTERTAINMENT_CELEBRITY_QUERIES, "celebrity") -
@@ -15647,6 +15746,17 @@ export default function Home() {
     return candidateArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
   }, [sportsTabArticles]);
 
+  useEffect(() => {
+    const realLargeCardCount = sportsTabArticles.filter(
+      (article) =>
+        isBroadSportsArticle(article) &&
+        !isSportsBettingAd(article) &&
+        Boolean(getLargeImageCardImageCandidate(article))
+    ).length;
+
+    console.log("SPORTS LARGE CARD REAL IMAGE COUNT", realLargeCardCount);
+  }, [sportsTabArticles]);
+
   const renderBreakingFeaturedVideosRow = () => {
     if (trendingBreakingFeaturedVideos.length === 0) {
       return (
@@ -16730,16 +16840,24 @@ export default function Home() {
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
     const selectedImage = getBestArticleImage(article);
     const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
+    const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
     const boxLogoFailureKey = boxLogoUrl ? `${safeSourceName}:${boxLogoUrl}` : `${safeSourceName}:none`;
+    const rectangleLogoFailureKey = rectangleLogoUrl
+      ? `${safeSourceName}:${rectangleLogoUrl}:rectangle`
+      : `${safeSourceName}:rectangle:none`;
     const shouldUseImage =
       Boolean(selectedImage.src) &&
       isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
     const shouldUseBoxLogoFallback =
       Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
+    const shouldUseRectangleLogoFallback =
+      Boolean(rectangleLogoUrl) && !failedArticleBoxImages[rectangleLogoFailureKey];
     const compactImageSourceUsed = shouldUseImage
       ? selectedImage.source ?? "real"
       : shouldUseBoxLogoFallback
         ? "box-logo"
+        : shouldUseRectangleLogoFallback
+          ? "rectangle-logo"
         : hasMappedSourceLogo(safeSourceName)
           ? "source-badge"
           : "category-fallback";
@@ -16854,6 +16972,26 @@ export default function Home() {
                     return {
                       ...prev,
                       [boxLogoFailureKey]: true,
+                    };
+                  });
+                }}
+              />
+            ) : shouldUseRectangleLogoFallback && rectangleLogoUrl ? (
+              <img
+                src={rectangleLogoUrl}
+                alt={`${safeSourceName} logo`}
+                className="top-trending-list-image top-trending-list-box-logo-image"
+                loading="lazy"
+                decoding="async"
+                onError={() => {
+                  setFailedArticleBoxImages((prev) => {
+                    if (prev[rectangleLogoFailureKey]) {
+                      return prev;
+                    }
+
+                    return {
+                      ...prev,
+                      [rectangleLogoFailureKey]: true,
                     };
                   });
                 }}
