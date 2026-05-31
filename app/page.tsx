@@ -5189,6 +5189,13 @@ function getEntertainmentSectionLeadArticle(
     source: selectedCandidate?.article.source ?? null,
     imageUrl: selectedCandidate?.image?.src ?? null,
   });
+  if (section === "movies") {
+    console.log("ENTERTAINMENT MOVIES LARGE CARD SELECTED", {
+      title: selectedCandidate?.article.title ?? null,
+      source: selectedCandidate?.article.source ?? null,
+      imageUrl: selectedCandidate?.image?.src ?? null,
+    });
+  }
 
   return selectedCandidate?.article ?? null;
 }
@@ -5264,6 +5271,21 @@ function isEntertainmentCelebrityArticle(article: Article) {
   return hasCelebrityTerms && !hasRejectedTerms;
 }
 
+function isEntertainmentRelevantArticle(article: Article) {
+  const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category ?? ""} ${article.url}`.toLowerCase();
+  const hasEntertainmentTerms =
+    /\b(entertainment|celebrity|hollywood|movie|film|tv|television|music|album|singer|actor|actress|streaming|netflix|hbo|max|disney\+|box office|red carpet|variety|deadline|hollywood reporter|people|e! news|e news|entertainment tonight|billboard|rolling stone|tmz|page six)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(world news|politics|sports|weather|crime|business|tech)\b/.test(haystack) &&
+    !/\b(entertainment|celebrity|hollywood|movie|film|tv|television|music|album|singer|actor|actress|streaming|netflix|hbo|max|disney\+|box office|red carpet)\b/.test(
+      haystack
+    );
+
+  return hasEntertainmentTerms && !hasRejectedTerms;
+}
+
 function scoreEntertainmentArticleBySources(
   article: Article,
   sourceTerms: readonly string[],
@@ -5288,6 +5310,37 @@ function scoreEntertainmentArticleBySources(
             : Number(isEntertainmentCelebrityArticle(article)) * 40;
 
   return sourceHits * 80 + imageBoost + relevanceBoost + recencyBoost;
+}
+
+function getEntertainmentMovieScore(article: Article) {
+  const movieMeta = article as Article & {
+    rottenTomatoesScore?: number | string | null;
+    criticsScore?: number | string | null;
+    audienceScore?: number | string | null;
+  };
+
+  if (movieMeta.rottenTomatoesScore !== undefined && movieMeta.rottenTomatoesScore !== null) {
+    return {
+      label: "Rotten Tomatoes",
+      value: String(movieMeta.rottenTomatoesScore),
+    };
+  }
+
+  if (movieMeta.criticsScore !== undefined && movieMeta.criticsScore !== null) {
+    return {
+      label: "Critics",
+      value: String(movieMeta.criticsScore),
+    };
+  }
+
+  if (movieMeta.audienceScore !== undefined && movieMeta.audienceScore !== null) {
+    return {
+      label: "Audience",
+      value: String(movieMeta.audienceScore),
+    };
+  }
+
+  return null;
 }
 
 function isStrictMlsVideo(video: VideoItem) {
@@ -9422,12 +9475,13 @@ export default function Home() {
 
   const celebrityTabArticles = useMemo(() => {
     if (sortMode === "celebrity") {
-      return selectSourceBalancedArticles(
-        dedupeArticlesByContent([
+      const combinedArticles = dedupeArticlesByContent([
           ...entertainmentSectionArticles,
           ...visibleArticles.slice(0, 60),
           ...celebrityPreviewArticles.slice(0, 40),
-        ]),
+        ]);
+      return selectSourceBalancedArticles(
+        combinedArticles.filter((article) => isEntertainmentRelevantArticle(article)),
         40
       );
     }
@@ -12963,8 +13017,23 @@ export default function Home() {
   ]);
 
   const featuredCelebrityArticles = useMemo(
-    () => selectSourceBalancedArticles(celebrityTabArticles.slice(0, 18), 8),
-    [celebrityTabArticles]
+    () => {
+      const filteredArticles = celebrityTabArticles.filter((article) => isEntertainmentRelevantArticle(article));
+      const rejectedArticles = celebrityTabArticles.filter((article) => !isEntertainmentRelevantArticle(article));
+      console.log("ENTERTAINMENT FEATURED UPDATE SOURCE", {
+        entertainmentSectionArticles: entertainmentSectionArticles.length,
+        visibleArticles: visibleArticles.length,
+        celebrityPreviewArticles: celebrityPreviewArticles.length,
+      });
+      console.log(
+        "ENTERTAINMENT FEATURED REJECTED_NON_ENTERTAINMENT",
+        rejectedArticles.slice(0, 8).map((article) => article.title)
+      );
+      const nextFeaturedArticles = selectSourceBalancedArticles(filteredArticles.slice(0, 24), 8);
+      console.log("ENTERTAINMENT FEATURED FINAL COUNT", nextFeaturedArticles.length);
+      return nextFeaturedArticles;
+    },
+    [celebrityPreviewArticles.length, celebrityTabArticles, entertainmentSectionArticles.length, visibleArticles.length]
   );
 
   useEffect(() => {
@@ -13126,6 +13195,27 @@ export default function Home() {
 
     return { music, tvShows, movies, gossip, celebrity };
   }, [buildEntertainmentSection, celebrityTabArticles, featuredCelebrityArticles]);
+
+  const entertainmentMovieSliderArticles = useMemo(() => {
+    const sliderArticles = entertainmentSectionContent.movies.filter((article) =>
+      Boolean(getLargeImageCardImageCandidate(article))
+    );
+    console.log("ENTERTAINMENT MOVIE SLIDER COUNT", sliderArticles.length);
+    return sliderArticles.slice(0, 10);
+  }, [entertainmentSectionContent.movies]);
+
+  useEffect(() => {
+    if (sortMode === "celebrity") {
+      console.log("ENTERTAINMENT SECTION ORDER", [
+        "Featured Entertainment",
+        "Gossip",
+        "Music",
+        "TV Shows",
+        "Celebrity",
+        "Movies",
+      ]);
+    }
+  }, [sortMode]);
 
   const localSectionArticles = useMemo(() => {
     if (sortMode !== "local") {
@@ -14551,6 +14641,67 @@ export default function Home() {
           <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
         </div>
       </Link>
+    );
+  };
+
+  const renderEntertainmentMovieSlider = (movieArticles: Article[]) => {
+    if (movieArticles.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="featured-stories-scroll" role="list" aria-label="Movies to watch">
+        {movieArticles.map((article) => {
+          const articleRouteId = getArticleRouteId(article);
+          const imageSrc = getBestArticleImage(article).src;
+          const score = getEntertainmentMovieScore(article);
+
+          if (!articleRouteId || !imageSrc) {
+            return null;
+          }
+
+          return (
+            <Link
+              key={`ent-movie-slider-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+              href={`/article/${articleRouteId}/`}
+              className="featured-story-card"
+              role="listitem"
+              onClick={() => {
+                persistArticleMetadata(article);
+                saveArticleReturnState({
+                  path: "/",
+                  scrollY: window.scrollY,
+                  source: "home",
+                  sortMode,
+                  selectedLocalCity,
+                  localLocationLabel,
+                });
+              }}
+            >
+              <img
+                src={imageSrc}
+                alt={cleanDisplayText(article.title)}
+                className="featured-story-image"
+                loading="lazy"
+                decoding="async"
+              />
+              <div className="featured-story-overlay" />
+              <div className="featured-story-copy">
+                <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
+                <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+                {score ? (
+                  <span
+                    className="chip chip-accent"
+                    style={{ width: "fit-content", marginTop: "6px" }}
+                  >
+                    {score.label}: {score.value}
+                  </span>
+                ) : null}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
     );
   };
 
@@ -17256,6 +17407,37 @@ export default function Home() {
                 </section>
               ) : null}
 
+              {entertainmentSectionContent.gossip.length > 0 ? (
+                <section className="home-section-block home-section-plain">
+                  <div className="home-section-header">
+                    <strong className="profile-section-title home-section-title">Gossip</strong>
+                  </div>
+                  {(() => {
+                    const leadArticle = getEntertainmentSectionLeadArticle("gossip", entertainmentSectionContent.gossip);
+                    const rankedArticles = leadArticle
+                      ? entertainmentSectionContent.gossip.filter(
+                          (article) =>
+                            getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
+                        )
+                      : entertainmentSectionContent.gossip;
+
+                    return (
+                      <div className="stack home-section-list top-trending-card-rail">
+                        {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
+                        {rankedArticles.slice(0, 5).map((article, index) => (
+                          <div key={`ent-gossip-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
+                            {renderCompactSideImageArticle(article, {
+                              imageFallbackLabel: "Gossip",
+                              showRank: index + 1,
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </section>
+              ) : null}
+
               {entertainmentSectionContent.music.length > 0 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
@@ -17308,37 +17490,6 @@ export default function Home() {
                           <div key={`ent-tv-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
                             {renderCompactSideImageArticle(article, {
                               imageFallbackLabel: "TV Shows",
-                              showRank: index + 1,
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </section>
-              ) : null}
-
-              {entertainmentSectionContent.gossip.length > 0 ? (
-                <section className="home-section-block home-section-plain">
-                  <div className="home-section-header">
-                    <strong className="profile-section-title home-section-title">Gossip</strong>
-                  </div>
-                  {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle("gossip", entertainmentSectionContent.gossip);
-                    const rankedArticles = leadArticle
-                      ? entertainmentSectionContent.gossip.filter(
-                          (article) =>
-                            getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadArticle)
-                        )
-                      : entertainmentSectionContent.gossip;
-
-                    return (
-                      <div className="stack home-section-list top-trending-card-rail">
-                        {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
-                        {rankedArticles.slice(0, 5).map((article, index) => (
-                          <div key={`ent-gossip-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
-                            {renderCompactSideImageArticle(article, {
-                              imageFallbackLabel: "Gossip",
                               showRank: index + 1,
                             })}
                           </div>
@@ -17408,6 +17559,7 @@ export default function Home() {
                       </div>
                     );
                   })()}
+                  {renderEntertainmentMovieSlider(entertainmentMovieSliderArticles)}
                 </section>
               ) : null}
             </div>
