@@ -11,6 +11,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Fragment,
   type MouseEvent,
   type RefObject,
   useCallback,
@@ -12159,6 +12160,84 @@ export default function Home() {
     return usedKeys;
   }, [sportsFeaturedArticles, sportsLeagueSections]);
 
+  const sportsSectionSeparatorArticles = useMemo(() => {
+    if (sortMode !== "sports" || sportsLeagueSections.length === 0) {
+      return {} as Partial<Record<SportsSectionKey, Article | null>>;
+    }
+
+    const usedKeys = new Set(usedSportsSectionArticleKeys);
+    const separatorBySectionKey: Partial<Record<SportsSectionKey, Article | null>> = {};
+    const candidates = [...sportsStandardArticles]
+      .filter((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+
+        return (
+          !usedKeys.has(dedupeKey) &&
+          isBroadSportsArticle(article) &&
+          !isSportsBettingAd(article) &&
+          Boolean(getLargeImageCardImageCandidate(article))
+        );
+      })
+      .sort((leftArticle, rightArticle) => {
+        const rightScore =
+          getArticlePriorityScore(rightArticle) +
+          Number(Boolean(getLargeImageCardImageCandidate(rightArticle))) * 80 +
+          Math.floor(getPublishedAtTimestamp(rightArticle.publishedAt) / 3_600_000);
+        const leftScore =
+          getArticlePriorityScore(leftArticle) +
+          Number(Boolean(getLargeImageCardImageCandidate(leftArticle))) * 80 +
+          Math.floor(getPublishedAtTimestamp(leftArticle.publishedAt) / 3_600_000);
+
+        return rightScore - leftScore;
+      });
+
+    sportsLeagueSections.forEach((section) => {
+      const nextArticle = candidates.find((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+        return !usedKeys.has(dedupeKey);
+      });
+
+      separatorBySectionKey[section.key] = nextArticle ?? null;
+
+      if (nextArticle) {
+        usedKeys.add(getArticleDeduplicationKey(nextArticle));
+      }
+    });
+
+    return separatorBySectionKey;
+  }, [sortMode, sportsLeagueSections, sportsStandardArticles, usedSportsSectionArticleKeys]);
+
+  const sportsVerticalSeparatorVideos = useMemo(() => {
+    if (sortMode !== "sports") {
+      return [] as VideoItem[];
+    }
+
+    const filteredVideos = sportsVideoPool.filter((video) => {
+      const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+      const hasSportsContext =
+        /\b(sports|espn|nba|nfl|mlb|nhl|mls|college football|college basketball|golf|nascar|playoffs|championship|highlights|game)\b/.test(
+          haystack
+        );
+      const hasRejectedContext =
+        /\b(politics?|celebrity|food|weather|crime|tech|business)\b/.test(haystack);
+
+      return hasSportsContext && !hasRejectedContext;
+    });
+
+    const sortedVideos = [...filteredVideos].sort((leftVideo, rightVideo) => {
+      const leftVerticalBoost = leftVideo.orientation === "vertical" ? 2 : 0;
+      const rightVerticalBoost = rightVideo.orientation === "vertical" ? 2 : 0;
+
+      if (rightVerticalBoost !== leftVerticalBoost) {
+        return rightVerticalBoost - leftVerticalBoost;
+      }
+
+      return getPublishedAtTimestamp(rightVideo.publishedAt) - getPublishedAtTimestamp(leftVideo.publishedAt);
+    });
+
+    return selectSourceBalancedVideos(sortedVideos, 4, 1);
+  }, [sortMode, sportsVideoPool]);
+
   const favoriteTeamNewsArticles = useMemo(() => {
     if (sortMode !== "sports" || favoriteTeams.length === 0) {
       return [] as Article[];
@@ -14428,6 +14507,58 @@ export default function Home() {
     );
   };
 
+  const renderSportsVerticalQuickWatchSeparator = () => {
+    if (sportsVerticalSeparatorVideos.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Quick Watch</strong>
+          </div>
+        </div>
+        <div
+          className="quick-watch-scroll quick-watch-scroll-centered"
+          role="list"
+          aria-label="Sports quick watch videos"
+        >
+          {sportsVerticalSeparatorVideos.map((video) => (
+            <div
+              key={`sports-separator-video-${video.id}`}
+              className="quick-watch-item quick-watch-item-compact"
+              role="listitem"
+            >
+              <VideoFeedCard
+                video={video}
+                isAutoplaying={
+                  autoplayTrendingVideoKeys.includes(`sports-separator-quickwatch:${video.id}`) &&
+                  !video.fallback
+                }
+                onToggleLike={handleToggleVideoLike}
+                onToggleSave={handleToggleVideoSave}
+                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "sports")}
+                frameRef={(node) => {
+                  trendingVideoFrameRefs.current[`sports-separator-quickwatch:${video.id}`] = node;
+                }}
+                autoplayKey={`sports-separator-quickwatch:${video.id}`}
+                previewDurationMs={null}
+                label="Quick Watch"
+                hideActions
+                useRelativeTime
+                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified quick-watch-video-card-compact"
+                useUniformTallFrame
+                variant="article"
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   const renderTeamPickerModal = () => {
     if (!isTeamPickerOpen) {
       return null;
@@ -16096,88 +16227,94 @@ export default function Home() {
               ) : null}
 
               {sportsLeagueSections.map((section) => (
-                <section
-                  key={`sports-section-${section.key}`}
-                  className="home-section-block home-section-plain"
-                >
-                  <div className="home-section-header">
-                    <div className="stack" style={{ gap: "4px" }}>
-                      <strong
-                        className={`profile-section-title ${
-                          section.key === "MORE"
-                            ? "home-section-title sports-more-title"
-                            : "sports-subsection-title"
-                        }`}
-                      >
-                        {section.label}
-                      </strong>
+                <Fragment key={`sports-section-group-${section.key}`}>
+                  {sportsSectionSeparatorArticles[section.key]
+                    ? renderLargeImageArticleCard(sportsSectionSeparatorArticles[section.key]!)
+                    : null}
+                  <section
+                    key={`sports-section-${section.key}`}
+                    className="home-section-block home-section-plain"
+                  >
+                    <div className="home-section-header">
+                      <div className="stack" style={{ gap: "4px" }}>
+                        <strong
+                          className={`profile-section-title ${
+                            section.key === "MORE"
+                              ? "home-section-title sports-more-title"
+                              : "sports-subsection-title"
+                          }`}
+                        >
+                          {section.label}
+                        </strong>
+                      </div>
+                      {section.scoreLeague === "MLB" && section.scores.length > 10 ? (
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          onClick={() => setExpandedScoresLeague("MLB")}
+                        >
+                          More
+                        </button>
+                      ) : null}
                     </div>
-                    {section.scoreLeague === "MLB" && section.scores.length > 10 ? (
-                      <button
-                        type="button"
-                        className="button button-secondary"
-                        onClick={() => setExpandedScoresLeague("MLB")}
-                      >
-                        More
-                      </button>
-                    ) : null}
-                  </div>
 
-                  {section.scoreLeague ? (
-                    isSportsScoresLoading ? (
-                      <div className="muted">Loading {section.label} scores...</div>
-                    ) : (
-                      renderSportsScoreRow(
-                        section.scores.slice(0, section.scoreLeague === "MLB" ? 10 : 6),
-                        `${section.label} scores`
-                      )
-                    )
-                  ) : null}
-
-                  {(() => {
-                    const largeCardArticle = getSportsLeagueLargeCardArticle(section.key, section.articles);
-                    const compactArticles = largeCardArticle
-                      ? section.articles.filter(
-                          (article) =>
-                            getArticleDeduplicationKey(article) !==
-                            getArticleDeduplicationKey(largeCardArticle)
+                    {section.scoreLeague ? (
+                      isSportsScoresLoading ? (
+                        <div className="muted">Loading {section.label} scores...</div>
+                      ) : (
+                        renderSportsScoreRow(
+                          section.scores.slice(0, section.scoreLeague === "MLB" ? 10 : 6),
+                          `${section.label} scores`
                         )
-                      : section.articles;
+                      )
+                    ) : null}
 
-                    return (
-                      <>
-                        {largeCardArticle ? renderLargeImageArticleCard(largeCardArticle) : null}
-                        {compactArticles.length > 0 ? (
-                          <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
-                            {compactArticles.map((article, index) => (
-                              <div
-                                key={`sports-section-article-${section.key}-${
-                                  article.id || article.url || getArticleDeduplicationKey(article)
-                                }`}
-                              >
-                                {renderCompactSideImageArticle(article, {
-                                  showRank: index + 1,
-                                  className: "sports-league-compact-card",
-                                  imageFallbackLabel: section.label,
-                                })}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </>
-                    );
-                  })()}
+                    {(() => {
+                      const largeCardArticle = getSportsLeagueLargeCardArticle(section.key, section.articles);
+                      const compactArticles = largeCardArticle
+                        ? section.articles.filter(
+                            (article) =>
+                              getArticleDeduplicationKey(article) !==
+                              getArticleDeduplicationKey(largeCardArticle)
+                          )
+                        : section.articles;
 
-                  {renderSportsLeagueVideos(
-                    section.key,
-                    section.key === "NFL"
-                      ? "Quick Watch"
-                      : section.key === "MORE"
-                        ? "More Videos"
-                        : `${section.label} Quick Watch`,
-                    section.videos
-                  )}
-                </section>
+                      return (
+                        <>
+                          {largeCardArticle ? renderLargeImageArticleCard(largeCardArticle) : null}
+                          {compactArticles.length > 0 ? (
+                            <div className="stack home-section-list top-trending-card-rail sports-league-compact-list">
+                              {compactArticles.map((article, index) => (
+                                <div
+                                  key={`sports-section-article-${section.key}-${
+                                    article.id || article.url || getArticleDeduplicationKey(article)
+                                  }`}
+                                >
+                                  {renderCompactSideImageArticle(article, {
+                                    showRank: index + 1,
+                                    className: "sports-league-compact-card",
+                                    imageFallbackLabel: section.label,
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </>
+                      );
+                    })()}
+
+                    {renderSportsLeagueVideos(
+                      section.key,
+                      section.key === "NFL"
+                        ? "Quick Watch"
+                        : section.key === "MORE"
+                          ? "More Videos"
+                          : `${section.label} Quick Watch`,
+                      section.videos
+                    )}
+                  </section>
+                  {section.key === "NFL" ? renderSportsVerticalQuickWatchSeparator() : null}
+                </Fragment>
               ))}
 
               {favoriteTeams.length > 0 ? (
