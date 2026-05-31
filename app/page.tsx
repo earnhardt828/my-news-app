@@ -2609,6 +2609,16 @@ type LikeUser = {
 
 type EntertainmentSectionKey = "gossip" | "music" | "tv" | "celebrity" | "movies";
 
+type PopularMusicAlbum = {
+  id: string;
+  title: string;
+  artist: string;
+  imageUrl: string;
+  sourceLabel: string;
+  rank: number;
+  url: string | null;
+};
+
 type DbComment = {
   id: number;
   article_id: number;
@@ -5943,6 +5953,7 @@ export default function Home() {
     celebrity: null,
     movies: null,
   });
+  const [popularMusicAlbums, setPopularMusicAlbums] = useState<PopularMusicAlbum[]>([]);
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
@@ -7898,6 +7909,49 @@ export default function Home() {
     }
 
     void loadTrendingPreviewSections();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [sortMode]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadPopularMusicAlbums() {
+      if (sortMode !== "celebrity") {
+        setPopularMusicAlbums([]);
+        return;
+      }
+
+      try {
+        const response = await apiFetch("/api/music", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!isCancelled) {
+            setPopularMusicAlbums([]);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          albums?: PopularMusicAlbum[];
+        };
+
+        if (!isCancelled) {
+          setPopularMusicAlbums(Array.isArray(payload.albums) ? payload.albums : []);
+        }
+      } catch (error) {
+        console.error("Failed to load popular music albums", error);
+        if (!isCancelled) {
+          setPopularMusicAlbums([]);
+        }
+      }
+    }
+
+    void loadPopularMusicAlbums();
 
     return () => {
       isCancelled = true;
@@ -15194,8 +15248,14 @@ export default function Home() {
     );
   };
 
-  const renderPopularMusicSlider = (musicArticles: Article[]) => {
-    if (musicArticles.length === 0) {
+  const renderPopularMusicSlider = (
+    albumItems: PopularMusicAlbum[],
+    fallbackArticles: Article[]
+  ) => {
+    const useAlbumItems = albumItems.length >= 3;
+    const cards = useAlbumItems ? albumItems : fallbackArticles;
+
+    if (cards.length === 0) {
       return null;
     }
 
@@ -15207,50 +15267,76 @@ export default function Home() {
           </div>
         </div>
         <div className="popular-music-scroll" role="list" aria-label="Popular music">
-          {musicArticles.map((article, index) => {
-            const articleRouteId = getArticleRouteId(article);
-            const imageSrc = getBestArticleImage(article).src;
-            const musicMeta = getEntertainmentPopularMusicCardMeta(article);
+          {useAlbumItems
+            ? albumItems.map((album) => (
+                <a
+                  key={`popular-music-album-${album.id}`}
+                  href={album.url ?? "#"}
+                  className="popular-music-card"
+                  role="listitem"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <div className="popular-music-card-art-shell">
+                    <img
+                      src={album.imageUrl}
+                      alt={album.title}
+                      className="popular-music-card-art"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <span className="popular-music-rank">#{album.rank}</span>
+                  </div>
+                  <div className="popular-music-card-copy">
+                    <strong className="popular-music-card-title">{album.title}</strong>
+                    <span className="popular-music-card-artist">{album.artist}</span>
+                  </div>
+                </a>
+              ))
+            : fallbackArticles.map((article, index) => {
+                const articleRouteId = getArticleRouteId(article);
+                const imageSrc = getBestArticleImage(article).src;
+                const musicMeta = getEntertainmentPopularMusicCardMeta(article);
 
-            if (!articleRouteId || !imageSrc) {
-              return null;
-            }
+                if (!articleRouteId || !imageSrc) {
+                  return null;
+                }
 
-            return (
-              <Link
-                key={`popular-music-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                href={`/article/${articleRouteId}/`}
-                className="popular-music-card"
-                role="listitem"
-                onClick={() => {
-                  persistArticleMetadata(article);
-                  saveArticleReturnState({
-                    path: "/",
-                    scrollY: window.scrollY,
-                    source: "home",
-                    sortMode,
-                    selectedLocalCity,
-                    localLocationLabel,
-                  });
-                }}
-              >
-                <div className="popular-music-card-art-shell">
-                  <img
-                    src={imageSrc}
-                    alt={musicMeta.title}
-                    className="popular-music-card-art"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <span className="popular-music-rank">#{index + 1}</span>
-                </div>
-                <div className="popular-music-card-copy">
-                  <strong className="popular-music-card-title">{musicMeta.title}</strong>
-                  <span className="popular-music-card-artist">{musicMeta.artist}</span>
-                </div>
-              </Link>
-            );
-          })}
+                return (
+                  <Link
+                    key={`popular-music-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                    href={`/article/${articleRouteId}/`}
+                    className="popular-music-card"
+                    role="listitem"
+                    onClick={() => {
+                      persistArticleMetadata(article);
+                      saveArticleReturnState({
+                        path: "/",
+                        scrollY: window.scrollY,
+                        source: "home",
+                        sortMode,
+                        selectedLocalCity,
+                        localLocationLabel,
+                      });
+                    }}
+                  >
+                    <div className="popular-music-card-art-shell">
+                      <img
+                        src={imageSrc}
+                        alt={musicMeta.title}
+                        className="popular-music-card-art"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span className="popular-music-rank">#{index + 1}</span>
+                    </div>
+                    <div className="popular-music-card-copy">
+                      <strong className="popular-music-card-title">{musicMeta.title}</strong>
+                      <span className="popular-music-card-artist">{musicMeta.artist}</span>
+                    </div>
+                  </Link>
+                );
+              })}
         </div>
       </section>
     );
@@ -18026,7 +18112,9 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {popularMusicSliderArticles.length >= 2 ? renderPopularMusicSlider(popularMusicSliderArticles) : null}
+              {popularMusicAlbums.length >= 3 || popularMusicSliderArticles.length >= 2
+                ? renderPopularMusicSlider(popularMusicAlbums, popularMusicSliderArticles)
+                : null}
 
               {entertainmentSectionContent.music.length > 0 ? (
                 <section className="home-section-block home-section-plain">
