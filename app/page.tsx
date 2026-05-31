@@ -4029,13 +4029,80 @@ function formatSportsGameTimeLabel(scheduledAt: string | null | undefined) {
   return `${weekdayLabel} ${timeLabel} ET`;
 }
 
-function getSportsScoreMetaLabel(game: SportsScoreGame) {
+function getSportsGameDayKey(scheduledAt: string | null | undefined) {
+  if (!scheduledAt) {
+    return null;
+  }
+
+  const scheduledDate = new Date(scheduledAt);
+
+  if (Number.isNaN(scheduledDate.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(scheduledDate);
+}
+
+function getTodayDayKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function isSportsGameScheduledForToday(game: SportsScoreGame) {
+  const gameDayKey = getSportsGameDayKey(game.scheduledAt);
+  if (!gameDayKey) {
+    return false;
+  }
+
+  return gameDayKey === getTodayDayKey();
+}
+
+function getSportsScheduledStartBadgeLabel(scheduledAt: string | null | undefined) {
+  if (!scheduledAt) {
+    return "Scheduled";
+  }
+
+  const scheduledDate = new Date(scheduledAt);
+
+  if (Number.isNaN(scheduledDate.getTime())) {
+    return "Scheduled";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(scheduledDate);
+}
+
+function getSportsScoreStatusLabel(game: SportsScoreGame) {
   if (game.status === "Live") {
-    return game.shortDetail ?? game.statusDetail ?? "Live update";
+    return "Live";
   }
 
   if (game.status === "Final") {
-    return game.shortDetail ?? game.statusDetail ?? "Final";
+    return "Final";
+  }
+
+  return getSportsScheduledStartBadgeLabel(game.scheduledAt);
+}
+
+function getSportsScoreMetaLabel(game: SportsScoreGame) {
+  if (game.status === "Live") {
+    return game.shortDetail ?? game.statusDetail ?? "Live";
+  }
+
+  if (game.status === "Final") {
+    return "Final";
   }
 
   return formatSportsGameTimeLabel(game.scheduledAt);
@@ -5379,7 +5446,10 @@ export default function Home() {
       setIsSportsScoresLoading(true);
 
       try {
-        const response = await apiFetch("/api/sports-scores");
+        console.log("SPORTS SCORES DATE USED", getTodayDayKey());
+        const response = await apiFetch(`/api/sports-scores?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
         const payload = (await response.json()) as {
           providerConfigured: boolean;
           leagues: Partial<Record<SportsScoreLeague, SportsScoreGame[]>>;
@@ -5425,6 +5495,26 @@ export default function Home() {
       isMounted = false;
     };
   }, [sortMode]);
+
+  const sportsScoresTodayByLeague = useMemo(() => {
+    const filteredScores = {
+      NFL: (sportsScoresByLeague.NFL ?? []).filter((game) => isSportsGameScheduledForToday(game)),
+      NBA: (sportsScoresByLeague.NBA ?? []).filter((game) => isSportsGameScheduledForToday(game)),
+      MLB: (sportsScoresByLeague.MLB ?? []).filter((game) => isSportsGameScheduledForToday(game)),
+      NHL: (sportsScoresByLeague.NHL ?? []).filter((game) => isSportsGameScheduledForToday(game)),
+      MLS: (sportsScoresByLeague.MLS ?? []).filter((game) => isSportsGameScheduledForToday(game)),
+    } satisfies Record<SportsScoreLeague, SportsScoreGame[]>;
+
+    console.log("SPORTS SCORE TODAY FILTERED COUNT", {
+      NFL: filteredScores.NFL.length,
+      NBA: filteredScores.NBA.length,
+      MLB: filteredScores.MLB.length,
+      NHL: filteredScores.NHL.length,
+      MLS: filteredScores.MLS.length,
+    });
+
+    return filteredScores;
+  }, [sportsScoresByLeague]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -11833,7 +11923,7 @@ export default function Home() {
     const seenGameIds = new Set<string>();
 
     favoriteTeams.forEach((team) => {
-      const leagueGames = sportsScoresByLeague[team.league] ?? [];
+      const leagueGames = sportsScoresTodayByLeague[team.league] ?? [];
       const teamName = team.team_name.toLowerCase();
       const matchingGame = leagueGames.find(
         (game) =>
@@ -11850,10 +11940,10 @@ export default function Home() {
     });
 
     return matchedGames;
-  }, [favoriteTeams, sportsScoresByLeague]);
+  }, [favoriteTeams, sportsScoresTodayByLeague]);
 
   const topSportsGames = useMemo(() => {
-    return Object.values(sportsScoresByLeague)
+    return Object.values(sportsScoresTodayByLeague)
       .flat()
       .sort((left, right) => {
         const statusRank = (game: SportsScoreGame) =>
@@ -11869,7 +11959,7 @@ export default function Home() {
         return rightTime - leftTime;
       })
       .slice(0, 8);
-  }, [sportsScoresByLeague]);
+  }, [sportsScoresTodayByLeague]);
 
   const sportsLeagueSections = useMemo(() => {
     if (sortMode !== "sports") {
@@ -12000,7 +12090,7 @@ export default function Home() {
       const visibleVideos = section.key === "MORE" ? [] : selectedVideos;
 
       const scores = section.scoreLeague
-        ? [...(sportsScoresByLeague[section.scoreLeague] ?? [])].sort((left, right) => {
+        ? [...(sportsScoresTodayByLeague[section.scoreLeague] ?? [])].sort((left, right) => {
             const normalizedFavoriteNames = new Set(
               favoriteLeagueTeams.map((team) => team.team_name.toLowerCase())
             );
@@ -12031,7 +12121,7 @@ export default function Home() {
         videos: visibleVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresTodayByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -14131,7 +14221,7 @@ export default function Home() {
         <div className="sports-score-card-top">
           <span className="sports-score-league">{game.league}</span>
           <span className={`sports-score-status sports-score-status-${game.status.toLowerCase()}`}>
-            {game.status}
+            {getSportsScoreStatusLabel(game)}
           </span>
         </div>
         <div className="sports-score-team-row">
@@ -14178,13 +14268,27 @@ export default function Home() {
   const renderSportsScoreRow = (
     games: SportsScoreGame[],
     leagueLabel: string,
-    emptyLabel = "Scores unavailable right now."
+    emptyLabel = "No games today"
   ) => {
+    console.log("SPORTS SCORE CARD COUNT", {
+      leagueLabel,
+      count: games.length,
+    });
+    console.log(
+      "SPORTS SCORE STATUS",
+      games.map((game) => ({
+        league: game.league,
+        teams: `${game.awayTeam.name} at ${game.homeTeam.name}`,
+        status: getSportsScoreStatusLabel(game),
+        meta: getSportsScoreMetaLabel(game),
+      }))
+    );
+
     if (games.length === 0) {
       return (
         <div className="empty-state compact-empty-state">
           <strong>{emptyLabel}</strong>
-          <span>Check back shortly for live, upcoming, and recent games.</span>
+          <span>Check back later for live or scheduled games.</span>
         </div>
       );
     }
@@ -14201,7 +14305,7 @@ export default function Home() {
       return null;
     }
 
-    const leagueGames = sportsScoresByLeague[expandedScoresLeague] ?? [];
+    const leagueGames = sportsScoresTodayByLeague[expandedScoresLeague] ?? [];
     const groupedGames = leagueGames.reduce<Record<string, SportsScoreGame[]>>((accumulator, game) => {
       const dateKey = game.scheduledAt
         ? new Intl.DateTimeFormat("en-US", {
@@ -14527,7 +14631,7 @@ export default function Home() {
           {sportsVerticalSeparatorVideos.map((video) => (
             <div
               key={`sports-separator-video-${video.id}`}
-              className="quick-watch-item quick-watch-item-compact"
+              className="quick-watch-item"
               role="listitem"
             >
               <VideoFeedCard
@@ -14548,7 +14652,7 @@ export default function Home() {
                 label="Quick Watch"
                 hideActions
                 useRelativeTime
-                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified quick-watch-video-card-compact"
+                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
                 useUniformTallFrame
                 variant="article"
               />
