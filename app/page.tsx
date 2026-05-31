@@ -398,6 +398,7 @@ const ENTERTAINMENT_SECTION_ARTICLE_QUERIES = [
   "Hollywood Life celebrity",
   "Access Hollywood",
   "Extra entertainment",
+  "Just Jared celebrity",
   "Pitchfork music",
   "Complex music",
   "NME music",
@@ -435,15 +436,33 @@ const ENTERTAINMENT_TV_QUERIES = [
   "television news",
 ] as const;
 const ENTERTAINMENT_CELEBRITY_QUERIES = [
+  "People celebrity",
+  "Entertainment Tonight celebrity",
+  "E! News celebrity",
+  "Access Hollywood celebrity",
+  "Extra celebrity",
+  "Us Weekly celebrity",
   "People",
   "Entertainment Tonight",
   "E! News",
   "Access Hollywood",
   "Extra",
   "Hollywood Life",
+  "Just Jared",
   "TMZ",
   "Page Six",
   "Us Weekly",
+] as const;
+const ENTERTAINMENT_GOSSIP_QUERIES = [
+  "Page Six celebrity",
+  "TMZ celebrity",
+  "Us Weekly celebrity",
+  "People celebrity",
+  "E! News celebrity",
+  "dating rumor celebrity",
+  "red carpet celebrity",
+  "Hollywood breakup news",
+  "Just Jared celebrity",
 ] as const;
 const ENTERTAINMENT_MOVIES_QUERIES = [
   "Variety Movies",
@@ -5176,11 +5195,22 @@ function getEntertainmentSectionLeadArticle(
   section: "music" | "tv" | "movies" | "gossip" | "celebrity",
   articles: Article[]
 ) {
-  const selectedCandidate = articles
-    .map((article) => ({
-      article,
-      image: getLargeImageCardImageCandidate(article),
+  const candidates = articles.map((article) => ({
+    article,
+    image: getLargeImageCardImageCandidate(article),
+  }));
+
+  console.log(
+    "ENTERTAINMENT LARGE CARD CANDIDATES",
+    candidates.slice(0, 10).map((candidate) => ({
+      section,
+      title: candidate.article.title,
+      source: candidate.article.source,
+      imageUrl: candidate.image?.src ?? null,
     }))
+  );
+
+  const selectedCandidate = candidates
     .find((candidate) => candidate.image);
 
   console.log("ENTERTAINMENT LARGE CARD SELECTED", {
@@ -5248,7 +5278,7 @@ function isEntertainmentMoviesArticle(article: Article) {
 function isEntertainmentGossipArticle(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category ?? ""}`.toLowerCase();
   const hasGossipTerms =
-    /\b(gossip|celebrity|rumor|dating|breakup|red carpet|page six|tmz|us weekly|e! news|e news|paparazzi)\b/.test(
+    /\b(gossip|celebrity|rumor|dating|breakup|red carpet|page six|tmz|us weekly|e! news|e news|paparazzi|people|just jared)\b/.test(
       haystack
     );
   const hasRejectedTerms =
@@ -5261,7 +5291,7 @@ function isEntertainmentGossipArticle(article: Article) {
 function isEntertainmentCelebrityArticle(article: Article) {
   const haystack = `${article.title} ${article.description ?? ""} ${article.source} ${article.category ?? ""}`.toLowerCase();
   const hasCelebrityTerms =
-    /\b(celebrity|actor|actress|star|hollywood|red carpet|interview|people|entertainment tonight|access hollywood|extra|hollywood life)\b/.test(
+    /\b(celebrity|actor|actress|star|hollywood|red carpet|interview|people|entertainment tonight|access hollywood|extra|hollywood life|us weekly|just jared|e! news|e news)\b/.test(
       haystack
     );
   const hasRejectedTerms =
@@ -5310,6 +5340,34 @@ function scoreEntertainmentArticleBySources(
             : Number(isEntertainmentCelebrityArticle(article)) * 40;
 
   return sourceHits * 80 + imageBoost + relevanceBoost + recencyBoost;
+}
+
+async function fetchEntertainmentArticlesForQueries(queries: readonly string[]) {
+  const payloads = await Promise.allSettled(
+    queries.map(async (query) => {
+      const response = await fetch(
+        `/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=10`,
+        {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        return [] as Article[];
+      }
+
+      const payload = normalizeNewsPayload(
+        (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+      );
+
+      return hydrateFeedArticles(payload.articles);
+    })
+  );
+
+  return dedupeArticlesByContent(
+    payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+  );
 }
 
 function getEntertainmentMovieScore(article: Article) {
@@ -5742,6 +5800,19 @@ export default function Home() {
   const [celebrityPreviewArticles, setCelebrityPreviewArticles] = useState<Article[]>([]);
   const [isCelebrityPreviewLoading, setIsCelebrityPreviewLoading] = useState(false);
   const [entertainmentSectionArticles, setEntertainmentSectionArticles] = useState<Article[]>([]);
+  const [entertainmentSectionFeeds, setEntertainmentSectionFeeds] = useState<{
+    music: Article[];
+    tvShows: Article[];
+    gossip: Article[];
+    celebrity: Article[];
+    movies: Article[];
+  }>({
+    music: [],
+    tvShows: [],
+    gossip: [],
+    celebrity: [],
+    movies: [],
+  });
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
@@ -9475,14 +9546,22 @@ export default function Home() {
 
   const celebrityTabArticles = useMemo(() => {
     if (sortMode === "celebrity") {
+      const sectionFeedArticles = [
+        ...entertainmentSectionFeeds.music,
+        ...entertainmentSectionFeeds.tvShows,
+        ...entertainmentSectionFeeds.gossip,
+        ...entertainmentSectionFeeds.celebrity,
+        ...entertainmentSectionFeeds.movies,
+      ];
       const combinedArticles = dedupeArticlesByContent([
-          ...entertainmentSectionArticles,
-          ...visibleArticles.slice(0, 60),
-          ...celebrityPreviewArticles.slice(0, 40),
-        ]);
+        ...sectionFeedArticles,
+        ...entertainmentSectionArticles,
+        ...visibleArticles.slice(0, 80),
+        ...celebrityPreviewArticles.slice(0, 50),
+      ]);
       return selectSourceBalancedArticles(
         combinedArticles.filter((article) => isEntertainmentRelevantArticle(article)),
-        40
+        60
       );
     }
 
@@ -9491,7 +9570,7 @@ export default function Home() {
     }
 
     return [] as Article[];
-  }, [celebrityPreviewArticles, entertainmentSectionArticles, sortMode, visibleArticles]);
+  }, [celebrityPreviewArticles, entertainmentSectionArticles, entertainmentSectionFeeds, sortMode, visibleArticles]);
 
   const weatherTabArticles = useMemo(() => {
     if (sortMode !== "weather") {
@@ -13029,7 +13108,7 @@ export default function Home() {
         "ENTERTAINMENT FEATURED REJECTED_NON_ENTERTAINMENT",
         rejectedArticles.slice(0, 8).map((article) => article.title)
       );
-      const nextFeaturedArticles = selectSourceBalancedArticles(filteredArticles.slice(0, 24), 8);
+      const nextFeaturedArticles = selectSourceBalancedArticles(filteredArticles.slice(0, 20), 3);
       console.log("ENTERTAINMENT FEATURED FINAL COUNT", nextFeaturedArticles.length);
       return nextFeaturedArticles;
     },
@@ -13042,6 +13121,13 @@ export default function Home() {
     async function loadEntertainmentSections() {
       if (sortMode !== "celebrity") {
         setEntertainmentSectionArticles([]);
+        setEntertainmentSectionFeeds({
+          music: [],
+          tvShows: [],
+          gossip: [],
+          celebrity: [],
+          movies: [],
+        });
         setIsEntertainmentSectionLoading(false);
         return;
       }
@@ -13049,47 +13135,62 @@ export default function Home() {
       setIsEntertainmentSectionLoading(true);
 
       try {
-        const payloads = await Promise.allSettled(
-          [
-            ...ENTERTAINMENT_SECTION_ARTICLE_QUERIES,
-            ...ENTERTAINMENT_MUSIC_QUERIES,
-            ...ENTERTAINMENT_TV_QUERIES,
-            ...ENTERTAINMENT_CELEBRITY_QUERIES,
-            ...ENTERTAINMENT_MOVIES_QUERIES,
-          ].map(async (query) => {
-            const response = await fetch(
-              `/api/news?mode=search&query=${encodeURIComponent(query)}&page=1&pageSize=6`,
-              {
-                cache: "no-store",
-                headers: { Accept: "application/json" },
-              }
-            );
-
-            if (!response.ok) {
-              return [] as Article[];
-            }
-
-            const payload = normalizeNewsPayload(
-              (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
-            );
-
-            return hydrateFeedArticles(payload.articles);
-          })
-        );
+        const [baseArticles, musicArticles, tvArticles, celebrityArticles, gossipArticles, moviesArticles] =
+          await Promise.all([
+            fetchEntertainmentArticlesForQueries(ENTERTAINMENT_SECTION_ARTICLE_QUERIES),
+            fetchEntertainmentArticlesForQueries(ENTERTAINMENT_MUSIC_QUERIES),
+            fetchEntertainmentArticlesForQueries(ENTERTAINMENT_TV_QUERIES),
+            fetchEntertainmentArticlesForQueries(ENTERTAINMENT_CELEBRITY_QUERIES),
+            fetchEntertainmentArticlesForQueries(ENTERTAINMENT_GOSSIP_QUERIES),
+            fetchEntertainmentArticlesForQueries(ENTERTAINMENT_MOVIES_QUERIES),
+          ]);
 
         if (isCancelled) {
           return;
         }
 
-        const nextArticles = dedupeArticlesByContent(
-          payloads.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
-        );
+        const sectionFeeds = {
+          music: dedupeArticlesByContent(
+            [...musicArticles, ...baseArticles].filter((article) => isEntertainmentMusicArticle(article))
+          ),
+          tvShows: dedupeArticlesByContent(
+            [...tvArticles, ...baseArticles].filter((article) => isEntertainmentTvArticle(article))
+          ),
+          gossip: dedupeArticlesByContent(
+            [...gossipArticles, ...celebrityArticles, ...baseArticles].filter((article) =>
+              isEntertainmentGossipArticle(article)
+            )
+          ),
+          celebrity: dedupeArticlesByContent(
+            [...celebrityArticles, ...baseArticles].filter((article) => isEntertainmentCelebrityArticle(article))
+          ),
+          movies: dedupeArticlesByContent(
+            [...moviesArticles, ...baseArticles].filter((article) => isEntertainmentMoviesArticle(article))
+          ),
+        };
 
+        const nextArticles = dedupeArticlesByContent([
+          ...baseArticles,
+          ...sectionFeeds.music,
+          ...sectionFeeds.tvShows,
+          ...sectionFeeds.gossip,
+          ...sectionFeeds.celebrity,
+          ...sectionFeeds.movies,
+        ]);
+
+        setEntertainmentSectionFeeds(sectionFeeds);
         setEntertainmentSectionArticles(nextArticles);
       } catch (error) {
         console.error("Entertainment section fetch failed", error);
         if (!isCancelled) {
           setEntertainmentSectionArticles([]);
+          setEntertainmentSectionFeeds({
+            music: [],
+            tvShows: [],
+            gossip: [],
+            celebrity: [],
+            movies: [],
+          });
         }
       } finally {
         if (!isCancelled) {
@@ -13107,13 +13208,17 @@ export default function Home() {
 
   const buildEntertainmentSection = useCallback(
     (
+      candidateArticles: Article[],
       matcher: (article: Article) => boolean,
       sourceTerms: readonly string[],
       kind: "music" | "tv" | "movies" | "gossip" | "celebrity",
       limit: number,
       usedKeys: Set<string>
     ) => {
-      const matches = celebrityTabArticles.filter((article) => {
+      const matches = dedupeArticlesByContent([
+        ...candidateArticles,
+        ...celebrityTabArticles,
+      ]).filter((article) => {
         return matcher(article) && !usedKeys.has(getArticleDeduplicationKey(article));
       });
       const sortedMatches = [...matches].sort(
@@ -13134,38 +13239,43 @@ export default function Home() {
     );
 
     const music = buildEntertainmentSection(
+      entertainmentSectionFeeds.music,
       isEntertainmentMusicArticle,
       ENTERTAINMENT_MUSIC_QUERIES,
       "music",
-      8,
+      12,
       usedKeys
     );
     const tvShows = buildEntertainmentSection(
+      entertainmentSectionFeeds.tvShows,
       isEntertainmentTvArticle,
       ENTERTAINMENT_TV_QUERIES,
       "tv",
-      10,
+      12,
       usedKeys
     );
     const gossip = buildEntertainmentSection(
+      entertainmentSectionFeeds.gossip,
       isEntertainmentGossipArticle,
       ENTERTAINMENT_CELEBRITY_QUERIES,
       "gossip",
-      8,
+      12,
       usedKeys
     );
     const celebrity = buildEntertainmentSection(
+      entertainmentSectionFeeds.celebrity,
       isEntertainmentCelebrityArticle,
       ENTERTAINMENT_CELEBRITY_QUERIES,
       "celebrity",
-      10,
+      12,
       usedKeys
     );
     const movies = buildEntertainmentSection(
+      entertainmentSectionFeeds.movies,
       isEntertainmentMoviesArticle,
       ENTERTAINMENT_MOVIES_QUERIES,
       "movies",
-      8,
+      10,
       usedKeys
     );
 
@@ -13180,6 +13290,7 @@ export default function Home() {
     console.log("ENTERTAINMENT MOVIES ARTICLE COUNT", movies.length);
     console.log("ENTERTAINMENT MOVIES FINAL COUNT", movies.length);
     console.log("ENTERTAINMENT GOSSIP ARTICLE COUNT", gossip.length);
+    console.log("ENTERTAINMENT GOSSIP FINAL COUNT", gossip.length);
     console.log("ENTERTAINMENT CELEBRITY ARTICLE COUNT", celebrity.length);
     console.log("ENTERTAINMENT CELEBRITY FINAL COUNT", celebrity.length);
     console.log(
@@ -13194,7 +13305,7 @@ export default function Home() {
     );
 
     return { music, tvShows, movies, gossip, celebrity };
-  }, [buildEntertainmentSection, celebrityTabArticles, featuredCelebrityArticles]);
+  }, [buildEntertainmentSection, celebrityTabArticles, entertainmentSectionFeeds, featuredCelebrityArticles]);
 
   const entertainmentMovieSliderArticles = useMemo(() => {
     const sliderArticles = entertainmentSectionContent.movies.filter((article) =>
