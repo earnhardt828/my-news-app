@@ -5193,13 +5193,17 @@ function isStrictFightingArticle(article: Article) {
 
 function getEntertainmentSectionLeadArticle(
   section: "music" | "tv" | "movies" | "gossip" | "celebrity",
-  articles: Article[]
+  articles: Article[],
+  sourceTerms: readonly string[],
+  kind: "music" | "tv" | "movies" | "gossip" | "celebrity"
 ) {
   const candidates = articles.map((article) => ({
     article,
     image: getLargeImageCardImageCandidate(article),
+    score: scoreEntertainmentArticleBySources(article, sourceTerms, kind),
   }));
 
+  console.log("ENTERTAINMENT LARGE CARD PRIORITY ACTIVE", section);
   console.log(
     "ENTERTAINMENT LARGE CARD CANDIDATES",
     candidates.slice(0, 10).map((candidate) => ({
@@ -5207,11 +5211,13 @@ function getEntertainmentSectionLeadArticle(
       title: candidate.article.title,
       source: candidate.article.source,
       imageUrl: candidate.image?.src ?? null,
+      score: candidate.score,
     }))
   );
 
-  const selectedCandidate = candidates
-    .find((candidate) => candidate.image);
+  const selectedCandidate = [...candidates]
+    .filter((candidate) => candidate.image)
+    .sort((leftCandidate, rightCandidate) => rightCandidate.score - leftCandidate.score)[0];
 
   console.log("ENTERTAINMENT LARGE CARD SELECTED", {
     section,
@@ -5314,6 +5320,23 @@ function isEntertainmentRelevantArticle(article: Article) {
     );
 
   return hasEntertainmentTerms && !hasRejectedTerms;
+}
+
+function isEntertainmentMusicVideo(video: VideoItem) {
+  const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
+  const hasMusicTerms =
+    /\b(music|billboard|rolling stone|pitchfork|nme|album|song|singer|rapper|band|concert|tour|grammy|music video)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(politics?|sports|weather|tech|business|world news)\b/.test(haystack);
+  const gossipOnly =
+    /\b(tmz|page six|us weekly|e! news|e news|people)\b/.test(haystack) &&
+    !/\b(music|album|song|singer|rapper|band|concert|tour|grammy|billboard|rolling stone|pitchfork|nme)\b/.test(
+      haystack
+    );
+
+  return hasMusicTerms && !hasRejectedTerms && !gossipOnly;
 }
 
 function scoreEntertainmentArticleBySources(
@@ -13315,6 +13338,23 @@ export default function Home() {
     return sliderArticles.slice(0, 10);
   }, [entertainmentSectionContent.movies]);
 
+  const entertainmentMusicVideos = useMemo(() => {
+    const filteredVideos = dedupeVideosBySourceTitleAndUrl(celebrityVideos)
+      .filter((video) => isEntertainmentMusicVideo(video))
+      .sort(
+        (leftVideo, rightVideo) =>
+          getPublishedAtTimestamp(rightVideo.publishedAt) -
+          getPublishedAtTimestamp(leftVideo.publishedAt)
+      );
+    const selectedVideos = selectSourceBalancedVideos(filteredVideos, 1, 1).slice(0, 1);
+    console.log("ENTERTAINMENT MUSIC VIDEO FINAL COUNT", selectedVideos.length);
+    console.log(
+      "ENTERTAINMENT MUSIC VIDEO SELECTED",
+      selectedVideos.map((video) => ({ title: video.title, creator: video.creator }))
+    );
+    return selectedVideos;
+  }, [celebrityVideos]);
+
   useEffect(() => {
     if (sortMode === "celebrity") {
       console.log("ENTERTAINMENT SECTION ORDER", [
@@ -17524,7 +17564,12 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">Gossip</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle("gossip", entertainmentSectionContent.gossip);
+                    const leadArticle = getEntertainmentSectionLeadArticle(
+                      "gossip",
+                      entertainmentSectionContent.gossip,
+                      ENTERTAINMENT_CELEBRITY_QUERIES,
+                      "gossip"
+                    );
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.gossip.filter(
                           (article) =>
@@ -17555,7 +17600,12 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">Music</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle("music", entertainmentSectionContent.music);
+                    const leadArticle = getEntertainmentSectionLeadArticle(
+                      "music",
+                      entertainmentSectionContent.music,
+                      ENTERTAINMENT_MUSIC_QUERIES,
+                      "music"
+                    );
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.music.filter(
                           (article) =>
@@ -17574,6 +17624,33 @@ export default function Home() {
                             })}
                           </div>
                         ))}
+                        {entertainmentMusicVideos.length > 0 ? (
+                          <div className="quick-watch-item" role="listitem">
+                            <VideoFeedCard
+                              video={entertainmentMusicVideos[0]}
+                              isAutoplaying={
+                                autoplayTrendingVideoKeys.includes(
+                                  `entertainment-music:${entertainmentMusicVideos[0].id}`
+                                ) && !entertainmentMusicVideos[0].fallback
+                              }
+                              onToggleLike={handleToggleVideoLike}
+                              onToggleSave={handleToggleVideoSave}
+                              onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
+                              onOpenPlayer={(videoId) => router.push(`/video/${videoId}`)}
+                              frameRef={(node) => {
+                                trendingVideoFrameRefs.current[
+                                  `entertainment-music:${entertainmentMusicVideos[0].id}`
+                                ] = node;
+                              }}
+                              autoplayKey={`entertainment-music:${entertainmentMusicVideos[0].id}`}
+                              previewDurationMs={null}
+                              label="Music Video"
+                              className="video-card-inline quick-watch-video-card"
+                              useUniformTallFrame
+                              variant="article"
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })()}
@@ -17586,7 +17663,12 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">TV Shows</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle("tv", entertainmentSectionContent.tvShows);
+                    const leadArticle = getEntertainmentSectionLeadArticle(
+                      "tv",
+                      entertainmentSectionContent.tvShows,
+                      ENTERTAINMENT_TV_QUERIES,
+                      "tv"
+                    );
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.tvShows.filter(
                           (article) =>
@@ -17617,7 +17699,12 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">Celebrity</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle("celebrity", entertainmentSectionContent.celebrity);
+                    const leadArticle = getEntertainmentSectionLeadArticle(
+                      "celebrity",
+                      entertainmentSectionContent.celebrity,
+                      ENTERTAINMENT_CELEBRITY_QUERIES,
+                      "celebrity"
+                    );
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.celebrity.filter(
                           (article) =>
@@ -17648,7 +17735,12 @@ export default function Home() {
                     <strong className="profile-section-title home-section-title">Movies</strong>
                   </div>
                   {(() => {
-                    const leadArticle = getEntertainmentSectionLeadArticle("movies", entertainmentSectionContent.movies);
+                    const leadArticle = getEntertainmentSectionLeadArticle(
+                      "movies",
+                      entertainmentSectionContent.movies,
+                      ENTERTAINMENT_MOVIES_QUERIES,
+                      "movies"
+                    );
                     const rankedArticles = leadArticle
                       ? entertainmentSectionContent.movies.filter(
                           (article) =>
