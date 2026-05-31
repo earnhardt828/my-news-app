@@ -13531,22 +13531,28 @@ export default function Home() {
   }, [entertainmentSectionContent.movies]);
 
   const popularMusicSliderArticles = useMemo(() => {
-    const sliderCandidates = dedupeArticlesByContent([
+    const rawCandidates = dedupeArticlesByContent([
       ...entertainmentSectionFeeds.music,
       ...entertainmentSectionContent.music,
+      ...celebrityTabArticles,
     ])
-      .filter(
-        (article) =>
-          isEntertainmentMusicArticle(article) && Boolean(getLargeImageCardImageCandidate(article))
-      )
+      .filter((article) => isEntertainmentMusicArticle(article))
       .sort(
         (leftArticle, rightArticle) =>
           scoreEntertainmentArticleBySources(rightArticle, ENTERTAINMENT_MUSIC_QUERIES, "music") -
           scoreEntertainmentArticleBySources(leftArticle, ENTERTAINMENT_MUSIC_QUERIES, "music")
       );
 
-    return sliderCandidates.slice(0, 10);
-  }, [entertainmentSectionContent.music, entertainmentSectionFeeds.music]);
+    const imageCandidates = rawCandidates.filter((article) =>
+      Boolean(getLargeImageCardImageCandidate(article))
+    );
+
+    console.log("POPULAR MUSIC RAW COUNT", rawCandidates.length);
+    console.log("POPULAR MUSIC IMAGE COUNT", imageCandidates.length);
+    console.log("POPULAR MUSIC SLIDER_VISIBLE", imageCandidates.length >= 2);
+
+    return imageCandidates.slice(0, 10);
+  }, [celebrityTabArticles, entertainmentSectionContent.music, entertainmentSectionFeeds.music]);
 
   useEffect(() => {
     if (sortMode === "celebrity") {
@@ -18020,7 +18026,7 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {popularMusicSliderArticles.length > 0 ? renderPopularMusicSlider(popularMusicSliderArticles) : null}
+              {popularMusicSliderArticles.length >= 2 ? renderPopularMusicSlider(popularMusicSliderArticles) : null}
 
               {entertainmentSectionContent.music.length > 0 ? (
                 <section className="home-section-block home-section-plain">
