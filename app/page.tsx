@@ -11996,6 +11996,7 @@ export default function Home() {
       selectedVideos.forEach((video) => {
         usedVideoKeys.add(video.id);
       });
+      const visibleVideos = section.key === "MORE" ? [] : selectedVideos;
 
       const scores = section.scoreLeague
         ? [...(sportsScoresByLeague[section.scoreLeague] ?? [])].sort((left, right) => {
@@ -12026,7 +12027,7 @@ export default function Home() {
         scoreLeague: section.scoreLeague,
         scores,
         articles: selectedArticles,
-        videos: selectedVideos,
+        videos: visibleVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
   }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresByLeague, sportsStandardArticles, sportsVideoPool]);
