@@ -4427,23 +4427,25 @@ function isStrictNflArticle(article: Article) {
     .toLowerCase();
 
   const hasNflTerms =
-    /\b(nfl|national football league|nfl\.com|nfl draft|nfl playoffs|super bowl|afc|nfc|quarterback|touchdown|training camp|draft|injuries|offseason)\b/.test(
+    /\b(nfl|national football league|nfl\.com|nfl draft|nfl playoffs|super bowl|afc|nfc|training camp|injuries|offseason)\b/.test(
       haystack
     );
+  const hasNflTeamTerms = NFL_TEAM_REGEX.test(haystack);
   const hasNflSourceTerms =
     /\b(nfl\.com|espn nfl|ap nfl|reuters nfl|cbs sports nfl|nbc sports nfl|fox sports nfl|yahoo sports nfl|bleacher report nfl|sports illustrated nfl|the athletic nfl)\b/.test(
       haystack
     );
   const hasRejectedTerms =
-    /\b(college football|ncaa|high school football|premier league|champions league|mls|soccer|world cup|odds|betting|sportsbook|parlay|spread pick|over\/under|bonus code|promo code|celebrity|hollywood|movie|music|tv show|supergirl|wwe)\b/.test(
+    /\b(cubs|mlb|baseball|college football|ncaa|high school football|premier league|champions league|mls|soccer|world cup|basketball|nba|nhl|golf|odds|betting|sportsbook|parlay|spread pick|over\/under|bonus code|promo code|celebrity|hollywood|movie|music|tv show|supergirl|wwe)\b/.test(
       haystack
     );
 
   if (hasRejectedTerms || isSportsBettingAd(article)) {
+    console.log("NFL ARTICLE REJECTED NON_NFL", article.title);
     return false;
   }
 
-  return hasNflTerms || hasNflSourceTerms;
+  return hasNflTerms || hasNflSourceTerms || hasNflTeamTerms;
 }
 
 function isStrictNhlArticle(article: Article) {
@@ -12596,6 +12598,64 @@ export default function Home() {
     return usedKeys;
   }, [sportsSectionSeparatorArticles]);
 
+  const sportsTopSeparatorArticles = useMemo(() => {
+    if (sortMode !== "sports" || sportsLeagueSections.length === 0) {
+      return [] as Article[];
+    }
+
+    const excludedKeys = new Set<string>([
+      ...featuredSportsArticleKeys,
+      ...Array.from(sportsSectionSeparatorArticleKeys),
+    ]);
+
+    const candidates = sportsStandardArticles
+      .filter((article) => {
+        const dedupeKey = getArticleDeduplicationKey(article);
+        return (
+          !excludedKeys.has(dedupeKey) &&
+          isBroadSportsArticle(article) &&
+          !isSportsBettingAd(article) &&
+          Boolean(getLargeImageCardImageCandidate(article))
+        );
+      })
+      .sort((leftArticle, rightArticle) => {
+        const rightScore =
+          getArticlePriorityScore(rightArticle) +
+          Number(Boolean(getLargeImageCardImageCandidate(rightArticle))) * 80 +
+          Math.floor(getPublishedAtTimestamp(rightArticle.publishedAt) / 3_600_000);
+        const leftScore =
+          getArticlePriorityScore(leftArticle) +
+          Number(Boolean(getLargeImageCardImageCandidate(leftArticle))) * 80 +
+          Math.floor(getPublishedAtTimestamp(leftArticle.publishedAt) / 3_600_000);
+
+        return rightScore - leftScore;
+      });
+
+    const selected = selectSourceBalancedArticles(candidates, 2).slice(0, 2);
+    console.log(
+      "SPORTS LARGE IMAGE SEPARATOR COUNT",
+      Object.values(sportsSectionSeparatorArticles).filter(Boolean).length + selected.length
+    );
+    return selected;
+  }, [
+    featuredSportsArticleKeys,
+    sortMode,
+    sportsLeagueSections.length,
+    sportsSectionSeparatorArticleKeys,
+    sportsSectionSeparatorArticles,
+    sportsStandardArticles,
+  ]);
+
+  const sportsTopSeparatorArticleKeys = useMemo(() => {
+    const usedKeys = new Set<string>();
+
+    sportsTopSeparatorArticles.forEach((article) => {
+      usedKeys.add(getArticleDeduplicationKey(article));
+    });
+
+    return usedKeys;
+  }, [sportsTopSeparatorArticles]);
+
   const sportsVerticalSeparatorVideos = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as VideoItem[];
@@ -12641,7 +12701,9 @@ export default function Home() {
           haystack
         );
       const hasRejectedContext =
-        /\b(politics?|celebrity|tech|business|weather|crime)\b/.test(haystack);
+        /\b(politics?|celebrity|tech|business|food|weather|crime|world news|local news)\b/.test(
+          haystack
+        ) && !/\b(local sports|sports)\b/.test(haystack);
 
       return hasSportsContext && !hasRejectedContext;
     });
@@ -14962,16 +15024,20 @@ export default function Home() {
       <section className="home-section-block home-section-plain quick-watch-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">Highlights</strong>
+            <strong className="profile-section-title home-section-title">Quick Watch</strong>
           </div>
         </div>
         <div
           className="quick-watch-scroll quick-watch-scroll-centered"
           role="list"
-          aria-label="Sports highlights"
+          aria-label="Sports quick watch"
         >
           {sportsHighlightsVideos.map((video) => (
-            <div key={`sports-highlights-${video.id}`} className="quick-watch-item" role="listitem">
+            <div
+              key={`sports-highlights-${video.id}`}
+              className="quick-watch-item quick-watch-item-compact"
+              role="listitem"
+            >
               <VideoFeedCard
                 video={video}
                 isAutoplaying={
@@ -14987,10 +15053,10 @@ export default function Home() {
                 }}
                 autoplayKey={`sports-highlights:${video.id}`}
                 previewDurationMs={null}
-                label="Highlights"
+                label="Quick Watch"
                 hideActions
                 useRelativeTime
-                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
+                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified quick-watch-video-card-compact"
                 useUniformTallFrame
                 variant="article"
               />
@@ -16671,6 +16737,7 @@ export default function Home() {
               ) : null}
 
               {renderSportsHighlightsSection()}
+              {sportsTopSeparatorArticles[0] ? renderLargeImageArticleCard(sportsTopSeparatorArticles[0]) : null}
 
               {sportsLeagueSections.map((section) => (
                 <Fragment key={`sports-section-group-${section.key}`}>
@@ -16728,7 +16795,8 @@ export default function Home() {
                         : section.articles;
                       const dedupedCompactArticles = compactArticles.filter(
                         (article) =>
-                          !sportsSectionSeparatorArticleKeys.has(getArticleDeduplicationKey(article))
+                          !sportsSectionSeparatorArticleKeys.has(getArticleDeduplicationKey(article)) &&
+                          !sportsTopSeparatorArticleKeys.has(getArticleDeduplicationKey(article))
                       );
 
                       return (
@@ -16770,6 +16838,8 @@ export default function Home() {
                   </section>
                 </Fragment>
               ))}
+
+              {sportsTopSeparatorArticles[1] ? renderLargeImageArticleCard(sportsTopSeparatorArticles[1]) : null}
 
               {favoriteTeams.length > 0 ? (
                 <section className="home-section-block home-section-plain">
