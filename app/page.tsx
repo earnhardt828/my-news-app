@@ -307,6 +307,21 @@ const MLS_SECTION_ARTICLE_QUERIES = [
   "MLS standings",
   "MLS transfer news",
 ] as const;
+const NBA_SECTION_ARTICLE_QUERIES = [
+  "NBA news",
+  "NBA playoffs",
+  "NBA Finals",
+  "ESPN NBA",
+  "NBA.com",
+  "AP NBA",
+  "Reuters NBA",
+  "CBS Sports NBA",
+  "NBC Sports NBA",
+  "Fox Sports NBA",
+  "Yahoo Sports NBA",
+  "Bleacher Report NBA",
+  "The Athletic NBA",
+] as const;
 const NBA_SECTION_VIDEO_QUERIES = [
   "NBA highlights today",
   "NBA.com highlights",
@@ -348,6 +363,22 @@ const NFL_SECTION_VIDEO_QUERIES = [
   "Chiefs highlights",
   "Eagles highlights",
   "NFL.com videos",
+] as const;
+const FIGHTING_SECTION_ARTICLE_QUERIES = [
+  "UFC news",
+  "MMA news",
+  "WWE news",
+  "boxing news",
+  "combat sports news",
+  "ESPN MMA",
+  "ESPN Boxing",
+  "UFC.com",
+  "MMA Fighting",
+  "Bloody Elbow",
+  "BoxingScene",
+  "DAZN Boxing",
+  "WWE.com",
+  "WrestleZone",
 ] as const;
 const MY_NEWS_NASCAR_ARTICLE_QUERIES = [
   "NASCAR news",
@@ -4396,7 +4427,7 @@ function isStrictNflArticle(article: Article) {
     .toLowerCase();
 
   const hasNflTerms =
-    /\b(nfl|national football league|nfl\.com|football|quarterback|touchdown|super bowl|training camp|draft|injuries|offseason)\b/.test(
+    /\b(nfl|national football league|nfl\.com|nfl draft|nfl playoffs|super bowl|afc|nfc|quarterback|touchdown|training camp|draft|injuries|offseason)\b/.test(
       haystack
     );
   const hasNflSourceTerms =
@@ -4404,7 +4435,7 @@ function isStrictNflArticle(article: Article) {
       haystack
     );
   const hasRejectedTerms =
-    /\b(odds|betting|sportsbook|parlay|spread pick|over\/under|bonus code|promo code|celebrity|hollywood|movie|music|tv show|supergirl)\b/.test(
+    /\b(college football|ncaa|high school football|premier league|champions league|mls|soccer|world cup|odds|betting|sportsbook|parlay|spread pick|over\/under|bonus code|promo code|celebrity|hollywood|movie|music|tv show|supergirl|wwe)\b/.test(
       haystack
     );
 
@@ -5017,7 +5048,7 @@ function isStrictNbaArticle(article: Article) {
       haystack
     );
   const hasSourceTerms =
-    /\b(espn nba|nba\.com|ap nba|reuters nba|cbs sports nba|nbc sports nba|fox sports nba|yahoo sports nba|bleacher report nba)\b/.test(
+    /\b(espn nba|nba\.com|ap nba|reuters nba|cbs sports nba|nbc sports nba|fox sports nba|yahoo sports nba|bleacher report nba|the athletic nba)\b/.test(
       haystack
     );
   const hasRejectedTerms =
@@ -5046,13 +5077,13 @@ function isStrictFightingArticle(article: Article) {
     .toLowerCase();
 
   const hasFightingTerms =
-    /\b(ufc|mma|boxing|combat sports|fight|fighter|title fight|knockout|bout)\b/.test(haystack);
+    /\b(ufc|mma|boxing|boxer|combat sports|fight|fighter|wwe|wrestling|title fight|knockout|bout|wrestlemania)\b/.test(haystack);
   const hasSourceTerms =
-    /\b(espn mma|espn boxing|ufc\.com|mma fighting|bloody elbow|boxingscene|dazn boxing|ap boxing|reuters boxing)\b/.test(
+    /\b(espn mma|espn boxing|ufc\.com|mma fighting|bloody elbow|boxingscene|dazn boxing|ap boxing|reuters boxing|wwe\.com|wrestlezone)\b/.test(
       haystack
     );
   const hasRejectedTerms =
-    /\b(wwe|pro wrestling|sports betting|odds|betting|sportsbook|parlay|spread pick|over\/under|celebrity fight)\b/.test(
+    /\b(sports betting|odds|betting|sportsbook|parlay|spread pick|over\/under|celebrity fight)\b/.test(
       haystack
     );
 
@@ -5391,9 +5422,11 @@ export default function Home() {
   const [nhlSectionArticles, setNhlSectionArticles] = useState<Article[]>([]);
   const [nhlSectionVideos, setNhlSectionVideos] = useState<VideoItem[]>([]);
   const [mlsSectionArticles, setMlsSectionArticles] = useState<Article[]>([]);
+  const [nbaSectionArticles, setNbaSectionArticles] = useState<Article[]>([]);
   const [nbaSectionVideos, setNbaSectionVideos] = useState<VideoItem[]>([]);
   const [nflSectionArticles, setNflSectionArticles] = useState<Article[]>([]);
   const [nflSectionVideos, setNflSectionVideos] = useState<VideoItem[]>([]);
+  const [fightingSectionArticles, setFightingSectionArticles] = useState<Article[]>([]);
   const [favoriteTeams, setFavoriteTeams] = useState<FavoriteTeamOption[]>([]);
   const [hasLoadedFavoriteTeams, setHasLoadedFavoriteTeams] = useState(false);
   const [isTeamPickerOpen, setIsTeamPickerOpen] = useState(false);
@@ -11051,9 +11084,11 @@ export default function Home() {
           setNhlSectionArticles([]);
           setNhlSectionVideos([]);
           setMlsSectionArticles([]);
+          setNbaSectionArticles([]);
           setNbaSectionVideos([]);
           setNflSectionArticles([]);
           setNflSectionVideos([]);
+          setFightingSectionArticles([]);
         }
         return;
       }
@@ -11065,9 +11100,11 @@ export default function Home() {
           nhlArticleResponses,
           nhlVideoResponses,
           mlsArticleResponses,
+          nbaArticleResponses,
           nbaVideoResponses,
           nflArticleResponses,
           nflVideoResponses,
+          fightingArticleResponses,
         ] = await Promise.all([
           Promise.allSettled(
             MLB_SECTION_ARTICLE_QUERIES.map(async (query) => {
@@ -11145,6 +11182,23 @@ export default function Home() {
             })
           ),
           Promise.allSettled(
+            NBA_SECTION_ARTICLE_QUERIES.map(async (query) => {
+              const response = await apiFetch(
+                `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=6`
+              );
+
+              if (!response.ok) {
+                throw new Error(`NBA article request failed (${response.status})`);
+              }
+
+              return hydrateFeedArticles(
+                normalizeNewsPayload(
+                  (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+                ).articles
+              );
+            })
+          ),
+          Promise.allSettled(
             NBA_SECTION_VIDEO_QUERIES.map(async (query) => {
               const response = await apiFetch(`/api/videos?tab=sports&q=${encodeURIComponent(query)}`);
 
@@ -11183,6 +11237,23 @@ export default function Home() {
 
               const payload = (await response.json()) as { videos?: VideoApiItem[] };
               return normalizeVideoFeedItems(payload.videos ?? []);
+            })
+          ),
+          Promise.allSettled(
+            FIGHTING_SECTION_ARTICLE_QUERIES.map(async (query) => {
+              const response = await apiFetch(
+                `/api/news?mode=sports&query=${encodeURIComponent(query)}&page=1&pageSize=6`
+              );
+
+              if (!response.ok) {
+                throw new Error(`Fighting article request failed (${response.status})`);
+              }
+
+              return hydrateFeedArticles(
+                normalizeNewsPayload(
+                  (await response.json()) as FeedArticlePayload[] | PaginatedNewsResponse
+                ).articles
+              );
             })
           ),
         ]);
@@ -11331,6 +11402,25 @@ export default function Home() {
         );
         setMlsSectionArticles(filteredMlsArticles);
 
+        const mergedNbaArticles = nbaArticleResponses.reduce<Article[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("NBA article fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return mergeArticlesByIdentity(accumulator, result.value);
+        }, []);
+
+        const filteredNbaArticles = selectSourceBalancedArticles(
+          mergedNbaArticles.filter(
+            (article) =>
+              matchesSportsSectionArticle(article, SPORTS_SECTION_CONFIGS.find((section) => section.key === "NBA")!) &&
+              !isSportsBettingAd(article)
+          ),
+          14
+        );
+        setNbaSectionArticles(filteredNbaArticles);
+
         const mergedNbaVideos = nbaVideoResponses.reduce<VideoItem[]>((accumulator, result) => {
           if (result.status !== "fulfilled") {
             console.error("NBA video fetch failed:", result.reason);
@@ -11390,6 +11480,25 @@ export default function Home() {
 
         setNflSectionArticles(filteredNflArticles);
         setNflSectionVideos(finalNflVideos);
+
+        const mergedFightingArticles = fightingArticleResponses.reduce<Article[]>((accumulator, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("Fighting article fetch failed:", result.reason);
+            return accumulator;
+          }
+
+          return mergeArticlesByIdentity(accumulator, result.value);
+        }, []);
+
+        const filteredFightingArticles = selectSourceBalancedArticles(
+          mergedFightingArticles.filter(
+            (article) =>
+              matchesSportsSectionArticle(article, SPORTS_SECTION_CONFIGS.find((section) => section.key === "MMA")!) &&
+              !isSportsBettingAd(article)
+          ),
+          14
+        );
+        setFightingSectionArticles(filteredFightingArticles);
       } catch (error) {
         console.error("Error loading MLB section supplements:", error);
         if (!isCancelled) {
@@ -11398,9 +11507,11 @@ export default function Home() {
           setNhlSectionArticles([]);
           setNhlSectionVideos([]);
           setMlsSectionArticles([]);
+          setNbaSectionArticles([]);
           setNbaSectionVideos([]);
           setNflSectionArticles([]);
           setNflSectionVideos([]);
+          setFightingSectionArticles([]);
         }
       }
     }
@@ -12142,8 +12253,12 @@ export default function Home() {
             ? nhlSectionArticles
             : section.key === "MLS"
               ? mlsSectionArticles
+              : section.key === "NBA"
+                ? nbaSectionArticles
             : section.key === "NFL"
               ? nflSectionArticles
+              : section.key === "MMA"
+                ? fightingSectionArticles
               : [];
       const supplementalVideos =
         section.key === "MLB"
@@ -12163,7 +12278,7 @@ export default function Home() {
 
         const duplicateKeys = getSportsArticleDuplicateKeys(article);
         if (duplicateKeys.some((key) => usedSportsDuplicateKeys.has(key))) {
-          console.log("SPORTS DUPLICATE ARTICLE REMOVED", {
+          console.log("SPORTS DUPLICATE REMOVED", {
             section: section.key,
             title: article.title,
             source: article.source,
@@ -12283,7 +12398,7 @@ export default function Home() {
         videos: visibleVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresDisplayByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, fightingSectionArticles, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresDisplayByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -14838,58 +14953,6 @@ export default function Home() {
     );
   };
 
-  const renderSportsVerticalQuickWatchSeparator = () => {
-    if (sportsVerticalSeparatorVideos.length === 0) {
-      return null;
-    }
-
-    return (
-      <section className="home-section-block home-section-plain quick-watch-row">
-        <div className="home-section-header">
-          <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">Quick Watch</strong>
-          </div>
-        </div>
-        <div
-          className="quick-watch-scroll quick-watch-scroll-centered"
-          role="list"
-          aria-label="Sports quick watch videos"
-        >
-          {sportsVerticalSeparatorVideos.map((video) => (
-            <div
-              key={`sports-separator-video-${video.id}`}
-              className="quick-watch-item"
-              role="listitem"
-            >
-              <VideoFeedCard
-                video={video}
-                isAutoplaying={
-                  autoplayTrendingVideoKeys.includes(`sports-separator-quickwatch:${video.id}`) &&
-                  !video.fallback
-                }
-                onToggleLike={handleToggleVideoLike}
-                onToggleSave={handleToggleVideoSave}
-                onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "sports")}
-                frameRef={(node) => {
-                  trendingVideoFrameRefs.current[`sports-separator-quickwatch:${video.id}`] = node;
-                }}
-                autoplayKey={`sports-separator-quickwatch:${video.id}`}
-                previewDurationMs={null}
-                label="Quick Watch"
-                hideActions
-                useRelativeTime
-                className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
-                useUniformTallFrame
-                variant="article"
-              />
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  };
-
   const renderSportsHighlightsSection = () => {
     if (sportsHighlightsVideos.length === 0) {
       return null;
@@ -14899,13 +14962,13 @@ export default function Home() {
       <section className="home-section-block home-section-plain quick-watch-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">Top Highlights</strong>
+            <strong className="profile-section-title home-section-title">Highlights</strong>
           </div>
         </div>
         <div
           className="quick-watch-scroll quick-watch-scroll-centered"
           role="list"
-          aria-label="Top sports highlights"
+          aria-label="Sports highlights"
         >
           {sportsHighlightsVideos.map((video) => (
             <div key={`sports-highlights-${video.id}`} className="quick-watch-item" role="listitem">
@@ -14924,7 +14987,7 @@ export default function Home() {
                 }}
                 autoplayKey={`sports-highlights:${video.id}`}
                 previewDurationMs={null}
-                label="Top Highlights"
+                label="Highlights"
                 hideActions
                 useRelativeTime
                 className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
@@ -16705,7 +16768,6 @@ export default function Home() {
                       section.videos
                     )}
                   </section>
-                  {section.key === "NFL" ? renderSportsVerticalQuickWatchSeparator() : null}
                 </Fragment>
               ))}
 
