@@ -15239,6 +15239,43 @@ export default function Home() {
     );
   };
 
+  const renderSourceRankingArt = (sourceName: string, rank: number) => {
+    const boxLogoUrl = getSourceBoxLogoUrl(sourceName);
+    const boxLogoFailureKey = boxLogoUrl ? `${sourceName}:source-ranking:${boxLogoUrl}` : `${sourceName}:source-ranking:none`;
+    const shouldUseBoxLogo = Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
+
+    return (
+      <div className="source-rankings-card-art-shell">
+        {shouldUseBoxLogo && boxLogoUrl ? (
+          <div className="source-rankings-card-art-logo-wrap">
+            <img
+              src={boxLogoUrl}
+              alt={`${sourceName} logo`}
+              className="source-rankings-card-art-logo"
+              loading="lazy"
+              decoding="async"
+              onError={() => {
+                setFailedArticleBoxImages((prev) => {
+                  if (prev[boxLogoFailureKey]) {
+                    return prev;
+                  }
+
+                  return {
+                    ...prev,
+                    [boxLogoFailureKey]: true,
+                  };
+                });
+              }}
+            />
+          </div>
+        ) : (
+          <SourceBadge sourceName={sourceName} className="source-rankings-card-art" />
+        )}
+        <span className="source-rankings-rank">#{rank}</span>
+      </div>
+    );
+  };
+
   const renderEntertainmentMovieSlider = (movieArticles: Article[]) => {
     if (movieArticles.length === 0) {
       return null;
@@ -15432,12 +15469,40 @@ export default function Home() {
 
   const trendingWeatherLeadArticle = useMemo(() => {
     const candidateArticles = [
-      ...trendingWeatherSections.localWeather,
       ...trendingWeatherSections.nationalWeather,
-    ];
+      ...trendingWeatherSections.localWeather,
+    ]
+      .filter((article) => isStrictWeatherArticle(article))
+      .sort((leftArticle, rightArticle) => {
+        const rightScore =
+          Number(Boolean(getLargeImageCardImage(rightArticle))) * 100 +
+          getPublishedAtTimestamp(rightArticle.publishedAt);
+        const leftScore =
+          Number(Boolean(getLargeImageCardImage(leftArticle))) * 100 +
+          getPublishedAtTimestamp(leftArticle.publishedAt);
+        return rightScore - leftScore;
+      });
 
     return candidateArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
   }, [trendingWeatherSections.localWeather, trendingWeatherSections.nationalWeather]);
+
+  const trendingSportsLeadArticle = useMemo(() => {
+    const candidateArticles = sportsTabArticles
+      .filter((article) => isBroadSportsArticle(article) && !isSportsBettingAd(article))
+      .sort((leftArticle, rightArticle) => {
+        const rightScore =
+          getArticlePriorityScore(rightArticle) +
+          Number(Boolean(getLargeImageCardImage(rightArticle))) * 80 +
+          getPublishedAtTimestamp(rightArticle.publishedAt);
+        const leftScore =
+          getArticlePriorityScore(leftArticle) +
+          Number(Boolean(getLargeImageCardImage(leftArticle))) * 80 +
+          getPublishedAtTimestamp(leftArticle.publishedAt);
+        return rightScore - leftScore;
+      });
+
+    return candidateArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
+  }, [sportsTabArticles]);
 
   const renderBreakingFeaturedVideosRow = () => {
     if (trendingBreakingFeaturedVideos.length === 0) {
@@ -16945,10 +17010,7 @@ export default function Home() {
                   className="source-rankings-card"
                   role="listitem"
                 >
-                  <div className="source-rankings-card-art-shell">
-                    <SourceBadge sourceName={source.sourceName} className="source-rankings-card-art" />
-                    <span className="source-rankings-rank">#{index + 1}</span>
-                  </div>
+                  {renderSourceRankingArt(source.sourceName, index + 1)}
                   <div className="source-rankings-card-copy">
                     <span className="source-rankings-name">{source.sourceName}</span>
                     <span className="source-rankings-card-meta">News Source</span>
@@ -17044,6 +17106,13 @@ export default function Home() {
               <span className="muted">Forecast and weather-related stories for your selected city.</span>
             </div>
           </div>
+
+          {trendingWeatherLeadArticle ? (
+            <div className="stack" style={{ gap: "10px", marginBottom: "16px" }}>
+              <strong className="profile-section-title home-section-title">Weather Around the World</strong>
+              {renderLargeImageArticleCard(trendingWeatherLeadArticle)}
+            </div>
+          ) : null}
 
           <div className="stack local-feed-shell">
             <div className="home-weather-card">
@@ -17182,13 +17251,6 @@ export default function Home() {
               </div>
             ) : (
               <div className="stack" style={{ gap: "18px" }}>
-                {trendingWeatherLeadArticle ? (
-                  <div
-                    key={`trending-weather-large-${trendingWeatherLeadArticle.id || trendingWeatherLeadArticle.url || getArticleDeduplicationKey(trendingWeatherLeadArticle)}`}
-                  >
-                    {renderLargeImageArticleCard(trendingWeatherLeadArticle)}
-                  </div>
-                ) : null}
                 {trendingWeatherSections.localWeather.length > 0 ? (
                   <section className="home-section-block home-section-plain">
                     <div className="home-section-header">
@@ -17285,7 +17347,28 @@ export default function Home() {
               </div>
             )
           ) : (
-            renderArticleSectionWithLargeLead(sportsTabArticles, { limit: 6 })
+            <div className="stack home-section-list top-trending-card-rail">
+              {trendingSportsLeadArticle ? renderLargeImageArticleCard(trendingSportsLeadArticle) : null}
+              {sportsTabArticles
+                .filter((article) =>
+                  trendingSportsLeadArticle
+                    ? getArticleDeduplicationKey(article) !==
+                      getArticleDeduplicationKey(trendingSportsLeadArticle)
+                    : true
+                )
+                .filter((article) => isBroadSportsArticle(article) && !isSportsBettingAd(article))
+                .slice(0, 5)
+                .map((article, index) => (
+                  <div
+                    key={`trending-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                  >
+                    {renderCompactSideImageArticle(article, {
+                      imageFallbackLabel: "Sports",
+                      showRank: index + 1,
+                    })}
+                  </div>
+                ))}
+            </div>
           )}
         </section>
 
