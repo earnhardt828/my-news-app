@@ -712,6 +712,81 @@ const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
 const SCIENCE_FEED_QUERY =
   "science news | NASA news | space news | astronomy news | climate science | physics news | biology research | medical research | Scientific American | Nature | Science Magazine | Live Science | Space.com | National Geographic science | AP Science | Reuters Science";
+const TOPIC_FALLBACK_IMAGE_GROUPS: TopicFallbackGroup[] = [
+  {
+    keyword: "trump",
+    pattern: /\b(trump|donald trump|trump administration)\b/i,
+    images: [
+      "/topic-images/trump.png",
+      "/topic-images/trump1.png",
+      "/topic-images/trump2.png",
+    ],
+  },
+  {
+    keyword: "hurricane",
+    pattern: /\b(hurricane|storm surge|tropical storm|cyclone)\b/i,
+    images: [
+      "/topic-images/hurricane.png",
+      "/topic-images/hurricane1.png",
+      "/topic-images/hurricane2.png",
+    ],
+  },
+  {
+    keyword: "floods",
+    pattern: /\b(flood|flooding|flash flood)\b/i,
+    images: ["/topic-images/floods.png", "/topic-images/flooding.png"],
+  },
+  {
+    keyword: "tornado",
+    pattern: /\b(tornado|twister)\b/i,
+    images: ["/topic-images/tornado.png", "/topic-images/thunderstorm.png"],
+  },
+  {
+    keyword: "winter-storm",
+    pattern: /\b(winter storm|blizzard|ice storm|snowstorm)\b/i,
+    images: ["/topic-images/winter-storm.png"],
+  },
+  {
+    keyword: "hot-weather",
+    pattern: /\b(heat wave|extreme heat|hot weather)\b/i,
+    images: ["/topic-images/hot-weather.png"],
+  },
+  {
+    keyword: "ukraine",
+    pattern: /\b(ukraine|ukraine war|russia-ukraine)\b/i,
+    images: ["/topic-images/ukraine.png", "/topic-images/ukraine-war.png"],
+  },
+  {
+    keyword: "who",
+    pattern: /\b(world health organization|who|ebola)\b/i,
+    images: ["/topic-images/who.png", "/topic-images/ebola.png"],
+  },
+  {
+    keyword: "economy",
+    pattern: /\b(economy|inflation|interest rates|federal reserve|markets?)\b/i,
+    images: ["/topic-images/economy.png", "/topic-images/economy1.png", "/topic-images/economists.png"],
+  },
+  {
+    keyword: "farmers",
+    pattern: /\b(farmers|farming|agriculture)\b/i,
+    images: ["/topic-images/farmers.png"],
+  },
+  {
+    keyword: "world-cup",
+    pattern: /\b(world cup)\b/i,
+    images: ["/topic-images/world-cup.png"],
+  },
+  {
+    keyword: "dodgers",
+    pattern: /\b(los angeles dodgers|dodgers)\b/i,
+    images: ["/topic-images/los-angeles-dodgers.png", "/topic-images/dodgers.png"],
+  },
+  {
+    keyword: "eagles",
+    pattern: /\b(philadelphia eagles|eagles)\b/i,
+    images: ["/topic-images/philadelphia-eagles.png", "/topic-images/eagles.png"],
+  },
+] as const;
 const AUTO_FEED_QUERY =
   "car industry news | EV news | auto reviews | car technology | autonomous driving | new vehicle launches | Tesla news | Ford news | GM news | Toyota news | Honda news | BMW news | Mercedes news | Rivian news | Lucid news | Hyundai news | Kia news | Volkswagen news | auto safety | electric vehicle news";
 const BUSINESS_FEED_QUERY =
@@ -2627,6 +2702,12 @@ type PopularMusicAlbum = {
   url: string | null;
 };
 
+type TopicFallbackGroup = {
+  keyword: string;
+  pattern: RegExp;
+  images: string[];
+};
+
 type DbComment = {
   id: number;
   article_id: number;
@@ -3008,6 +3089,50 @@ function getSportsLeagueOrTeamFallbackImageUrl(article: Pick<Article, "title" | 
   }
 
   return getCategoryImageUrl("Sports");
+}
+
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+function getTopicFallbackImage(article: Pick<Article, "title" | "description" | "source" | "category" | "content" | "url">) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.content,
+    article.source,
+    article.category,
+    article.url,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const matchingGroup = TOPIC_FALLBACK_IMAGE_GROUPS.find((group) => group.pattern.test(haystack));
+
+  if (!matchingGroup || matchingGroup.images.length === 0) {
+    return null;
+  }
+
+  const stableKey = cleanDisplayText(article.url ?? article.title ?? "").trim().toLowerCase();
+  const rotationIndex = stableKey ? hashString(stableKey) % matchingGroup.images.length : 0;
+  const selectedImage = matchingGroup.images[rotationIndex] ?? matchingGroup.images[0] ?? null;
+
+  if (selectedImage) {
+    console.log("TOPIC FALLBACK ROTATION_USED", {
+      keyword: matchingGroup.keyword,
+      index: rotationIndex,
+      image: selectedImage,
+      title: cleanDisplayText(article.title),
+    });
+  }
+
+  return selectedImage;
 }
 
 function filterArticlesBySelectedCategories(articles: Article[], selectedCategories: string[]) {
@@ -6068,6 +6193,13 @@ export default function Home() {
     null
   );
   const [isNationalWeatherMapLoading, setIsNationalWeatherMapLoading] = useState(false);
+
+  useEffect(() => {
+    console.log(
+      "FALLBACK IMAGES SYNCED",
+      Array.from(new Set(TOPIC_FALLBACK_IMAGE_GROUPS.flatMap((group) => group.images))).length
+    );
+  }, []);
   const [isWeatherRadarOpen, setIsWeatherRadarOpen] = useState(false);
   const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
   const [isBreakingPreviewLoading, setIsBreakingPreviewLoading] = useState(false);
@@ -13907,21 +14039,24 @@ export default function Home() {
   }, [buildEntertainmentSection, celebrityTabArticles, entertainmentSectionFeeds, featuredCelebrityArticles]);
 
   const entertainmentMovieSliderArticles = useMemo(() => {
-    const sliderArticles = dedupeArticlesByContent([
+    const rawSliderArticles = dedupeArticlesByContent([
       ...entertainmentSectionFeeds.movies,
       ...entertainmentSectionContent.movies,
       ...celebrityTabArticles,
-    ])
+    ]);
+    const sliderArticles = rawSliderArticles
       .filter(
         (article) =>
           isEntertainmentMoviesArticle(article) &&
-          Boolean(getLargeImageCardImageCandidate(article))
+          Boolean(getLargeImageCardImageCandidate(article)?.src || getTopicFallbackImage(article))
       )
       .sort(
         (leftArticle, rightArticle) =>
           scoreEntertainmentArticleBySources(rightArticle, ENTERTAINMENT_MOVIES_QUERIES, "movies") -
           scoreEntertainmentArticleBySources(leftArticle, ENTERTAINMENT_MOVIES_QUERIES, "movies")
       );
+    console.log("MOVIES SLIDER RAW COUNT", rawSliderArticles.length);
+    console.log("MOVIES SLIDER VALID_COUNT", sliderArticles.length);
     console.log("ENTERTAINMENT MOVIE SLIDER COUNT", sliderArticles.length);
     return sliderArticles.slice(0, 10);
   }, [celebrityTabArticles, entertainmentSectionContent.movies, entertainmentSectionFeeds.movies]);
@@ -15638,8 +15773,11 @@ export default function Home() {
 
   const renderEntertainmentMovieSlider = (movieArticles: Article[]) => {
     if (movieArticles.length < 2) {
+      console.log("MOVIES SLIDER RENDERED", false);
       return null;
     }
+
+    console.log("MOVIES SLIDER RENDERED", true);
 
     return (
       <section className="home-section-block home-section-plain">
@@ -15651,7 +15789,7 @@ export default function Home() {
         <div className="popular-music-scroll" role="list" aria-label="Movies in theaters">
         {movieArticles.map((article, index) => {
           const articleRouteId = getArticleRouteId(article);
-          const imageSrc = getBestArticleImage(article).src;
+          const imageSrc = getBestArticleImage(article).src ?? getTopicFallbackImage(article);
           const score = getEntertainmentMovieScore(article);
 
           if (!articleRouteId || !imageSrc) {
@@ -16975,6 +17113,7 @@ export default function Home() {
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
     const selectedImage = getBestArticleImage(article);
+    const topicFallbackImageUrl = getTopicFallbackImage(article);
     const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
     const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
     const sportsFallbackImageUrl = isBroadSportsArticle(article)
@@ -16984,6 +17123,9 @@ export default function Home() {
     const rectangleLogoFailureKey = rectangleLogoUrl
       ? `${safeSourceName}:${rectangleLogoUrl}:rectangle`
       : `${safeSourceName}:rectangle:none`;
+    const topicFallbackFailureKey = topicFallbackImageUrl
+      ? `${safeSourceName}:${topicFallbackImageUrl}:topic`
+      : `${safeSourceName}:topic:none`;
     const sportsFallbackFailureKey = sportsFallbackImageUrl
       ? `${safeSourceName}:${sportsFallbackImageUrl}:sports`
       : `${safeSourceName}:sports:none`;
@@ -16994,10 +17136,14 @@ export default function Home() {
       Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
     const shouldUseRectangleLogoFallback =
       Boolean(rectangleLogoUrl) && !failedArticleBoxImages[rectangleLogoFailureKey];
+    const shouldUseTopicFallbackImage =
+      Boolean(topicFallbackImageUrl) && !failedArticleBoxImages[topicFallbackFailureKey];
     const shouldUseSportsFallbackImage =
       Boolean(sportsFallbackImageUrl) && !failedArticleBoxImages[sportsFallbackFailureKey];
     const compactImageSourceUsed = shouldUseImage
       ? selectedImage.source ?? "real"
+      : shouldUseTopicFallbackImage
+        ? "topic-fallback"
       : shouldUseBoxLogoFallback
         ? "box-logo"
         : shouldUseRectangleLogoFallback
@@ -17101,6 +17247,26 @@ export default function Home() {
                 className="top-trending-list-image"
                 loading="lazy"
                 decoding="async"
+              />
+            ) : shouldUseTopicFallbackImage && topicFallbackImageUrl ? (
+              <img
+                src={topicFallbackImageUrl}
+                alt={cleanDisplayText(article.title)}
+                className="top-trending-list-image"
+                loading="lazy"
+                decoding="async"
+                onError={() => {
+                  setFailedArticleBoxImages((prev) => {
+                    if (prev[topicFallbackFailureKey]) {
+                      return prev;
+                    }
+
+                    return {
+                      ...prev,
+                      [topicFallbackFailureKey]: true,
+                    };
+                  });
+                }}
               />
             ) : shouldUseBoxLogoFallback && boxLogoUrl ? (
               <img
@@ -18874,7 +19040,7 @@ export default function Home() {
                 </section>
               ) : null}
 
-              {entertainmentSectionContent.movies.length > 0 ? (
+              {entertainmentSectionContent.movies.length > 0 || entertainmentMovieSliderArticles.length >= 2 ? (
                 <section className="home-section-block home-section-plain">
                   <div className="home-section-header">
                     <strong className="profile-section-title home-section-title">Movies</strong>
