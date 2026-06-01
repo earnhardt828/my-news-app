@@ -713,6 +713,8 @@ const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
 const SCIENCE_FEED_QUERY =
   "science news | NASA news | space news | astronomy news | climate science | physics news | biology research | medical research | Scientific American | Nature | Science Magazine | Live Science | Space.com | National Geographic science | AP Science | Reuters Science";
+const OPINION_FEED_QUERY =
+  "Wall Street Journal Opinion | New York Times Opinion | Washington Post Opinions | Bloomberg Opinion | The Atlantic | National Review | The Hill Opinion | USA Today Opinion | Reuters Analysis | AP Analysis | Financial Times Opinion";
 const TOPIC_IMAGE_FILENAMES = [
   "africa.png",
   "africas.png",
@@ -5195,6 +5197,51 @@ function isStrictScienceArticle(article: Article) {
   return hasScienceTerms || hasScienceSourceTerms;
 }
 
+function isStrictOpinionArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasOpinionTerms =
+    /\b(opinion|analysis|commentary|editorial|viewpoint|column|perspective)\b/.test(haystack);
+  const hasOpinionSourceTerms =
+    /\b(wall street journal opinion|new york times opinion|washington post opinions?|bloomberg opinion|the atlantic|national review|the hill opinion|usa today opinion|reuters analysis|ap analysis|financial times opinion)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(weather|sports|celebrity|entertainment gossip)\b/.test(haystack);
+  const hasBreakingOnlyTerms =
+    /\b(breaking news|just in|live updates|developing story)\b/.test(haystack);
+
+  if (hasRejectedTerms) {
+    return false;
+  }
+
+  if (hasBreakingOnlyTerms && !hasOpinionTerms && !hasOpinionSourceTerms) {
+    return false;
+  }
+
+  return hasOpinionTerms || hasOpinionSourceTerms;
+}
+
+function getOpinionLargeCardSelection(articles: Article[]) {
+  return articles
+    .map((article) => ({
+      article,
+      isStrictOpinion: isStrictOpinionArticle(article),
+      image: getLargeImageCardImageCandidate(article),
+    }))
+    .find((candidate) => candidate.isStrictOpinion && candidate.image);
+}
+
 function getTechLargeCardSelection(articles: Article[]) {
   const candidates = articles.map((article) => ({
     article,
@@ -6505,6 +6552,8 @@ export default function Home() {
   const [isBusinessPreviewLoading, setIsBusinessPreviewLoading] = useState(false);
   const [carsPreviewArticles, setCarsPreviewArticles] = useState<Article[]>([]);
   const [isCarsPreviewLoading, setIsCarsPreviewLoading] = useState(false);
+  const [opinionPreviewArticles, setOpinionPreviewArticles] = useState<Article[]>([]);
+  const [isOpinionPreviewLoading, setIsOpinionPreviewLoading] = useState(false);
   const [foodPreviewArticles, setFoodPreviewArticles] = useState<Article[]>([]);
   const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
   const [sciencePreviewArticles, setSciencePreviewArticles] = useState<Article[]>([]);
@@ -8217,6 +8266,7 @@ export default function Home() {
         setTechnologyPreviewArticles([]);
         setBusinessPreviewArticles([]);
         setCarsPreviewArticles([]);
+        setOpinionPreviewArticles([]);
         setFoodPreviewArticles([]);
         setSciencePreviewArticles([]);
         setIsBreakingPreviewLoading(false);
@@ -8225,6 +8275,7 @@ export default function Home() {
         setIsTechnologyPreviewLoading(false);
         setIsBusinessPreviewLoading(false);
         setIsCarsPreviewLoading(false);
+        setIsOpinionPreviewLoading(false);
         setIsFoodPreviewLoading(false);
         setIsSciencePreviewLoading(false);
         return;
@@ -8237,6 +8288,7 @@ export default function Home() {
         setIsTechnologyPreviewLoading(true);
         setIsBusinessPreviewLoading(true);
         setIsCarsPreviewLoading(true);
+        setIsOpinionPreviewLoading(true);
         setIsFoodPreviewLoading(true);
         setIsSciencePreviewLoading(true);
       }
@@ -8249,6 +8301,7 @@ export default function Home() {
           technologyResponse,
           businessResponse,
           carsResponse,
+          opinionResponse,
           foodResponse,
           scienceResponse,
         ] = await Promise.all([
@@ -8295,6 +8348,15 @@ export default function Home() {
               )
             : Promise.resolve(null),
           sortMode === "trending"
+            ? fetch(
+                `/api/news?mode=search&query=${encodeURIComponent(OPINION_FEED_QUERY)}&pageSize=25`,
+                {
+                  cache: "no-store",
+                  headers: { Accept: "application/json" },
+                }
+              )
+            : Promise.resolve(null),
+          sortMode === "trending"
             ? fetch("/api/news?mode=food&pageSize=25", {
               cache: "no-store",
               headers: { Accept: "application/json" },
@@ -8318,6 +8380,7 @@ export default function Home() {
           technologyPayload,
           businessPayload,
           carsPayload,
+          opinionPayload,
           foodPayload,
           sciencePayload,
         ] = await Promise.all([
@@ -8338,6 +8401,9 @@ export default function Home() {
             : Promise.resolve(null),
           carsResponse && "ok" in carsResponse && carsResponse.ok
             ? carsResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          opinionResponse && "ok" in opinionResponse && opinionResponse.ok
+            ? opinionResponse.json().catch(() => null)
             : Promise.resolve(null),
           foodResponse && "ok" in foodResponse && foodResponse.ok
             ? foodResponse.json().catch(() => null)
@@ -8393,6 +8459,15 @@ export default function Home() {
               ).articles
             ).filter((article) => isStrictAutoArticle(article))
           : [];
+        const nextOpinionArticles = opinionPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                opinionPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            ).filter(
+              (article) => isStrictOpinionArticle(article) && !isLowInformationLiveStreamArticle(article)
+            )
+          : [];
         const nextFoodArticles = foodPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
@@ -8420,6 +8495,7 @@ export default function Home() {
           setTechnologyPreviewArticles(nextTechnologyArticles);
           setBusinessPreviewArticles(nextBusinessArticles);
           setCarsPreviewArticles(nextCarsArticles);
+          setOpinionPreviewArticles((prev) => (nextOpinionArticles.length > 0 ? nextOpinionArticles : prev));
           setFoodPreviewArticles(nextFoodArticles);
           setSciencePreviewArticles((prev) => (nextScienceArticles.length > 0 ? nextScienceArticles : prev));
         }
@@ -8438,10 +8514,11 @@ export default function Home() {
             setIsBreakingPreviewLoading(false);
             setIsCelebrityPreviewLoading(false);
             setIsTechnologyPreviewLoading(false);
-            setIsBusinessPreviewLoading(false);
-            setIsCarsPreviewLoading(false);
-            setIsFoodPreviewLoading(false);
-            setIsSciencePreviewLoading(false);
+          setIsBusinessPreviewLoading(false);
+          setIsCarsPreviewLoading(false);
+          setIsOpinionPreviewLoading(false);
+          setIsFoodPreviewLoading(false);
+          setIsSciencePreviewLoading(false);
           }
           setIsSportsPreviewLoading(false);
         }
@@ -10555,6 +10632,16 @@ export default function Home() {
 
     return selectSourceBalancedArticles(visibleArticles.slice(0, 40), 25);
   }, [businessPreviewArticles, sortMode, visibleArticles]);
+
+  const opinionTabArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(opinionPreviewArticles.slice(0, 40), 12).filter(
+      (article) => isStrictOpinionArticle(article) && !isLowInformationLiveStreamArticle(article)
+    );
+  }, [opinionPreviewArticles, sortMode]);
 
   const travelTabArticles = useMemo(() => {
     if (sortMode !== "travel") {
@@ -16418,6 +16505,28 @@ export default function Home() {
     return candidateArticles.find((article) => Boolean(getLargeImageCardImage(article))) ?? null;
   }, [sportsTabArticles]);
 
+  const trendingOpinionLeadArticle = useMemo(() => {
+    const selectedArticle = getOpinionLargeCardSelection(opinionTabArticles)?.article ?? null;
+    console.log(
+      "OPINION LARGE CARD SELECTED",
+      selectedArticle
+        ? {
+            title: selectedArticle.title,
+            source: selectedArticle.source,
+          }
+        : null
+    );
+    return selectedArticle;
+  }, [opinionTabArticles]);
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      return;
+    }
+
+    console.log("OPINION ARTICLE COUNT", opinionTabArticles.length);
+  }, [opinionTabArticles.length, sortMode]);
+
   useEffect(() => {
     const realLargeCardCount = sportsTabArticles.filter(
       (article) =>
@@ -18509,6 +18618,47 @@ export default function Home() {
         {autoTrendingVideos.length > 0
           ? renderTallTrendingQuickWatchRow("Auto Videos", autoTrendingVideos, "auto-trending-videos")
           : null}
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Opinion</strong>
+            </div>
+          </div>
+
+          {opinionTabArticles.length === 0 ? (
+            isOpinionPreviewLoading ? (
+              <div className="muted">Loading opinion stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No opinion stories yet</strong>
+                <span>Check back shortly for fresh analysis and commentary.</span>
+              </div>
+            )
+          ) : (
+            <div className="stack home-section-list top-trending-card-rail">
+              {trendingOpinionLeadArticle ? renderLargeImageArticleCard(trendingOpinionLeadArticle) : null}
+              {opinionTabArticles
+                .filter((article) =>
+                  trendingOpinionLeadArticle
+                    ? getArticleDeduplicationKey(article) !==
+                      getArticleDeduplicationKey(trendingOpinionLeadArticle)
+                    : true
+                )
+                .slice(0, 5)
+                .map((article, index) => (
+                  <div
+                    key={`trending-opinion-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                  >
+                    {renderCompactSideImageArticle(article, {
+                      imageFallbackLabel: "Opinion",
+                      showRank: index + 1,
+                    })}
+                  </div>
+                ))}
+            </div>
+          )}
+        </section>
 
         {isCategorySheetOpen ? (
           <div

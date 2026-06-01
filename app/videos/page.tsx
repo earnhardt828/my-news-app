@@ -86,11 +86,7 @@ export default function VideosPage() {
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const visibleTabs = useMemo(
-    () =>
-      SHARED_VIDEO_CATEGORIES.filter((tab) =>
-        (TECH_VIDEOS_DISABLED ? tab.value !== "technology" : true) &&
-        (CELEBRITY_VIDEOS_DISABLED ? tab.value !== "celebrity" : true)
-      ),
+    () => SHARED_VIDEO_CATEGORIES.filter((tab) => tab.value === "news"),
     []
   );
 
@@ -120,6 +116,8 @@ export default function VideosPage() {
 
   useEffect(() => {
     console.log("VIDEO PAGE ACTIVE TABS", visibleTabs.map((tab) => tab.value));
+    console.log("VIDEOS TABS REMOVED", ["sports", "politics", "world"]);
+    console.log("VIDEOS DEFAULT_TAB", "news");
   }, [visibleTabs]);
 
   useEffect(() => {
@@ -355,31 +353,9 @@ export default function VideosPage() {
     touchStartYRef.current = touch.clientY;
   };
 
-  const handleHorizontalSwipeEnd = (event: TouchEvent<HTMLElement>) => {
-    const startX = touchStartXRef.current;
-    const startY = touchStartYRef.current;
-    const touch = event.changedTouches[0];
-
+  const handleHorizontalSwipeEnd = (_event: TouchEvent<HTMLElement>) => {
     touchStartXRef.current = null;
     touchStartYRef.current = null;
-
-    if (startX === null || startY === null) {
-      return;
-    }
-
-    const diffX = touch.clientX - startX;
-    const diffY = touch.clientY - startY;
-
-    if (Math.abs(diffX) < 50 || Math.abs(diffX) <= Math.abs(diffY)) {
-      return;
-    }
-
-    const tabs = visibleTabs.map((tab) => tab.value);
-    const currentIndex = tabs.indexOf(activeTab);
-    const nextTab = tabs[diffX < 0 ? currentIndex + 1 : currentIndex - 1];
-    if (nextTab) {
-      setActiveTab(nextTab);
-    }
   };
 
   const handleCloseViewer = useCallback(() => {
@@ -422,22 +398,6 @@ export default function VideosPage() {
           </span>
         </button>
       ) : null}
-      <div className="videos-page-tab-row" role="tablist" aria-label="Video categories">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.value}
-            className={`videos-page-tab ${
-              activeTab === tab.value ? "videos-page-tab-active" : ""
-            }`}
-            onClick={() => setActiveTab(tab.value)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
       {statusMessage ? <div className="chip chip-accent reels-status">{statusMessage}</div> : null}
       {isCurrentTabLoading && hasLoadedOnce ? (
         <div className="muted reels-inline-status">Refreshing videos...</div>
