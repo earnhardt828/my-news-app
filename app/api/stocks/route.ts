@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 const STOCK_SYMBOLS = ["SPY", "QQQ", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"] as const;
+type DisplayStockSymbol = (typeof STOCK_SYMBOLS)[number];
 
-const STOCK_LABELS: Record<(typeof STOCK_SYMBOLS)[number], string> = {
+const STOCK_LABELS: Record<DisplayStockSymbol, string> = {
   SPY: "S&P 500",
   QQQ: "Nasdaq",
   DIA: "Dow Jones",
@@ -15,8 +16,21 @@ const STOCK_LABELS: Record<(typeof STOCK_SYMBOLS)[number], string> = {
   TSLA: "Tesla",
 };
 
+const STOCK_SYMBOL_CANDIDATES: Record<DisplayStockSymbol, string[]> = {
+  SPY: ["SPY", "IVV", "VOO"],
+  QQQ: ["QQQ", "QQQM"],
+  DIA: ["DIA", "DJIA"],
+  AAPL: ["AAPL"],
+  MSFT: ["MSFT"],
+  NVDA: ["NVDA"],
+  AMZN: ["AMZN"],
+  GOOGL: ["GOOGL"],
+  META: ["META"],
+  TSLA: ["TSLA"],
+};
+
 type StockTickerItem = {
-  symbol: (typeof STOCK_SYMBOLS)[number];
+  symbol: DisplayStockSymbol;
   label: string;
   price: number | null;
   change: number | null;
@@ -24,21 +38,29 @@ type StockTickerItem = {
   source: string;
 };
 
-async function fetchFinnhubQuote(symbol: (typeof STOCK_SYMBOLS)[number], apiKey: string) {
-  console.log("FINNHUB REQUEST SYMBOL", symbol);
+function parseFinnhubQuoteValue(raw: unknown) {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
+    return null;
+  }
+
+  return raw;
+}
+
+async function fetchFinnhubQuoteForSymbol(requestSymbol: string, apiKey: string) {
+  console.log("FINNHUB REQUEST SYMBOL", requestSymbol);
 
   const response = await fetch(
-    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`,
+    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(requestSymbol)}&token=${encodeURIComponent(apiKey)}`,
     {
       cache: "no-store",
       next: { revalidate: 0 },
     }
   );
 
-  console.log("FINNHUB RESPONSE STATUS", { symbol, status: response.status, ok: response.ok });
+  console.log("FINNHUB RESPONSE STATUS", { symbol: requestSymbol, status: response.status, ok: response.ok });
 
   const responseBodyText = await response.text();
-  console.log("FINNHUB RESPONSE BODY", { symbol, body: responseBodyText });
+  console.log("FINNHUB RESPONSE BODY", { symbol: requestSymbol, body: responseBodyText });
 
   if (!response.ok) {
     return null;
@@ -57,21 +79,63 @@ async function fetchFinnhubQuote(symbol: (typeof STOCK_SYMBOLS)[number], apiKey:
       dp?: number;
     };
   } catch (error) {
-    console.error("FINNHUB RESPONSE PARSE FAILED", { symbol, error });
+    console.error("FINNHUB RESPONSE PARSE FAILED", { symbol: requestSymbol, error });
+    return null;
+  }
+
+  const parsedPrice = parseFinnhubQuoteValue(payload.c);
+  const parsedChange = typeof payload.d === "number" && Number.isFinite(payload.d) ? payload.d : null;
+  const parsedPercentChange =
+    typeof payload.dp === "number" && Number.isFinite(payload.dp) ? payload.dp : null;
+
+  console.log("STOCK PRICE PARSED", {
+    symbol: requestSymbol,
+    price: parsedPrice,
+    change: parsedChange,
+    percentChange: parsedPercentChange,
+  });
+
+  if (parsedPrice === null) {
     return null;
   }
 
   return {
-    symbol,
-    label: STOCK_LABELS[symbol],
-    price: typeof payload.c === "number" ? payload.c : null,
-    change: typeof payload.d === "number" ? payload.d : null,
-    percentChange: typeof payload.dp === "number" ? payload.dp : null,
-    source: "Finnhub",
-  } satisfies StockTickerItem;
+    requestSymbol,
+    price: parsedPrice,
+    change: parsedChange,
+    percentChange: parsedPercentChange,
+  };
 }
 
-async function fetchAlphaVantageQuote(symbol: (typeof STOCK_SYMBOLS)[number], apiKey: string) {
+async function fetchFinnhubQuote(symbol: DisplayStockSymbol, apiKey: string) {
+  const candidates = STOCK_SYMBOL_CANDIDATES[symbol];
+
+  for (const [index, candidate] of candidates.entries()) {
+    const quote = await fetchFinnhubQuoteForSymbol(candidate, apiKey);
+
+    if (quote) {
+      console.log("STOCK SYMBOL USED", { displaySymbol: symbol, requestSymbol: candidate });
+
+      if (index > 0) {
+        console.log("STOCK SYMBOL FALLBACK_USED", { displaySymbol: symbol, requestSymbol: candidate });
+      }
+
+      return {
+        symbol,
+        label: STOCK_LABELS[symbol],
+        price: quote.price,
+        change: quote.change,
+        percentChange: quote.percentChange,
+        source: "Finnhub",
+      } satisfies StockTickerItem;
+    }
+  }
+
+  console.log("STOCK SYMBOL FAILED", { displaySymbol: symbol, tried: candidates });
+  return null;
+}
+
+async function fetchAlphaVantageQuote(symbol: DisplayStockSymbol, apiKey: string) {
   const response = await fetch(
     `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(
       symbol
@@ -119,8 +183,8 @@ export async function GET() {
   try {
     const fetcher =
       finnhubApiKey
-        ? (symbol: (typeof STOCK_SYMBOLS)[number]) => fetchFinnhubQuote(symbol, finnhubApiKey)
-        : (symbol: (typeof STOCK_SYMBOLS)[number]) =>
+        ? (symbol: DisplayStockSymbol) => fetchFinnhubQuote(symbol, finnhubApiKey)
+        : (symbol: DisplayStockSymbol) =>
             fetchAlphaVantageQuote(symbol, alphaVantageApiKey as string);
 
     const payloads = await Promise.allSettled(STOCK_SYMBOLS.map((symbol) => fetcher(symbol)));
