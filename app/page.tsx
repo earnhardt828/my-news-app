@@ -6475,21 +6475,27 @@ export default function Home() {
         }
 
         const payload = (await response.json()) as {
-          stocks?: StockTickerItem[];
-          source?: string;
+          items?: StockTickerItem[];
+          debug?: {
+            keyPresent?: boolean;
+            raw?: unknown;
+          };
         };
 
+        console.log("BUSINESS STOCK JSON RECEIVED", payload);
         console.log("BUSINESS STOCK FETCH RESPONSE", {
           ok: response.ok,
           status: response.status,
-          source: payload.source ?? "unknown",
-          count: Array.isArray(payload.stocks) ? payload.stocks.length : 0,
+          keyPresent: payload.debug?.keyPresent ?? false,
+          count: Array.isArray(payload.items) ? payload.items.length : 0,
         });
-        console.log("BUSINESS STOCK ITEMS RECEIVED", payload.stocks ?? []);
+        console.log("BUSINESS STOCK ITEMS RECEIVED", payload.items ?? []);
+        console.log("BUSINESS STOCK ITEMS LENGTH", Array.isArray(payload.items) ? payload.items.length : 0);
 
         if (!isCancelled) {
-          setBusinessTickerItems(Array.isArray(payload.stocks) ? payload.stocks : []);
-          setBusinessTickerSource(payload.source ?? "unknown");
+          const nextItems = Array.isArray(payload.items) ? payload.items : [];
+          setBusinessTickerItems(nextItems);
+          setBusinessTickerSource(nextItems.length > 0 ? "finnhub" : "error");
         }
       } catch (error) {
         console.error("BUSINESS TICKER LOAD FAILED", error);
@@ -16376,6 +16382,11 @@ export default function Home() {
     console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
     console.log("BUSINESS STOCK MARKET_DATA_UNAVAILABLE", marketDataUnavailable);
     console.log("BUSINESS STOCK ITEMS RENDERED", tickerItems);
+    console.log("BUSINESS STOCK RENDERING", {
+      hasLiveTickerData,
+      marketDataUnavailable,
+      count: tickerItems.length,
+    });
     console.log("BUSINESS STOCK TICKER RENDERED", true);
 
     if (!hasLiveTickerData && !marketDataUnavailable) {

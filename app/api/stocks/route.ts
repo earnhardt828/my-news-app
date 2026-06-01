@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 
-const STOCK_SYMBOLS = ["AAPL", "MSFT", "NVDA"] as const;
+const STOCK_SYMBOLS = ["AAPL"] as const;
 type DisplayStockSymbol = (typeof STOCK_SYMBOLS)[number];
 
 const STOCK_LABELS: Record<DisplayStockSymbol, string> = {
   AAPL: "Apple",
-  MSFT: "Microsoft",
-  NVDA: "Nvidia",
 };
 
 type StockTickerItem = {
@@ -58,6 +56,11 @@ async function fetchFinnhubQuote(symbol: DisplayStockSymbol, apiKey: string) {
   const price = parseNumber(payload?.c);
   const change = parseNumber(payload?.d);
   const percentChange = parseNumber(payload?.dp);
+
+  console.log("API STOCK RAW AAPL", {
+    symbol,
+    raw: payload,
+  });
 
   if (price === null || price <= 0) {
     return null;
@@ -114,46 +117,53 @@ async function fetchAlphaVantageQuote(symbol: DisplayStockSymbol, apiKey: string
 
 export async function GET() {
   const finnhubApiKey = process.env.FINNHUB_API_KEY?.trim();
-  const alphaVantageApiKey = process.env.ALPHA_VANTAGE_API_KEY?.trim();
 
   console.log("FINNHUB API KEY PRESENT", Boolean(finnhubApiKey));
 
-  if (!finnhubApiKey && !alphaVantageApiKey) {
-    console.log("STOCK API RESPONSE", { source: "no-api-key", stocks: [] });
+  if (!finnhubApiKey) {
+    const noKeyPayload = {
+      items: [] as StockTickerItem[],
+      debug: {
+        keyPresent: false,
+        raw: null as { c?: number; d?: number; dp?: number } | null,
+      },
+    };
+    console.log("STOCK API RESPONSE", noKeyPayload);
     console.log("STOCK API PARSED ITEMS", []);
-    console.log("STOCK API FINAL JSON", { stocks: [], source: "no-api-key" });
+    console.log("API STOCK ITEMS RETURNED", []);
+    console.log("STOCK API FINAL JSON", noKeyPayload);
     console.log("FINNHUB VALID ITEMS COUNT", 0);
     console.log("STOCK API FINAL COUNT", 0);
-    return NextResponse.json({ stocks: [] as StockTickerItem[], source: "no-api-key" }, { status: 200 });
+    return NextResponse.json(noKeyPayload, { status: 200 });
   }
 
   try {
-    const fetcher =
-      finnhubApiKey
-        ? (symbol: DisplayStockSymbol) => fetchFinnhubQuote(symbol, finnhubApiKey)
-        : (symbol: DisplayStockSymbol) =>
-            fetchAlphaVantageQuote(symbol, alphaVantageApiKey as string);
-
-    const results = await Promise.allSettled(STOCK_SYMBOLS.map((symbol) => fetcher(symbol)));
+    const results = await Promise.allSettled(
+      STOCK_SYMBOLS.map((symbol) => fetchFinnhubQuote(symbol, finnhubApiKey))
+    );
     console.log("STOCK API RESPONSE", results);
-    const stocks = results
+    const items = results
       .map((result) => (result.status === "fulfilled" ? result.value : null))
       .filter((item): item is StockTickerItem => item !== null);
 
-    console.log("STOCK API PARSED ITEMS", stocks);
-    console.log("FINNHUB VALID ITEMS COUNT", stocks.length);
-    console.log("STOCK API FINAL COUNT", stocks.length);
+    console.log("STOCK API PARSED ITEMS", items);
+    console.log("API STOCK ITEMS RETURNED", items);
+    console.log("FINNHUB VALID ITEMS COUNT", items.length);
+    console.log("STOCK API FINAL COUNT", items.length);
 
+    const firstItem = items[0] ?? null;
     const finalPayload = {
-      stocks,
-      source:
-        stocks.length > 0
-          ? finnhubApiKey
-            ? "finnhub"
-            : "alpha-vantage"
-          : finnhubApiKey
-            ? "finnhub-empty"
-            : "alpha-vantage-empty",
+      items,
+      debug: {
+        keyPresent: true,
+        raw: firstItem
+          ? {
+              c: firstItem.price,
+              d: firstItem.change ?? undefined,
+              dp: firstItem.percentChange ?? undefined,
+            }
+          : null,
+      },
     };
 
     console.log("STOCK API FINAL JSON", finalPayload);
@@ -161,11 +171,19 @@ export async function GET() {
     return NextResponse.json(finalPayload, { status: 200 });
   } catch (error) {
     console.error("Stocks API load failed", error);
+    const errorPayload = {
+      items: [] as StockTickerItem[],
+      debug: {
+        keyPresent: true,
+        raw: null as { c?: number; d?: number; dp?: number } | null,
+      },
+    };
     console.log("STOCK API RESPONSE", { error: error instanceof Error ? error.message : String(error) });
     console.log("STOCK API PARSED ITEMS", []);
-    console.log("STOCK API FINAL JSON", { stocks: [], source: "error" });
+    console.log("API STOCK ITEMS RETURNED", []);
+    console.log("STOCK API FINAL JSON", errorPayload);
     console.log("FINNHUB VALID ITEMS COUNT", 0);
     console.log("STOCK API FINAL COUNT", 0);
-    return NextResponse.json({ stocks: [] as StockTickerItem[], source: "error" }, { status: 200 });
+    return NextResponse.json(errorPayload, { status: 200 });
   }
 }
