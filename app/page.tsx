@@ -13608,6 +13608,200 @@ export default function Home() {
     );
   }, [sortMode, sportsStandardArticles]);
 
+  const groupedSportsArticleSections = useMemo(() => {
+    const shouldBuild =
+      (sortMode === "trending" || sortMode === "sports") && sportsTabArticles.length > 0;
+
+    if (!shouldBuild) {
+      return [] as Array<{
+        key: string;
+        label: string;
+        leadArticle: Article | null;
+        articles: Article[];
+      }>;
+    }
+
+    const sectionConfigs: Array<{
+      key: string;
+      label: string;
+      matcher: (article: Article) => boolean;
+      getLead: (articles: Article[]) => Article | null;
+    }> = [
+      {
+        key: "NFL",
+        label: "NFL",
+        matcher: (article) => isStrictNflArticle(article),
+        getLead: (articles) => getNflLargeCardSelection(articles),
+      },
+      {
+        key: "NBA",
+        label: "NBA",
+        matcher: (article) => isStrictNbaArticle(article),
+        getLead: (articles) => {
+          const selectedCandidate = articles
+            .map((article) => ({
+              article,
+              image: getLargeImageCardImageCandidate(article),
+            }))
+            .find((candidate) => candidate.image);
+          return selectedCandidate?.article ?? null;
+        },
+      },
+      {
+        key: "MLB",
+        label: "MLB",
+        matcher: (article) => isDedicatedMlbArticle(article, "article"),
+        getLead: (articles) => {
+          const selection = getMlbLargeCardSelection(articles);
+          return selection && selection.imageSrc !== "/category-images/mlb.png" ? selection.article : null;
+        },
+      },
+      {
+        key: "NHL",
+        label: "NHL",
+        matcher: (article) => isStrictNhlArticle(article),
+        getLead: (articles) => getNhlLargeCardSelection(articles),
+      },
+      {
+        key: "MLS",
+        label: "MLS",
+        matcher: (article) => isStrictMlsArticle(article),
+        getLead: (articles) => getMlsLargeCardSelection(articles),
+      },
+      {
+        key: "COLLEGE_FOOTBALL",
+        label: "College Football",
+        matcher: (article) => isStrictCollegeFootballArticle(article),
+        getLead: (articles) => getCollegeFootballLargeCardSelection(articles),
+      },
+      {
+        key: "COLLEGE_BASKETBALL",
+        label: "College Basketball",
+        matcher: (article) => isStrictCollegeBasketballArticle(article),
+        getLead: (articles) => getCollegeBasketballLargeCardSelection(articles),
+      },
+      {
+        key: "GOLF",
+        label: "Golf",
+        matcher: (article) => isStrictGolfArticle(article),
+        getLead: (articles) => getGolfLargeCardSelection(articles),
+      },
+      {
+        key: "NASCAR",
+        label: "NASCAR",
+        matcher: (article) => articleMatchesSelectedCategory(article, "NASCAR") && !isSportsBettingAd(article),
+        getLead: (articles) =>
+          articles
+            .map((article) => ({
+              article,
+              image: getLargeImageCardImageCandidate(article),
+            }))
+            .find((candidate) => candidate.image)?.article ?? null,
+      },
+      {
+        key: "FIGHTING",
+        label: "Fighting",
+        matcher: (article) => isStrictFightingArticle(article),
+        getLead: (articles) =>
+          articles
+            .map((article) => ({
+              article,
+              image: getLargeImageCardImageCandidate(article),
+            }))
+            .find((candidate) => candidate.image)?.article ?? null,
+      },
+    ];
+
+    const sourcePool = dedupeArticlesByContent(sportsTabArticles).filter(
+      (article) => isBroadSportsArticle(article) && !isSportsBettingAd(article)
+    );
+    const usedArticleKeys = new Set<string>();
+    const usedDuplicateKeys = new Set<string>();
+
+    const sections = sectionConfigs
+      .map((section) => {
+        const filteredArticles = sourcePool.filter((article) => {
+          const articleKey = getArticleDeduplicationKey(article);
+
+          if (usedArticleKeys.has(articleKey)) {
+            console.log("SPORTS DUPLICATE ARTICLE REMOVED", {
+              section: section.key,
+              title: article.title,
+              source: article.source,
+              reason: "article_key",
+            });
+            return false;
+          }
+
+          const duplicateKeys = getSportsArticleDuplicateKeys(article);
+          if (duplicateKeys.some((key) => usedDuplicateKeys.has(key))) {
+            console.log("SPORTS DUPLICATE ARTICLE REMOVED", {
+              section: section.key,
+              title: article.title,
+              source: article.source,
+              reason: "duplicate_key",
+            });
+            return false;
+          }
+
+          return section.matcher(article);
+        });
+
+        const sortedArticles = [...filteredArticles].sort((leftArticle, rightArticle) => {
+          const rightImageBoost = Number(Boolean(getLargeImageCardImageCandidate(rightArticle)));
+          const leftImageBoost = Number(Boolean(getLargeImageCardImageCandidate(leftArticle)));
+
+          if (rightImageBoost !== leftImageBoost) {
+            return rightImageBoost - leftImageBoost;
+          }
+
+          return getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle);
+        });
+
+        const selectedArticles = selectSourceBalancedArticles(sortedArticles, 6);
+        const leadArticle = section.getLead(selectedArticles);
+        const articleKeysToReserve = new Set(
+          selectedArticles.map((article) => getArticleDeduplicationKey(article))
+        );
+
+        if (leadArticle) {
+          articleKeysToReserve.add(getArticleDeduplicationKey(leadArticle));
+        }
+
+        selectedArticles.forEach((article) => {
+          usedArticleKeys.add(getArticleDeduplicationKey(article));
+          getSportsArticleDuplicateKeys(article).forEach((key) => usedDuplicateKeys.add(key));
+        });
+
+        if (leadArticle) {
+          usedArticleKeys.add(getArticleDeduplicationKey(leadArticle));
+          getSportsArticleDuplicateKeys(leadArticle).forEach((key) => usedDuplicateKeys.add(key));
+        }
+
+        console.log("SPORTS GROUP ARTICLE COUNT", {
+          section: section.label,
+          count: selectedArticles.length,
+        });
+        console.log("SPORTS GROUP LARGE CARD SELECTED", {
+          section: section.label,
+          title: leadArticle?.title ?? null,
+        });
+
+        return {
+          key: section.key,
+          label: section.label,
+          leadArticle,
+          articles: selectedArticles.filter((article) =>
+            articleKeysToReserve.has(getArticleDeduplicationKey(article))
+          ),
+        };
+      })
+      .filter((section) => section.articles.length > 0);
+
+    console.log("SPORTS GROUPED SECTION COUNT", sections.length);
+    return sections;
+  }, [sortMode, sportsTabArticles]);
+
   const favoriteTeamGames = useMemo(() => {
     const matchedGames: SportsScoreGame[] = [];
     const seenGameIds = new Set<string>();
@@ -15618,6 +15812,52 @@ export default function Home() {
             {renderCompactSideImageArticle(article, { showRank: index + 1 })}
           </div>
         ))}
+      </div>
+    );
+  };
+
+  const renderGroupedSportsArticleSections = (
+    sections: Array<{
+      key: string;
+      label: string;
+      leadArticle: Article | null;
+      articles: Article[];
+    }>
+  ) => {
+    if (sections.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="stack home-section-list" style={{ gap: "18px" }}>
+        {sections.map((section) => {
+          const leadArticleKey = section.leadArticle
+            ? getArticleDeduplicationKey(section.leadArticle)
+            : null;
+
+          return (
+            <section
+              key={`sports-grouped-${section.key}`}
+              className="home-section-block home-section-plain"
+            >
+              <div className="home-section-header">
+                <div className="stack" style={{ gap: "4px" }}>
+                  <strong className="profile-section-title sports-subsection-title">
+                    {section.label}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="stack home-section-list top-trending-card-rail">
+                {section.leadArticle ? renderLargeImageArticleCard(section.leadArticle) : null}
+                {renderRankedCompactArticleSection(section.articles, {
+                  limit: 5,
+                  excludeArticleKey: leadArticleKey,
+                })}
+              </div>
+            </section>
+          );
+        })}
       </div>
     );
   };
@@ -18449,28 +18689,30 @@ export default function Home() {
               </div>
             )
           ) : (
-            <div className="stack home-section-list top-trending-card-rail">
-              {trendingSportsLeadArticle ? renderLargeImageArticleCard(trendingSportsLeadArticle) : null}
-              {sportsTabArticles
-                .filter((article) =>
-                  trendingSportsLeadArticle
-                    ? getArticleDeduplicationKey(article) !==
-                      getArticleDeduplicationKey(trendingSportsLeadArticle)
-                    : true
-                )
-                .filter((article) => isBroadSportsArticle(article) && !isSportsBettingAd(article))
-                .slice(0, 5)
-                .map((article, index) => (
-                  <div
-                    key={`trending-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                  >
-                    {renderCompactSideImageArticle(article, {
-                      imageFallbackLabel: "Sports",
-                      showRank: index + 1,
-                    })}
-                  </div>
-                ))}
-            </div>
+            renderGroupedSportsArticleSections(groupedSportsArticleSections) ?? (
+              <div className="stack home-section-list top-trending-card-rail">
+                {trendingSportsLeadArticle ? renderLargeImageArticleCard(trendingSportsLeadArticle) : null}
+                {sportsTabArticles
+                  .filter((article) =>
+                    trendingSportsLeadArticle
+                      ? getArticleDeduplicationKey(article) !==
+                        getArticleDeduplicationKey(trendingSportsLeadArticle)
+                      : true
+                  )
+                  .filter((article) => isBroadSportsArticle(article) && !isSportsBettingAd(article))
+                  .slice(0, 5)
+                  .map((article, index) => (
+                    <div
+                      key={`trending-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                    >
+                      {renderCompactSideImageArticle(article, {
+                        imageFallbackLabel: "Sports",
+                        showRank: index + 1,
+                      })}
+                    </div>
+                  ))}
+              </div>
+            )
           )}
         </section>
 
