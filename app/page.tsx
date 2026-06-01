@@ -544,6 +544,7 @@ const MLS_VIDEOS_DISABLED = true;
 const COLLEGE_BASKETBALL_VIDEOS_DISABLED = true;
 const NASCAR_VIDEOS_DISABLED = true;
 const SPORTS_SCORE_CARDS_DISABLED = true;
+const TRENDING_SCORE_CARDS_DISABLED = true;
 const FEATURED_SPORTS_DISABLED = true;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
@@ -2684,13 +2685,7 @@ const SWIPEABLE_SORT_MODES = [
   "trending",
   "mynews",
   "local",
-  "sports",
-  "celebrity",
   "weather",
-  "technology",
-  "travel",
-  "food",
-  "business",
 ] as const;
 
 type SwipeableSortMode = (typeof SWIPEABLE_SORT_MODES)[number];
@@ -17783,26 +17778,6 @@ export default function Home() {
         </button>
         <button
           ref={(node) => {
-            topTabButtonRefs.current.sports = node;
-          }}
-          className={`toolbar-pill ${activeMode === "sports" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("sports")}
-        >
-          Sports
-        </button>
-        <button
-          ref={(node) => {
-            topTabButtonRefs.current.celebrity = node;
-          }}
-          className={`toolbar-pill ${activeMode === "celebrity" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("celebrity")}
-        >
-          Entertainment
-        </button>
-        <button
-          ref={(node) => {
             topTabButtonRefs.current.weather = node;
           }}
           className={`toolbar-pill ${activeMode === "weather" ? "toolbar-pill-active" : ""}`}
@@ -17811,71 +17786,6 @@ export default function Home() {
         >
           Weather
         </button>
-        <button
-          ref={(node) => {
-            topTabButtonRefs.current.technology = node;
-          }}
-          className={`toolbar-pill ${activeMode === "technology" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("technology")}
-        >
-          Technology
-        </button>
-        <button
-          ref={(node) => {
-            topTabButtonRefs.current.travel = node;
-          }}
-          className={`toolbar-pill ${activeMode === "travel" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("travel")}
-        >
-          Travel
-        </button>
-        <button
-          ref={(node) => {
-            topTabButtonRefs.current.food = node;
-          }}
-          className={`toolbar-pill ${activeMode === "food" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("food")}
-        >
-          Food
-        </button>
-        <button
-          ref={(node) => {
-            topTabButtonRefs.current.business = node;
-          }}
-          className={`toolbar-pill ${activeMode === "business" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("business")}
-        >
-          Business
-        </button>
-        {activeMode === "trending" ? (
-          <>
-            <button
-              className="toolbar-pill"
-              type="button"
-              onClick={() => scrollSectionIntoView(trendingEntertainmentSectionRef)}
-            >
-              Entertainment
-            </button>
-            <button
-              className="toolbar-pill"
-              type="button"
-              onClick={() => scrollSectionIntoView(scienceSectionRef)}
-            >
-              Science
-            </button>
-            <button
-              className="toolbar-pill"
-              type="button"
-              onClick={() => scrollSectionIntoView(carsSectionRef)}
-            >
-              Auto
-            </button>
-          </>
-        ) : null}
       </div>
     </div>
   );
@@ -18361,15 +18271,15 @@ export default function Home() {
             </button>
           </div>
 
-          {isSportsScoresLoading ? (
-            <div className="muted">Loading score cards...</div>
-          ) : (
-            renderSportsScoreRow(
-              topSportsGames,
-              "Trending sports scores",
-              "Scores unavailable right now."
-            )
-          )}
+          {!TRENDING_SCORE_CARDS_DISABLED
+            ? isSportsScoresLoading
+              ? <div className="muted">Loading score cards...</div>
+              : renderSportsScoreRow(
+                  topSportsGames,
+                  "Trending sports scores",
+                  "Scores unavailable right now."
+                )
+            : null}
 
           {sportsTabArticles.length === 0 ? (
             isSportsPreviewLoading ? (
