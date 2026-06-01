@@ -2774,8 +2774,8 @@ type TheaterMovieItem = {
 };
 
 type StockTickerItem = {
-  name: string;
   symbol: string;
+  label: string;
   price: number | null;
   change: number | null;
   percentChange: number | null;
@@ -6418,6 +6418,7 @@ export default function Home() {
     async function loadBusinessTicker() {
       if (sortMode !== "business" && sortMode !== "trending") {
         setBusinessTickerItems([]);
+        setBusinessTickerSource("idle");
         return;
       }
 
@@ -6501,7 +6502,7 @@ export default function Home() {
   const [popularMusicAlbums, setPopularMusicAlbums] = useState<PopularMusicAlbum[]>([]);
   const [theaterMovies, setTheaterMovies] = useState<TheaterMovieItem[]>([]);
   const [businessTickerItems, setBusinessTickerItems] = useState<StockTickerItem[]>([]);
-  const [businessTickerSource, setBusinessTickerSource] = useState<string>("no-api-key");
+  const [businessTickerSource, setBusinessTickerSource] = useState<string>("loading");
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
@@ -14319,12 +14320,16 @@ export default function Home() {
   }, [celebrityTabArticles, entertainmentSectionContent.movies, entertainmentSectionFeeds.movies]);
 
   const BUSINESS_TICKER_FALLBACK_ITEMS: StockTickerItem[] = [
-    { name: "S&P 500", symbol: "SPY", price: null, change: null, percentChange: null, source: "fallback" },
-    { name: "Nasdaq", symbol: "QQQ", price: null, change: null, percentChange: null, source: "fallback" },
-    { name: "Dow Jones", symbol: "DIA", price: null, change: null, percentChange: null, source: "fallback" },
-    { name: "AAPL", symbol: "AAPL", price: null, change: null, percentChange: null, source: "fallback" },
-    { name: "MSFT", symbol: "MSFT", price: null, change: null, percentChange: null, source: "fallback" },
-    { name: "NVDA", symbol: "NVDA", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "S&P 500", symbol: "SPY", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Nasdaq", symbol: "QQQ", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Dow Jones", symbol: "DIA", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Apple", symbol: "AAPL", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Microsoft", symbol: "MSFT", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Nvidia", symbol: "NVDA", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Amazon", symbol: "AMZN", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Alphabet", symbol: "GOOGL", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Meta", symbol: "META", price: null, change: null, percentChange: null, source: "fallback" },
+    { label: "Tesla", symbol: "TSLA", price: null, change: null, percentChange: null, source: "fallback" },
   ];
 
   const popularMusicSliderArticles = useMemo(() => {
@@ -16249,12 +16254,15 @@ export default function Home() {
 
   const renderBusinessStockTicker = () => {
     const apiKeyPresent =
-      businessTickerSource !== "no-api-key" && businessTickerSource !== "error";
+      businessTickerSource === "finnhub" || businessTickerSource === "alpha-vantage";
     const tickerItems = businessTickerItems.length > 0 ? businessTickerItems : BUSINESS_TICKER_FALLBACK_ITEMS;
-    const marketDataUnavailable = businessTickerItems.length === 0;
+    const hasLiveTickerData = businessTickerItems.length > 0;
+    const marketDataUnavailable =
+      businessTickerSource === "error" || businessTickerSource === "no-api-key";
 
     console.log("BUSINESS STOCK API_KEY_PRESENT", apiKeyPresent);
     console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
+    console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
     console.log("BUSINESS STOCK MARKET_DATA_UNAVAILABLE", marketDataUnavailable);
     console.log("BUSINESS STOCK TICKER RENDERED", true);
 
@@ -16294,7 +16302,7 @@ export default function Home() {
                   </span>
                 </div>
                 <div className="popular-music-card-copy">
-                  <strong className="popular-music-card-title">{item.name ?? item.symbol}</strong>
+                  <strong className="popular-music-card-title">{item.label}</strong>
                   <span className="popular-music-card-artist">{item.symbol}</span>
                   <strong className="popular-music-card-title">
                     {item.price !== null ? `$${item.price.toFixed(2)}` : "—"}
@@ -16303,9 +16311,9 @@ export default function Home() {
                     className="popular-music-card-artist"
                     style={{ color: isPositive ? "#16a34a" : "#dc2626" }}
                   >
-                    {item.price !== null && item.change !== null && item.percentChange !== null
+                    {hasLiveTickerData && item.change !== null && item.percentChange !== null
                       ? `${isPositive ? "+" : ""}${item.change.toFixed(2)} (${isPositive ? "+" : ""}${item.percentChange.toFixed(2)}%)`
-                      : "Market data unavailable"}
+                      : "—"}
                   </span>
                 </div>
               </div>

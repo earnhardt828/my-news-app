@@ -16,8 +16,8 @@ const STOCK_LABELS: Record<(typeof STOCK_SYMBOLS)[number], string> = {
 };
 
 type StockTickerItem = {
-  name: string;
   symbol: (typeof STOCK_SYMBOLS)[number];
+  label: string;
   price: number | null;
   change: number | null;
   percentChange: number | null;
@@ -25,6 +25,8 @@ type StockTickerItem = {
 };
 
 async function fetchFinnhubQuote(symbol: (typeof STOCK_SYMBOLS)[number], apiKey: string) {
+  console.log("FINNHUB REQUEST SYMBOL", symbol);
+
   const response = await fetch(
     `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`,
     {
@@ -33,19 +35,35 @@ async function fetchFinnhubQuote(symbol: (typeof STOCK_SYMBOLS)[number], apiKey:
     }
   );
 
+  console.log("FINNHUB RESPONSE STATUS", { symbol, status: response.status, ok: response.ok });
+
+  const responseBodyText = await response.text();
+  console.log("FINNHUB RESPONSE BODY", { symbol, body: responseBodyText });
+
   if (!response.ok) {
     return null;
   }
 
-  const payload = (await response.json()) as {
+  let payload: {
     c?: number;
     d?: number;
     dp?: number;
-  };
+  } | null = null;
+
+  try {
+    payload = JSON.parse(responseBodyText) as {
+      c?: number;
+      d?: number;
+      dp?: number;
+    };
+  } catch (error) {
+    console.error("FINNHUB RESPONSE PARSE FAILED", { symbol, error });
+    return null;
+  }
 
   return {
-    name: STOCK_LABELS[symbol],
     symbol,
+    label: STOCK_LABELS[symbol],
     price: typeof payload.c === "number" ? payload.c : null,
     change: typeof payload.d === "number" ? payload.d : null,
     percentChange: typeof payload.dp === "number" ? payload.dp : null,
@@ -79,8 +97,8 @@ async function fetchAlphaVantageQuote(symbol: (typeof STOCK_SYMBOLS)[number], ap
   const percentChange = Number(percentRaw);
 
   return {
-    name: STOCK_LABELS[symbol],
     symbol,
+    label: STOCK_LABELS[symbol],
     price: Number.isFinite(price) ? price : null,
     change: Number.isFinite(change) ? change : null,
     percentChange: Number.isFinite(percentChange) ? percentChange : null,
@@ -91,6 +109,8 @@ async function fetchAlphaVantageQuote(symbol: (typeof STOCK_SYMBOLS)[number], ap
 export async function GET() {
   const finnhubApiKey = process.env.FINNHUB_API_KEY?.trim();
   const alphaVantageApiKey = process.env.ALPHA_VANTAGE_API_KEY?.trim();
+
+  console.log("FINNHUB API KEY PRESENT", Boolean(finnhubApiKey));
 
   if (!finnhubApiKey && !alphaVantageApiKey) {
     return NextResponse.json({ stocks: [] as StockTickerItem[], source: "no-api-key" }, { status: 200 });
@@ -106,7 +126,15 @@ export async function GET() {
     const payloads = await Promise.allSettled(STOCK_SYMBOLS.map((symbol) => fetcher(symbol)));
     const stocks = payloads
       .map((result) => (result.status === "fulfilled" ? result.value : null))
-      .filter((item) => item !== null);
+      .filter(
+        (item): item is StockTickerItem =>
+          item !== null &&
+          item.price !== null &&
+          Number.isFinite(item.price) &&
+          item.price > 0
+      );
+
+    console.log("STOCK API FINAL COUNT", stocks.length);
 
     return NextResponse.json(
       {
