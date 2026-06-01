@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
 
-const STOCK_SYMBOLS = ["SPY", "QQQ", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"] as const;
+const STOCK_SYMBOLS = ["AAPL", "MSFT", "NVDA"] as const;
 type DisplayStockSymbol = (typeof STOCK_SYMBOLS)[number];
 
 const STOCK_LABELS: Record<DisplayStockSymbol, string> = {
-  SPY: "S&P 500",
-  QQQ: "Nasdaq",
-  DIA: "Dow Jones",
   AAPL: "Apple",
   MSFT: "Microsoft",
   NVDA: "Nvidia",
-  AMZN: "Amazon",
-  GOOGL: "Alphabet",
-  META: "Meta",
-  TSLA: "Tesla",
 };
 
 type StockTickerItem = {
@@ -126,6 +119,9 @@ export async function GET() {
   console.log("FINNHUB API KEY PRESENT", Boolean(finnhubApiKey));
 
   if (!finnhubApiKey && !alphaVantageApiKey) {
+    console.log("STOCK API RESPONSE", { source: "no-api-key", stocks: [] });
+    console.log("STOCK API PARSED ITEMS", []);
+    console.log("STOCK API FINAL JSON", { stocks: [], source: "no-api-key" });
     console.log("FINNHUB VALID ITEMS COUNT", 0);
     console.log("STOCK API FINAL COUNT", 0);
     return NextResponse.json({ stocks: [] as StockTickerItem[], source: "no-api-key" }, { status: 200 });
@@ -139,29 +135,35 @@ export async function GET() {
             fetchAlphaVantageQuote(symbol, alphaVantageApiKey as string);
 
     const results = await Promise.allSettled(STOCK_SYMBOLS.map((symbol) => fetcher(symbol)));
+    console.log("STOCK API RESPONSE", results);
     const stocks = results
       .map((result) => (result.status === "fulfilled" ? result.value : null))
       .filter((item): item is StockTickerItem => item !== null);
 
+    console.log("STOCK API PARSED ITEMS", stocks);
     console.log("FINNHUB VALID ITEMS COUNT", stocks.length);
     console.log("STOCK API FINAL COUNT", stocks.length);
 
-    return NextResponse.json(
-      {
-        stocks,
-        source:
-          stocks.length > 0
-            ? finnhubApiKey
-              ? "finnhub"
-              : "alpha-vantage"
-            : finnhubApiKey
-              ? "finnhub-empty"
-              : "alpha-vantage-empty",
-      },
-      { status: 200 }
-    );
+    const finalPayload = {
+      stocks,
+      source:
+        stocks.length > 0
+          ? finnhubApiKey
+            ? "finnhub"
+            : "alpha-vantage"
+          : finnhubApiKey
+            ? "finnhub-empty"
+            : "alpha-vantage-empty",
+    };
+
+    console.log("STOCK API FINAL JSON", finalPayload);
+
+    return NextResponse.json(finalPayload, { status: 200 });
   } catch (error) {
     console.error("Stocks API load failed", error);
+    console.log("STOCK API RESPONSE", { error: error instanceof Error ? error.message : String(error) });
+    console.log("STOCK API PARSED ITEMS", []);
+    console.log("STOCK API FINAL JSON", { stocks: [], source: "error" });
     console.log("FINNHUB VALID ITEMS COUNT", 0);
     console.log("STOCK API FINAL COUNT", 0);
     return NextResponse.json({ stocks: [] as StockTickerItem[], source: "error" }, { status: 200 });

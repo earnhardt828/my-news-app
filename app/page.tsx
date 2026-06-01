@@ -6479,12 +6479,26 @@ export default function Home() {
           source?: string;
         };
 
+        console.log("BUSINESS STOCK FETCH RESPONSE", {
+          ok: response.ok,
+          status: response.status,
+          source: payload.source ?? "unknown",
+          count: Array.isArray(payload.stocks) ? payload.stocks.length : 0,
+        });
+        console.log("BUSINESS STOCK ITEMS RECEIVED", payload.stocks ?? []);
+
         if (!isCancelled) {
           setBusinessTickerItems(Array.isArray(payload.stocks) ? payload.stocks : []);
           setBusinessTickerSource(payload.source ?? "unknown");
         }
       } catch (error) {
         console.error("BUSINESS TICKER LOAD FAILED", error);
+        console.log("BUSINESS STOCK FETCH RESPONSE", {
+          ok: false,
+          status: "error",
+          error: error instanceof Error ? error.message : String(error),
+        });
+        console.log("BUSINESS STOCK ITEMS RECEIVED", []);
         if (!isCancelled) {
           setBusinessTickerItems([]);
           setBusinessTickerSource("error");
@@ -16361,6 +16375,7 @@ export default function Home() {
     console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
     console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
     console.log("BUSINESS STOCK MARKET_DATA_UNAVAILABLE", marketDataUnavailable);
+    console.log("BUSINESS STOCK ITEMS RENDERED", tickerItems);
     console.log("BUSINESS STOCK TICKER RENDERED", true);
 
     if (!hasLiveTickerData && !marketDataUnavailable) {
