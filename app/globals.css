@@ -7150,6 +7150,97 @@ input {
   }
 }
 
+.daily-crossword-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.daily-crossword-grid {
+  display: grid;
+  gap: 4px;
+  align-self: center;
+  width: min(100%, 420px);
+}
+
+.daily-crossword-block {
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  background: rgba(20, 33, 61, 0.08);
+}
+
+.daily-crossword-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  box-shadow: 0 8px 18px rgba(20, 33, 61, 0.05);
+  overflow: hidden;
+}
+
+.daily-crossword-cell-correct {
+  border-color: rgba(22, 101, 52, 0.35);
+  background: rgba(22, 163, 74, 0.1);
+}
+
+.daily-crossword-cell-wrong {
+  border-color: rgba(153, 27, 27, 0.35);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.daily-crossword-number {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  line-height: 1;
+}
+
+.daily-crossword-input {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 1.05rem;
+  font-weight: 800;
+  outline: none;
+  padding: 12px 4px 4px;
+}
+
+.daily-crossword-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.daily-crossword-clues {
+  display: grid;
+  gap: 14px;
+}
+
+.daily-crossword-clue-group {
+  display: grid;
+  gap: 8px;
+}
+
+.daily-crossword-clue-group ol {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: var(--text-soft);
+}
+
+.daily-crossword-clue-number {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
 @media (min-width: 768px) {
   .app-shell {
     padding-bottom: 112px;

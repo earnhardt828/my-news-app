@@ -2786,6 +2786,38 @@ type TopicFallbackGroup = {
   imageKey: string;
 };
 
+type CrosswordDirection = "across" | "down";
+
+type CrosswordSeedEntry = {
+  answer: string;
+  clue: string;
+  section: string;
+  sourceTitle: string;
+};
+
+type CrosswordPlacedEntry = CrosswordSeedEntry & {
+  id: string;
+  row: number;
+  col: number;
+  direction: CrosswordDirection;
+  number: number;
+};
+
+type CrosswordCell = {
+  row: number;
+  col: number;
+  solution: string;
+  entries: string[];
+  number?: number;
+};
+
+type CrosswordPuzzle = {
+  width: number;
+  height: number;
+  cells: Record<string, CrosswordCell>;
+  placedEntries: CrosswordPlacedEntry[];
+};
+
 type DbComment = {
   id: number;
   article_id: number;
@@ -3277,6 +3309,285 @@ function getTopicFallbackImage(article: Pick<Article, "title" | "description" | 
   }
 
   return selectedImage;
+}
+
+const CROSSWORD_STOP_WORDS = new Set([
+  "THE",
+  "AND",
+  "FOR",
+  "WITH",
+  "FROM",
+  "THIS",
+  "THAT",
+  "JUST",
+  "LIVE",
+  "NEWS",
+  "LATEST",
+  "BREAKING",
+  "ABOUT",
+  "AFTER",
+  "BEFORE",
+  "TODAY",
+  "THEIR",
+  "THERE",
+  "WHERE",
+  "WHILE",
+  "UNDER",
+  "OVER",
+  "INTO",
+  "ONTO",
+  "YOUR",
+  "THEY",
+  "WILL",
+  "SAYS",
+  "SAY",
+  "MORE",
+  "WHAT",
+  "WHEN",
+  "WHY",
+  "HOW",
+  "HAVE",
+  "HAS",
+  "HAD",
+  "NEW",
+  "NEWSLETTER",
+  "VIDEO",
+  "WATCH",
+  "UPDATE",
+  "UPDATES",
+]);
+
+function getCrosswordCellKey(row: number, col: number) {
+  return `${row}:${col}`;
+}
+
+function normalizeCrosswordAnswer(value: string) {
+  return cleanDisplayText(value).replace(/[^A-Za-z]/g, "").toUpperCase();
+}
+
+function buildCrosswordCandidatesFromArticles(
+  sections: Array<{ section: string; articles: Article[] }>
+) {
+  const seenAnswers = new Set<string>();
+  const candidates: CrosswordSeedEntry[] = [];
+
+  sections.forEach(({ section, articles }) => {
+    articles.forEach((article) => {
+      const title = cleanDisplayText(article.title);
+      const tokens = title
+        .split(/\s+/)
+        .map((token) => normalizeCrosswordAnswer(token))
+        .filter(
+          (token) =>
+            token.length >= 3 &&
+            token.length <= 12 &&
+            !CROSSWORD_STOP_WORDS.has(token) &&
+            !seenAnswers.has(token)
+        );
+
+      tokens.slice(0, 2).forEach((answer) => {
+        seenAnswers.add(answer);
+        candidates.push({
+          answer,
+          clue: `${section}: ${title}`,
+          section,
+          sourceTitle: title,
+        });
+      });
+    });
+  });
+
+  return candidates;
+}
+
+const FALLBACK_CROSSWORD_ENTRIES: CrosswordSeedEntry[] = [
+  { answer: "NEWS", clue: "General current events", section: "Fallback", sourceTitle: "News" },
+  { answer: "WORLD", clue: "International coverage section", section: "Fallback", sourceTitle: "World" },
+  { answer: "SPORTS", clue: "Games and scores section", section: "Fallback", sourceTitle: "Sports" },
+  { answer: "WEATHER", clue: "Forecasts and storms", section: "Fallback", sourceTitle: "Weather" },
+  { answer: "MARKET", clue: "Business and stocks topic", section: "Fallback", sourceTitle: "Market" },
+  { answer: "MOVIE", clue: "Big-screen entertainment", section: "Fallback", sourceTitle: "Movie" },
+  { answer: "MUSIC", clue: "Albums, songs, and tours", section: "Fallback", sourceTitle: "Music" },
+  { answer: "SCIENCE", clue: "Research and discovery section", section: "Fallback", sourceTitle: "Science" },
+];
+
+function buildCrosswordPuzzle(seedEntries: CrosswordSeedEntry[]) {
+  const entries = seedEntries
+    .filter((entry) => entry.answer.length >= 3 && entry.answer.length <= 12)
+    .slice(0, 12);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const gridSize = 17;
+  const grid = new Map<string, string>();
+  const placedEntries: Array<Omit<CrosswordPlacedEntry, "number">> = [];
+
+  const canPlaceWord = (
+    answer: string,
+    row: number,
+    col: number,
+    direction: CrosswordDirection
+  ) => {
+    const rowDelta = direction === "across" ? 0 : 1;
+    const colDelta = direction === "across" ? 1 : 0;
+
+    for (let index = 0; index < answer.length; index += 1) {
+      const nextRow = row + rowDelta * index;
+      const nextCol = col + colDelta * index;
+
+      if (nextRow < 0 || nextRow >= gridSize || nextCol < 0 || nextCol >= gridSize) {
+        return false;
+      }
+
+      const key = getCrosswordCellKey(nextRow, nextCol);
+      const existing = grid.get(key);
+
+      if (existing && existing !== answer[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const placeWord = (
+    entry: CrosswordSeedEntry,
+    row: number,
+    col: number,
+    direction: CrosswordDirection
+  ) => {
+    const rowDelta = direction === "across" ? 0 : 1;
+    const colDelta = direction === "across" ? 1 : 0;
+
+    for (let index = 0; index < entry.answer.length; index += 1) {
+      const nextRow = row + rowDelta * index;
+      const nextCol = col + colDelta * index;
+      grid.set(getCrosswordCellKey(nextRow, nextCol), entry.answer[index]);
+    }
+
+    placedEntries.push({
+      ...entry,
+      id: `${entry.answer}-${row}-${col}-${direction}`,
+      row,
+      col,
+      direction,
+    });
+  };
+
+  const sortedEntries = [...entries].sort((left, right) => right.answer.length - left.answer.length);
+  const anchor = sortedEntries[0];
+  placeWord(anchor, Math.floor(gridSize / 2), Math.max(1, Math.floor((gridSize - anchor.answer.length) / 2)), "across");
+
+  for (const entry of sortedEntries.slice(1)) {
+    let placed = false;
+
+    for (const placedEntry of placedEntries) {
+      for (let sourceIndex = 0; sourceIndex < placedEntry.answer.length && !placed; sourceIndex += 1) {
+        for (let targetIndex = 0; targetIndex < entry.answer.length && !placed; targetIndex += 1) {
+          if (placedEntry.answer[sourceIndex] !== entry.answer[targetIndex]) {
+            continue;
+          }
+
+          const nextDirection: CrosswordDirection =
+            placedEntry.direction === "across" ? "down" : "across";
+          const startRow =
+            nextDirection === "across"
+              ? placedEntry.row + sourceIndex
+              : placedEntry.row - targetIndex;
+          const startCol =
+            nextDirection === "across"
+              ? placedEntry.col - targetIndex
+              : placedEntry.col + sourceIndex;
+
+          if (canPlaceWord(entry.answer, startRow, startCol, nextDirection)) {
+            placeWord(entry, startRow, startCol, nextDirection);
+            placed = true;
+          }
+        }
+      }
+    }
+
+    if (!placed) {
+      for (let fallbackRow = 1; fallbackRow < gridSize - 1 && !placed; fallbackRow += 2) {
+        for (let fallbackCol = 1; fallbackCol < gridSize - entry.answer.length - 1 && !placed; fallbackCol += 1) {
+          if (canPlaceWord(entry.answer, fallbackRow, fallbackCol, "across")) {
+            placeWord(entry, fallbackRow, fallbackCol, "across");
+            placed = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (placedEntries.length < 6 && seedEntries !== FALLBACK_CROSSWORD_ENTRIES) {
+    return buildCrosswordPuzzle(FALLBACK_CROSSWORD_ENTRIES);
+  }
+
+  const occupiedRows = placedEntries.flatMap((entry) =>
+    Array.from({ length: entry.answer.length }, (_, index) =>
+      entry.direction === "across" ? entry.row : entry.row + index
+    )
+  );
+  const occupiedCols = placedEntries.flatMap((entry) =>
+    Array.from({ length: entry.answer.length }, (_, index) =>
+      entry.direction === "across" ? entry.col + index : entry.col
+    )
+  );
+
+  const minRow = Math.max(0, Math.min(...occupiedRows) - 1);
+  const maxRow = Math.min(gridSize - 1, Math.max(...occupiedRows) + 1);
+  const minCol = Math.max(0, Math.min(...occupiedCols) - 1);
+  const maxCol = Math.min(gridSize - 1, Math.max(...occupiedCols) + 1);
+
+  const cells: Record<string, CrosswordCell> = {};
+
+  placedEntries.forEach((entry) => {
+    for (let index = 0; index < entry.answer.length; index += 1) {
+      const row = (entry.direction === "across" ? entry.row : entry.row + index) - minRow;
+      const col = (entry.direction === "across" ? entry.col + index : entry.col) - minCol;
+      const key = getCrosswordCellKey(row, col);
+      const existing = cells[key];
+
+      cells[key] = {
+        row,
+        col,
+        solution: entry.answer[index],
+        entries: existing ? [...existing.entries, entry.id] : [entry.id],
+        number: existing?.number,
+      };
+    }
+  });
+
+  let clueNumber = 1;
+  const numberedEntries = placedEntries
+    .map((entry) => {
+      const row = entry.row - minRow;
+      const col = entry.col - minCol;
+      const key = getCrosswordCellKey(row, col);
+      const cell = cells[key];
+
+      if (cell && !cell.number) {
+        cell.number = clueNumber;
+        clueNumber += 1;
+      }
+
+      return {
+        ...entry,
+        row,
+        col,
+        number: cell?.number ?? 0,
+      };
+    })
+    .sort((left, right) => left.number - right.number);
+
+  return {
+    width: maxCol - minCol + 1,
+    height: maxRow - minRow + 1,
+    cells,
+    placedEntries: numberedEntries,
+  } satisfies CrosswordPuzzle;
 }
 
 function filterArticlesBySelectedCategories(articles: Article[], selectedCategories: string[]) {
@@ -6555,6 +6866,9 @@ export default function Home() {
   const [isCarsPreviewLoading, setIsCarsPreviewLoading] = useState(false);
   const [opinionPreviewArticles, setOpinionPreviewArticles] = useState<Article[]>([]);
   const [isOpinionPreviewLoading, setIsOpinionPreviewLoading] = useState(false);
+  const [dailyCrosswordPuzzle, setDailyCrosswordPuzzle] = useState<CrosswordPuzzle | null>(null);
+  const [dailyCrosswordEntries, setDailyCrosswordEntries] = useState<Record<string, string>>({});
+  const [dailyCrosswordStatus, setDailyCrosswordStatus] = useState<"idle" | "checked" | "revealed">("idle");
   const [foodPreviewArticles, setFoodPreviewArticles] = useState<Article[]>([]);
   const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
   const [sciencePreviewArticles, setSciencePreviewArticles] = useState<Article[]>([]);
@@ -16428,6 +16742,147 @@ export default function Home() {
     );
   };
 
+  const renderDailyCrosswordSection = () => {
+    if (!dailyCrosswordPuzzle) {
+      return null;
+    }
+
+    const acrossClues = dailyCrosswordPuzzle.placedEntries.filter((entry) => entry.direction === "across");
+    const downClues = dailyCrosswordPuzzle.placedEntries.filter((entry) => entry.direction === "down");
+
+    const handleCrosswordEntryChange = (cellKey: string, nextValue: string) => {
+      const normalizedValue = normalizeCrosswordAnswer(nextValue).slice(-1);
+      setDailyCrosswordEntries((prev) => ({
+        ...prev,
+        [cellKey]: normalizedValue,
+      }));
+      if (dailyCrosswordStatus !== "idle") {
+        setDailyCrosswordStatus("idle");
+      }
+    };
+
+    const handleCrosswordReset = () => {
+      setDailyCrosswordEntries({});
+      setDailyCrosswordStatus("idle");
+    };
+
+    const handleCrosswordReveal = () => {
+      const revealedEntries = Object.fromEntries(
+        Object.entries(dailyCrosswordPuzzle.cells).map(([cellKey, cell]) => [cellKey, cell.solution])
+      );
+      setDailyCrosswordEntries(revealedEntries);
+      setDailyCrosswordStatus("revealed");
+    };
+
+    return (
+      <section className="home-section-block home-section-plain">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Daily Crossword</strong>
+            <span className="muted">A mini puzzle generated from today&apos;s Trending topics.</span>
+          </div>
+        </div>
+        <div className="daily-crossword-shell">
+          <div
+            className="daily-crossword-grid"
+            style={{
+              gridTemplateColumns: `repeat(${dailyCrosswordPuzzle.width}, minmax(0, 1fr))`,
+            }}
+          >
+            {Array.from({ length: dailyCrosswordPuzzle.height * dailyCrosswordPuzzle.width }, (_, index) => {
+              const row = Math.floor(index / dailyCrosswordPuzzle.width);
+              const col = index % dailyCrosswordPuzzle.width;
+              const cellKey = getCrosswordCellKey(row, col);
+              const cell = dailyCrosswordPuzzle.cells[cellKey];
+
+              if (!cell) {
+                return <div key={`crossword-block-${cellKey}`} className="daily-crossword-block" aria-hidden="true" />;
+              }
+
+              const userValue = dailyCrosswordEntries[cellKey] ?? "";
+              const isCorrect = userValue !== "" && userValue === cell.solution;
+              const isWrong = dailyCrosswordStatus === "checked" && userValue !== "" && userValue !== cell.solution;
+
+              return (
+                <label
+                  key={`crossword-cell-${cellKey}`}
+                  className={`daily-crossword-cell ${
+                    dailyCrosswordStatus === "revealed" || isCorrect
+                      ? "daily-crossword-cell-correct"
+                      : isWrong
+                        ? "daily-crossword-cell-wrong"
+                        : ""
+                  }`}
+                >
+                  {cell.number ? <span className="daily-crossword-number">{cell.number}</span> : null}
+                  <input
+                    type="text"
+                    inputMode="text"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    maxLength={1}
+                    className="daily-crossword-input"
+                    value={userValue}
+                    onChange={(event) => handleCrosswordEntryChange(cellKey, event.target.value)}
+                    aria-label={`Crossword cell ${row + 1}, ${col + 1}`}
+                  />
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="daily-crossword-controls">
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setDailyCrosswordStatus("checked")}
+            >
+              Check
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={handleCrosswordReveal}
+            >
+              Reveal
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={handleCrosswordReset}
+            >
+              Reset
+            </button>
+          </div>
+
+          <div className="daily-crossword-clues">
+            <div className="daily-crossword-clue-group">
+              <strong>Across</strong>
+              <ol>
+                {acrossClues.map((entry) => (
+                  <li key={`across-${entry.id}`}>
+                    <span className="daily-crossword-clue-number">{entry.number}.</span> {entry.clue}
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="daily-crossword-clue-group">
+              <strong>Down</strong>
+              <ol>
+                {downClues.map((entry) => (
+                  <li key={`down-${entry.id}`}>
+                    <span className="daily-crossword-clue-number">{entry.number}.</span> {entry.clue}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   const renderEntertainmentSectionVideo = (
     section: "gossip" | "music" | "tv" | "celebrity" | "movies",
     title: string,
@@ -16531,6 +16986,47 @@ export default function Home() {
 
     console.log("OPINION ARTICLE COUNT", opinionTabArticles.length);
   }, [opinionTabArticles.length, sortMode]);
+
+  const dailyCrosswordSeedEntries = useMemo(
+    () =>
+      buildCrosswordCandidatesFromArticles([
+        { section: "Breaking News", articles: breakingPreviewArticles.slice(0, 8) },
+        { section: "Top 10 Trending", articles: topTenTrendingArticles.slice(0, 10) },
+        { section: "Sports", articles: sportsTabArticles.slice(0, 8) },
+        { section: "Business", articles: businessTabArticles.slice(0, 8) },
+        { section: "Entertainment", articles: trendingEntertainmentArticles.slice(0, 8) },
+        { section: "Science", articles: scienceTabArticles.slice(0, 8) },
+        { section: "Weather", articles: weatherNewsArticles.slice(0, 8) },
+        { section: "World", articles: visibleArticles.slice(0, 16) },
+      ]),
+    [
+      breakingPreviewArticles,
+      businessTabArticles,
+      scienceTabArticles,
+      sportsTabArticles,
+      topTenTrendingArticles,
+      trendingEntertainmentArticles,
+      visibleArticles,
+      weatherNewsArticles,
+    ]
+  );
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      setDailyCrosswordPuzzle(null);
+      setDailyCrosswordEntries({});
+      setDailyCrosswordStatus("idle");
+      return;
+    }
+
+    const seedEntries =
+      dailyCrosswordSeedEntries.length >= 8 ? dailyCrosswordSeedEntries : FALLBACK_CROSSWORD_ENTRIES;
+    const nextPuzzle = buildCrosswordPuzzle(seedEntries);
+
+    setDailyCrosswordPuzzle(nextPuzzle);
+    setDailyCrosswordEntries({});
+    setDailyCrosswordStatus("idle");
+  }, [dailyCrosswordSeedEntries, sortMode]);
 
   useEffect(() => {
     const realLargeCardCount = sportsTabArticles.filter(
@@ -18623,6 +19119,8 @@ export default function Home() {
         {autoTrendingVideos.length > 0
           ? renderTallTrendingQuickWatchRow("Auto Videos", autoTrendingVideos, "auto-trending-videos")
           : null}
+
+        {renderDailyCrosswordSection()}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
