@@ -42,22 +42,22 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: "/search/",
-    label: "Search",
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="11" cy="11" r="6.5" />
-        <path d="m16 16 4 4" />
-      </svg>
-    ),
-  },
-  {
     href: "/videos/",
     label: "Videos",
     icon: (
       <svg {...iconProps}>
         <rect x="3.5" y="5" width="13" height="14" rx="3" />
         <path d="m16.5 10 4-2.5v9L16.5 14" />
+      </svg>
+    ),
+  },
+  {
+    href: "/search/",
+    label: "Search",
+    icon: (
+      <svg {...iconProps}>
+        <circle cx="11" cy="11" r="6.5" />
+        <path d="m16 16 4 4" />
       </svg>
     ),
   },

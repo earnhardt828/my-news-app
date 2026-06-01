@@ -546,6 +546,7 @@ const NASCAR_VIDEOS_DISABLED = true;
 const SPORTS_SCORE_CARDS_DISABLED = true;
 const TRENDING_SCORE_CARDS_DISABLED = false;
 const FEATURED_SPORTS_DISABLED = true;
+const BUSINESS_STOCK_TICKER_DISABLED = true;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
 function buildNhlFallbackVideos(): VideoItem[] {
@@ -16352,6 +16353,10 @@ export default function Home() {
   };
 
   const renderBusinessStockTicker = () => {
+    if (BUSINESS_STOCK_TICKER_DISABLED) {
+      return null;
+    }
+
     const apiKeyPresent =
       businessTickerSource === "finnhub" || businessTickerSource === "alpha-vantage";
     const tickerItems = businessTickerItems.length > 0 ? businessTickerItems : BUSINESS_TICKER_FALLBACK_ITEMS;
