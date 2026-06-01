@@ -6111,6 +6111,7 @@ export default function Home() {
     celebrity: null,
     movies: null,
   });
+  const [breakingLeadCard, setBreakingLeadCard] = useState<Article | null>(null);
   const [popularMusicAlbums, setPopularMusicAlbums] = useState<PopularMusicAlbum[]>([]);
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
@@ -12901,16 +12902,49 @@ export default function Home() {
   }, [breakingNewsPreviewArticles, failedArticleImages]);
 
   useEffect(() => {
-    console.log(
-      "BREAKING NEWS LARGE CARD SELECTED",
-      breakingNewsLeadArticle
-        ? {
+    if (sortMode !== "trending") {
+      setBreakingLeadCard(null);
+      return;
+    }
+
+    setBreakingLeadCard((previousCard) => {
+      if (breakingNewsLeadArticle) {
+        if (
+          previousCard &&
+          getArticleDeduplicationKey(previousCard) === getArticleDeduplicationKey(breakingNewsLeadArticle)
+        ) {
+          console.log("BREAKING LARGE CARD KEPT", {
+            title: previousCard.title,
+            source: previousCard.source,
+          });
+          return previousCard;
+        }
+
+        console.log(
+          previousCard ? "BREAKING LARGE CARD INITIAL" : "BREAKING LARGE CARD INITIAL",
+          {
             title: breakingNewsLeadArticle.title,
             source: breakingNewsLeadArticle.source,
           }
-        : null
-    );
-  }, [breakingNewsLeadArticle]);
+        );
+        console.log("BREAKING LARGE CARD SELECTED", {
+          title: breakingNewsLeadArticle.title,
+          source: breakingNewsLeadArticle.source,
+        });
+        return breakingNewsLeadArticle;
+      }
+
+      if (previousCard) {
+        console.log("BREAKING LARGE CARD OVERWRITE_BLOCKED", {
+          title: previousCard.title,
+          source: previousCard.source,
+        });
+        return previousCard;
+      }
+
+      return null;
+    });
+  }, [breakingNewsLeadArticle, sortMode]);
 
   const topTenTrendingLeadArticle = useMemo(() => {
     const firstArticle = topTenTrendingArticles[0];
@@ -13873,12 +13907,24 @@ export default function Home() {
   }, [buildEntertainmentSection, celebrityTabArticles, entertainmentSectionFeeds, featuredCelebrityArticles]);
 
   const entertainmentMovieSliderArticles = useMemo(() => {
-    const sliderArticles = entertainmentSectionContent.movies.filter((article) =>
-      Boolean(getLargeImageCardImageCandidate(article))
-    );
+    const sliderArticles = dedupeArticlesByContent([
+      ...entertainmentSectionFeeds.movies,
+      ...entertainmentSectionContent.movies,
+      ...celebrityTabArticles,
+    ])
+      .filter(
+        (article) =>
+          isEntertainmentMoviesArticle(article) &&
+          Boolean(getLargeImageCardImageCandidate(article))
+      )
+      .sort(
+        (leftArticle, rightArticle) =>
+          scoreEntertainmentArticleBySources(rightArticle, ENTERTAINMENT_MOVIES_QUERIES, "movies") -
+          scoreEntertainmentArticleBySources(leftArticle, ENTERTAINMENT_MOVIES_QUERIES, "movies")
+      );
     console.log("ENTERTAINMENT MOVIE SLIDER COUNT", sliderArticles.length);
     return sliderArticles.slice(0, 10);
-  }, [entertainmentSectionContent.movies]);
+  }, [celebrityTabArticles, entertainmentSectionContent.movies, entertainmentSectionFeeds.movies]);
 
   const popularMusicSliderArticles = useMemo(() => {
     const rawCandidates = dedupeArticlesByContent(
@@ -15387,11 +15433,12 @@ export default function Home() {
       return null;
     }
 
-    const rankedBreakingArticles = breakingNewsLeadArticle
+    const leadBreakingArticle = breakingLeadCard;
+    const rankedBreakingArticles = leadBreakingArticle
       ? breakingNewsPreviewArticles
           .filter(
             (article) =>
-              getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(breakingNewsLeadArticle)
+              getArticleDeduplicationKey(article) !== getArticleDeduplicationKey(leadBreakingArticle)
           )
           .slice(0, 4)
       : breakingNewsPreviewArticles.slice(0, 5);
@@ -15406,11 +15453,11 @@ export default function Home() {
           </div>
         </div>
         <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
-          {breakingNewsLeadArticle ? renderLargeImageArticleCard(breakingNewsLeadArticle) : null}
+          {leadBreakingArticle ? renderLargeImageArticleCard(leadBreakingArticle) : null}
           {rankedBreakingArticles.map((article, index) => (
             <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
               {renderCompactSideImageArticle(article, {
-                showRank: breakingNewsLeadArticle ? index + 2 : index + 1,
+                showRank: leadBreakingArticle ? index + 2 : index + 1,
               })}
             </div>
           ))}
@@ -15590,13 +15637,19 @@ export default function Home() {
   };
 
   const renderEntertainmentMovieSlider = (movieArticles: Article[]) => {
-    if (movieArticles.length === 0) {
+    if (movieArticles.length < 2) {
       return null;
     }
 
     return (
-      <div className="featured-stories-scroll" role="list" aria-label="Movies to watch">
-        {movieArticles.map((article) => {
+      <section className="home-section-block home-section-plain">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Movies In Theaters</strong>
+          </div>
+        </div>
+        <div className="popular-music-scroll" role="list" aria-label="Movies in theaters">
+        {movieArticles.map((article, index) => {
           const articleRouteId = getArticleRouteId(article);
           const imageSrc = getBestArticleImage(article).src;
           const score = getEntertainmentMovieScore(article);
@@ -15609,7 +15662,7 @@ export default function Home() {
             <Link
               key={`ent-movie-slider-${article.id || article.url || getArticleDeduplicationKey(article)}`}
               href={`/article/${articleRouteId}/`}
-              className="featured-story-card"
+              className="popular-music-card"
               role="listitem"
               onClick={() => {
                 persistArticleMetadata(article);
@@ -15623,17 +15676,19 @@ export default function Home() {
                 });
               }}
             >
-              <img
-                src={imageSrc}
-                alt={cleanDisplayText(article.title)}
-                className="featured-story-image"
-                loading="lazy"
-                decoding="async"
-              />
-              <div className="featured-story-overlay" />
-              <div className="featured-story-copy">
-                <span className="featured-story-source">{getSafeSourceLabel(article.source)}</span>
-                <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
+              <div className="popular-music-card-art-shell">
+                <img
+                  src={imageSrc}
+                  alt={cleanDisplayText(article.title)}
+                  className="popular-music-card-art"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <span className="popular-music-rank">#{index + 1}</span>
+              </div>
+              <div className="popular-music-card-copy">
+                <strong className="popular-music-card-title">{cleanDisplayText(article.title)}</strong>
+                <span className="popular-music-card-artist">{getSafeSourceLabel(article.source)}</span>
                 {score ? (
                   <span
                     className="chip chip-accent"
@@ -15646,7 +15701,8 @@ export default function Home() {
             </Link>
           );
         })}
-      </div>
+        </div>
+      </section>
     );
   };
 
@@ -18834,6 +18890,7 @@ export default function Home() {
 
                     return (
                       <div className="stack home-section-list top-trending-card-rail">
+                        {renderEntertainmentMovieSlider(entertainmentMovieSliderArticles)}
                         {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
                         {rankedArticles.slice(0, 5).map((article, index) => (
                           <div key={`ent-movies-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
@@ -18847,7 +18904,6 @@ export default function Home() {
                       </div>
                     );
                   })()}
-                  {renderEntertainmentMovieSlider(entertainmentMovieSliderArticles)}
                 </section>
               ) : null}
             </div>
