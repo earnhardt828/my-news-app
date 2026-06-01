@@ -16,123 +16,68 @@ const STOCK_LABELS: Record<DisplayStockSymbol, string> = {
   TSLA: "Tesla",
 };
 
-const STOCK_SYMBOL_CANDIDATES: Record<DisplayStockSymbol, string[]> = {
-  SPY: ["SPY", "IVV", "VOO"],
-  QQQ: ["QQQ", "QQQM"],
-  DIA: ["DIA", "DJIA"],
-  AAPL: ["AAPL"],
-  MSFT: ["MSFT"],
-  NVDA: ["NVDA"],
-  AMZN: ["AMZN"],
-  GOOGL: ["GOOGL"],
-  META: ["META"],
-  TSLA: ["TSLA"],
-};
-
 type StockTickerItem = {
   symbol: DisplayStockSymbol;
   label: string;
-  price: number | null;
+  price: number;
   change: number | null;
   percentChange: number | null;
   source: string;
 };
 
-function parseFinnhubQuoteValue(raw: unknown) {
-  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
-    return null;
-  }
-
-  return raw;
+function parseNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-async function fetchFinnhubQuoteForSymbol(requestSymbol: string, apiKey: string) {
-  console.log("FINNHUB REQUEST SYMBOL", requestSymbol);
+async function fetchFinnhubQuote(symbol: DisplayStockSymbol, apiKey: string) {
+  console.log("FINNHUB REQUEST SYMBOL", symbol);
 
   const response = await fetch(
-    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(requestSymbol)}&token=${encodeURIComponent(apiKey)}`,
+    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`,
     {
       cache: "no-store",
       next: { revalidate: 0 },
     }
   );
 
-  console.log("FINNHUB RESPONSE STATUS", { symbol: requestSymbol, status: response.status, ok: response.ok });
-
   const responseBodyText = await response.text();
-  console.log("FINNHUB RESPONSE BODY", { symbol: requestSymbol, body: responseBodyText });
+
+  console.log("FINNHUB RAW RESPONSE", {
+    symbol,
+    ok: response.ok,
+    status: response.status,
+    body: responseBodyText,
+  });
 
   if (!response.ok) {
     return null;
   }
 
-  let payload: {
-    c?: number;
-    d?: number;
-    dp?: number;
-  } | null = null;
+  let payload: { c?: number; d?: number; dp?: number } | null = null;
 
   try {
-    payload = JSON.parse(responseBodyText) as {
-      c?: number;
-      d?: number;
-      dp?: number;
-    };
+    payload = JSON.parse(responseBodyText) as { c?: number; d?: number; dp?: number };
   } catch (error) {
-    console.error("FINNHUB RESPONSE PARSE FAILED", { symbol: requestSymbol, error });
+    console.error("FINNHUB RESPONSE PARSE FAILED", { symbol, error });
     return null;
   }
 
-  const parsedPrice = parseFinnhubQuoteValue(payload.c);
-  const parsedChange = typeof payload.d === "number" && Number.isFinite(payload.d) ? payload.d : null;
-  const parsedPercentChange =
-    typeof payload.dp === "number" && Number.isFinite(payload.dp) ? payload.dp : null;
+  const price = parseNumber(payload?.c);
+  const change = parseNumber(payload?.d);
+  const percentChange = parseNumber(payload?.dp);
 
-  console.log("STOCK PRICE PARSED", {
-    symbol: requestSymbol,
-    price: parsedPrice,
-    change: parsedChange,
-    percentChange: parsedPercentChange,
-  });
-
-  if (parsedPrice === null) {
+  if (price === null || price <= 0) {
     return null;
   }
 
   return {
-    requestSymbol,
-    price: parsedPrice,
-    change: parsedChange,
-    percentChange: parsedPercentChange,
-  };
-}
-
-async function fetchFinnhubQuote(symbol: DisplayStockSymbol, apiKey: string) {
-  const candidates = STOCK_SYMBOL_CANDIDATES[symbol];
-
-  for (const [index, candidate] of candidates.entries()) {
-    const quote = await fetchFinnhubQuoteForSymbol(candidate, apiKey);
-
-    if (quote) {
-      console.log("STOCK SYMBOL USED", { displaySymbol: symbol, requestSymbol: candidate });
-
-      if (index > 0) {
-        console.log("STOCK SYMBOL FALLBACK_USED", { displaySymbol: symbol, requestSymbol: candidate });
-      }
-
-      return {
-        symbol,
-        label: STOCK_LABELS[symbol],
-        price: quote.price,
-        change: quote.change,
-        percentChange: quote.percentChange,
-        source: "Finnhub",
-      } satisfies StockTickerItem;
-    }
-  }
-
-  console.log("STOCK SYMBOL FAILED", { displaySymbol: symbol, tried: candidates });
-  return null;
+    symbol,
+    label: STOCK_LABELS[symbol],
+    price,
+    change,
+    percentChange,
+    source: "Finnhub",
+  } satisfies StockTickerItem;
 }
 
 async function fetchAlphaVantageQuote(symbol: DisplayStockSymbol, apiKey: string) {
@@ -160,10 +105,14 @@ async function fetchAlphaVantageQuote(symbol: DisplayStockSymbol, apiKey: string
   const percentRaw = quote["10. change percent"]?.replace("%", "") ?? "";
   const percentChange = Number(percentRaw);
 
+  if (!Number.isFinite(price) || price <= 0) {
+    return null;
+  }
+
   return {
     symbol,
     label: STOCK_LABELS[symbol],
-    price: Number.isFinite(price) ? price : null,
+    price,
     change: Number.isFinite(change) ? change : null,
     percentChange: Number.isFinite(percentChange) ? percentChange : null,
     source: "Alpha Vantage",
@@ -177,6 +126,8 @@ export async function GET() {
   console.log("FINNHUB API KEY PRESENT", Boolean(finnhubApiKey));
 
   if (!finnhubApiKey && !alphaVantageApiKey) {
+    console.log("FINNHUB VALID ITEMS COUNT", 0);
+    console.log("STOCK API FINAL COUNT", 0);
     return NextResponse.json({ stocks: [] as StockTickerItem[], source: "no-api-key" }, { status: 200 });
   }
 
@@ -187,28 +138,32 @@ export async function GET() {
         : (symbol: DisplayStockSymbol) =>
             fetchAlphaVantageQuote(symbol, alphaVantageApiKey as string);
 
-    const payloads = await Promise.allSettled(STOCK_SYMBOLS.map((symbol) => fetcher(symbol)));
-    const stocks = payloads
+    const results = await Promise.allSettled(STOCK_SYMBOLS.map((symbol) => fetcher(symbol)));
+    const stocks = results
       .map((result) => (result.status === "fulfilled" ? result.value : null))
-      .filter(
-        (item): item is StockTickerItem =>
-          item !== null &&
-          item.price !== null &&
-          Number.isFinite(item.price) &&
-          item.price > 0
-      );
+      .filter((item): item is StockTickerItem => item !== null);
 
+    console.log("FINNHUB VALID ITEMS COUNT", stocks.length);
     console.log("STOCK API FINAL COUNT", stocks.length);
 
     return NextResponse.json(
       {
         stocks,
-        source: finnhubApiKey ? "finnhub" : "alpha-vantage",
+        source:
+          stocks.length > 0
+            ? finnhubApiKey
+              ? "finnhub"
+              : "alpha-vantage"
+            : finnhubApiKey
+              ? "finnhub-empty"
+              : "alpha-vantage-empty",
       },
       { status: 200 }
     );
   } catch (error) {
     console.error("Stocks API load failed", error);
+    console.log("FINNHUB VALID ITEMS COUNT", 0);
+    console.log("STOCK API FINAL COUNT", 0);
     return NextResponse.json({ stocks: [] as StockTickerItem[], source: "error" }, { status: 200 });
   }
 }
