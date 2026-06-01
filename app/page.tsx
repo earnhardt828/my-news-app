@@ -18361,6 +18361,16 @@ export default function Home() {
             </button>
           </div>
 
+          {isSportsScoresLoading ? (
+            <div className="muted">Loading score cards...</div>
+          ) : (
+            renderSportsScoreRow(
+              topSportsGames,
+              "Trending sports scores",
+              "Scores unavailable right now."
+            )
+          )}
+
           {sportsTabArticles.length === 0 ? (
             isSportsPreviewLoading ? (
               <div className="muted">Loading sports stories...</div>
