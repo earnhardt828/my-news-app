@@ -544,7 +544,7 @@ const MLS_VIDEOS_DISABLED = true;
 const COLLEGE_BASKETBALL_VIDEOS_DISABLED = true;
 const NASCAR_VIDEOS_DISABLED = true;
 const SPORTS_SCORE_CARDS_DISABLED = true;
-const TRENDING_SCORE_CARDS_DISABLED = true;
+const TRENDING_SCORE_CARDS_DISABLED = false;
 const FEATURED_SPORTS_DISABLED = true;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
 
@@ -6595,7 +6595,7 @@ export default function Home() {
     let isMounted = true;
 
     async function loadSportsScores() {
-      if (sortMode !== "sports") {
+      if (sortMode !== "sports" && sortMode !== "trending") {
         return;
       }
 
@@ -13543,6 +13543,23 @@ export default function Home() {
       .slice(0, 8);
   }, [sportsScoresDisplayByLeague]);
 
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      return;
+    }
+
+    console.log("TRENDING SPORTS SCORE CARDS ENABLED", !TRENDING_SCORE_CARDS_DISABLED);
+    console.log("TRENDING SPORTS SCORE RAW COUNT", {
+      NFL: sportsScoresByLeague.NFL.length,
+      NBA: sportsScoresByLeague.NBA.length,
+      MLB: sportsScoresByLeague.MLB.length,
+      NHL: sportsScoresByLeague.NHL.length,
+      MLS: sportsScoresByLeague.MLS.length,
+    });
+    console.log("TRENDING SPORTS SCORE FINAL COUNT", topSportsGames.length);
+    console.log("TRENDING SPORTS SCORE_RENDERED", !TRENDING_SCORE_CARDS_DISABLED && topSportsGames.length > 0);
+  }, [sortMode, sportsScoresByLeague, topSportsGames]);
+
   const sportsLeagueSections = useMemo(() => {
     if (sortMode !== "sports") {
       return [] as Array<{
@@ -18274,11 +18291,13 @@ export default function Home() {
           {!TRENDING_SCORE_CARDS_DISABLED
             ? isSportsScoresLoading
               ? <div className="muted">Loading score cards...</div>
-              : renderSportsScoreRow(
-                  topSportsGames,
-                  "Trending sports scores",
-                  "Scores unavailable right now."
-                )
+              : topSportsGames.length > 0
+                ? renderSportsScoreRow(
+                    topSportsGames,
+                    "Trending sports scores",
+                    "Scores unavailable right now."
+                  )
+                : null
             : null}
 
           {sportsTabArticles.length === 0 ? (
