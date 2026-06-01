@@ -2702,6 +2702,26 @@ type PopularMusicAlbum = {
   url: string | null;
 };
 
+type TheaterMovieItem = {
+  id: string;
+  title: string;
+  imageUrl: string;
+  rank: number;
+  releaseDate: string | null;
+  tmdbScore: number | null;
+  rottenTomatoesScore: string | null;
+  imdbRating: string | null;
+  sourceLabel: string;
+};
+
+type StockTickerItem = {
+  symbol: string;
+  price: number | null;
+  change: number | null;
+  percentChange: number | null;
+  source: string;
+};
+
 type TopicFallbackGroup = {
   keyword: string;
   pattern: RegExp;
@@ -5802,6 +5822,31 @@ function getEntertainmentMovieScore(article: Article) {
   return null;
 }
 
+function getTheaterMovieScore(movie: TheaterMovieItem) {
+  if (movie.rottenTomatoesScore) {
+    return {
+      label: "Rotten Tomatoes",
+      value: movie.rottenTomatoesScore,
+    };
+  }
+
+  if (movie.imdbRating) {
+    return {
+      label: "IMDb",
+      value: movie.imdbRating,
+    };
+  }
+
+  if (movie.tmdbScore !== null && movie.tmdbScore !== undefined) {
+    return {
+      label: "TMDb",
+      value: String(movie.tmdbScore),
+    };
+  }
+
+  return null;
+}
+
 function isStrictMlsVideo(video: VideoItem) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
   const hasMlsTerms =
@@ -6200,6 +6245,86 @@ export default function Home() {
       Array.from(new Set(TOPIC_FALLBACK_IMAGE_GROUPS.flatMap((group) => group.images))).length
     );
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadTheaterMovies() {
+      if (sortMode !== "celebrity") {
+        setTheaterMovies([]);
+        return;
+      }
+
+      try {
+        const response = await apiFetch("/api/movies", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Movies request failed (${response.status})`);
+        }
+
+        const payload = (await response.json()) as {
+          movies?: TheaterMovieItem[];
+        };
+
+        if (!isCancelled) {
+          setTheaterMovies(Array.isArray(payload.movies) ? payload.movies : []);
+        }
+      } catch (error) {
+        console.error("THEATER MOVIES LOAD FAILED", error);
+        if (!isCancelled) {
+          setTheaterMovies([]);
+        }
+      }
+    }
+
+    void loadTheaterMovies();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [sortMode]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadBusinessTicker() {
+      if (sortMode !== "business" && sortMode !== "trending") {
+        setBusinessTickerItems([]);
+        return;
+      }
+
+      try {
+        const response = await apiFetch("/api/stocks", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Stocks request failed (${response.status})`);
+        }
+
+        const payload = (await response.json()) as {
+          stocks?: StockTickerItem[];
+        };
+
+        if (!isCancelled) {
+          setBusinessTickerItems(Array.isArray(payload.stocks) ? payload.stocks : []);
+        }
+      } catch (error) {
+        console.error("BUSINESS TICKER LOAD FAILED", error);
+        if (!isCancelled) {
+          setBusinessTickerItems([]);
+        }
+      }
+    }
+
+    void loadBusinessTicker();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [sortMode]);
   const [isWeatherRadarOpen, setIsWeatherRadarOpen] = useState(false);
   const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
   const [isBreakingPreviewLoading, setIsBreakingPreviewLoading] = useState(false);
@@ -6245,6 +6370,8 @@ export default function Home() {
   });
   const [breakingLeadCard, setBreakingLeadCard] = useState<Article | null>(null);
   const [popularMusicAlbums, setPopularMusicAlbums] = useState<PopularMusicAlbum[]>([]);
+  const [theaterMovies, setTheaterMovies] = useState<TheaterMovieItem[]>([]);
+  const [businessTickerItems, setBusinessTickerItems] = useState<StockTickerItem[]>([]);
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
@@ -14061,6 +14188,8 @@ export default function Home() {
     return sliderArticles.slice(0, 10);
   }, [celebrityTabArticles, entertainmentSectionContent.movies, entertainmentSectionFeeds.movies]);
 
+  const hasBusinessTicker = businessTickerItems.length > 0;
+
   const popularMusicSliderArticles = useMemo(() => {
     const rawCandidates = dedupeArticlesByContent(
       sortMode === "trending"
@@ -15771,8 +15900,14 @@ export default function Home() {
     );
   };
 
-  const renderEntertainmentMovieSlider = (movieArticles: Article[]) => {
-    if (movieArticles.length < 2) {
+  const renderEntertainmentMovieSlider = (
+    movieItems: TheaterMovieItem[],
+    fallbackArticles: Article[]
+  ) => {
+    const useMovieItems = movieItems.length >= 2;
+    const cards = useMovieItems ? movieItems : fallbackArticles;
+
+    if (cards.length < 2) {
       console.log("MOVIES SLIDER RENDERED", false);
       return null;
     }
@@ -15787,58 +15922,95 @@ export default function Home() {
           </div>
         </div>
         <div className="popular-music-scroll" role="list" aria-label="Movies in theaters">
-        {movieArticles.map((article, index) => {
-          const articleRouteId = getArticleRouteId(article);
-          const imageSrc = getBestArticleImage(article).src ?? getTopicFallbackImage(article);
-          const score = getEntertainmentMovieScore(article);
+          {useMovieItems
+            ? movieItems.map((movie) => {
+                const score = getTheaterMovieScore(movie);
 
-          if (!articleRouteId || !imageSrc) {
-            return null;
-          }
-
-          return (
-            <Link
-              key={`ent-movie-slider-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-              href={`/article/${articleRouteId}/`}
-              className="popular-music-card"
-              role="listitem"
-              onClick={() => {
-                persistArticleMetadata(article);
-                saveArticleReturnState({
-                  path: "/",
-                  scrollY: window.scrollY,
-                  source: "home",
-                  sortMode,
-                  selectedLocalCity,
-                  localLocationLabel,
-                });
-              }}
-            >
-              <div className="popular-music-card-art-shell">
-                <img
-                  src={imageSrc}
-                  alt={cleanDisplayText(article.title)}
-                  className="popular-music-card-art"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <span className="popular-music-rank">#{index + 1}</span>
-              </div>
-              <div className="popular-music-card-copy">
-                <strong className="popular-music-card-title">{cleanDisplayText(article.title)}</strong>
-                <span className="popular-music-card-artist">{getSafeSourceLabel(article.source)}</span>
-                {score ? (
-                  <span
-                    className="chip chip-accent"
-                    style={{ width: "fit-content", marginTop: "6px" }}
+                return (
+                  <div
+                    key={`ent-movie-slider-${movie.id}`}
+                    className="popular-music-card"
+                    role="listitem"
                   >
-                    {score.label}: {score.value}
-                  </span>
-                ) : null}
-              </div>
-            </Link>
-          );
-        })}
+                    <div className="popular-music-card-art-shell">
+                      <img
+                        src={movie.imageUrl}
+                        alt={movie.title}
+                        className="popular-music-card-art"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span className="popular-music-rank">#{movie.rank}</span>
+                    </div>
+                    <div className="popular-music-card-copy">
+                      <strong className="popular-music-card-title">{movie.title}</strong>
+                      <span className="popular-music-card-artist">
+                        {movie.releaseDate ? `${movie.releaseDate.slice(0, 4)} · ${movie.sourceLabel}` : movie.sourceLabel}
+                      </span>
+                      {score ? (
+                        <span
+                          className="chip chip-accent"
+                          style={{ width: "fit-content", marginTop: "6px" }}
+                        >
+                          {score.label}: {score.value}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })
+            : fallbackArticles.map((article, index) => {
+                const articleRouteId = getArticleRouteId(article);
+                const imageSrc = getBestArticleImage(article).src ?? getTopicFallbackImage(article);
+                const score = getEntertainmentMovieScore(article);
+
+                if (!articleRouteId || !imageSrc) {
+                  return null;
+                }
+
+                return (
+                  <Link
+                    key={`ent-movie-slider-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                    href={`/article/${articleRouteId}/`}
+                    className="popular-music-card"
+                    role="listitem"
+                    onClick={() => {
+                      persistArticleMetadata(article);
+                      saveArticleReturnState({
+                        path: "/",
+                        scrollY: window.scrollY,
+                        source: "home",
+                        sortMode,
+                        selectedLocalCity,
+                        localLocationLabel,
+                      });
+                    }}
+                  >
+                    <div className="popular-music-card-art-shell">
+                      <img
+                        src={imageSrc}
+                        alt={cleanDisplayText(article.title)}
+                        className="popular-music-card-art"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span className="popular-music-rank">#{index + 1}</span>
+                    </div>
+                    <div className="popular-music-card-copy">
+                      <strong className="popular-music-card-title">{cleanDisplayText(article.title)}</strong>
+                      <span className="popular-music-card-artist">{getSafeSourceLabel(article.source)}</span>
+                      {score ? (
+                        <span
+                          className="chip chip-accent"
+                          style={{ width: "fit-content", marginTop: "6px" }}
+                        >
+                          {score.label}: {score.value}
+                        </span>
+                      ) : null}
+                    </div>
+                  </Link>
+                );
+              })}
         </div>
       </section>
     );
@@ -15933,6 +16105,62 @@ export default function Home() {
                   </Link>
                 );
               })}
+        </div>
+      </section>
+    );
+  };
+
+  const renderBusinessStockTicker = () => {
+    if (!hasBusinessTicker) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain quick-watch-row">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Market Watch</strong>
+          </div>
+        </div>
+        <div className="popular-music-scroll" role="list" aria-label="Business stock ticker">
+          {businessTickerItems.map((item) => {
+            const isPositive = (item.change ?? 0) >= 0;
+
+            return (
+              <div
+                key={`stock-${item.symbol}`}
+                className="popular-music-card"
+                role="listitem"
+              >
+                <div
+                  className="popular-music-card-art-shell"
+                  style={{
+                    background:
+                      isPositive
+                        ? "linear-gradient(160deg, rgba(16,185,129,0.28), rgba(5,150,105,0.12))"
+                        : "linear-gradient(160deg, rgba(239,68,68,0.28), rgba(185,28,28,0.12))",
+                  }}
+                >
+                  <span className="popular-music-rank" style={{ fontSize: "0.95rem" }}>
+                    {item.symbol}
+                  </span>
+                </div>
+                <div className="popular-music-card-copy">
+                  <strong className="popular-music-card-title">
+                    {item.price !== null ? `$${item.price.toFixed(2)}` : "—"}
+                  </strong>
+                  <span
+                    className="popular-music-card-artist"
+                    style={{ color: isPositive ? "#16a34a" : "#dc2626" }}
+                  >
+                    {item.change !== null && item.percentChange !== null
+                      ? `${isPositive ? "+" : ""}${item.change.toFixed(2)} (${isPositive ? "+" : ""}${item.percentChange.toFixed(2)}%)`
+                      : "Market data unavailable"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
     );
@@ -18100,6 +18328,8 @@ export default function Home() {
             </div>
           </div>
 
+          {renderBusinessStockTicker()}
+
           {businessTabArticles.length === 0 ? (
             isBusinessPreviewLoading ? (
               <div className="muted">Loading business stories...</div>
@@ -19056,7 +19286,7 @@ export default function Home() {
 
                     return (
                       <div className="stack home-section-list top-trending-card-rail">
-                        {renderEntertainmentMovieSlider(entertainmentMovieSliderArticles)}
+                        {renderEntertainmentMovieSlider(theaterMovies, entertainmentMovieSliderArticles)}
                         {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
                         {rankedArticles.slice(0, 5).map((article, index) => (
                           <div key={`ent-movies-${article.id || article.url || getArticleDeduplicationKey(article)}`}>
@@ -19641,6 +19871,8 @@ export default function Home() {
               <span className="home-section-date">{todayLabel}</span>
             </div>
           </div>
+
+          {renderBusinessStockTicker()}
 
           {businessTabArticles.length === 0 ? (
             <div className="empty-state compact-empty-state">
