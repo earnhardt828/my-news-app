@@ -2,15 +2,29 @@ import { NextResponse } from "next/server";
 
 const STOCK_SYMBOLS = ["SPY", "QQQ", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"] as const;
 
+const STOCK_LABELS: Record<(typeof STOCK_SYMBOLS)[number], string> = {
+  SPY: "S&P 500",
+  QQQ: "Nasdaq",
+  DIA: "Dow Jones",
+  AAPL: "Apple",
+  MSFT: "Microsoft",
+  NVDA: "Nvidia",
+  AMZN: "Amazon",
+  GOOGL: "Alphabet",
+  META: "Meta",
+  TSLA: "Tesla",
+};
+
 type StockTickerItem = {
-  symbol: string;
+  name: string;
+  symbol: (typeof STOCK_SYMBOLS)[number];
   price: number | null;
   change: number | null;
   percentChange: number | null;
   source: string;
 };
 
-async function fetchFinnhubQuote(symbol: string, apiKey: string) {
+async function fetchFinnhubQuote(symbol: (typeof STOCK_SYMBOLS)[number], apiKey: string) {
   const response = await fetch(
     `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`,
     {
@@ -30,6 +44,7 @@ async function fetchFinnhubQuote(symbol: string, apiKey: string) {
   };
 
   return {
+    name: STOCK_LABELS[symbol],
     symbol,
     price: typeof payload.c === "number" ? payload.c : null,
     change: typeof payload.d === "number" ? payload.d : null,
@@ -38,7 +53,7 @@ async function fetchFinnhubQuote(symbol: string, apiKey: string) {
   } satisfies StockTickerItem;
 }
 
-async function fetchAlphaVantageQuote(symbol: string, apiKey: string) {
+async function fetchAlphaVantageQuote(symbol: (typeof STOCK_SYMBOLS)[number], apiKey: string) {
   const response = await fetch(
     `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(
       symbol
@@ -64,6 +79,7 @@ async function fetchAlphaVantageQuote(symbol: string, apiKey: string) {
   const percentChange = Number(percentRaw);
 
   return {
+    name: STOCK_LABELS[symbol],
     symbol,
     price: Number.isFinite(price) ? price : null,
     change: Number.isFinite(change) ? change : null,
@@ -83,13 +99,14 @@ export async function GET() {
   try {
     const fetcher =
       finnhubApiKey
-        ? (symbol: string) => fetchFinnhubQuote(symbol, finnhubApiKey)
-        : (symbol: string) => fetchAlphaVantageQuote(symbol, alphaVantageApiKey as string);
+        ? (symbol: (typeof STOCK_SYMBOLS)[number]) => fetchFinnhubQuote(symbol, finnhubApiKey)
+        : (symbol: (typeof STOCK_SYMBOLS)[number]) =>
+            fetchAlphaVantageQuote(symbol, alphaVantageApiKey as string);
 
     const payloads = await Promise.allSettled(STOCK_SYMBOLS.map((symbol) => fetcher(symbol)));
     const stocks = payloads
       .map((result) => (result.status === "fulfilled" ? result.value : null))
-      .filter((item): item is StockTickerItem => Boolean(item));
+      .filter((item) => item !== null);
 
     return NextResponse.json(
       {

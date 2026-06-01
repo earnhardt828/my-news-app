@@ -712,79 +712,138 @@ const FOOD_FEED_QUERY =
   "food news | restaurant news | fast food news | food safety | grocery news | recipes news | dining news | Eater | Food & Wine | Bon Appétit | Serious Eats | Restaurant Business | Food Network | CNN Food | USA Today Food";
 const SCIENCE_FEED_QUERY =
   "science news | NASA news | space news | astronomy news | climate science | physics news | biology research | medical research | Scientific American | Nature | Science Magazine | Live Science | Space.com | National Geographic science | AP Science | Reuters Science";
+const TOPIC_IMAGE_FILENAMES = [
+  "africa.png",
+  "africas.png",
+  "ai.png",
+  "ai1.png",
+  "air-travel.png",
+  "baseball.png",
+  "blue-jays.png",
+  "brokerages.png",
+  "chicago-weather.png",
+  "dodgers.png",
+  "eagles.png",
+  "ebola.png",
+  "economists.png",
+  "economy.png",
+  "economy1.png",
+  "farmers.png",
+  "fifa.png",
+  "finance.png",
+  "flash-flood.png",
+  "flash-flooding.png",
+  "flash-floods.png",
+  "flooding.png",
+  "floods.png",
+  "hot-weather.png",
+  "hurricane-ian.png",
+  "hurricane.png",
+  "hurricane1.png",
+  "hurricane2.png",
+  "ice-cream.png",
+  "influencer.png",
+  "influencers.png",
+  "iran-war.png",
+  "iran.png",
+  "lightning.png",
+  "meteor.png",
+  "los-angeles-dodgers.png",
+  "orioles.png",
+  "philadelphia-eagles.png",
+  "rocket.png",
+  "rockies.png",
+  "san-francisco-giants.png",
+  "science.png",
+  "scientist.png",
+  "scientists.png",
+  "sp500.png",
+  "storms.png",
+  "thunderstorm.png",
+  "tornado-warning.png",
+  "tornado.png",
+  "tornado1.png",
+  "tornado2.png",
+  "travel-advisory.png",
+  "trump.png",
+  "trump1.png",
+  "trumps.png",
+  "ukraine-war.png",
+  "ukraine.png",
+  "wall-st.png",
+  "wall-street.png",
+  "who.png",
+  "winter-storm.png",
+  "wnba.png",
+  "world-cup.png",
+  "yankees.png",
+] as const;
+
 const TOPIC_FALLBACK_IMAGE_GROUPS: TopicFallbackGroup[] = [
   {
     keyword: "trump",
     pattern: /\b(trump|donald trump|trump administration)\b/i,
-    images: [
-      "/topic-images/trump.png",
-      "/topic-images/trump1.png",
-      "/topic-images/trump2.png",
-    ],
+    imageKey: "trump",
   },
   {
     keyword: "hurricane",
     pattern: /\b(hurricane|storm surge|tropical storm|cyclone)\b/i,
-    images: [
-      "/topic-images/hurricane.png",
-      "/topic-images/hurricane1.png",
-      "/topic-images/hurricane2.png",
-    ],
+    imageKey: "hurricane",
   },
   {
     keyword: "floods",
     pattern: /\b(flood|flooding|flash flood)\b/i,
-    images: ["/topic-images/floods.png", "/topic-images/flooding.png"],
+    imageKey: "floods",
   },
   {
     keyword: "tornado",
     pattern: /\b(tornado|twister)\b/i,
-    images: ["/topic-images/tornado.png", "/topic-images/thunderstorm.png"],
+    imageKey: "tornado",
   },
   {
     keyword: "winter-storm",
     pattern: /\b(winter storm|blizzard|ice storm|snowstorm)\b/i,
-    images: ["/topic-images/winter-storm.png"],
+    imageKey: "winter-storm",
   },
   {
     keyword: "hot-weather",
     pattern: /\b(heat wave|extreme heat|hot weather)\b/i,
-    images: ["/topic-images/hot-weather.png"],
+    imageKey: "hot-weather",
   },
   {
     keyword: "ukraine",
     pattern: /\b(ukraine|ukraine war|russia-ukraine)\b/i,
-    images: ["/topic-images/ukraine.png", "/topic-images/ukraine-war.png"],
+    imageKey: "ukraine",
   },
   {
     keyword: "who",
     pattern: /\b(world health organization|who|ebola)\b/i,
-    images: ["/topic-images/who.png", "/topic-images/ebola.png"],
+    imageKey: "who",
   },
   {
     keyword: "economy",
     pattern: /\b(economy|inflation|interest rates|federal reserve|markets?)\b/i,
-    images: ["/topic-images/economy.png", "/topic-images/economy1.png", "/topic-images/economists.png"],
+    imageKey: "economy",
   },
   {
     keyword: "farmers",
     pattern: /\b(farmers|farming|agriculture)\b/i,
-    images: ["/topic-images/farmers.png"],
+    imageKey: "farmers",
   },
   {
     keyword: "world-cup",
     pattern: /\b(world cup)\b/i,
-    images: ["/topic-images/world-cup.png"],
+    imageKey: "world-cup",
   },
   {
     keyword: "dodgers",
     pattern: /\b(los angeles dodgers|dodgers)\b/i,
-    images: ["/topic-images/los-angeles-dodgers.png", "/topic-images/dodgers.png"],
+    imageKey: "dodgers",
   },
   {
     keyword: "eagles",
     pattern: /\b(philadelphia eagles|eagles)\b/i,
-    images: ["/topic-images/philadelphia-eagles.png", "/topic-images/eagles.png"],
+    imageKey: "eagles",
   },
 ] as const;
 const AUTO_FEED_QUERY =
@@ -2715,6 +2774,7 @@ type TheaterMovieItem = {
 };
 
 type StockTickerItem = {
+  name: string;
   symbol: string;
   price: number | null;
   change: number | null;
@@ -2725,7 +2785,7 @@ type StockTickerItem = {
 type TopicFallbackGroup = {
   keyword: string;
   pattern: RegExp;
-  images: string[];
+  imageKey: string;
 };
 
 type DbComment = {
@@ -3121,6 +3181,65 @@ function hashString(value: string) {
   return hash;
 }
 
+function getTopicImagePool(imageKey: string) {
+  const normalizedKey = imageKey.toLowerCase();
+  const imagePool = TOPIC_IMAGE_FILENAMES.filter((filename) => {
+    const normalizedFilename = filename.toLowerCase().replace(/\.png$/i, "");
+
+    if (normalizedFilename === normalizedKey) {
+      return true;
+    }
+
+    if (new RegExp(`^${normalizedKey}\\d+$`, "i").test(normalizedFilename)) {
+      return true;
+    }
+
+    if (normalizedKey === "tornado" && normalizedFilename === "thunderstorm") {
+      return true;
+    }
+
+    if (normalizedKey === "tornado" && normalizedFilename === "tornado-warning") {
+      return true;
+    }
+
+    if (normalizedKey === "floods" && ["flooding", "flash-flooding", "flash-floods"].includes(normalizedFilename)) {
+      return true;
+    }
+
+    if (normalizedKey === "floods" && normalizedFilename === "flash-flood") {
+      return true;
+    }
+
+    if (normalizedKey === "ukraine" && normalizedFilename === "ukraine-war") {
+      return true;
+    }
+
+    if (normalizedKey === "who" && normalizedFilename === "ebola") {
+      return true;
+    }
+
+    if (normalizedKey === "economy" && ["economists", "wall-street", "sp500"].includes(normalizedFilename)) {
+      return true;
+    }
+
+    if (normalizedKey === "economy" && ["wall-st", "finance", "brokerages"].includes(normalizedFilename)) {
+      return true;
+    }
+
+    if (normalizedKey === "dodgers" && normalizedFilename === "los-angeles-dodgers") {
+      return true;
+    }
+
+    if (normalizedKey === "eagles" && normalizedFilename === "philadelphia-eagles") {
+      return true;
+    }
+
+    return false;
+  }).map((filename) => `/topic-images/${filename}`);
+
+  return imagePool;
+}
+
 function getTopicFallbackImage(article: Pick<Article, "title" | "description" | "source" | "category" | "content" | "url">) {
   const haystack = [
     article.title,
@@ -3135,19 +3254,26 @@ function getTopicFallbackImage(article: Pick<Article, "title" | "description" | 
 
   const matchingGroup = TOPIC_FALLBACK_IMAGE_GROUPS.find((group) => group.pattern.test(haystack));
 
-  if (!matchingGroup || matchingGroup.images.length === 0) {
+  if (!matchingGroup) {
+    return null;
+  }
+
+  const imagePool = getTopicImagePool(matchingGroup.imageKey);
+
+  if (imagePool.length === 0) {
     return null;
   }
 
   const stableKey = cleanDisplayText(article.url ?? article.title ?? "").trim().toLowerCase();
-  const rotationIndex = stableKey ? hashString(stableKey) % matchingGroup.images.length : 0;
-  const selectedImage = matchingGroup.images[rotationIndex] ?? matchingGroup.images[0] ?? null;
+  const rotationIndex = stableKey ? hashString(stableKey) % imagePool.length : 0;
+  const selectedImage = imagePool[rotationIndex] ?? imagePool[0] ?? null;
 
   if (selectedImage) {
     console.log("TOPIC FALLBACK ROTATION_USED", {
       keyword: matchingGroup.keyword,
       index: rotationIndex,
       image: selectedImage,
+      poolSize: imagePool.length,
       title: cleanDisplayText(article.title),
     });
   }
@@ -6242,7 +6368,7 @@ export default function Home() {
   useEffect(() => {
     console.log(
       "FALLBACK IMAGES SYNCED",
-      Array.from(new Set(TOPIC_FALLBACK_IMAGE_GROUPS.flatMap((group) => group.images))).length
+      TOPIC_IMAGE_FILENAMES.length
     );
   }, []);
 
@@ -6306,15 +6432,18 @@ export default function Home() {
 
         const payload = (await response.json()) as {
           stocks?: StockTickerItem[];
+          source?: string;
         };
 
         if (!isCancelled) {
           setBusinessTickerItems(Array.isArray(payload.stocks) ? payload.stocks : []);
+          setBusinessTickerSource(payload.source ?? "unknown");
         }
       } catch (error) {
         console.error("BUSINESS TICKER LOAD FAILED", error);
         if (!isCancelled) {
           setBusinessTickerItems([]);
+          setBusinessTickerSource("error");
         }
       }
     }
@@ -6372,6 +6501,7 @@ export default function Home() {
   const [popularMusicAlbums, setPopularMusicAlbums] = useState<PopularMusicAlbum[]>([]);
   const [theaterMovies, setTheaterMovies] = useState<TheaterMovieItem[]>([]);
   const [businessTickerItems, setBusinessTickerItems] = useState<StockTickerItem[]>([]);
+  const [businessTickerSource, setBusinessTickerSource] = useState<string>("no-api-key");
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
@@ -14188,7 +14318,14 @@ export default function Home() {
     return sliderArticles.slice(0, 10);
   }, [celebrityTabArticles, entertainmentSectionContent.movies, entertainmentSectionFeeds.movies]);
 
-  const hasBusinessTicker = businessTickerItems.length > 0;
+  const BUSINESS_TICKER_FALLBACK_ITEMS: StockTickerItem[] = [
+    { name: "S&P 500", symbol: "SPY", price: null, change: null, percentChange: null, source: "fallback" },
+    { name: "Nasdaq", symbol: "QQQ", price: null, change: null, percentChange: null, source: "fallback" },
+    { name: "Dow Jones", symbol: "DIA", price: null, change: null, percentChange: null, source: "fallback" },
+    { name: "AAPL", symbol: "AAPL", price: null, change: null, percentChange: null, source: "fallback" },
+    { name: "MSFT", symbol: "MSFT", price: null, change: null, percentChange: null, source: "fallback" },
+    { name: "NVDA", symbol: "NVDA", price: null, change: null, percentChange: null, source: "fallback" },
+  ];
 
   const popularMusicSliderArticles = useMemo(() => {
     const rawCandidates = dedupeArticlesByContent(
@@ -16111,19 +16248,30 @@ export default function Home() {
   };
 
   const renderBusinessStockTicker = () => {
-    if (!hasBusinessTicker) {
-      return null;
-    }
+    const apiKeyPresent =
+      businessTickerSource !== "no-api-key" && businessTickerSource !== "error";
+    const tickerItems = businessTickerItems.length > 0 ? businessTickerItems : BUSINESS_TICKER_FALLBACK_ITEMS;
+    const marketDataUnavailable = businessTickerItems.length === 0;
+
+    console.log("BUSINESS STOCK API_KEY_PRESENT", apiKeyPresent);
+    console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
+    console.log("BUSINESS STOCK MARKET_DATA_UNAVAILABLE", marketDataUnavailable);
+    console.log("BUSINESS STOCK TICKER RENDERED", true);
 
     return (
       <section className="home-section-block home-section-plain quick-watch-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">Market Watch</strong>
+            <strong className="profile-section-title home-section-title">Stock Market</strong>
+            {marketDataUnavailable ? (
+              <span className="muted" style={{ fontSize: "0.82rem" }}>
+                Market data unavailable
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="popular-music-scroll" role="list" aria-label="Business stock ticker">
-          {businessTickerItems.map((item) => {
+          {tickerItems.map((item) => {
             const isPositive = (item.change ?? 0) >= 0;
 
             return (
@@ -16146,6 +16294,8 @@ export default function Home() {
                   </span>
                 </div>
                 <div className="popular-music-card-copy">
+                  <strong className="popular-music-card-title">{item.name ?? item.symbol}</strong>
+                  <span className="popular-music-card-artist">{item.symbol}</span>
                   <strong className="popular-music-card-title">
                     {item.price !== null ? `$${item.price.toFixed(2)}` : "—"}
                   </strong>
@@ -16153,7 +16303,7 @@ export default function Home() {
                     className="popular-music-card-artist"
                     style={{ color: isPositive ? "#16a34a" : "#dc2626" }}
                   >
-                    {item.change !== null && item.percentChange !== null
+                    {item.price !== null && item.change !== null && item.percentChange !== null
                       ? `${isPositive ? "+" : ""}${item.change.toFixed(2)} (${isPositive ? "+" : ""}${item.percentChange.toFixed(2)}%)`
                       : "Market data unavailable"}
                   </span>
