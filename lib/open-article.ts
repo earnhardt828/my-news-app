@@ -48,36 +48,11 @@ export async function openOriginalArticleUrl(url?: string | null) {
   return true;
 }
 
-export function openArticleInReflektReader(payload: ArticleReaderLaunchPayload) {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  if (!payload.url?.trim()) {
-    return false;
-  }
-
-  window.dispatchEvent(
-    new CustomEvent("reflekt:open-article-reader", {
-      detail: payload,
-    })
-  );
-
-  return true;
-}
-
 export async function handleArticleCardActivation(
-  event: LinkActivationEvent,
-  payload: ArticleReaderLaunchPayload,
+  _event: LinkActivationEvent,
+  _payload: ArticleReaderLaunchPayload,
   onBeforeOpen?: () => void
 ) {
-  const sourceUrl = payload.url?.trim();
-
-  if (!sourceUrl) {
-    return false;
-  }
-
-  event.preventDefault();
   onBeforeOpen?.();
-  return openArticleInReflektReader(payload);
+  return false;
 }
