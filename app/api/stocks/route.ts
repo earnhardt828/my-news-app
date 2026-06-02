@@ -93,6 +93,10 @@ export async function GET() {
   const finnhubApiKey = process.env.FINNHUB_API_KEY?.trim();
 
   console.log("FINNHUB API KEY PRESENT", Boolean(finnhubApiKey));
+  console.log(
+    "STOCK API SYMBOLS REQUESTED",
+    STOCK_QUOTE_CONFIGS.map((config) => config.symbol)
+  );
 
   if (!finnhubApiKey) {
     const noKeyPayload = {
@@ -101,6 +105,7 @@ export async function GET() {
     console.log("STOCK API RESPONSE", noKeyPayload);
     console.log("STOCK API PARSED ITEMS", noKeyPayload.items);
     console.log("API STOCK ITEMS RETURNED", noKeyPayload.items);
+    console.log("STOCK API ITEMS RETURNED", noKeyPayload.items);
     console.log("STOCK API EXACT ITEMS", noKeyPayload.items);
     console.log("STOCK API FINAL JSON", noKeyPayload);
     console.log("FINNHUB VALID ITEMS COUNT", noKeyPayload.items.length);
@@ -120,6 +125,7 @@ export async function GET() {
 
     console.log("STOCK API PARSED ITEMS", items);
     console.log("API STOCK ITEMS RETURNED", items);
+    console.log("STOCK API ITEMS RETURNED", items);
     console.log("STOCK API EXACT ITEMS", items);
     console.log("FINNHUB VALID ITEMS COUNT", items.length);
     console.log("STOCK API FINAL COUNT", items.length);
@@ -138,6 +144,7 @@ export async function GET() {
     console.log("STOCK API RESPONSE", { error: error instanceof Error ? error.message : String(error) });
     console.log("STOCK API PARSED ITEMS", errorPayload.items);
     console.log("API STOCK ITEMS RETURNED", errorPayload.items);
+    console.log("STOCK API ITEMS RETURNED", errorPayload.items);
     console.log("STOCK API EXACT ITEMS", errorPayload.items);
     console.log("STOCK API FINAL JSON", errorPayload);
     console.log("FINNHUB VALID ITEMS COUNT", errorPayload.items.length);

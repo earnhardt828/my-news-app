@@ -6556,21 +6556,19 @@ export default function Home() {
         console.log("BUSINESS STOCK DATA ITEMS", apiItems);
         console.log("BUSINESS STOCK ITEMS RECEIVED", apiItems);
         console.log("BUSINESS STOCK ITEMS LENGTH", apiItems.length);
+        const sourceItems = apiItems.length > 0 ? apiItems : fallbackItems;
+        console.log("BUSINESS STOCK USING_API_ITEMS", apiItems.length > 0);
+        console.log("BUSINESS STOCK USING_FALLBACK_ITEMS", apiItems.length === 0);
 
-        const mergedBySymbol = new Map<string, StockTickerItem>();
-
-        fallbackItems.forEach((item) => {
-          mergedBySymbol.set(item.symbol, item);
-        });
-
-        apiItems.forEach((item) => {
-          mergedBySymbol.set(item.symbol, {
+        const itemBySymbol = new Map<string, StockTickerItem>();
+        sourceItems.forEach((item) => {
+          itemBySymbol.set(item.symbol, {
             ...item,
-            source: item.source ?? "Finnhub",
+            source: item.source ?? (apiItems.length > 0 ? "Finnhub" : "UI Test"),
           });
         });
 
-        const orderedItems = BUSINESS_STOCK_TICKER_ORDER.map((symbol) => mergedBySymbol.get(symbol))
+        const orderedItems = BUSINESS_STOCK_TICKER_ORDER.map((symbol) => itemBySymbol.get(symbol))
           .filter((item): item is StockTickerItem => Boolean(item))
           .filter((item) => item.price !== null && Number.isFinite(item.price));
 
@@ -6586,6 +6584,8 @@ export default function Home() {
           status: "fetch-error",
           count: fallbackItems.length,
         });
+        console.log("BUSINESS STOCK USING_API_ITEMS", false);
+        console.log("BUSINESS STOCK USING_FALLBACK_ITEMS", true);
         console.log("STOCK TICKER API ITEMS RECEIVED", []);
         console.log("BUSINESS STOCK DATA ITEMS", fallbackItems);
         console.log("BUSINESS STOCK ITEMS RECEIVED", fallbackItems);
