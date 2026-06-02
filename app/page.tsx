@@ -16762,20 +16762,12 @@ export default function Home() {
                 className="popular-music-card"
                 role="listitem"
               >
-                <div
-                  className="popular-music-card-art-shell"
-                  style={{
-                    background:
-                      isPositive
-                        ? "linear-gradient(160deg, rgba(16,185,129,0.28), rgba(5,150,105,0.12))"
-                        : "linear-gradient(160deg, rgba(239,68,68,0.28), rgba(185,28,28,0.12))",
-                  }}
-                >
+                <div className="popular-music-card-art-shell stock-ticker-logo-shell">
                   {showLogo && logoUrl ? (
                     <img
                       src={logoUrl}
                       alt={`${item.symbol} logo`}
-                      className="source-rankings-card-art-logo"
+                      className="stock-ticker-logo-image"
                       loading="lazy"
                       decoding="async"
                       onError={() => {
@@ -16792,7 +16784,7 @@ export default function Home() {
                       }}
                     />
                   ) : (
-                    <span className="popular-music-rank" style={{ fontSize: "0.95rem" }}>
+                    <span className="stock-ticker-logo-fallback">
                       {getBusinessTickerInitials(item.symbol)}
                     </span>
                   )}
