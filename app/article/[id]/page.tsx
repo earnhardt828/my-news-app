@@ -2407,7 +2407,7 @@ export default function ArticleDetailPage() {
               onClick={() => {
                 void openOriginalSource(compareArticle.url);
               }}
-              aria-label="Read original source"
+              aria-label="Read original article"
             >
               <span className="icon-action-glyph" aria-hidden="true">↗</span>
               <span>Read</span>
@@ -2455,7 +2455,7 @@ export default function ArticleDetailPage() {
                   void openOriginalSource(compareArticle.url);
                 }}
               >
-                Read original source
+                Read Original Article
               </button>
             ) : null}
           </div>
