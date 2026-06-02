@@ -103,6 +103,7 @@ import {
   isStrictTechnologyVideo,
   isStrictWorldVideo,
 } from "../lib/video-filters";
+import { POLLS_DISABLED } from "../lib/feature-flags";
 
 const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
@@ -6873,6 +6874,12 @@ export default function Home() {
     console.log("ARTICLES COUNT", articles.length);
     console.log("LOADING STATE", isLoading);
   }, [articles.length, isLoading]);
+
+  useEffect(() => {
+    if (POLLS_DISABLED && sortMode === "polls") {
+      setSortMode("trending");
+    }
+  }, [sortMode]);
 
   const articleDisplayImageCount = useMemo(
     () => articles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length,
@@ -16453,9 +16460,9 @@ export default function Home() {
               >
                 <div className="source-rankings-card-art-shell">
                   <SourceBadge sourceName={sourceName} className="source-rankings-card-art" />
-                  <span className="source-rankings-rank">#{sourceIndex + 1}</span>
                 </div>
                 <div className="source-rankings-card-copy">
+                  <span className="source-rankings-rank">#{sourceIndex + 1}</span>
                   <span className="source-rankings-name">{sourceName}</span>
                   <span className="source-rankings-card-meta">Recommended Source</span>
                 </div>
@@ -16702,34 +16709,36 @@ export default function Home() {
     const shouldUseBoxLogo = Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
 
     return (
-      <div className="source-rankings-card-art-shell">
-        {shouldUseBoxLogo && boxLogoUrl ? (
-          <div className="source-rankings-card-art-logo-wrap">
-            <img
-              src={boxLogoUrl}
-              alt={`${sourceName} logo`}
-              className="source-rankings-card-art-logo"
-              loading="lazy"
-              decoding="async"
-              onError={() => {
-                setFailedArticleBoxImages((prev) => {
-                  if (prev[boxLogoFailureKey]) {
-                    return prev;
-                  }
+      <>
+        <div className="source-rankings-card-art-shell">
+          {shouldUseBoxLogo && boxLogoUrl ? (
+            <div className="source-rankings-card-art-logo-wrap">
+              <img
+                src={boxLogoUrl}
+                alt={`${sourceName} logo`}
+                className="source-rankings-card-art-logo"
+                loading="lazy"
+                decoding="async"
+                onError={() => {
+                  setFailedArticleBoxImages((prev) => {
+                    if (prev[boxLogoFailureKey]) {
+                      return prev;
+                    }
 
-                  return {
-                    ...prev,
-                    [boxLogoFailureKey]: true,
-                  };
-                });
-              }}
-            />
-          </div>
-        ) : (
-          <SourceBadge sourceName={sourceName} className="source-rankings-card-art" />
-        )}
+                    return {
+                      ...prev,
+                      [boxLogoFailureKey]: true,
+                    };
+                  });
+                }}
+              />
+            </div>
+          ) : (
+            <SourceBadge sourceName={sourceName} className="source-rankings-card-art" />
+          )}
+        </div>
         <span className="source-rankings-rank">#{rank}</span>
-      </div>
+      </>
     );
   };
 
@@ -18881,35 +18890,37 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Polls</strong>
-              <span className="muted">Top questions people are reacting to right now.</span>
+        {!POLLS_DISABLED ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Polls</strong>
+                <span className="muted">Top questions people are reacting to right now.</span>
+              </div>
             </div>
-          </div>
 
-          {topPollsSection.length === 0 ? (
-            <div className="empty-state compact-empty-state">
-              <strong>No polls yet</strong>
-              <span>Create the first one from the plus button.</span>
-            </div>
-          ) : (
-            <div className="polls-carousel" role="list" aria-label="Top polls">
-              {topPollsSection.map((poll, index) => (
-                <div key={poll.id} className="polls-carousel-item" role="listitem">
-                  <PollCard
-                    poll={poll}
-                    onVote={handleVoteOnPoll}
-                    isVoting={activePollVoteId === poll.id}
-                    rankLabel={formatTopRankLabel(index + 1)}
-                    className="poll-card-featured"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+            {topPollsSection.length === 0 ? (
+              <div className="empty-state compact-empty-state">
+                <strong>No polls yet</strong>
+                <span>Create the first one from the plus button.</span>
+              </div>
+            ) : (
+              <div className="polls-carousel" role="list" aria-label="Top polls">
+                {topPollsSection.map((poll, index) => (
+                  <div key={poll.id} className="polls-carousel-item" role="listitem">
+                    <PollCard
+                      poll={poll}
+                      onVote={handleVoteOnPoll}
+                      isVoting={activePollVoteId === poll.id}
+                      rankLabel={formatTopRankLabel(index + 1)}
+                      className="poll-card-featured"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
 
         {renderTallTrendingQuickWatchRow(
           "Quick Watch",
@@ -21191,14 +21202,16 @@ export default function Home() {
               >
                 Trending
               </button>
-              <button
-                className={`toolbar-pill ${
-                  sortMode === "polls" ? "toolbar-pill-active" : ""
-                }`}
-                onClick={() => setSortMode("polls")}
-              >
-                Polls
-              </button>
+              {!POLLS_DISABLED ? (
+                <button
+                  className={`toolbar-pill ${
+                    sortMode === "polls" ? "toolbar-pill-active" : ""
+                  }`}
+                  onClick={() => setSortMode("polls")}
+                >
+                  Polls
+                </button>
+              ) : null}
               <button
                 className={`toolbar-pill ${
                   sortMode === "latest" ? "toolbar-pill-active" : ""
@@ -21212,7 +21225,7 @@ export default function Home() {
         </div>
       </div>
 
-      {sortMode === "polls" ? (
+      {!POLLS_DISABLED && sortMode === "polls" ? (
         <div className="polls-filter-toolbar">
           <label className="polls-filter-select-wrap">
             <span className="polls-filter-select-label">Filter</span>
@@ -21232,7 +21245,7 @@ export default function Home() {
         </div>
       ) : null}
 
-      {sortMode === "polls" && myFeedRenderItems.length === 0 ? (
+      {!POLLS_DISABLED && sortMode === "polls" && myFeedRenderItems.length === 0 ? (
         <div className="empty-state">
           <strong>{pollFilter === "following" ? "No followed-user polls yet" : "No polls yet"}</strong>
           <span>
@@ -21242,19 +21255,19 @@ export default function Home() {
           </span>
         </div>
       ) : visibleArticles.length === 0 &&
-        !(sortMode === "polls" && myFeedRenderItems.length > 0) ? (
+        !(!POLLS_DISABLED && sortMode === "polls" && myFeedRenderItems.length > 0) ? (
         <div className="empty-state">
           <strong>
             {feedLoadError
               ? "Couldn’t load stories."
-              : sortMode === "polls"
+              : !POLLS_DISABLED && sortMode === "polls"
               ? "No polls yet"
               : "No stories yet"}
           </strong>
           <span>
             {feedLoadError
               ? "Tap to retry."
-              : sortMode === "polls"
+              : !POLLS_DISABLED && sortMode === "polls"
               ? "Create the first one."
               : "Check back in a moment for fresh stories."}
           </span>
@@ -21268,7 +21281,7 @@ export default function Home() {
               </div>
             </div>
           ) : null}
-          {sortMode === "polls"
+          {!POLLS_DISABLED && sortMode === "polls"
             ? myFeedRenderItems.map((item) => (
                 <div key={item.key} className="stack">
                   <PollCard

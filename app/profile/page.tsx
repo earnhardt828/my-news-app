@@ -23,6 +23,7 @@ import { hydratePolls, type PollRecord, type PollWithResults } from "../../lib/p
 import { cleanDisplayText } from "../../lib/display-text";
 import { SUPPORTED_LOCAL_CITIES } from "../../lib/local-news";
 import { isUsernameAllowed } from "../../lib/moderation";
+import { POLLS_DISABLED } from "../../lib/feature-flags";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -1435,51 +1436,52 @@ export default function Profile() {
             {message ? <div className="chip chip-accent">{message}</div> : null}
           </section>
 
-            <div className="stack">
-              <section className="section-card stack">
-              <div className="profile-section-row">
-                <h3 className="profile-section-title">Your Polls</h3>
-                <Link
-                  href="/profile/polls/new"
-                  className="profile-section-icon-button"
-                  aria-label="Create a poll"
-                >
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.9"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 5v14" />
-                    <path d="M5 12h14" />
-                  </svg>
-                </Link>
+            {!POLLS_DISABLED ? (
+              <div className="stack">
+                <section className="section-card stack">
+                  <div className="profile-section-row">
+                    <h3 className="profile-section-title">Your Polls</h3>
+                    <Link
+                      href="/profile/polls/new"
+                      className="profile-section-icon-button"
+                      aria-label="Create a poll"
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.9"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 5v14" />
+                        <path d="M5 12h14" />
+                      </svg>
+                    </Link>
+                  </div>
+
+                  <span className="muted">
+                    Create news-related polls and see how people respond.
+                  </span>
+
+                  {myPolls.length === 0 ? (
+                    <div className="empty-state">
+                      <strong>No polls yet</strong>
+                      <span>Start a poll tied to a current story, public issue, or debate.</span>
+                    </div>
+                  ) : (
+                    <div className="stack">
+                      {myPolls.map((poll) => (
+                        <PollCard key={poll.id} poll={poll} />
+                      ))}
+                    </div>
+                  )}
+                </section>
               </div>
-
-              <span className="muted">
-                Create news-related polls and see how people respond.
-              </span>
-
-              {myPolls.length === 0 ? (
-                <div className="empty-state">
-                  <strong>No polls yet</strong>
-                  <span>Start a poll tied to a current story, public issue, or debate.</span>
-                </div>
-              ) : (
-                <div className="stack">
-                  {myPolls.map((poll) => (
-                    <PollCard key={poll.id} poll={poll} />
-                  ))}
-                </div>
-              )}
-            </section>
-
-          </div>
+            ) : null}
         </div>
       )}
     </section>

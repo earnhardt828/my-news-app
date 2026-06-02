@@ -8,6 +8,7 @@ import {
   readArticleReturnState,
   savePendingArticleReturnState,
 } from "../../lib/article-navigation";
+import { POLLS_DISABLED } from "../../lib/feature-flags";
 import { getSourceNameFromSlug } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
@@ -44,7 +45,7 @@ function getPageTitle(pathname: string) {
     return "Following";
   }
 
-  if (pathname === "/profile/polls/new") {
+  if (!POLLS_DISABLED && pathname === "/profile/polls/new") {
     return "Create Poll";
   }
 
@@ -81,7 +82,7 @@ function getPageTitle(pathname: string) {
   }
 
   if (pathname === "/my-feed") {
-    return "Polls";
+    return "My Feed";
   }
 
   if (pathname === "/privacy") {
@@ -100,7 +101,7 @@ function getPageTitle(pathname: string) {
     return "Article";
   }
 
-  if (pathname.startsWith("/poll/")) {
+  if (!POLLS_DISABLED && pathname.startsWith("/poll/")) {
     return "Poll";
   }
 
@@ -413,7 +414,7 @@ export default function AppHeader() {
     );
   }
 
-  if (pathname.startsWith("/poll/")) {
+  if (!POLLS_DISABLED && pathname.startsWith("/poll/")) {
     return (
       <div className="app-header-article-bar">
         <button
@@ -508,7 +509,7 @@ export default function AppHeader() {
     );
   }
 
-  if (pathname === "/profile/polls/new") {
+  if (!POLLS_DISABLED && pathname === "/profile/polls/new") {
     return (
       <div className="app-header-article-bar">
         <button
@@ -845,16 +846,18 @@ export default function AppHeader() {
       </Link>
 
       <div className="header-actions-cluster">
-        <button
-          type="button"
-          className="category-launch-button"
-          aria-label="Create poll"
-          onClick={() => {
-            router.push("/profile/polls/new/");
-          }}
-        >
-          +
-        </button>
+        {!POLLS_DISABLED ? (
+          <button
+            type="button"
+            className="category-launch-button"
+            aria-label="Create poll"
+            onClick={() => {
+              router.push("/profile/polls/new/");
+            }}
+          >
+            +
+          </button>
+        ) : null}
       </div>
     </div>
   );

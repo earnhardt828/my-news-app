@@ -25,6 +25,7 @@ import {
   type PollRecord,
   type PollWithResults,
 } from "../../lib/polls";
+import { POLLS_DISABLED } from "../../lib/feature-flags";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { formatRelativeTimestamp } from "../../lib/relative-time";
 import { slugifySourceName } from "../../lib/source-logos";
@@ -356,13 +357,15 @@ export default function MyFeed() {
     article,
   }));
 
-  followedPolls.forEach((poll, index) => {
-    myFeedItems.splice(Math.min(myFeedItems.length, 2 + index * 5), 0, {
-      type: "poll" as const,
-      key: `poll:${poll.id}`,
-      poll,
+  if (!POLLS_DISABLED) {
+    followedPolls.forEach((poll, index) => {
+      myFeedItems.splice(Math.min(myFeedItems.length, 2 + index * 5), 0, {
+        type: "poll" as const,
+        key: `poll:${poll.id}`,
+        poll,
+      });
     });
-  });
+  }
 
   return (
     <section className="page-shell">
@@ -371,10 +374,10 @@ export default function MyFeed() {
           <strong>Loading polls...</strong>
           <span>Pulling in recent community polls.</span>
         </div>
-      ) : articles.length === 0 && followedPolls.length === 0 ? (
+      ) : articles.length === 0 && (POLLS_DISABLED || followedPolls.length === 0) ? (
         <div className="empty-state">
-          <strong>No polls yet</strong>
-          <span>Create the first one.</span>
+          <strong>No stories yet</strong>
+          <span>Check back soon for more articles.</span>
         </div>
       ) : (
         <div className="stack">

@@ -3848,13 +3848,14 @@ input {
 
 .source-rankings-card-art-shell {
   position: relative;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 96px;
   height: 96px;
   border-radius: 9999px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--surface-strong) 96%, white);
+  background: transparent;
   box-shadow:
     0 0 0 3px rgba(255, 255, 255, 0.96),
     0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
@@ -3863,8 +3864,9 @@ input {
 .source-rankings-card-art-logo-wrap {
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   background: transparent;
   overflow: hidden;
@@ -3873,7 +3875,7 @@ input {
 .source-rankings-card-art-logo {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
   display: block;
   border: none;
