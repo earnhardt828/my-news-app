@@ -6598,6 +6598,7 @@ export default function Home() {
 
   useEffect(() => {
     console.log("STOCK TICKER COMPONENT MOUNTED", true);
+    console.log("STOCK LOGOS SYNCED", true);
   }, []);
   const [isWeatherRadarOpen, setIsWeatherRadarOpen] = useState(false);
   const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
@@ -16746,6 +16747,10 @@ export default function Home() {
               symbol: item.symbol,
               logoUrl,
               showLogo,
+            });
+            console.log("STOCK LOGO PATH USED", {
+              symbol: item.symbol,
+              logoUrl,
             });
             if (!showLogo) {
               console.log("STOCK LOGO FALLBACK_INITIALS_USED", item.symbol);
