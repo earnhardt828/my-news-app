@@ -1710,6 +1710,16 @@ function hasRealArticleImage(article: Pick<
   );
 }
 
+function hasUsablePrimaryImageUrl(imageUrl: string | null | undefined) {
+  const trimmed = imageUrl?.trim() ?? "";
+
+  if (!trimmed) {
+    return false;
+  }
+
+  return !looksLikeLowQualityImageUrl(trimmed);
+}
+
 function logProviderArticleStats(providerName: string, articles: NormalizedArticle[]) {
   console.log("NEWS PROVIDER ARTICLE COUNT", {
     provider: providerName,
@@ -2718,6 +2728,8 @@ async function fetchNewsApiArticles(params: ProviderFetchParams): Promise<Provid
 }
 
 async function fetchGNewsArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  console.log("GNEWS API KEY PRESENT", Boolean(GNEWS_API_KEY));
+
   if (!GNEWS_API_KEY) {
     logProviderSkip("GNews", "GNEWS_API_KEY is missing");
     return { articles: [], hasMore: false };
@@ -2784,15 +2796,22 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
 
       return (data.articles ?? [])
         .map((article, index) =>
-          buildNormalizedArticle(article, {
-            source: article.source?.name?.trim() || "GNews",
-            category,
-            uniqueSeed: `gnews-${category}-${params.page}-${index}`,
-            fallbackPublishedOffsetHours: index,
-            provider: "GNews",
-          })
+          buildNormalizedArticle(
+            {
+              ...article,
+              imageUrl: article.image ?? null,
+            },
+            {
+              source: article.source?.name?.trim() || "GNews",
+              category,
+              uniqueSeed: `gnews-${category}-${params.page}-${index}`,
+              fallbackPublishedOffsetHours: index,
+              provider: "gnews",
+            }
+          )
         )
-        .filter(Boolean) as NormalizedArticle[];
+        .filter((article): article is NormalizedArticle => Boolean(article))
+        .filter((article) => hasUsablePrimaryImageUrl(article.imageUrl));
     })
   );
 
@@ -2805,6 +2824,11 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
     return [];
   });
 
+  console.log("GNEWS ARTICLE COUNT", normalizedArticles.length);
+  console.log(
+    "GNEWS IMAGE ARTICLE COUNT",
+    normalizedArticles.filter((article) => hasUsablePrimaryImageUrl(article.imageUrl)).length
+  );
   logProviderArticleStats("GNews", normalizedArticles);
 
   return {
@@ -3982,6 +4006,10 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     result.status === "fulfilled" ? result.value.articles : []
   );
   console.log("NEWS MERGED COUNT", combined.length);
+  console.log(
+    "NEWS MERGED IMAGE_ONLY COUNT",
+    combined.filter((article) => hasRealArticleImage(article)).length
+  );
   console.log("RAW PROVIDER COUNT", combined.length);
 
   const deduped = dedupeArticles(combined);
