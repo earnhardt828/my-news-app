@@ -2,12 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
 import SourceHeaderMark from "../../components/source-header-mark";
-import { apiFetch } from "../../../lib/api-base";
+import { apiFetch, isNativeCapacitorRuntime } from "../../../lib/api-base";
 import {
   buildStableArticleKey,
   isMissingCommentKeyColumnError,
@@ -862,6 +862,7 @@ function buildSummaryParagraphs(
 
 export default function ArticleDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const articleId = Number(params.id);
   const [article, setArticle] = useState<ArticleRecord | null>(null);
   const [comments, setComments] = useState<ArticleComment[]>([]);
@@ -879,6 +880,8 @@ export default function ArticleDetailPage() {
   const [failedArticleBoxImages, setFailedArticleBoxImages] = useState<Record<string, true>>({});
   const [commentSortMode, setCommentSortMode] = useState<"top" | "newest">("top");
   const [isCommentSortSheetOpen, setIsCommentSortSheetOpen] = useState(false);
+  const [isCommentsSheetOpen, setIsCommentsSheetOpen] = useState(false);
+  const [isSourceReaderLoading, setIsSourceReaderLoading] = useState(false);
   const [commentInput, setCommentInput] = useState("");
   const [replyTarget, setReplyTarget] = useState<{
     commentId: number;
@@ -1373,6 +1376,7 @@ export default function ArticleDetailPage() {
   }, []);
 
   const activeCompareArticle = compareArticles[activeCompareIndex] ?? article;
+  const shouldUseNativeSourceReader = isNativeCapacitorRuntime() && Boolean(activeCompareArticle?.url);
 
   useEffect(() => {
     if (!activeCompareArticle?.source) {
@@ -1402,6 +1406,15 @@ export default function ArticleDetailPage() {
       window.clearTimeout(timer);
     };
   }, [showCompareTutorial]);
+
+  useEffect(() => {
+    if (!shouldUseNativeSourceReader) {
+      setIsSourceReaderLoading(false);
+      return;
+    }
+
+    setIsSourceReaderLoading(true);
+  }, [activeCompareArticle?.url, shouldUseNativeSourceReader]);
 
   const displayedComments = useMemo(
     () => sortComments(comments, commentSortMode),
@@ -2032,6 +2045,355 @@ export default function ArticleDetailPage() {
     cleanedContent,
     compareArticle.publishedAt
   );
+  const renderCommentsContent = () => (
+    <>
+      <div className="article-comments-thread article-comments-inline-thread">
+        {displayedComments.length === 0 ? (
+          <div className="empty-state">
+            <strong>No comments yet</strong>
+            <span>Start the conversation on this story.</span>
+          </div>
+        ) : (
+          <div className="comment-list article-comment-list">
+            {displayedComments.map((comment) => (
+              <div
+                key={comment.id}
+                id={`comment-${comment.id}`}
+                className="comment-thread-row"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  openCommentActionSheet(comment);
+                }}
+                onMouseDown={() => startCommentLongPress(comment)}
+                onMouseUp={clearCommentLongPress}
+                onMouseLeave={clearCommentLongPress}
+                onTouchStart={() => startCommentLongPress(comment)}
+                onTouchEnd={clearCommentLongPress}
+              >
+                <div className="comment-thread-main">
+                  <div className="comment-thread-copy">
+                    <div className="comment-header">
+                      <div className="comment-user-heading">
+                        {comment.user_id ? (
+                          <Link href={`/user/${comment.user_id}`} className="comment-user-link">
+                            <span className="comment-user-avatar">
+                              {comment.avatar_url ? (
+                                <Image
+                                  src={comment.avatar_url}
+                                  alt={comment.username ?? "User avatar"}
+                                  width={34}
+                                  height={34}
+                                  unoptimized
+                                />
+                              ) : (
+                                (comment.username ?? "U").charAt(0).toUpperCase()
+                              )}
+                            </span>
+                            <span className="comment-username">{comment.username ?? "Unknown"}</span>
+                          </Link>
+                        ) : (
+                          <strong className="comment-username">{comment.username ?? "Unknown"}</strong>
+                        )}
+                        <span className="comment-header-time">
+                          · {formatRelativeTime(comment.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="comment-body">{comment.text}</div>
+                    <button
+                      className="comment-action article-comment-reply-action"
+                      type="button"
+                      onClick={() =>
+                        setReplyTarget({
+                          commentId: comment.id,
+                          username: comment.username,
+                        })
+                      }
+                    >
+                      Reply
+                    </button>
+                    {comment.replies.length > 0 ? (
+                      <div className="comment-replies">
+                        {comment.replies.map((reply) => (
+                          <div key={reply.id} className="comment-reply-card">
+                            <div className="comment-header">
+                              <div className="comment-user-heading">
+                                {reply.user_id ? (
+                                  <Link href={`/user/${reply.user_id}`} className="comment-user-link">
+                                    <span className="comment-user-avatar">
+                                      {reply.avatar_url ? (
+                                        <Image
+                                          src={reply.avatar_url}
+                                          alt={reply.username ?? "User avatar"}
+                                          width={34}
+                                          height={34}
+                                          unoptimized
+                                        />
+                                      ) : (
+                                        (reply.username ?? "U").charAt(0).toUpperCase()
+                                      )}
+                                    </span>
+                                    <span className="comment-username">
+                                      {reply.username ?? "Unknown"}
+                                    </span>
+                                  </Link>
+                                ) : (
+                                  <strong className="comment-username">{reply.username ?? "Unknown"}</strong>
+                                )}
+                                <span className="comment-header-time">
+                                  · {formatRelativeTime(reply.created_at)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="comment-body">{reply.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="comment-thread-reactions">
+                    <button
+                      className={`comment-reaction-pill ${
+                        comment.currentUserReaction === "like" ? "comment-reaction-pill-active" : ""
+                      }`}
+                      onClick={() => handleCommentReaction(comment.id)}
+                      disabled={activeCommentAction === `reaction-${comment.id}`}
+                      aria-label={comment.currentUserReaction === "like" ? "Remove heart" : "Heart comment"}
+                    >
+                      <span className="comment-reaction-glyph" aria-hidden="true">
+                        <svg {...actionIconProps}>
+                          <path
+                            d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                            fill={comment.currentUserReaction === "like" ? "currentColor" : "none"}
+                          />
+                        </svg>
+                      </span>
+                      <span>{comment.likes}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="comment-sheet-composer article-comments-inline-composer">
+        {replyTarget ? (
+          <div className="comment-reply-banner">
+            <span>
+              Replying to <strong>{replyTarget.username ?? "this comment"}</strong>
+            </span>
+            <button className="comment-action" onClick={() => setReplyTarget(null)} type="button">
+              Cancel
+            </button>
+          </div>
+        ) : null}
+
+        <div className="input-row bottom-sheet-input-row">
+          <input
+            ref={commentInputRef}
+            className="input"
+            type="text"
+            placeholder={replyTarget ? "Write a reply..." : "Write a comment..."}
+            value={commentInput}
+            onChange={(event) => setCommentInput(event.target.value)}
+          />
+          <button
+            className="button button-secondary article-comment-send-button"
+            onClick={handleAddComment}
+            aria-label={replyTarget ? "Send reply" : "Send comment"}
+          >
+            <span className="icon-action-glyph" aria-hidden="true">
+              <svg {...actionIconProps}>
+                <path d="M22 2 11 13" />
+                <path d="m22 2-7 20-4-9-9-4Z" />
+              </svg>
+            </span>
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
+  if (shouldUseNativeSourceReader && compareArticle.url) {
+    return (
+      <section className="page-shell article-page-shell article-source-reader-page">
+        <section className="section-card article-source-reader-card">
+          <div className="article-source-reader-header">
+            <div className="stack" style={{ gap: "8px" }}>
+              <div className="article-detail-kicker-row">
+                <Link
+                  href={`/source/${slugifySourceName(compareArticle.source)}`}
+                  className="source-trigger source-trigger-tight article-detail-source-wrap"
+                >
+                  <SourceHeaderMark sourceName={compareArticle.source} fallbackMode="text" />
+                </Link>
+                <span className="chip chip-accent">{compareArticle.category}</span>
+              </div>
+              <h2 className="article-detail-title">{cleanDisplayText(compareArticle.title)}</h2>
+              <p className="article-detail-byline">
+                Viewing original source in Reflekt
+              </p>
+            </div>
+          </div>
+
+          <div className="reader-frame-shell article-source-reader-shell">
+            {isSourceReaderLoading ? (
+              <div className="reader-loading-state">
+                <strong>Loading original source</strong>
+                <span>Opening the publisher page inside Reflekt.</span>
+              </div>
+            ) : null}
+
+            <iframe
+              src={compareArticle.url}
+              title={compareArticle.title}
+              className="reader-frame article-source-reader-frame"
+              onLoad={() => setIsSourceReaderLoading(false)}
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+            />
+          </div>
+
+          <div className="engagement-row article-detail-actions article-source-reader-actions">
+            <button
+              className="icon-action-pill"
+              onClick={() => router.back()}
+              aria-label="Go back"
+            >
+              <span className="icon-action-glyph" aria-hidden="true">←</span>
+              <span>Back</span>
+            </button>
+            <button
+              className={`icon-action-pill ${likedByCurrentUser ? "icon-action-pill-active" : ""}`}
+              onClick={handleToggleLike}
+              aria-label={likedByCurrentUser ? "Unlike article" : "Like article"}
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg {...actionIconProps}>
+                  <path
+                    d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
+                    fill={likedByCurrentUser ? "currentColor" : "none"}
+                  />
+                </svg>
+              </span>
+              <span>{likesCount}</span>
+            </button>
+            <button
+              className="icon-action-pill"
+              aria-label="Comments"
+              onClick={() => {
+                setIsCommentsSheetOpen(true);
+                setIsCommentSortSheetOpen(false);
+                setReplyTarget(null);
+              }}
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg {...actionIconProps}>
+                  <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+                </svg>
+              </span>
+              <span>{comments.length}</span>
+            </button>
+            <button
+              className={`bookmark-button ${isSaved ? "bookmark-button-active" : ""}`}
+              onClick={handleToggleSave}
+              aria-label={isSaved ? "Remove bookmark" : "Save article"}
+            >
+              <span className="icon-action-glyph" aria-hidden="true">
+                <svg {...actionIconProps}>
+                  <path
+                    d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-3.8L6 20V5.5a1 1 0 0 1 1-1Z"
+                    fill={isSaved ? "currentColor" : "none"}
+                  />
+                </svg>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        {isCommentsSheetOpen ? (
+          <div
+            className="bottom-sheet-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Article comments"
+            onClick={() => setIsCommentsSheetOpen(false)}
+          >
+            <section
+              className="bottom-sheet article-comments-reader-sheet"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="bottom-sheet-handle" aria-hidden="true" />
+              <div className="article-comments-inline-header">
+                <h3 className="article-comments-inline-title">Comments</h3>
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setIsCommentsSheetOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              {renderCommentsContent()}
+            </section>
+          </div>
+        ) : null}
+
+        {isCommentSortSheetOpen ? (
+          <div
+            className="bottom-sheet-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose comment sort"
+            onClick={() => setIsCommentSortSheetOpen(false)}
+          >
+            <div
+              className="bottom-sheet article-comment-sort-sheet"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="bottom-sheet-handle" aria-hidden="true" />
+              <div className="stack" style={{ gap: "6px" }}>
+                <h3 className="modal-title">Sort comments</h3>
+                <p className="muted bottom-sheet-title">
+                  Choose how comments should be ordered.
+                </p>
+              </div>
+              <div className="source-sheet-actions">
+                {[
+                  { value: "top" as const, label: "Top comments" },
+                  { value: "newest" as const, label: "Newest" },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    className={`button source-sheet-button article-comment-sort-option ${
+                      commentSortMode === option.value
+                        ? "article-comment-sort-option-active"
+                        : "button-secondary"
+                    }`}
+                    onClick={() => {
+                      setCommentSortMode(option.value);
+                      setIsCommentSortSheetOpen(false);
+                    }}
+                  >
+                    <span>{option.label}</span>
+                    {commentSortMode === option.value ? <span aria-hidden="true">✓</span> : null}
+                  </button>
+                ))}
+                <button
+                  className="button button-secondary source-sheet-close"
+                  onClick={() => setIsCommentSortSheetOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className="page-shell article-page-shell">
@@ -2244,198 +2606,7 @@ export default function ArticleDetailPage() {
         <div className="article-comments-inline-header">
           <h3 className="article-comments-inline-title">Comments</h3>
         </div>
-
-        <div className="article-comments-thread article-comments-inline-thread">
-          {displayedComments.length === 0 ? (
-            <div className="empty-state">
-              <strong>No comments yet</strong>
-              <span>Start the conversation on this story.</span>
-            </div>
-          ) : (
-            <div className="comment-list article-comment-list">
-              {displayedComments.map((comment) => (
-                <div
-                  key={comment.id}
-                  id={`comment-${comment.id}`}
-                  className="comment-thread-row"
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    openCommentActionSheet(comment);
-                  }}
-                  onMouseDown={() => startCommentLongPress(comment)}
-                  onMouseUp={clearCommentLongPress}
-                  onMouseLeave={clearCommentLongPress}
-                  onTouchStart={() => startCommentLongPress(comment)}
-                  onTouchEnd={clearCommentLongPress}
-                >
-                  <div className="comment-thread-main">
-                    <div className="comment-thread-copy">
-                      <div className="comment-header">
-                        <div className="comment-user-heading">
-                          {comment.user_id ? (
-                            <Link
-                              href={`/user/${comment.user_id}`}
-                              className="comment-user-link"
-                            >
-                              <span className="comment-user-avatar">
-                                {comment.avatar_url ? (
-                                  <Image
-                                    src={comment.avatar_url}
-                                    alt={comment.username ?? "User avatar"}
-                                    width={34}
-                                    height={34}
-                                    unoptimized
-                                  />
-                                ) : (
-                                  (comment.username ?? "U").charAt(0).toUpperCase()
-                                )}
-                              </span>
-                              <span className="comment-username">
-                                {comment.username ?? "Unknown"}
-                              </span>
-                            </Link>
-                          ) : (
-                            <strong className="comment-username">
-                              {comment.username ?? "Unknown"}
-                            </strong>
-                          )}
-                          <span className="comment-header-time">
-                            · {formatRelativeTime(comment.created_at)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="comment-body">{comment.text}</div>
-                      <button
-                        className="comment-action article-comment-reply-action"
-                        type="button"
-                        onClick={() =>
-                          setReplyTarget({
-                            commentId: comment.id,
-                            username: comment.username,
-                          })
-                        }
-                      >
-                        Reply
-                      </button>
-                      {comment.replies.length > 0 ? (
-                        <div className="comment-replies">
-                          {comment.replies.map((reply) => (
-                            <div key={reply.id} className="comment-reply-card">
-                              <div className="comment-header">
-                                <div className="comment-user-heading">
-                                  {reply.user_id ? (
-                                    <Link
-                                      href={`/user/${reply.user_id}`}
-                                      className="comment-user-link"
-                                    >
-                                      <span className="comment-user-avatar">
-                                        {reply.avatar_url ? (
-                                          <Image
-                                            src={reply.avatar_url}
-                                            alt={reply.username ?? "User avatar"}
-                                            width={34}
-                                            height={34}
-                                            unoptimized
-                                          />
-                                        ) : (
-                                          (reply.username ?? "U")
-                                            .charAt(0)
-                                            .toUpperCase()
-                                        )}
-                                      </span>
-                                      <span className="comment-username">
-                                        {reply.username ?? "Unknown"}
-                                      </span>
-                                    </Link>
-                                  ) : (
-                                    <strong className="comment-username">
-                                      {reply.username ?? "Unknown"}
-                                    </strong>
-                                  )}
-                                  <span className="comment-header-time">
-                                    · {formatRelativeTime(reply.created_at)}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="comment-body">{reply.text}</div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="comment-thread-reactions">
-                      <button
-                        className={`comment-reaction-pill ${
-                          comment.currentUserReaction === "like"
-                            ? "comment-reaction-pill-active"
-                            : ""
-                        }`}
-                        onClick={() => handleCommentReaction(comment.id)}
-                        disabled={activeCommentAction === `reaction-${comment.id}`}
-                        aria-label={
-                          comment.currentUserReaction === "like"
-                            ? "Remove heart"
-                            : "Heart comment"
-                        }
-                      >
-                        <span className="comment-reaction-glyph" aria-hidden="true">
-                          <svg {...actionIconProps}>
-                            <path
-                              d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                              fill={
-                                comment.currentUserReaction === "like"
-                                  ? "currentColor"
-                                  : "none"
-                              }
-                            />
-                          </svg>
-                        </span>
-                        <span>{comment.likes}</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="comment-sheet-composer article-comments-inline-composer">
-          {replyTarget ? (
-            <div className="comment-reply-banner">
-              <span>
-                Replying to <strong>{replyTarget.username ?? "this comment"}</strong>
-              </span>
-              <button className="comment-action" onClick={() => setReplyTarget(null)} type="button">
-                Cancel
-              </button>
-            </div>
-          ) : null}
-
-          <div className="input-row bottom-sheet-input-row">
-            <input
-              ref={commentInputRef}
-              className="input"
-              type="text"
-              placeholder={replyTarget ? "Write a reply..." : "Write a comment..."}
-              value={commentInput}
-              onChange={(event) => setCommentInput(event.target.value)}
-            />
-            <button
-              className="button button-secondary article-comment-send-button"
-              onClick={handleAddComment}
-              aria-label={replyTarget ? "Send reply" : "Send comment"}
-            >
-              <span className="icon-action-glyph" aria-hidden="true">
-                <svg {...actionIconProps}>
-                  <path d="M22 2 11 13" />
-                  <path d="m22 2-7 20-4-9-9-4Z" />
-                </svg>
-              </span>
-            </button>
-          </div>
-        </div>
+        {renderCommentsContent()}
       </section>
 
       {isCommentSortSheetOpen ? (
