@@ -2690,6 +2690,7 @@ async function fetchNewsApiArticles(params: ProviderFetchParams): Promise<Provid
             category,
             uniqueSeed: `newsapi-${category}-${params.page}-${index}`,
             fallbackPublishedOffsetHours: index,
+            provider: "NewsAPI",
           })
         )
         .filter(Boolean) as NormalizedArticle[];
@@ -2788,6 +2789,7 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
             category,
             uniqueSeed: `gnews-${category}-${params.page}-${index}`,
             fallbackPublishedOffsetHours: index,
+            provider: "GNews",
           })
         )
         .filter(Boolean) as NormalizedArticle[];
