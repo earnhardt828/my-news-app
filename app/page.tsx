@@ -2780,12 +2780,6 @@ type StockTickerItem = {
   source: string;
 };
 
-const BUSINESS_STOCK_UI_TEST_ITEMS: StockTickerItem[] = [
-  { symbol: "AAPL", label: "Apple", price: 306.31, change: -5.75, percentChange: -1.84, source: "UI Test" },
-  { symbol: "MSFT", label: "Microsoft", price: 420.12, change: 2.15, percentChange: 0.51, source: "UI Test" },
-  { symbol: "NVDA", label: "Nvidia", price: 1120.5, change: 18.22, percentChange: 1.65, source: "UI Test" },
-];
-
 const BUSINESS_STOCK_TICKER_ORDER = [
   "AAPL",
   "MSFT",
@@ -6524,8 +6518,6 @@ export default function Home() {
         return;
       }
 
-      const fallbackItems = BUSINESS_STOCK_UI_TEST_ITEMS.map((item) => ({ ...item }));
-
       try {
         const response = await apiFetch("/api/stocks", {
           cache: "no-store",
@@ -6556,15 +6548,14 @@ export default function Home() {
         console.log("BUSINESS STOCK DATA ITEMS", apiItems);
         console.log("BUSINESS STOCK ITEMS RECEIVED", apiItems);
         console.log("BUSINESS STOCK ITEMS LENGTH", apiItems.length);
-        const sourceItems = apiItems.length > 0 ? apiItems : fallbackItems;
         console.log("BUSINESS STOCK USING_API_ITEMS", apiItems.length > 0);
-        console.log("BUSINESS STOCK USING_FALLBACK_ITEMS", apiItems.length === 0);
+        console.log("BUSINESS STOCK USING_FALLBACK_ITEMS", false);
 
         const itemBySymbol = new Map<string, StockTickerItem>();
-        sourceItems.forEach((item) => {
+        apiItems.forEach((item) => {
           itemBySymbol.set(item.symbol, {
             ...item,
-            source: item.source ?? (apiItems.length > 0 ? "Finnhub" : "UI Test"),
+            source: item.source ?? "Stock API",
           });
         });
 
@@ -6574,26 +6565,26 @@ export default function Home() {
 
         if (!isCancelled) {
           setBusinessTickerItems(orderedItems);
-          setBusinessTickerSource(apiItems.length > 0 ? "finnhub" : "ui-test");
+          setBusinessTickerSource(apiItems.length > 0 ? "api" : "empty");
         }
       } catch (error) {
         console.error("BUSINESS STOCK FETCH FAILED", error);
-        console.log("BUSINESS STOCK JSON RECEIVED", { items: fallbackItems, debugFallback: true });
+        console.log("BUSINESS STOCK JSON RECEIVED", { items: [] });
         console.log("BUSINESS STOCK FETCH RESPONSE", {
           ok: false,
           status: "fetch-error",
-          count: fallbackItems.length,
+          count: 0,
         });
         console.log("BUSINESS STOCK USING_API_ITEMS", false);
-        console.log("BUSINESS STOCK USING_FALLBACK_ITEMS", true);
+        console.log("BUSINESS STOCK USING_FALLBACK_ITEMS", false);
         console.log("STOCK TICKER API ITEMS RECEIVED", []);
-        console.log("BUSINESS STOCK DATA ITEMS", fallbackItems);
-        console.log("BUSINESS STOCK ITEMS RECEIVED", fallbackItems);
-        console.log("BUSINESS STOCK ITEMS LENGTH", fallbackItems.length);
+        console.log("BUSINESS STOCK DATA ITEMS", []);
+        console.log("BUSINESS STOCK ITEMS RECEIVED", []);
+        console.log("BUSINESS STOCK ITEMS LENGTH", 0);
 
         if (!isCancelled) {
-          setBusinessTickerItems(fallbackItems);
-          setBusinessTickerSource("ui-test");
+          setBusinessTickerItems([]);
+          setBusinessTickerSource("error");
         }
       }
     }
@@ -16711,7 +16702,7 @@ export default function Home() {
 
     console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
     console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
-    console.log("BUSINESS STOCK FALLBACK USED", businessTickerSource !== "finnhub");
+    console.log("BUSINESS STOCK FALLBACK USED", false);
     console.log("BUSINESS STOCK ITEMS RENDERED", tickerItems);
     console.log("BUSINESS STOCK RENDERING", {
       count: tickerItems.length,
@@ -16720,7 +16711,21 @@ export default function Home() {
     console.log("STOCK TICKER ITEMS COUNT", tickerItems.length);
 
     if (tickerItems.length === 0) {
-      return null;
+      return (
+        <section className="home-section-block home-section-plain quick-watch-row">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Stock Market</strong>
+            </div>
+          </div>
+          <div className="muted" style={{ fontSize: "0.8rem" }}>
+            API returned zero stock items
+          </div>
+          <div className="muted" style={{ fontSize: "0.74rem", marginTop: "6px" }}>
+            STOCK ITEMS RENDERED: 0
+          </div>
+        </section>
+      );
     }
 
     return (
@@ -16805,6 +16810,9 @@ export default function Home() {
               </div>
             );
           })}
+        </div>
+        <div className="muted" style={{ fontSize: "0.74rem", marginTop: "6px" }}>
+          {`STOCK ITEMS RENDERED: ${tickerItems.length}`}
         </div>
       </section>
     );
