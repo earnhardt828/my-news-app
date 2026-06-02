@@ -9632,7 +9632,15 @@ export default function Home() {
       event: { preventDefault: () => void; stopPropagation?: () => void },
       article: Article
     ) => {
-      await handleArticleCardActivation(event, article.url, () => {
+      await handleArticleCardActivation(
+        event,
+        {
+          id: article.id,
+          url: article.url,
+          title: article.title,
+          source: article.source,
+        },
+        () => {
         persistArticleMetadata(article);
         saveArticleReturnState({
           path: "/",
@@ -9642,7 +9650,8 @@ export default function Home() {
           selectedLocalCity,
           localLocationLabel,
         });
-      });
+        }
+      );
     },
     [localLocationLabel, selectedLocalCity, sortMode]
   );

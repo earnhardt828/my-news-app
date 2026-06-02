@@ -4742,6 +4742,62 @@ input {
   gap: 16px;
 }
 
+.article-reader-shell-backdrop {
+  z-index: 90;
+}
+
+.article-reader-modal-card {
+  width: min(100%, 1100px);
+  max-height: min(94vh, 1100px);
+}
+
+.article-reader-modal-header {
+  align-items: center;
+}
+
+.article-reader-modal-title-wrap {
+  min-width: 0;
+  flex: 1;
+  text-align: center;
+}
+
+.article-reader-modal-source {
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.article-reader-modal-caption {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.article-reader-frame-shell {
+  min-height: 72vh;
+}
+
+.article-reader-frame {
+  height: min(76vh, 920px);
+}
+
+.article-reader-modal-actions {
+  justify-content: center;
+}
+
+.article-comments-reader-frame {
+  width: 100%;
+  min-height: 62vh;
+  border: 0;
+  background: var(--reader-frame-bg);
+}
+
+.article-comments-inline-embedded {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
 .status-message {
   padding: 12px 14px;
   border-radius: 16px;

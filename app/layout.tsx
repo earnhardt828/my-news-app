@@ -1,4 +1,5 @@
 import AppHeader from "./components/app-header";
+import ArticleSourceReaderModal from "./components/article-source-reader-modal";
 import BottomNav from "./components/bottom-nav";
 import Script from "next/script";
 import "./globals.css";
@@ -56,6 +57,7 @@ export default function RootLayout({
           <main className="app-main">{children}</main>
 
           <BottomNav />
+          <ArticleSourceReaderModal />
         </div>
       </body>
     </html>

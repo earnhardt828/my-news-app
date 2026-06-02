@@ -408,13 +408,18 @@ export default function MyFeed() {
                         <span className="trending-source-name">{article.source}</span>
                       </div>
                     </Link>
-                    <Link
-                      href={`/article/${article.id}/`}
-                      className="article-link"
-                      onClick={(event) => {
-                        void handleArticleCardActivation(event, article.url);
-                      }}
-                    >
+                      <Link
+                        href={`/article/${article.id}/`}
+                        className="article-link"
+                        onClick={(event) => {
+                          void handleArticleCardActivation(event, {
+                            id: article.id,
+                            url: article.url,
+                            title: article.title,
+                            source: article.source,
+                          });
+                        }}
+                      >
                       <div
                         className={`news-card-body ${
                           shouldUseHeroImage

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
@@ -862,7 +862,9 @@ function buildSummaryParagraphs(
 
 export default function ArticleDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const articleId = Number(params.id);
+  const commentsOnly = searchParams.get("comments") === "1";
   const [article, setArticle] = useState<ArticleRecord | null>(null);
   const [comments, setComments] = useState<ArticleComment[]>([]);
   const [likesCount, setLikesCount] = useState(0);
@@ -2203,6 +2205,17 @@ export default function ArticleDetailPage() {
       </div>
     </>
   );
+
+  if (commentsOnly) {
+    return (
+      <section className="section-card article-comments-inline article-comments-inline-embedded" aria-label="Comments">
+        <div className="article-comments-inline-header">
+          <h3 className="article-comments-inline-title">Comments</h3>
+        </div>
+        {renderCommentsContent()}
+      </section>
+    );
+  }
 
   const openOriginalSource = async (url?: string | null) => {
     const sourceUrl = url?.trim();

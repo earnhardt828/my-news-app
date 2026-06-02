@@ -5,6 +5,13 @@ type LinkActivationEvent = {
   stopPropagation?: () => void;
 };
 
+export type ArticleReaderLaunchPayload = {
+  id?: number | null;
+  url?: string | null;
+  title: string;
+  source?: string | null;
+};
+
 export async function openOriginalArticleUrl(url?: string | null) {
   const sourceUrl = url?.trim();
 
@@ -37,12 +44,30 @@ export async function openOriginalArticleUrl(url?: string | null) {
   return true;
 }
 
+export function openArticleInReflektReader(payload: ArticleReaderLaunchPayload) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  if (!payload.url?.trim()) {
+    return false;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("reflekt:open-article-reader", {
+      detail: payload,
+    })
+  );
+
+  return true;
+}
+
 export async function handleArticleCardActivation(
   event: LinkActivationEvent,
-  url?: string | null,
+  payload: ArticleReaderLaunchPayload,
   onBeforeOpen?: () => void
 ) {
-  const sourceUrl = url?.trim();
+  const sourceUrl = payload.url?.trim();
 
   if (!sourceUrl) {
     return false;
@@ -50,6 +75,5 @@ export async function handleArticleCardActivation(
 
   event.preventDefault();
   onBeforeOpen?.();
-  await openOriginalArticleUrl(sourceUrl);
-  return true;
+  return openArticleInReflektReader(payload);
 }

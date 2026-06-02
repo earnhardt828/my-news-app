@@ -1357,7 +1357,15 @@ export default function Search() {
                         href={`/article/${article.id}/`}
                         className="section-card search-result-card"
                         onClick={(event) => {
-                          void handleArticleCardActivation(event, article.url, () => {
+                          void handleArticleCardActivation(
+                            event,
+                            {
+                              id: article.id,
+                              url: article.url,
+                              title: article.title,
+                              source: article.source,
+                            },
+                            () => {
                             persistSearchArticleMetadata(article);
                             saveArticleReturnState({
                               path: "/search/",
@@ -1365,7 +1373,8 @@ export default function Search() {
                               source: "search",
                               searchQuery: query,
                             });
-                          });
+                            }
+                          );
                         }}
                       >
                         <div className="search-result-layout">

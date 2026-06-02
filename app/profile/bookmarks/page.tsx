@@ -124,7 +124,12 @@ export default function ProfileBookmarksPage() {
                 href={`/article/${article.article_id}/`}
                 className="comment-card profile-saved-article-card"
                 onClick={(event) => {
-                  void handleArticleCardActivation(event, article.url);
+                  void handleArticleCardActivation(event, {
+                    id: article.article_id,
+                    url: article.url,
+                    title: article.title,
+                    source: article.source,
+                  });
                 }}
               >
                 <div className="profile-saved-article-copy">

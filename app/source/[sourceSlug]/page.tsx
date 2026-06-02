@@ -557,9 +557,18 @@ export default function SourcePage({
               href={`/article/${article.id}/`}
               className="section-card search-result-card"
               onClick={(event) => {
-                void handleArticleCardActivation(event, article.url, () => {
+                void handleArticleCardActivation(
+                  event,
+                  {
+                    id: article.id,
+                    url: article.url,
+                    title: article.title,
+                    source: article.source,
+                  },
+                  () => {
                   persistSourceArticleMetadata(article);
-                });
+                  }
+                );
               }}
             >
               <div className="search-result-source-row">
