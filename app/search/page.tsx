@@ -11,8 +11,8 @@ import {
 } from "../../lib/article-navigation";
 import {
   getBestArticleImage,
-  isLikelyHighQualityArticleImage,
 } from "../../lib/article-images";
+import { getArticleDisplayImage } from "../../lib/article-display-image";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
@@ -183,7 +183,7 @@ function persistSearchArticleMetadata(article: NewsArticle) {
   }
 
   try {
-    const cardImage = getBestArticleImage(article).src;
+    const cardImage = getArticleDisplayImage(article).src;
     const existingRaw = window.localStorage.getItem(ARTICLE_METADATA_STORAGE_KEY);
     const existingCache = existingRaw
       ? (JSON.parse(existingRaw) as Record<string, Record<string, unknown>>)
@@ -1145,6 +1145,15 @@ export default function Search() {
     );
   }, [articles, matchedSourceName, normalizedQuery, searchArticles, sourceFallbackArticles]);
 
+  const displayableSearchResultCount = useMemo(
+    () => filteredResults.filter((article) => Boolean(getArticleDisplayImage(article).src)).length,
+    [filteredResults]
+  );
+
+  useEffect(() => {
+    console.log("ARTICLE DISPLAY_IMAGE FINAL_COUNT", displayableSearchResultCount);
+  }, [displayableSearchResultCount]);
+
   return (
     <section className="page-shell search-shell">
       <section className="search-bar-shell">
@@ -1336,15 +1345,18 @@ export default function Search() {
               <div className="search-results-list">
                 {filteredResults.map((article) => (
                   (() => {
-                    const selectedImage = getBestArticleImage(article);
-                    const imageSrc = selectedImage.src ?? getSearchResultImage(article);
-                    const imageFailureKey = imageSrc
-                      ? `${article.id}:${imageSrc}`
-                      : `${article.id}:none`;
-                    const shouldShowImage =
-                      Boolean(imageSrc) &&
-                      !failedSearchImages[imageFailureKey] &&
-                      isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
+                    const displayImage = getArticleDisplayImage(article);
+                    const imageSrc = displayImage.src;
+                    const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
+
+                    if (!imageSrc || failedSearchImages[imageFailureKey]) {
+                      console.log("ARTICLE HIDDEN_NO_IMAGE", {
+                        section: "Search",
+                        title: article.title,
+                        source: article.source,
+                      });
+                      return null;
+                    }
                     const safeSourceName = sanitizeSourceName(article.source);
                     const safeCategoryName = getDisplayCategory(article.category, {
                       source: article.source,
@@ -1365,7 +1377,7 @@ export default function Search() {
                               title: article.title,
                               source: article.source,
                               description: article.description ?? null,
-                              imageSrc: imageSrc ?? null,
+                              imageSrc: imageSrc,
                               publishedLabel: formatSearchDate(article.publishedAt, article.time),
                               category: getCategoryLabel(safeCategoryName),
                             },
@@ -1422,29 +1434,27 @@ export default function Search() {
                               </p>
                             ) : null}
                           </div>
-                          {shouldShowImage ? (
-                            <div className="search-result-image-shell">
-                              <img
-                                src={imageSrc as string}
-                                alt={cleanDisplayText(article.title)}
-                                className="search-result-image"
-                                loading="lazy"
-                                decoding="async"
-                                onError={() => {
-                                  setFailedSearchImages((prev) => {
-                                    if (prev[imageFailureKey]) {
-                                      return prev;
-                                    }
+                          <div className="search-result-image-shell">
+                            <img
+                              src={imageSrc}
+                              alt={cleanDisplayText(article.title)}
+                              className="search-result-image"
+                              loading="lazy"
+                              decoding="async"
+                              onError={() => {
+                                setFailedSearchImages((prev) => {
+                                  if (prev[imageFailureKey]) {
+                                    return prev;
+                                  }
 
-                                    return {
-                                      ...prev,
-                                      [imageFailureKey]: true,
-                                    };
-                                  });
-                                }}
-                              />
-                            </div>
-                          ) : null}
+                                  return {
+                                    ...prev,
+                                    [imageFailureKey]: true,
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
                         </div>
                       </Link>
                     );

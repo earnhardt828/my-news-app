@@ -14,6 +14,7 @@ import {
   shouldUseLargeArticleImage,
   shouldSuppressLowQualityArticleImage,
 } from "../../lib/article-images";
+import { getArticleDisplayImage } from "../../lib/article-display-image";
 import { handleArticleCardActivation } from "../../lib/open-article";
 import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
@@ -182,6 +183,13 @@ export default function MyFeed() {
     loadFeed();
   }, []);
 
+  useEffect(() => {
+    console.log(
+      "ARTICLE DISPLAY_IMAGE FINAL_COUNT",
+      articles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length
+    );
+  }, [articles]);
+
   const handleToggleSaveArticle = async (article: FeedArticle) => {
     if (!userId) {
       alert("Log in to save articles");
@@ -225,7 +233,7 @@ export default function MyFeed() {
         category: article.category,
         time: article.time,
         url: article.url ?? null,
-        image: getBestArticleImage(article).src,
+        image: getArticleDisplayImage(article).src,
         published_at: article.publishedAt ?? null,
       },
       {
@@ -380,19 +388,24 @@ export default function MyFeed() {
                 />
               ) : (() => {
                 const article = item.article;
-                const selectedImage = getBestArticleImage(article);
-                const imageSrc = selectedImage.src;
-                const imageFailureKey = imageSrc
-                  ? `${article.id}:${imageSrc}`
-                  : `${article.id}:none`;
+                const displayImage = getArticleDisplayImage(article);
+                const imageSrc = displayImage.src;
+                const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
                 const hasFailedImage = Boolean(failedArticleImages[imageFailureKey]);
-                const isLowQualityImage = Boolean(lowQualityArticleImages[imageFailureKey]);
-                const hasUsableImage = Boolean(imageSrc) && !hasFailedImage;
-                const shouldUseHeroImage =
-                  hasUsableImage &&
-                  !isLowQualityImage &&
-                  isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
-                const shouldUseThumbnail = hasUsableImage && !shouldUseHeroImage;
+
+                if (!imageSrc || hasFailedImage) {
+                  console.log("ARTICLE HIDDEN_NO_IMAGE", {
+                    section: "My Feed",
+                    title: article.title,
+                    source: article.source,
+                  });
+                  return null;
+                }
+
+                const isLowQualityImage =
+                  displayImage.kind === "real" && Boolean(lowQualityArticleImages[imageFailureKey]);
+                const shouldUseHeroImage = displayImage.kind === "real" && !isLowQualityImage;
+                const shouldUseThumbnail = true;
 
                 return (
                   <article className="news-card">
@@ -418,7 +431,7 @@ export default function MyFeed() {
                             title: article.title,
                             source: article.source,
                             description: article.description ?? null,
-                            imageSrc: imageSrc ?? null,
+                            imageSrc,
                             publishedLabel: formatRelativeTimestamp(article.publishedAt, article.time),
                             category: getCategoryLabel(article.category),
                           });
@@ -449,7 +462,7 @@ export default function MyFeed() {
                           {shouldUseHeroImage ? (
                             <div className="article-hero-shell">
                               <img
-                                src={imageSrc as string}
+                                src={imageSrc}
                                 alt={cleanDisplayText(article.title)}
                                 className="article-image article-image-hero"
                                 loading="lazy"
@@ -495,7 +508,7 @@ export default function MyFeed() {
                         {shouldUseThumbnail ? (
                           <div className="article-thumb-shell">
                             <img
-                              src={imageSrc as string}
+                                src={imageSrc}
                               alt={cleanDisplayText(article.title)}
                               className="article-thumb-image"
                               loading="lazy"
@@ -504,8 +517,9 @@ export default function MyFeed() {
                                 const target = event.currentTarget;
 
                                 if (
+                                  displayImage.kind === "real" &&
                                   shouldSuppressLowQualityArticleImage(
-                                    selectedImage.source,
+                                    getBestArticleImage(article).source,
                                     target.naturalWidth,
                                     target.naturalHeight
                                   )

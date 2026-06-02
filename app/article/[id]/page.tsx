@@ -16,11 +16,12 @@ import {
   getBestArticleImage,
   looksLikeLowQualityImageUrl,
 } from "../../../lib/article-images";
+import { getArticleDisplayImage } from "../../../lib/article-display-image";
 import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
 import { cleanDisplayText } from "../../../lib/display-text";
 import { ensureProfileRow } from "../../../lib/profile-store";
 import { isCommentAllowed } from "../../../lib/moderation";
-import { getSourceBoxLogoUrl, slugifySourceName } from "../../../lib/source-logos";
+import { slugifySourceName } from "../../../lib/source-logos";
 import { supabase } from "../../../lib/supabase";
 
 type ArticleRecord = {
@@ -2001,25 +2002,18 @@ export default function ArticleDetailPage() {
   const compareArticle = shouldEnableCompareSources
     ? activeCompareArticle ?? article
     : article;
-  const selectedArticleImage = compareArticle ? getBestArticleImage(compareArticle) : null;
-  const articleImageSrc = selectedArticleImage?.src ?? null;
-  const articleBoxLogoSrc = getSourceBoxLogoUrl(compareArticle.source);
+  const displayArticleImage = getArticleDisplayImage(compareArticle);
+  const articleImageSrc = displayArticleImage.src ?? null;
   console.log("IMAGE URL USED", articleImageSrc);
-  const articleImageFailureKey = articleImageSrc
-    ? `${compareArticle?.id ?? article.id}:${articleImageSrc}`
-    : `${compareArticle?.id ?? article.id}:none`;
-  const articleBoxLogoFailureKey = articleBoxLogoSrc
-    ? `${compareArticle?.source}:${articleBoxLogoSrc}`
-    : `${compareArticle?.source}:none`;
+  const articleImageFailureKey =
+    displayArticleImage.failureKey ?? `${compareArticle?.id ?? article.id}:none`;
   const shouldShowArticleImage =
     Boolean(articleImageSrc) &&
-    !failedArticleImages[articleImageFailureKey] &&
-    !looksLikeLowQualityImageUrl(articleImageSrc as string) &&
-    ["urlToImage", "imageUrl", "image", "cardImage", "mediaContent", "enclosureUrl", "ogImage", "twitterImage", "thumbnail"].includes(
-      selectedArticleImage?.source ?? ""
-    );
-  const shouldShowSourceLogoFallback =
-    Boolean(articleBoxLogoSrc) && !failedArticleBoxImages[articleBoxLogoFailureKey];
+    !(displayArticleImage.kind === "real"
+      ? failedArticleImages[articleImageFailureKey]
+      : failedArticleBoxImages[articleImageFailureKey]) &&
+    (displayArticleImage.kind !== "real" || !looksLikeLowQualityImageUrl(articleImageSrc as string));
+  console.log("ARTICLE DISPLAY_IMAGE FINAL_COUNT", shouldShowArticleImage ? 1 : 0);
   const rawContent = compareArticle.content?.trim() ?? "";
   const rawDescription = compareArticle.description?.trim() ?? "";
   const cleanedContent = rawContent
@@ -2330,7 +2324,21 @@ export default function ArticleDetailPage() {
                   loading="lazy"
                   decoding="async"
                   onError={() => {
-                    setFailedArticleImages((prev) => {
+                    if (displayArticleImage.kind === "real") {
+                      setFailedArticleImages((prev) => {
+                        if (prev[articleImageFailureKey]) {
+                          return prev;
+                        }
+
+                        return {
+                          ...prev,
+                          [articleImageFailureKey]: true,
+                        };
+                      });
+                      return;
+                    }
+
+                    setFailedArticleBoxImages((prev) => {
                       if (prev[articleImageFailureKey]) {
                         return prev;
                       }
@@ -2338,28 +2346,6 @@ export default function ArticleDetailPage() {
                       return {
                         ...prev,
                         [articleImageFailureKey]: true,
-                      };
-                    });
-                  }}
-                />
-              </div>
-            ) : shouldShowSourceLogoFallback && articleBoxLogoSrc ? (
-              <div className="article-detail-inline-image-wrap article-detail-inline-image-wrap-fallback">
-                <img
-                  src={articleBoxLogoSrc}
-                  alt={`${compareArticle.source} image`}
-                  className="article-thumb-image article-detail-inline-image article-card-box-logo-image"
-                  loading="lazy"
-                  decoding="async"
-                  onError={() => {
-                    setFailedArticleBoxImages((prev) => {
-                      if (prev[articleBoxLogoFailureKey]) {
-                        return prev;
-                      }
-
-                      return {
-                        ...prev,
-                        [articleBoxLogoFailureKey]: true,
                       };
                     });
                   }}

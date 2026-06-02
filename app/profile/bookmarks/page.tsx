@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { cleanDisplayText } from "../../../lib/display-text";
+import { getArticleDisplayImage } from "../../../lib/article-display-image";
 import { handleArticleCardActivation } from "../../../lib/open-article";
 import { slugifySourceName } from "../../../lib/source-logos";
 import { supabase } from "../../../lib/supabase";
@@ -118,57 +119,67 @@ export default function ProfileBookmarksPage() {
           </div>
 
           <div className="comment-list">
-            {savedArticles.map((article) => (
-              <Link
-                key={article.id}
-                href={`/article/${article.article_id}/`}
-                className="comment-card profile-saved-article-card"
-                onClick={(event) => {
-                  void handleArticleCardActivation(event, {
-                    id: article.article_id,
-                    url: article.url,
-                    title: article.title,
-                    source: article.source,
-                    imageSrc: article.image ?? null,
-                    publishedLabel: formatSavedArticleDate(article),
-                    category: article.category,
-                  });
-                }}
-              >
-                <div className="profile-saved-article-copy">
-                  <strong className="profile-saved-article-title">
-                    {cleanDisplayText(article.title)}
-                  </strong>
-                  <div className="comment-meta">
-                    <button
-                      type="button"
-                      className="source-trigger source-trigger-tight profile-saved-source-link"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        router.push(`/source/${slugifySourceName(article.source)}/`);
-                      }}
-                    >
-                      {article.source}
-                    </button>
-                    {" · "}
-                    {formatSavedArticleDate(article)}
+            {savedArticles.map((article) => {
+              const displayImage = getArticleDisplayImage({
+                ...article,
+                imageUrl: article.image ?? null,
+              });
+
+              if (!displayImage.src) {
+                console.log("ARTICLE HIDDEN_NO_IMAGE", {
+                  section: "Bookmarks",
+                  title: article.title,
+                  source: article.source,
+                });
+                return null;
+              }
+
+              return (
+                <Link
+                  key={article.id}
+                  href={`/article/${article.article_id}/`}
+                  className="comment-card profile-saved-article-card"
+                  onClick={(event) => {
+                    void handleArticleCardActivation(event, {
+                      id: article.article_id,
+                      url: article.url,
+                      title: article.title,
+                      source: article.source,
+                      imageSrc: displayImage.src,
+                      publishedLabel: formatSavedArticleDate(article),
+                      category: article.category,
+                    });
+                  }}
+                >
+                  <div className="profile-saved-article-copy">
+                    <strong className="profile-saved-article-title">
+                      {cleanDisplayText(article.title)}
+                    </strong>
+                    <div className="comment-meta">
+                      <button
+                        type="button"
+                        className="source-trigger source-trigger-tight profile-saved-source-link"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          router.push(`/source/${slugifySourceName(article.source)}/`);
+                        }}
+                      >
+                        {article.source}
+                      </button>
+                      {" · "}
+                      {formatSavedArticleDate(article)}
+                    </div>
                   </div>
-                </div>
-                {article.image ? (
                   <div
                     className="profile-saved-article-thumb"
                     role="img"
                     aria-label={cleanDisplayText(article.title)}
-                    style={{ backgroundImage: `url(${article.image})` }}
+                    style={{ backgroundImage: `url(${displayImage.src})` }}
                   />
-                ) : (
-                  <div className="profile-saved-article-thumb profile-saved-article-thumb-placeholder">
-                    {article.source.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}

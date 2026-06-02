@@ -34,6 +34,7 @@ import {
   getBestArticleImage,
   isLikelyHighQualityArticleImage,
 } from "../lib/article-images";
+import { getArticleDisplayImage } from "../lib/article-display-image";
 import { cleanDisplayText } from "../lib/display-text";
 import {
   consumePendingArticleReturnState,
@@ -3019,7 +3020,7 @@ function persistArticleMetadata(article: Article) {
   }
 
   try {
-    const cardImage = getBestArticleImage(article).src;
+    const cardImage = getArticleDisplayImage(article).src;
     const existingRaw = window.localStorage.getItem(ARTICLE_METADATA_STORAGE_KEY);
     const existingCache = existingRaw
       ? (JSON.parse(existingRaw) as Record<string, Record<string, unknown>>)
@@ -6872,6 +6873,15 @@ export default function Home() {
     console.log("ARTICLES COUNT", articles.length);
     console.log("LOADING STATE", isLoading);
   }, [articles.length, isLoading]);
+
+  const articleDisplayImageCount = useMemo(
+    () => articles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length,
+    [articles]
+  );
+
+  useEffect(() => {
+    console.log("ARTICLE DISPLAY_IMAGE FINAL_COUNT", articleDisplayImageCount);
+  }, [articleDisplayImageCount]);
 
 
   const feedMode:
@@ -15913,36 +15923,26 @@ export default function Home() {
   };
 
   const getLargeImageCardImage = (article: Article) => {
-    if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
-      const sportsVisual = getSportsCardVisual(article, { largeCard: true });
+    const displayImage = getArticleDisplayImage(article, { largeCard: true });
 
-      if (!sportsVisual?.src) {
-        return null;
-      }
-
-      return {
-        src: sportsVisual.src,
-        failureKey: sportsVisual.failureKey,
-        kind: sportsVisual.kind,
-      };
-    }
-
-    const selectedImage = getBestArticleImage(article);
-    const imageSrc = selectedImage.src;
-    const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
-
-    if (!imageSrc || failedArticleImages[imageFailureKey]) {
+    if (!displayImage.src || !displayImage.kind) {
       return null;
     }
 
-    if (!isLikelyHighQualityArticleImage(selectedImage.source, imageSrc)) {
+    const failureKey = displayImage.failureKey ?? `${article.id}:none`;
+    const hasFailedImage =
+      displayImage.kind === "real"
+        ? Boolean(failedArticleImages[failureKey])
+        : Boolean(failedArticleBoxImages[failureKey]);
+
+    if (hasFailedImage) {
       return null;
     }
 
     return {
-      src: imageSrc,
-      failureKey: imageFailureKey,
-      kind: "real" as const,
+      src: displayImage.src,
+      failureKey,
+      kind: displayImage.kind,
     };
   };
 
@@ -18106,10 +18106,17 @@ export default function Home() {
     }
 
     const safeSourceName = getSafeSourceLabel(article.source);
-    const selectedImage = getBestArticleImage(article);
-    const shouldUseImage =
-      Boolean(selectedImage.src) &&
-      isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
+    const displayImage = getArticleDisplayImage(article);
+    const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
+
+    if (!displayImage.src) {
+      console.log("ARTICLE HIDDEN_NO_IMAGE", {
+        section: "Top 10 Trending",
+        title: article.title,
+        source: article.source,
+      });
+      return null;
+    }
 
     return (
       <article
@@ -18177,25 +18184,15 @@ export default function Home() {
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
           </div>
           <div className="top-trending-list-media" aria-hidden="true">
-            {shouldUseImage && selectedImage.src ? (
+            {displayImage.src ? (
               <img
-                src={selectedImage.src}
+                src={displayImage.src}
                 alt={cleanDisplayText(article.title)}
                 className="top-trending-list-image"
                 loading="lazy"
                 decoding="async"
               />
-            ) : hasMappedSourceLogo(safeSourceName) ? (
-              <div className="top-trending-list-logo-fallback">
-                <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
-              </div>
-            ) : (
-              <div className="top-trending-list-logo-fallback top-trending-list-category-fallback">
-                <span className="top-trending-list-fallback-label">
-                  {getCategoryLabel(getSafeCategoryLabel(article.category, article))}
-                </span>
-              </div>
-            )}
+            ) : null}
           </div>
         </Link>
       </article>
@@ -18218,24 +18215,24 @@ export default function Home() {
 
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
-    const sportsVisual = isBroadSportsArticle(article) ? getSportsCardVisual(article) : null;
-    const compactImageSourceUsed = sportsVisual?.kind ?? "category-fallback";
+    const displayImage = getArticleDisplayImage(article);
+    const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
+
+    if (!displayImage.src) {
+      console.log("ARTICLE HIDDEN_NO_IMAGE", {
+        section: options?.imageFallbackLabel ?? safeCategoryName,
+        title: article.title,
+        source: article.source,
+      });
+      return null;
+    }
 
     if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
       console.log("SPORTS IMAGE SOURCE USED", {
         title: cleanDisplayText(article.title),
         source: safeSourceName,
-        imageSource: compactImageSourceUsed,
+        imageSource: displayImage.kind ?? "none",
       });
-
-      if (!sportsVisual?.src && !hasMappedSourceLogo(safeSourceName)) {
-        console.log("SPORTS ARTICLE HIDDEN_NO_IMAGE", {
-          section: options?.imageFallbackLabel ?? "Sports",
-          title: article.title,
-          source: article.source,
-        });
-        return null;
-      }
     }
 
     return (
@@ -18308,60 +18305,45 @@ export default function Home() {
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
           </div>
           <div className="top-trending-list-media" aria-hidden="true">
-            {sportsVisual?.src ? (
+            {displayImage.src ? (
               <img
-                src={sportsVisual.src}
+                src={displayImage.src}
                 alt={cleanDisplayText(article.title)}
                 className="top-trending-list-image"
                 loading="lazy"
                 decoding="async"
                 onError={() => {
-                  if (!sportsVisual.failureKey) {
+                  if (!displayImage.failureKey) {
                     return;
                   }
 
-                  if (sportsVisual.kind === "real") {
+                  if (displayImage.kind === "real") {
                     setFailedArticleImages((prev) => {
-                      if (prev[sportsVisual.failureKey]) {
+                      if (prev[imageFailureKey]) {
                         return prev;
                       }
 
                       return {
                         ...prev,
-                        [sportsVisual.failureKey]: true,
+                        [imageFailureKey]: true,
                       };
                     });
                     return;
                   }
 
                   setFailedArticleBoxImages((prev) => {
-                    if (prev[sportsVisual.failureKey]) {
+                    if (prev[imageFailureKey]) {
                       return prev;
                     }
 
                     return {
                       ...prev,
-                      [sportsVisual.failureKey]: true,
+                      [imageFailureKey]: true,
                     };
                   });
                 }}
               />
-            ) : hasMappedSourceLogo(safeSourceName) ? (
-              <div className="top-trending-list-logo-fallback">
-                <SourceBadge sourceName={safeSourceName} showInitialFallback={false} />
-                {options?.imageFallbackLabel ? (
-                  <span className="top-trending-list-fallback-label">{options.imageFallbackLabel}</span>
-                ) : null}
-              </div>
-            ) : (
-              <div
-                className={`top-trending-list-logo-fallback top-trending-list-category-fallback top-trending-list-category-fallback-${safeCategoryName.toLowerCase()}`}
-              >
-                <span className="top-trending-list-fallback-label">
-                  {options?.imageFallbackLabel ?? getCategoryLabel(safeCategoryName)}
-                </span>
-              </div>
-            )}
+            ) : null}
           </div>
         </Link>
       </article>
