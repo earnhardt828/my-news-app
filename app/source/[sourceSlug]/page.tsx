@@ -8,6 +8,7 @@ import { apiFetch } from "../../../lib/api-base";
 import { getBestArticleImage } from "../../../lib/article-images";
 import { getCategoryLabel } from "../../../lib/categories";
 import { cleanDisplayText } from "../../../lib/display-text";
+import { handleArticleCardActivation } from "../../../lib/open-article";
 import { ensureProfileRow, saveProfilePatch } from "../../../lib/profile-store";
 import { formatRelativeTimestamp } from "../../../lib/relative-time";
 import {
@@ -555,8 +556,10 @@ export default function SourcePage({
               key={article.id}
               href={`/article/${article.id}/`}
               className="section-card search-result-card"
-              onClick={() => {
-                persistSourceArticleMetadata(article);
+              onClick={(event) => {
+                void handleArticleCardActivation(event, article.url, () => {
+                  persistSourceArticleMetadata(article);
+                });
               }}
             >
               <div className="search-result-source-row">

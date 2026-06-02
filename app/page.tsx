@@ -74,6 +74,7 @@ import {
   SUPPORTED_LOCAL_CITIES,
 } from "../lib/local-news";
 import { isCommentAllowed } from "../lib/moderation";
+import { handleArticleCardActivation } from "../lib/open-article";
 import {
   getSourceBoxLogoUrl,
   getSourceRectangleLogoUrl,
@@ -9626,6 +9627,26 @@ export default function Home() {
     }
   }, []);
 
+  const handlePrimaryArticleOpen = useCallback(
+    async (
+      event: { preventDefault: () => void; stopPropagation?: () => void },
+      article: Article
+    ) => {
+      await handleArticleCardActivation(event, article.url, () => {
+        persistArticleMetadata(article);
+        saveArticleReturnState({
+          path: "/",
+          scrollY: window.scrollY,
+          source: "home",
+          sortMode,
+          selectedLocalCity,
+          localLocationLabel,
+        });
+      });
+    },
+    [localLocationLabel, selectedLocalCity, sortMode]
+  );
+
   useEffect(() => () => clearArticleLongPressTimer(), [clearArticleLongPressTimer]);
 
   useEffect(() => {
@@ -15588,16 +15609,8 @@ export default function Home() {
           <Link
             href={`/article/${articleRouteId}/`}
             className="article-link"
-            onClick={() => {
-              persistArticleMetadata(article);
-              saveArticleReturnState({
-                path: "/",
-                scrollY: window.scrollY,
-                source: "home",
-                sortMode,
-                selectedLocalCity,
-                localLocationLabel,
-              });
+            onClick={(event) => {
+              void handlePrimaryArticleOpen(event, article);
             }}
           >
             <div className="news-card-body news-card-body-with-thumb news-card-body-compact">
@@ -15662,7 +15675,13 @@ export default function Home() {
               </span>
             </div>
           </div>
-          <Link href={`/article/${article.id}/`} className="article-link">
+          <Link
+            href={`/article/${article.id}/`}
+            className="article-link"
+            onClick={(event) => {
+              void handlePrimaryArticleOpen(event, article);
+            }}
+          >
             <div className="news-card-body news-card-body-text-only">
               <div className="news-card-copy">
                 <h3 className="trending-article-title">{cleanDisplayText(article.title)}</h3>
@@ -15765,16 +15784,8 @@ export default function Home() {
         imageAlt={cleanDisplayText(article.title)}
         likes={article.likes}
         commentsCount={article.comments.length}
-        onOpen={() => {
-          persistArticleMetadata(article);
-          saveArticleReturnState({
-            path: "/",
-            scrollY: window.scrollY,
-            source: "home",
-            sortMode,
-            selectedLocalCity,
-            localLocationLabel,
-          });
+        onOpen={(event) => {
+          void handlePrimaryArticleOpen(event, article);
         }}
         onImageError={() => {
           setFailedArticleImages((prev) => {
@@ -16391,16 +16402,8 @@ export default function Home() {
         href={`/article/${articleRouteId}/`}
         className={`featured-story-card ${options?.className ?? ""}`.trim()}
         role="listitem"
-        onClick={() => {
-          persistArticleMetadata(article);
-          saveArticleReturnState({
-            path: "/",
-            scrollY: window.scrollY,
-            source: "home",
-            sortMode,
-            selectedLocalCity,
-            localLocationLabel,
-          });
+        onClick={(event) => {
+          void handlePrimaryArticleOpen(event, article);
         }}
       >
         {imageSrc ? (
@@ -16556,16 +16559,8 @@ export default function Home() {
                     href={`/article/${articleRouteId}/`}
                     className="popular-music-card"
                     role="listitem"
-                    onClick={() => {
-                      persistArticleMetadata(article);
-                      saveArticleReturnState({
-                        path: "/",
-                        scrollY: window.scrollY,
-                        source: "home",
-                        sortMode,
-                        selectedLocalCity,
-                        localLocationLabel,
-                      });
+                    onClick={(event) => {
+                      void handlePrimaryArticleOpen(event, article);
                     }}
                   >
                     <div className="popular-music-card-art-shell">
@@ -16658,16 +16653,8 @@ export default function Home() {
                     href={`/article/${articleRouteId}/`}
                     className="popular-music-card"
                     role="listitem"
-                    onClick={() => {
-                      persistArticleMetadata(article);
-                      saveArticleReturnState({
-                        path: "/",
-                        scrollY: window.scrollY,
-                        source: "home",
-                        sortMode,
-                        selectedLocalCity,
-                        localLocationLabel,
-                      });
+                    onClick={(event) => {
+                      void handlePrimaryArticleOpen(event, article);
                     }}
                   >
                     <div className="popular-music-card-art-shell">
@@ -17916,16 +17903,8 @@ export default function Home() {
         <Link
           href={`/article/${articleRouteId}/`}
           className="top-trending-list-link"
-          onClick={() => {
-            persistArticleMetadata(article);
-            saveArticleReturnState({
-              path: "/",
-              scrollY: window.scrollY,
-              source: "home",
-              sortMode,
-              selectedLocalCity,
-              localLocationLabel,
-            });
+          onClick={(event) => {
+            void handlePrimaryArticleOpen(event, article);
           }}
         >
           <div className="top-trending-list-rank" aria-hidden="true">
@@ -18083,16 +18062,8 @@ export default function Home() {
         <Link
           href={`/article/${articleRouteId}/`}
           className="top-trending-list-link"
-          onClick={() => {
-            persistArticleMetadata(article);
-            saveArticleReturnState({
-              path: "/",
-              scrollY: window.scrollY,
-              source: "home",
-              sortMode,
-              selectedLocalCity,
-              localLocationLabel,
-            });
+          onClick={(event) => {
+            void handlePrimaryArticleOpen(event, article);
           }}
         >
           {typeof options?.showRank === "number" ? (

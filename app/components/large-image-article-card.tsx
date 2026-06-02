@@ -14,7 +14,7 @@ type LargeImageArticleCardProps = {
   likes: number;
   commentsCount: number;
   className?: string;
-  onOpen?: () => void;
+  onOpen?: MouseEventHandler<HTMLAnchorElement>;
   onImageError?: () => void;
   onContextMenu?: MouseEventHandler<HTMLElement>;
   onTouchStart?: TouchEventHandler<HTMLElement>;

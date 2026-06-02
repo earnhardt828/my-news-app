@@ -14,6 +14,7 @@ import {
   shouldUseLargeArticleImage,
   shouldSuppressLowQualityArticleImage,
 } from "../../lib/article-images";
+import { handleArticleCardActivation } from "../../lib/open-article";
 import { getCategoryLabel } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import {
@@ -407,7 +408,13 @@ export default function MyFeed() {
                         <span className="trending-source-name">{article.source}</span>
                       </div>
                     </Link>
-                    <Link href={`/article/${article.id}/`} className="article-link">
+                    <Link
+                      href={`/article/${article.id}/`}
+                      className="article-link"
+                      onClick={(event) => {
+                        void handleArticleCardActivation(event, article.url);
+                      }}
+                    >
                       <div
                         className={`news-card-body ${
                           shouldUseHeroImage

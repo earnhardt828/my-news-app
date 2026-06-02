@@ -16,6 +16,7 @@ import {
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
+import { handleArticleCardActivation } from "../../lib/open-article";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { formatRelativeTimestamp } from "../../lib/relative-time";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
@@ -1355,13 +1356,15 @@ export default function Search() {
                         key={article.id}
                         href={`/article/${article.id}/`}
                         className="section-card search-result-card"
-                        onClick={() => {
-                          persistSearchArticleMetadata(article);
-                          saveArticleReturnState({
-                            path: "/search/",
-                            scrollY: window.scrollY,
-                            source: "search",
-                            searchQuery: query,
+                        onClick={(event) => {
+                          void handleArticleCardActivation(event, article.url, () => {
+                            persistSearchArticleMetadata(article);
+                            saveArticleReturnState({
+                              path: "/search/",
+                              scrollY: window.scrollY,
+                              source: "search",
+                              searchQuery: query,
+                            });
                           });
                         }}
                       >

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/loading-screen";
 import { cleanDisplayText } from "../../../lib/display-text";
+import { handleArticleCardActivation } from "../../../lib/open-article";
 import { slugifySourceName } from "../../../lib/source-logos";
 import { supabase } from "../../../lib/supabase";
 
@@ -122,6 +123,9 @@ export default function ProfileBookmarksPage() {
                 key={article.id}
                 href={`/article/${article.article_id}/`}
                 className="comment-card profile-saved-article-card"
+                onClick={(event) => {
+                  void handleArticleCardActivation(event, article.url);
+                }}
               >
                 <div className="profile-saved-article-copy">
                   <strong className="profile-saved-article-title">
