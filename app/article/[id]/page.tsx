@@ -895,8 +895,6 @@ export default function ArticleDetailPage() {
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
   const [commentActionTarget, setCommentActionTarget] = useState<ArticleComment | null>(null);
   const [compareStatusMessage, setCompareStatusMessage] = useState("");
-  const [isEmbeddedPreviewLoaded, setIsEmbeddedPreviewLoaded] = useState(false);
-  const [isEmbeddedPreviewTimedOut, setIsEmbeddedPreviewTimedOut] = useState(false);
   const shouldEnableCompareSources = false;
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const commentsSectionRef = useRef<HTMLElement | null>(null);
@@ -1406,31 +1404,6 @@ export default function ArticleDetailPage() {
       window.clearTimeout(timer);
     };
   }, [showCompareTutorial]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const previewUrl = activeCompareArticle?.url?.trim() ?? "";
-    const canAttemptEmbeddedPreview =
-      Boolean(previewUrl) && !commentsOnly && !isNativeCapacitorRuntime();
-
-    setIsEmbeddedPreviewLoaded(false);
-    setIsEmbeddedPreviewTimedOut(false);
-
-    if (!canAttemptEmbeddedPreview) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setIsEmbeddedPreviewTimedOut(true);
-    }, 3000);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [activeCompareArticle?.url, commentsOnly]);
 
   const displayedComments = useMemo(
     () => sortComments(comments, commentSortMode),
@@ -2058,13 +2031,6 @@ export default function ArticleDetailPage() {
     .trim();
   const articleSnippet =
     rawSnippet.length > 360 ? `${rawSnippet.slice(0, 357).trimEnd()}...` : rawSnippet;
-  const canAttemptEmbeddedPreview =
-    Boolean(compareArticle.url?.trim()) && !isNativeCapacitorRuntime();
-  const shouldShowEmbeddedPreview =
-    canAttemptEmbeddedPreview && (!isEmbeddedPreviewTimedOut || isEmbeddedPreviewLoaded);
-  const shouldShowEmbeddedPreviewBlockedMessage =
-    Boolean(compareArticle.url?.trim()) &&
-    (isNativeCapacitorRuntime() || (isEmbeddedPreviewTimedOut && !isEmbeddedPreviewLoaded));
   const renderCommentsContent = () => (
     <>
       <div className="article-comments-thread article-comments-inline-thread">
@@ -2493,50 +2459,6 @@ export default function ArticleDetailPage() {
               </button>
             ) : null}
           </div>
-
-          {compareArticle.url ? (
-            <div className="article-detail-section article-source-preview-section">
-              <p className="article-detail-label">Source preview</p>
-              {shouldShowEmbeddedPreview ? (
-                <div className="reader-frame-shell article-source-preview-shell">
-                  {!isEmbeddedPreviewLoaded ? (
-                    <div className="reader-loading-state">
-                      <strong>Loading source preview...</strong>
-                      <span>Trying to display the publisher view inside Graffiti.</span>
-                    </div>
-                  ) : null}
-                  <iframe
-                    src={compareArticle.url}
-                    title={`${compareArticle.source} preview`}
-                    className="reader-frame article-source-preview-frame"
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                    onLoad={() => {
-                      setIsEmbeddedPreviewLoaded(true);
-                    }}
-                  />
-                </div>
-              ) : null}
-
-              {shouldShowEmbeddedPreviewBlockedMessage ? (
-                <div className="article-source-preview-blocked">
-                  <p className="article-summary-paragraph">
-                    This publisher blocks in-app viewing.
-                  </p>
-                  <button
-                    type="button"
-                    className="button button-secondary article-original-button"
-                    onClick={() => {
-                      void openOriginalSource(compareArticle.url);
-                    }}
-                  >
-                    Read Original Source
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       </section>
 

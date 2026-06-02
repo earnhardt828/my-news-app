@@ -54,6 +54,7 @@ type NormalizedArticle = {
   time: string;
   likes: number;
   comments: null[];
+  provider: string;
 };
 
 type NewsMode =
@@ -134,6 +135,53 @@ type GNewsApiResponse = {
       name?: string | null;
     } | null;
   }>;
+};
+
+type MediaStackApiResponse = {
+  data?: Array<{
+    title?: string | null;
+    description?: string | null;
+    url?: string | null;
+    image?: string | null;
+    published_at?: string | null;
+    source?: string | null;
+    category?: string | null;
+  }>;
+};
+
+type GuardianApiResponse = {
+  response?: {
+    results?: Array<{
+      webTitle?: string | null;
+      webUrl?: string | null;
+      webPublicationDate?: string | null;
+      sectionName?: string | null;
+      fields?: {
+        trailText?: string | null;
+        thumbnail?: string | null;
+        headline?: string | null;
+        bodyText?: string | null;
+      } | null;
+    }>;
+  };
+};
+
+type NytApiResponse = {
+  response?: {
+    docs?: Array<{
+      headline?: {
+        main?: string | null;
+      } | null;
+      abstract?: string | null;
+      web_url?: string | null;
+      pub_date?: string | null;
+      section_name?: string | null;
+      multimedia?: Array<{
+        url?: string | null;
+        subtype?: string | null;
+      }> | null;
+    }>;
+  };
 };
 
 type NewsApiResponse = {
@@ -623,9 +671,19 @@ const NEWS_API_KEY =
   "";
 const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
+const NYT_API_KEY = process.env.NYT_API_KEY ?? "";
+const GUARDIAN_API_KEY = process.env.GUARDIAN_API_KEY ?? "";
+const BING_NEWS_API_KEY = process.env.BING_NEWS_API_KEY ?? "";
 
 function logProviderSkip(providerName: string, reason: string) {
   console.warn(`[api/news] Skipping ${providerName}: ${reason}`);
+}
+
+function logProviderRequest(providerName: string, details: Record<string, unknown>) {
+  console.log("NEWS PROVIDER REQUEST", {
+    provider: providerName,
+    ...details,
+  });
 }
 
 const responseCache = new Map<string, CachedResponse>();
@@ -1572,6 +1630,7 @@ function buildNormalizedArticle(
     category: string;
     uniqueSeed: string;
     fallbackPublishedOffsetHours?: number;
+    provider?: string;
   }
 ): NormalizedArticle | null {
   const title = raw.title?.trim();
@@ -1631,7 +1690,35 @@ function buildNormalizedArticle(
     time: "Recent",
     likes: popularity.likes,
     comments: new Array(popularity.commentCount).fill(null),
+    provider: fallback.provider ?? fallback.source,
   };
+}
+
+function hasRealArticleImage(article: Pick<
+  NormalizedArticle,
+  "urlToImage" | "imageUrl" | "image" | "ogImage" | "mediaContent" | "enclosureUrl" | "twitterImage" | "thumbnail"
+>) {
+  return Boolean(
+    article.urlToImage ||
+      article.imageUrl ||
+      article.image ||
+      article.ogImage ||
+      article.mediaContent ||
+      article.enclosureUrl ||
+      article.twitterImage ||
+      article.thumbnail
+  );
+}
+
+function logProviderArticleStats(providerName: string, articles: NormalizedArticle[]) {
+  console.log("NEWS PROVIDER ARTICLE COUNT", {
+    provider: providerName,
+    count: articles.length,
+  });
+  console.log("NEWS PROVIDER IMAGE COUNT", {
+    provider: providerName,
+    count: articles.filter((article) => hasRealArticleImage(article)).length,
+  });
 }
 
 function getModeCategories(mode: NewsMode, categories: string[]) {
@@ -2107,7 +2194,9 @@ function dedupeArticles(articles: NormalizedArticle[]) {
     const sourceKey = article.source.trim().toLowerCase();
     const keys = [
       normalizedUrl ? `url:${normalizedUrl}` : null,
+      titleFingerprint ? `title:${titleFingerprint}` : null,
       titleFingerprint ? `title:${sourceKey}:${titleFingerprint}` : null,
+      titleFingerprint ? `source-title:${sourceKey}:${titleFingerprint}` : null,
     ].filter(Boolean) as string[];
 
     if (keys.length === 0) {
@@ -2133,6 +2222,26 @@ function dedupeArticles(articles: NormalizedArticle[]) {
     }
     seenArticles.add(identity);
     return true;
+  });
+}
+
+function sortImageFirstArticles(articles: NormalizedArticle[]) {
+  return [...articles].sort((left, right) => {
+    const imageDiff = Number(hasRealArticleImage(right)) - Number(hasRealArticleImage(left));
+
+    if (imageDiff !== 0) {
+      return imageDiff;
+    }
+
+    const qualityDiff =
+      getSourceQualityScore(right.source, right.url) -
+      getSourceQualityScore(left.source, left.url);
+
+    if (qualityDiff !== 0) {
+      return qualityDiff;
+    }
+
+    return getPublishedTime(right) - getPublishedTime(left);
   });
 }
 
@@ -2289,16 +2398,20 @@ function sortArticlesForMode(
   articles: NormalizedArticle[],
   params: Pick<ProviderFetchParams, "mode" | "query" | "location" | "cityKey">
 ) {
+  const getImageBoost = (article: NormalizedArticle) => (hasRealArticleImage(article) ? 2.5 : 0);
+
   if (params.mode === "search" || params.mode === "compare") {
     return [...articles].sort((left, right) => {
       const rightCompositeScore =
         getMatchScore(right, params.query) * 3 +
         getSourceQualityScore(right.source, right.url) * 8 +
-        getLaunchRecencyScore(right) * 6;
+        getLaunchRecencyScore(right) * 6 +
+        getImageBoost(right);
       const leftCompositeScore =
         getMatchScore(left, params.query) * 3 +
         getSourceQualityScore(left.source, left.url) * 8 +
-        getLaunchRecencyScore(left) * 6;
+        getLaunchRecencyScore(left) * 6 +
+        getImageBoost(left);
       const scoreDiff = rightCompositeScore - leftCompositeScore;
 
       if (scoreDiff !== 0) {
@@ -2316,11 +2429,13 @@ function sortArticlesForMode(
       const rightCompositeScore =
         getLocalMatchScore(right, params.location || params.query, params.cityKey) +
         getSourceQualityScore(right.source, right.url) * 22 +
-        getLaunchRecencyScore(right) * 18;
+        getLaunchRecencyScore(right) * 18 +
+        getImageBoost(right) * 2;
       const leftCompositeScore =
         getLocalMatchScore(left, params.location || params.query, params.cityKey) +
         getSourceQualityScore(left.source, left.url) * 22 +
-        getLaunchRecencyScore(left) * 18;
+        getLaunchRecencyScore(left) * 18 +
+        getImageBoost(left) * 2;
       const scoreDiff = rightCompositeScore - leftCompositeScore;
 
       if (scoreDiff !== 0) {
@@ -2348,11 +2463,13 @@ function sortArticlesForMode(
       const rightCompositeScore =
         getMatchScore(right, effectiveQuery) * 3 +
         getSourceQualityScore(right.source, right.url) * 8 +
-        getLaunchRecencyScore(right) * 6;
+        getLaunchRecencyScore(right) * 6 +
+        getImageBoost(right);
       const leftCompositeScore =
         getMatchScore(left, effectiveQuery) * 3 +
         getSourceQualityScore(left.source, left.url) * 8 +
-        getLaunchRecencyScore(left) * 6;
+        getLaunchRecencyScore(left) * 6 +
+        getImageBoost(left);
       const scoreDiff = rightCompositeScore - leftCompositeScore;
 
       if (scoreDiff !== 0) {
@@ -2370,8 +2487,12 @@ function sortArticlesForMode(
       const qualityDiff =
         getSourceQualityScore(right.source, right.url) -
         getSourceQualityScore(left.source, left.url);
+      const imageDiff = getImageBoost(right) - getImageBoost(left);
       const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
       const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+      if (imageDiff !== 0) {
+        return imageDiff;
+      }
       if (rightTime !== leftTime) {
         return rightTime - leftTime;
       }
@@ -2383,9 +2504,13 @@ function sortArticlesForMode(
     return diversifyArticles(
       [...articles].sort((left, right) => {
         const rightCompositeScore =
-          getPublishedTime(right) + getSourceQualityScore(right.source, right.url) * 1000;
+          getPublishedTime(right) +
+          getSourceQualityScore(right.source, right.url) * 1000 +
+          getImageBoost(right) * 1000;
         const leftCompositeScore =
-          getPublishedTime(left) + getSourceQualityScore(left.source, left.url) * 1000;
+          getPublishedTime(left) +
+          getSourceQualityScore(left.source, left.url) * 1000 +
+          getImageBoost(left) * 1000;
         return rightCompositeScore - leftCompositeScore;
       })
     );
@@ -2529,6 +2654,12 @@ async function fetchNewsApiArticles(params: ProviderFetchParams): Promise<Provid
   }
 
   const requests = buildNewsApiUrls(params);
+  logProviderRequest("NewsAPI", {
+    mode: params.mode,
+    page: params.page,
+    requestCount: requests.length,
+    query: getEffectiveQuery(params),
+  });
   let hasLoggedRawSample = false;
 
   const responses = await Promise.allSettled(
@@ -2577,6 +2708,7 @@ async function fetchNewsApiArticles(params: ProviderFetchParams): Promise<Provid
   console.log("NEWSAPI REQUEST COUNT", requests.length);
   console.log("NORMALIZED COUNT", normalizedArticles.length);
   console.log("NORMALIZED ARTICLE SAMPLE", normalizedArticles[0] ?? null);
+  logProviderArticleStats("NewsAPI", normalizedArticles);
 
   return {
     articles: normalizedArticles,
@@ -2630,6 +2762,13 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
     });
   }
 
+  logProviderRequest("GNews", {
+    mode: params.mode,
+    page: params.page,
+    requestCount: requests.length,
+    query: effectiveQuery,
+  });
+
   const responses = await Promise.allSettled(
     requests.map(async ({ url, category }) => {
       const response = await fetch(url, {
@@ -2663,6 +2802,8 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
     console.error("GNews provider error:", result.reason);
     return [];
   });
+
+  logProviderArticleStats("GNews", normalizedArticles);
 
   return {
     articles: normalizedArticles,
@@ -2753,6 +2894,12 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
     return { articles: [], hasMore: false };
   }
 
+  logProviderRequest("NewsData.io", {
+    mode: params.mode,
+    page: params.page,
+    query: effectiveQuery || categories[0] || "",
+  });
+
   if (pageToken) {
     baseUrl.searchParams.set("page", pageToken);
   }
@@ -2795,9 +2942,210 @@ async function fetchNewsDataArticles(params: ProviderFetchParams): Promise<Provi
     )
     .filter(Boolean) as NormalizedArticle[];
 
+  logProviderArticleStats("NewsData.io", normalizedArticles);
+
   return {
     articles: normalizedArticles,
     hasMore: Boolean(data.nextPage),
+  };
+}
+
+async function fetchMediaStackArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  if (!MEDIASTACK_API_KEY) {
+    logProviderSkip("MediaStack", "MEDIASTACK_API_KEY is missing");
+    return { articles: [], hasMore: false };
+  }
+
+  const categories = getModeCategories(params.mode, params.categories);
+  const effectiveQuery = getEffectiveQuery(params);
+  const url = new URL("https://api.mediastack.com/v1/news");
+  url.searchParams.set("access_key", MEDIASTACK_API_KEY);
+  url.searchParams.set("languages", "en");
+  url.searchParams.set("countries", "us");
+  url.searchParams.set("limit", String(Math.min(params.pageSize, 100)));
+  url.searchParams.set("offset", String(Math.max(0, (params.page - 1) * params.pageSize)));
+
+  if (effectiveQuery) {
+    url.searchParams.set("keywords", effectiveQuery);
+  } else if (categories.length > 0) {
+    url.searchParams.set("keywords", getCategoryQuery(categories[0]));
+    url.searchParams.set("categories", categories[0].toLowerCase().replace(/\s+/g, ","));
+  }
+
+  logProviderRequest("MediaStack", {
+    mode: params.mode,
+    page: params.page,
+    query: effectiveQuery || categories[0] || "",
+  });
+
+  const response = await fetch(url.toString(), {
+    next: { revalidate: 600 },
+  });
+
+  if (!response.ok) {
+    console.error("MediaStack provider error:", response.status, response.statusText);
+    return { articles: [], hasMore: false };
+  }
+
+  const data = (await response.json()) as MediaStackApiResponse;
+  const normalizedArticles = (data.data ?? [])
+    .map((article, index) =>
+      buildNormalizedArticle(
+        {
+          title: article.title,
+          description: article.description,
+          url: article.url,
+          image: article.image,
+          publishedAt: article.published_at,
+          source_name: article.source,
+          category: article.category,
+        },
+        {
+          source: article.source?.trim() || "MediaStack",
+          category: article.category?.trim() || categories[0] || "News",
+          uniqueSeed: `mediastack-${params.page}-${index}`,
+          fallbackPublishedOffsetHours: index,
+          provider: "MediaStack",
+        }
+      )
+    )
+    .filter(Boolean) as NormalizedArticle[];
+
+  logProviderArticleStats("MediaStack", normalizedArticles);
+  return {
+    articles: normalizedArticles,
+    hasMore: normalizedArticles.length >= params.pageSize,
+  };
+}
+
+async function fetchGuardianArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  if (!GUARDIAN_API_KEY) {
+    logProviderSkip("The Guardian", "GUARDIAN_API_KEY is missing");
+    return { articles: [], hasMore: false };
+  }
+
+  const categories = getModeCategories(params.mode, params.categories);
+  const effectiveQuery = getEffectiveQuery(params) || categories[0] || "news";
+  const url = new URL("https://content.guardianapis.com/search");
+  url.searchParams.set("api-key", GUARDIAN_API_KEY);
+  url.searchParams.set("page-size", String(Math.min(params.pageSize, 50)));
+  url.searchParams.set("page", String(params.page));
+  url.searchParams.set("show-fields", "headline,trailText,thumbnail,bodyText");
+  url.searchParams.set("q", effectiveQuery);
+
+  logProviderRequest("The Guardian", {
+    mode: params.mode,
+    page: params.page,
+    query: effectiveQuery,
+  });
+
+  const response = await fetch(url.toString(), {
+    next: { revalidate: 600 },
+  });
+
+  if (!response.ok) {
+    console.error("The Guardian provider error:", response.status, response.statusText);
+    return { articles: [], hasMore: false };
+  }
+
+  const data = (await response.json()) as GuardianApiResponse;
+  const normalizedArticles = (data.response?.results ?? [])
+    .map((article, index) =>
+      buildNormalizedArticle(
+        {
+          title: article.fields?.headline ?? article.webTitle,
+          description: article.fields?.trailText ?? null,
+          content: article.fields?.bodyText ?? null,
+          url: article.webUrl,
+          imageUrl: article.fields?.thumbnail ?? null,
+          publishedAt: article.webPublicationDate,
+          source_name: "The Guardian",
+          category: article.sectionName ?? categories[0] ?? "News",
+        },
+        {
+          source: "The Guardian",
+          category: article.sectionName ?? categories[0] ?? "News",
+          uniqueSeed: `guardian-${params.page}-${index}`,
+          fallbackPublishedOffsetHours: index,
+          provider: "The Guardian",
+        }
+      )
+    )
+    .filter(Boolean) as NormalizedArticle[];
+
+  logProviderArticleStats("The Guardian", normalizedArticles);
+  return {
+    articles: normalizedArticles,
+    hasMore: normalizedArticles.length >= params.pageSize,
+  };
+}
+
+async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  if (!NYT_API_KEY) {
+    logProviderSkip("New York Times", "NYT_API_KEY is missing");
+    return { articles: [], hasMore: false };
+  }
+
+  const categories = getModeCategories(params.mode, params.categories);
+  const effectiveQuery = getEffectiveQuery(params) || categories[0] || "news";
+  const url = new URL("https://api.nytimes.com/svc/search/v2/articlesearch.json");
+  url.searchParams.set("api-key", NYT_API_KEY);
+  url.searchParams.set("q", effectiveQuery);
+  url.searchParams.set("page", String(Math.max(0, params.page - 1)));
+
+  logProviderRequest("New York Times", {
+    mode: params.mode,
+    page: params.page,
+    query: effectiveQuery,
+  });
+
+  const response = await fetch(url.toString(), {
+    next: { revalidate: 600 },
+  });
+
+  if (!response.ok) {
+    console.error("New York Times provider error:", response.status, response.statusText);
+    return { articles: [], hasMore: false };
+  }
+
+  const payload = (await response.json()) as NytApiResponse;
+  const docs = payload.response?.docs ?? [];
+  const normalizedArticles = docs
+    .slice(0, params.pageSize)
+    .map((article, index) => {
+      const multimediaUrl =
+        article.multimedia?.find((item) => item.url)?.url?.trim() ?? null;
+      const fullMultimediaUrl = multimediaUrl
+        ? multimediaUrl.startsWith("http")
+          ? multimediaUrl
+          : `https://www.nytimes.com/${multimediaUrl.replace(/^\/+/, "")}`
+        : null;
+
+      return buildNormalizedArticle(
+        {
+          title: article.headline?.main ?? null,
+          description: article.abstract,
+          url: article.web_url,
+          imageUrl: fullMultimediaUrl,
+          publishedAt: article.pub_date,
+          source_name: "The New York Times",
+          category: article.section_name ?? categories[0] ?? "News",
+        },
+        {
+          source: "The New York Times",
+          category: article.section_name ?? categories[0] ?? "News",
+          uniqueSeed: `nyt-${params.page}-${index}`,
+          fallbackPublishedOffsetHours: index,
+          provider: "New York Times",
+        }
+      );
+    })
+    .filter(Boolean) as NormalizedArticle[];
+
+  logProviderArticleStats("New York Times", normalizedArticles);
+  return {
+    articles: normalizedArticles,
+    hasMore: normalizedArticles.length >= params.pageSize,
   };
 }
 
@@ -3561,6 +3909,9 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const providerFetchers = [
     { name: "NewsAPI", run: () => fetchNewsApiArticles(params) },
     { name: "GNews", run: () => fetchGNewsArticles(params) },
+    { name: "MediaStack", run: () => fetchMediaStackArticles(params) },
+    { name: "The Guardian", run: () => fetchGuardianArticles(params) },
+    { name: "New York Times", run: () => fetchNytArticles(params) },
     { name: "Google News RSS", run: () => fetchGoogleNewsRssArticles(params) },
     { name: "NewsData.io", run: () => fetchNewsDataArticles(params) },
     { name: "RSS", run: () => fetchRssArticles(params) },
@@ -3610,6 +3961,10 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     configuredProviders: {
       newsApi: Boolean(NEWS_API_KEY),
       gnews: Boolean(GNEWS_API_KEY),
+      mediaStack: Boolean(MEDIASTACK_API_KEY),
+      nyt: Boolean(NYT_API_KEY),
+      guardian: Boolean(GUARDIAN_API_KEY),
+      bingNews: Boolean(BING_NEWS_API_KEY),
       googleNewsRss: true,
       newsData: Boolean(NEWSDATA_API_KEY),
       rss: true,
@@ -3624,11 +3979,18 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const combined = providerResponses.flatMap((result) =>
     result.status === "fulfilled" ? result.value.articles : []
   );
+  console.log("NEWS MERGED COUNT", combined.length);
   console.log("RAW PROVIDER COUNT", combined.length);
 
   const deduped = dedupeArticles(combined);
+  console.log("NEWS DEDUPED COUNT", deduped.length);
   const sorted = sortArticlesForMode(deduped, params);
-  const realArticles = sorted.filter((article) => !isFallbackArticle(article));
+  const imageFirstSorted = sortImageFirstArticles(sorted);
+  console.log(
+    "NEWS IMAGE_FIRST COUNT",
+    imageFirstSorted.filter((article) => hasRealArticleImage(article)).length
+  );
+  const realArticles = imageFirstSorted.filter((article) => !isFallbackArticle(article));
   const enrichedRealArticles =
     params.mode === "trending" && params.page === 1
       ? await enrichTrendingArticleImages(realArticles)
