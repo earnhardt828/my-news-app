@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 
 const STOCK_QUOTE_CONFIGS = [
-  { symbol: "ES=F", label: "S&P Futures" },
-  { symbol: "NQ=F", label: "Nasdaq Futures" },
-  { symbol: "YM=F", label: "Dow Futures" },
-  { symbol: "SPY", label: "S&P 500" },
-  { symbol: "QQQ", label: "Nasdaq" },
-  { symbol: "DIA", label: "Dow Jones" },
-  { symbol: "IWM", label: "Russell 2000" },
   { symbol: "AAPL", label: "Apple" },
   { symbol: "MSFT", label: "Microsoft" },
   { symbol: "NVDA", label: "Nvidia" },
+  { symbol: "SPY", label: "S&P 500" },
+  { symbol: "QQQ", label: "Nasdaq" },
+  { symbol: "DIA", label: "Dow Jones" },
   { symbol: "AMZN", label: "Amazon" },
   { symbol: "GOOGL", label: "Alphabet" },
   { symbol: "META", label: "Meta" },
@@ -21,6 +17,7 @@ const STOCK_QUOTE_CONFIGS = [
   { symbol: "BAC", label: "Bank of America" },
   { symbol: "XOM", label: "ExxonMobil" },
   { symbol: "DIS", label: "Disney" },
+  { symbol: "IWM", label: "Russell 2000" },
 ] as const;
 
 type StockQuoteConfig = (typeof STOCK_QUOTE_CONFIGS)[number];

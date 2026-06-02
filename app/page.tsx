@@ -2786,6 +2786,26 @@ const BUSINESS_STOCK_UI_TEST_ITEMS: StockTickerItem[] = [
   { symbol: "NVDA", label: "Nvidia", price: 1120.5, change: 18.22, percentChange: 1.65, source: "UI Test" },
 ];
 
+const BUSINESS_STOCK_TICKER_ORDER = [
+  "AAPL",
+  "MSFT",
+  "NVDA",
+  "SPY",
+  "QQQ",
+  "DIA",
+  "AMZN",
+  "GOOGL",
+  "META",
+  "TSLA",
+  "AMD",
+  "NFLX",
+  "JPM",
+  "BAC",
+  "XOM",
+  "DIS",
+  "IWM",
+] as const;
+
 type TopicFallbackGroup = {
   keyword: string;
   pattern: RegExp;
@@ -6504,26 +6524,77 @@ export default function Home() {
         return;
       }
 
-      const payload = {
-        items: BUSINESS_STOCK_UI_TEST_ITEMS,
-        debugFallback: true,
-      };
+      const fallbackItems = BUSINESS_STOCK_UI_TEST_ITEMS.map((item) => ({ ...item }));
 
-      console.log("BUSINESS STOCK JSON RECEIVED", payload);
-      console.log("BUSINESS STOCK FETCH RESPONSE", {
-        ok: true,
-        status: "ui-test",
-        debugFallback: true,
-        count: payload.items.length,
-      });
-      console.log("STOCK TICKER API ITEMS RECEIVED", payload.items);
-      console.log("BUSINESS STOCK DATA ITEMS", payload.items);
-      console.log("BUSINESS STOCK ITEMS RECEIVED", payload.items);
-      console.log("BUSINESS STOCK ITEMS LENGTH", payload.items.length);
+      try {
+        const response = await apiFetch("/api/stocks", {
+          cache: "no-store",
+        });
 
-      if (!isCancelled) {
-        setBusinessTickerItems(payload.items);
-        setBusinessTickerSource("ui-test");
+        const payload = (await response.json().catch(() => ({ items: [] }))) as {
+          items?: StockTickerItem[];
+          debugFallback?: boolean;
+        };
+
+        console.log("BUSINESS STOCK JSON RECEIVED", payload);
+        console.log("BUSINESS STOCK FETCH RESPONSE", {
+          ok: response.ok,
+          status: response.status,
+          count: Array.isArray(payload.items) ? payload.items.length : 0,
+        });
+
+        const apiItems = Array.isArray(payload.items)
+          ? payload.items.filter(
+              (item) =>
+                Boolean(item?.symbol) &&
+                item.price !== null &&
+                Number.isFinite(item.price)
+            )
+          : [];
+
+        console.log("STOCK TICKER API ITEMS RECEIVED", apiItems);
+        console.log("BUSINESS STOCK DATA ITEMS", apiItems);
+        console.log("BUSINESS STOCK ITEMS RECEIVED", apiItems);
+        console.log("BUSINESS STOCK ITEMS LENGTH", apiItems.length);
+
+        const mergedBySymbol = new Map<string, StockTickerItem>();
+
+        fallbackItems.forEach((item) => {
+          mergedBySymbol.set(item.symbol, item);
+        });
+
+        apiItems.forEach((item) => {
+          mergedBySymbol.set(item.symbol, {
+            ...item,
+            source: item.source ?? "Finnhub",
+          });
+        });
+
+        const orderedItems = BUSINESS_STOCK_TICKER_ORDER.map((symbol) => mergedBySymbol.get(symbol))
+          .filter((item): item is StockTickerItem => Boolean(item))
+          .filter((item) => item.price !== null && Number.isFinite(item.price));
+
+        if (!isCancelled) {
+          setBusinessTickerItems(orderedItems);
+          setBusinessTickerSource(apiItems.length > 0 ? "finnhub" : "ui-test");
+        }
+      } catch (error) {
+        console.error("BUSINESS STOCK FETCH FAILED", error);
+        console.log("BUSINESS STOCK JSON RECEIVED", { items: fallbackItems, debugFallback: true });
+        console.log("BUSINESS STOCK FETCH RESPONSE", {
+          ok: false,
+          status: "fetch-error",
+          count: fallbackItems.length,
+        });
+        console.log("STOCK TICKER API ITEMS RECEIVED", []);
+        console.log("BUSINESS STOCK DATA ITEMS", fallbackItems);
+        console.log("BUSINESS STOCK ITEMS RECEIVED", fallbackItems);
+        console.log("BUSINESS STOCK ITEMS LENGTH", fallbackItems.length);
+
+        if (!isCancelled) {
+          setBusinessTickerItems(fallbackItems);
+          setBusinessTickerSource("ui-test");
+        }
       }
     }
 
@@ -16640,7 +16711,7 @@ export default function Home() {
 
     console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
     console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
-    console.log("BUSINESS STOCK FALLBACK USED", true);
+    console.log("BUSINESS STOCK FALLBACK USED", businessTickerSource !== "finnhub");
     console.log("BUSINESS STOCK ITEMS RENDERED", tickerItems);
     console.log("BUSINESS STOCK RENDERING", {
       count: tickerItems.length,
@@ -16734,9 +16805,6 @@ export default function Home() {
               </div>
             );
           })}
-        </div>
-        <div className="muted" style={{ fontSize: "0.74rem", marginTop: "6px" }}>
-          STOCK TICKER UI TEST ACTIVE
         </div>
       </section>
     );
