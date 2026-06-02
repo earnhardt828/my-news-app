@@ -10,6 +10,10 @@ export type ArticleReaderLaunchPayload = {
   url?: string | null;
   title: string;
   source?: string | null;
+  description?: string | null;
+  imageSrc?: string | null;
+  publishedLabel?: string | null;
+  category?: string | null;
 };
 
 export async function openOriginalArticleUrl(url?: string | null) {

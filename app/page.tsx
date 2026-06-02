@@ -9639,6 +9639,10 @@ export default function Home() {
           url: article.url,
           title: article.title,
           source: article.source,
+          description: article.description ?? null,
+          imageSrc: getBestArticleImage(article).src ?? null,
+          publishedLabel: formatFreshnessTime(article.publishedAt, article.time),
+          category: getCategoryLabel(getSafeCategoryLabel(article.category, article)),
         },
         () => {
         persistArticleMetadata(article);

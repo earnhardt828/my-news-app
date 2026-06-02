@@ -417,6 +417,10 @@ export default function MyFeed() {
                             url: article.url,
                             title: article.title,
                             source: article.source,
+                            description: article.description ?? null,
+                            imageSrc: imageSrc ?? null,
+                            publishedLabel: formatRelativeTimestamp(article.publishedAt, article.time),
+                            category: getCategoryLabel(article.category),
                           });
                         }}
                       >

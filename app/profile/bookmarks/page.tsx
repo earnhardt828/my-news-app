@@ -129,6 +129,9 @@ export default function ProfileBookmarksPage() {
                     url: article.url,
                     title: article.title,
                     source: article.source,
+                    imageSrc: article.image ?? null,
+                    publishedLabel: formatSavedArticleDate(article),
+                    category: article.category,
                   });
                 }}
               >

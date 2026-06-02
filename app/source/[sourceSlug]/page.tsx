@@ -564,6 +564,10 @@ export default function SourcePage({
                     url: article.url,
                     title: article.title,
                     source: article.source,
+                    description: article.description ?? null,
+                    imageSrc: getBestArticleImage(article).src ?? null,
+                    publishedLabel: formatSourceDate(article.publishedAt, article.time),
+                    category: getCategoryLabel(article.category),
                   },
                   () => {
                   persistSourceArticleMetadata(article);

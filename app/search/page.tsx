@@ -1364,6 +1364,10 @@ export default function Search() {
                               url: article.url,
                               title: article.title,
                               source: article.source,
+                              description: article.description ?? null,
+                              imageSrc: imageSrc ?? null,
+                              publishedLabel: formatSearchDate(article.publishedAt, article.time),
+                              category: getCategoryLabel(safeCategoryName),
                             },
                             () => {
                             persistSearchArticleMetadata(article);

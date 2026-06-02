@@ -4772,14 +4772,6 @@ input {
   text-overflow: ellipsis;
 }
 
-.article-reader-frame-shell {
-  min-height: 72vh;
-}
-
-.article-reader-frame {
-  height: min(76vh, 920px);
-}
-
 .article-reader-modal-actions {
   justify-content: center;
 }
@@ -4796,6 +4788,44 @@ input {
   background: transparent;
   box-shadow: none;
   padding: 0;
+}
+
+.article-reader-preview-body {
+  display: grid;
+  gap: 18px;
+}
+
+.article-reader-preview-image-shell {
+  position: relative;
+  width: 100%;
+  border-radius: 24px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-muted) 88%, white);
+  border: 1px solid var(--border);
+}
+
+.article-reader-preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(42vh, 420px);
+  object-fit: cover;
+}
+
+.article-reader-preview-date {
+  font-size: 0.85rem;
+}
+
+.article-reader-preview-summary {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.article-reader-preview-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .status-message {

@@ -1,11 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { openOriginalArticleUrl, type ArticleReaderLaunchPayload } from "../../lib/open-article";
 import { supabase } from "../../lib/supabase";
 import { cleanDisplayText } from "../../lib/display-text";
 
-type ReaderCommentCountResponse = { count: number | null };
 type ReaderLikeRow = { id: number; user_id: string | null };
 type ReaderSavedRow = { article_id: number | null };
 
@@ -20,11 +20,13 @@ const actionIconProps = {
   strokeLinejoin: "round" as const,
 };
 
+function formatPublishedLabel(label?: string | null) {
+  return cleanDisplayText(label ?? "").trim();
+}
+
 export default function ArticleSourceReaderModal() {
   const [activeArticle, setActiveArticle] = useState<ArticleReaderLaunchPayload | null>(null);
   const [isReaderOpen, setIsReaderOpen] = useState(false);
-  const [isReaderLoaded, setIsReaderLoaded] = useState(false);
-  const [showBlockedFallback, setShowBlockedFallback] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [likesCount, setLikesCount] = useState(0);
   const [commentsCount, setCommentsCount] = useState(0);
@@ -37,6 +39,10 @@ export default function ArticleSourceReaderModal() {
   const articleUrl = activeArticle?.url?.trim() ?? null;
   const articleTitle = cleanDisplayText(activeArticle?.title ?? "Article");
   const articleSource = cleanDisplayText(activeArticle?.source ?? "Original source");
+  const articleDescription = cleanDisplayText(activeArticle?.description ?? "").trim();
+  const articleImageSrc = activeArticle?.imageSrc?.trim() ?? null;
+  const articlePublishedLabel = formatPublishedLabel(activeArticle?.publishedLabel);
+  const articleCategory = cleanDisplayText(activeArticle?.category ?? "").trim();
   const commentsReaderUrl =
     articleId !== null ? `/article/${articleId}/?comments=1` : null;
 
@@ -51,8 +57,6 @@ export default function ArticleSourceReaderModal() {
 
       setActiveArticle(detail);
       setIsReaderOpen(true);
-      setIsReaderLoaded(false);
-      setShowBlockedFallback(false);
       setIsCommentsSheetOpen(false);
     };
 
@@ -75,20 +79,6 @@ export default function ArticleSourceReaderModal() {
       document.body.style.overflow = previousOverflow;
     };
   }, [isReaderOpen]);
-
-  useEffect(() => {
-    if (!isReaderOpen || isReaderLoaded) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setShowBlockedFallback(true);
-    }, 4500);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [isReaderLoaded, isReaderOpen, articleUrl]);
 
   useEffect(() => {
     if (!isReaderOpen || articleId === null) {
@@ -147,8 +137,6 @@ export default function ArticleSourceReaderModal() {
   const closeReader = () => {
     setIsReaderOpen(false);
     setIsCommentsSheetOpen(false);
-    setShowBlockedFallback(false);
-    setIsReaderLoaded(false);
   };
 
   const handleToggleLike = async () => {
@@ -209,7 +197,7 @@ export default function ArticleSourceReaderModal() {
           title: articleTitle,
           source: articleSource,
           url: articleUrl,
-          image: null,
+          image: articleImageSrc,
         },
         { onConflict: "user_id,article_id" }
       );
@@ -250,30 +238,48 @@ export default function ArticleSourceReaderModal() {
           </button>
         </div>
 
-        <div className="reader-frame-shell article-reader-frame-shell">
-          {!showBlockedFallback ? (
-            <iframe
-              src={articleUrl}
-              title={articleTitle}
-              className="reader-frame article-reader-frame"
-              onLoad={() => setIsReaderLoaded(true)}
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-            />
-          ) : (
-            <div className="reader-loading-state">
-              <strong>This publisher blocks in-app viewing.</strong>
-              <span>You can still open the original source without leaving Reflekt first.</span>
+        <div className="article-reader-preview-body">
+          {articleImageSrc ? (
+            <div className="article-reader-preview-image-shell">
+              <Image
+                src={articleImageSrc}
+                alt={articleTitle}
+                width={1200}
+                height={720}
+                className="article-reader-preview-image"
+                unoptimized
+              />
+            </div>
+          ) : null}
+
+          <div className="stack" style={{ gap: "10px" }}>
+            <div className="article-detail-kicker-row">
+              <span className="chip chip-accent">{articleCategory || "News"}</span>
+              {articlePublishedLabel ? (
+                <span className="muted article-reader-preview-date">{articlePublishedLabel}</span>
+              ) : null}
+            </div>
+            <h2 className="article-detail-title">{articleTitle}</h2>
+            <p className="article-detail-byline">{headerSourceLabel}</p>
+            {articleDescription ? (
+              <p className="article-reader-preview-summary">{articleDescription}</p>
+            ) : (
+              <p className="article-reader-preview-summary">
+                Read the original article from {headerSourceLabel} to see the full story.
+              </p>
+            )}
+            <div className="article-reader-preview-actions">
               <button
-                className="button button-secondary"
                 type="button"
+                className="button button-secondary article-original-button"
                 onClick={() => {
                   void openOriginalArticleUrl(articleUrl);
                 }}
               >
-                Open Original Source
+                Read Original Source
               </button>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="engagement-row article-detail-actions article-reader-modal-actions">
