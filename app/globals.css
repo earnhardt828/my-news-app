@@ -2469,6 +2469,23 @@ input {
   text-wrap: pretty;
 }
 
+.article-source-preview-section {
+  gap: 14px;
+}
+
+.article-source-preview-shell {
+  min-height: 360px;
+}
+
+.article-source-preview-frame {
+  height: min(62vh, 760px);
+}
+
+.article-source-preview-blocked {
+  display: grid;
+  gap: 12px;
+}
+
 .article-detail-stats-row {
   border-top: 0;
 }
