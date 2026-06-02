@@ -2780,6 +2780,12 @@ type StockTickerItem = {
   source: string;
 };
 
+const BUSINESS_STOCK_UI_TEST_ITEMS: StockTickerItem[] = [
+  { symbol: "AAPL", label: "Apple", price: 306.31, change: -5.75, percentChange: -1.84, source: "UI Test" },
+  { symbol: "MSFT", label: "Microsoft", price: 420.12, change: 2.15, percentChange: 0.51, source: "UI Test" },
+  { symbol: "NVDA", label: "Nvidia", price: 1120.5, change: 18.22, percentChange: 1.65, source: "UI Test" },
+];
+
 type TopicFallbackGroup = {
   keyword: string;
   pattern: RegExp;
@@ -5535,28 +5541,8 @@ function getBreakingLeadCardImageOverride(article: Article) {
 }
 
 function getBusinessTickerLogoUrl(symbol: string) {
-  const normalizedSymbol = symbol.trim().toLowerCase();
-  const directLogoCandidates: Record<string, string> = {
-    spy: "/logos-for-boxes/bloomberg.png",
-    qqq: "/logos-for-boxes/cnbc.png",
-    dia: "/logos-for-boxes/reuters.png",
-    iwm: "/logos-for-boxes/reuters-connect.png",
-    aapl: "/logos-for-boxes/bbc-news.png",
-    msft: "/logos-for-boxes/cbs-news.png",
-    nvda: "/logos-for-boxes/cnn.png",
-    amzn: "/logos-for-boxes/fox-news.png",
-    googl: "/logos-for-boxes/nbc-news.png",
-    meta: "/logos-for-boxes/people.png",
-    tsla: "/logos-for-boxes/reuters.png",
-    amd: "/logos-for-boxes/bloomberg.png",
-    nflx: "/logos-for-boxes/tmz.png",
-    jpm: "/logos-for-boxes/cnbc.png",
-    bac: "/logos-for-boxes/cnbc.png",
-    xom: "/logos-for-boxes/ap-news.png",
-    dis: "/logos-for-boxes/variety.png",
-  };
-
-  return directLogoCandidates[normalizedSymbol] ?? null;
+  const normalizedSymbol = symbol.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normalizedSymbol ? `/stock-logos/${normalizedSymbol}.png` : null;
 }
 
 function getBusinessTickerInitials(symbol: string) {
@@ -6518,49 +6504,26 @@ export default function Home() {
         return;
       }
 
-      try {
-        const response = await apiFetch("/api/stocks", {
-          cache: "no-store",
-        });
+      const payload = {
+        items: BUSINESS_STOCK_UI_TEST_ITEMS,
+        debugFallback: true,
+      };
 
-        if (!response.ok) {
-          throw new Error(`Stocks request failed (${response.status})`);
-        }
+      console.log("BUSINESS STOCK JSON RECEIVED", payload);
+      console.log("BUSINESS STOCK FETCH RESPONSE", {
+        ok: true,
+        status: "ui-test",
+        debugFallback: true,
+        count: payload.items.length,
+      });
+      console.log("STOCK TICKER API ITEMS RECEIVED", payload.items);
+      console.log("BUSINESS STOCK DATA ITEMS", payload.items);
+      console.log("BUSINESS STOCK ITEMS RECEIVED", payload.items);
+      console.log("BUSINESS STOCK ITEMS LENGTH", payload.items.length);
 
-        const payload = (await response.json()) as {
-          items?: StockTickerItem[];
-          debugFallback?: boolean;
-        };
-
-        console.log("BUSINESS STOCK JSON RECEIVED", payload);
-        console.log("BUSINESS STOCK FETCH RESPONSE", {
-          ok: response.ok,
-          status: response.status,
-          debugFallback: payload.debugFallback ?? false,
-          count: Array.isArray(payload.items) ? payload.items.length : 0,
-        });
-        console.log("STOCK TICKER API ITEMS RECEIVED", payload.items ?? []);
-        console.log("BUSINESS STOCK DATA ITEMS", payload.items ?? []);
-        console.log("BUSINESS STOCK ITEMS RECEIVED", payload.items ?? []);
-        console.log("BUSINESS STOCK ITEMS LENGTH", Array.isArray(payload.items) ? payload.items.length : 0);
-
-        if (!isCancelled) {
-          const nextItems = Array.isArray(payload.items) ? payload.items : [];
-          setBusinessTickerItems(nextItems);
-          setBusinessTickerSource(nextItems.length > 0 ? "finnhub" : "error");
-        }
-      } catch (error) {
-        console.error("BUSINESS TICKER LOAD FAILED", error);
-        console.log("BUSINESS STOCK FETCH RESPONSE", {
-          ok: false,
-          status: "error",
-          error: error instanceof Error ? error.message : String(error),
-        });
-        console.log("BUSINESS STOCK ITEMS RECEIVED", []);
-        if (!isCancelled) {
-          setBusinessTickerItems([]);
-          setBusinessTickerSource("error");
-        }
+      if (!isCancelled) {
+        setBusinessTickerItems(payload.items);
+        setBusinessTickerSource("ui-test");
       }
     }
 
@@ -16677,12 +16640,13 @@ export default function Home() {
 
     console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
     console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
-    console.log("BUSINESS STOCK FALLBACK USED", false);
+    console.log("BUSINESS STOCK FALLBACK USED", true);
     console.log("BUSINESS STOCK ITEMS RENDERED", tickerItems);
     console.log("BUSINESS STOCK RENDERING", {
       count: tickerItems.length,
     });
     console.log("BUSINESS STOCK RENDER SUCCESS", tickerItems.length > 0);
+    console.log("STOCK TICKER ITEMS COUNT", tickerItems.length);
 
     if (tickerItems.length === 0) {
       return null;
@@ -16701,6 +16665,15 @@ export default function Home() {
             const logoUrl = getBusinessTickerLogoUrl(item.symbol);
             const logoFailureKey = logoUrl ? `stock:${item.symbol}:${logoUrl}` : `stock:${item.symbol}:none`;
             const showLogo = Boolean(logoUrl) && !failedArticleBoxImages[logoFailureKey];
+
+            console.log("STOCK LOGO LOAD ATTEMPT", {
+              symbol: item.symbol,
+              logoUrl,
+              showLogo,
+            });
+            if (!showLogo) {
+              console.log("STOCK LOGO FALLBACK_INITIALS_USED", item.symbol);
+            }
 
             return (
               <div
@@ -16761,6 +16734,9 @@ export default function Home() {
               </div>
             );
           })}
+        </div>
+        <div className="muted" style={{ fontSize: "0.74rem", marginTop: "6px" }}>
+          STOCK TICKER UI TEST ACTIVE
         </div>
       </section>
     );
@@ -20472,13 +20448,20 @@ export default function Home() {
               <span>Check back shortly for fresh business and finance coverage.</span>
             </div>
           ) : (
-            <div className="stack home-section-list">
-              {businessTabArticles.map((article) => (
-                <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
-                  {renderArticleFeedCard(article)}
+            (() => {
+              const leadArticle = getBusinessLargeCardSelection(businessTabArticles);
+              const leadArticleKey = leadArticle ? getArticleDeduplicationKey(leadArticle) : null;
+
+              return (
+                <div className="stack home-section-list top-trending-card-rail">
+                  {leadArticle ? renderLargeImageArticleCard(leadArticle) : null}
+                  {renderRankedCompactArticleSection(businessTabArticles, {
+                    limit: 5,
+                    excludeArticleKey: leadArticleKey,
+                  })}
                 </div>
-              ))}
-            </div>
+              );
+            })()
           )}
         </section>
       </section>
