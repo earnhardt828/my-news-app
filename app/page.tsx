@@ -2780,12 +2780,6 @@ type StockTickerItem = {
   source: string;
 };
 
-const BUSINESS_STOCK_UI_TEST_ITEMS: StockTickerItem[] = [
-  { symbol: "AAPL", label: "Apple", price: 306.31, change: -5.75, percentChange: -1.84, source: "UI Test" },
-  { symbol: "MSFT", label: "Microsoft", price: 420.12, change: 2.15, percentChange: 0.51, source: "UI Test" },
-  { symbol: "NVDA", label: "Nvidia", price: 1120.5, change: 18.22, percentChange: 1.65, source: "UI Test" },
-];
-
 type TopicFallbackGroup = {
   keyword: string;
   pattern: RegExp;
@@ -5538,6 +5532,36 @@ function getBreakingLeadCardImageOverride(article: Article) {
   }
 
   return getCategoryImageUrl(getSafeCategoryLabel(article.category, article));
+}
+
+function getBusinessTickerLogoUrl(symbol: string) {
+  const normalizedSymbol = symbol.trim().toLowerCase();
+  const directLogoCandidates: Record<string, string> = {
+    spy: "/logos-for-boxes/bloomberg.png",
+    qqq: "/logos-for-boxes/cnbc.png",
+    dia: "/logos-for-boxes/reuters.png",
+    iwm: "/logos-for-boxes/reuters-connect.png",
+    aapl: "/logos-for-boxes/bbc-news.png",
+    msft: "/logos-for-boxes/cbs-news.png",
+    nvda: "/logos-for-boxes/cnn.png",
+    amzn: "/logos-for-boxes/fox-news.png",
+    googl: "/logos-for-boxes/nbc-news.png",
+    meta: "/logos-for-boxes/people.png",
+    tsla: "/logos-for-boxes/reuters.png",
+    amd: "/logos-for-boxes/bloomberg.png",
+    nflx: "/logos-for-boxes/tmz.png",
+    jpm: "/logos-for-boxes/cnbc.png",
+    bac: "/logos-for-boxes/cnbc.png",
+    xom: "/logos-for-boxes/ap-news.png",
+    dis: "/logos-for-boxes/variety.png",
+  };
+
+  return directLogoCandidates[normalizedSymbol] ?? null;
+}
+
+function getBusinessTickerInitials(symbol: string) {
+  const trimmedSymbol = cleanDisplayText(symbol).trim().toUpperCase();
+  return trimmedSymbol.slice(0, 4) || "STK";
 }
 
 function getWorldLargeCardSelection(articles: Article[]) {
@@ -16647,36 +16671,36 @@ export default function Home() {
       return null;
     }
 
-    const apiItems = businessTickerItems.filter(
+    const tickerItems = businessTickerItems.filter(
       (item) => item.price !== null && Number.isFinite(item.price)
     );
-    const usingFallbackItems = apiItems.length === 0;
-    const tickerItems = usingFallbackItems ? BUSINESS_STOCK_UI_TEST_ITEMS : apiItems;
 
     console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
     console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
-    console.log("BUSINESS STOCK FALLBACK USED", usingFallbackItems);
+    console.log("BUSINESS STOCK FALLBACK USED", false);
     console.log("BUSINESS STOCK ITEMS RENDERED", tickerItems);
     console.log("BUSINESS STOCK RENDERING", {
-      usingFallbackItems,
       count: tickerItems.length,
     });
-    console.log("STOCK TICKER UI TEST RENDERED", true);
     console.log("BUSINESS STOCK RENDER SUCCESS", tickerItems.length > 0);
+
+    if (tickerItems.length === 0) {
+      return null;
+    }
 
     return (
       <section className="home-section-block home-section-plain quick-watch-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
             <strong className="profile-section-title home-section-title">Stock Market</strong>
-            <span className="muted" style={{ fontSize: "0.74rem" }}>
-              STOCK TICKER UI TEST ACTIVE
-            </span>
           </div>
         </div>
         <div className="popular-music-scroll" role="list" aria-label="Business stock ticker">
           {tickerItems.map((item) => {
             const isPositive = (item.change ?? 0) >= 0;
+            const logoUrl = getBusinessTickerLogoUrl(item.symbol);
+            const logoFailureKey = logoUrl ? `stock:${item.symbol}:${logoUrl}` : `stock:${item.symbol}:none`;
+            const showLogo = Boolean(logoUrl) && !failedArticleBoxImages[logoFailureKey];
 
             return (
               <div
@@ -16693,9 +16717,31 @@ export default function Home() {
                         : "linear-gradient(160deg, rgba(239,68,68,0.28), rgba(185,28,28,0.12))",
                   }}
                 >
-                  <span className="popular-music-rank" style={{ fontSize: "0.95rem" }}>
-                    {item.symbol}
-                  </span>
+                  {showLogo && logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt={`${item.symbol} logo`}
+                      className="source-rankings-card-art-logo"
+                      loading="lazy"
+                      decoding="async"
+                      onError={() => {
+                        setFailedArticleBoxImages((prev) => {
+                          if (prev[logoFailureKey]) {
+                            return prev;
+                          }
+
+                          return {
+                            ...prev,
+                            [logoFailureKey]: true,
+                          };
+                        });
+                      }}
+                    />
+                  ) : (
+                    <span className="popular-music-rank" style={{ fontSize: "0.95rem" }}>
+                      {getBusinessTickerInitials(item.symbol)}
+                    </span>
+                  )}
                 </div>
                 <div className="popular-music-card-copy">
                   <strong className="popular-music-card-title">{item.label}</strong>

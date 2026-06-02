@@ -1,10 +1,33 @@
 import { NextResponse } from "next/server";
 
-const STOCK_SYMBOL = "AAPL" as const;
+const STOCK_QUOTE_CONFIGS = [
+  { symbol: "ES=F", label: "S&P Futures" },
+  { symbol: "NQ=F", label: "Nasdaq Futures" },
+  { symbol: "YM=F", label: "Dow Futures" },
+  { symbol: "SPY", label: "S&P 500" },
+  { symbol: "QQQ", label: "Nasdaq" },
+  { symbol: "DIA", label: "Dow Jones" },
+  { symbol: "IWM", label: "Russell 2000" },
+  { symbol: "AAPL", label: "Apple" },
+  { symbol: "MSFT", label: "Microsoft" },
+  { symbol: "NVDA", label: "Nvidia" },
+  { symbol: "AMZN", label: "Amazon" },
+  { symbol: "GOOGL", label: "Alphabet" },
+  { symbol: "META", label: "Meta" },
+  { symbol: "TSLA", label: "Tesla" },
+  { symbol: "AMD", label: "AMD" },
+  { symbol: "NFLX", label: "Netflix" },
+  { symbol: "JPM", label: "JPMorgan" },
+  { symbol: "BAC", label: "Bank of America" },
+  { symbol: "XOM", label: "ExxonMobil" },
+  { symbol: "DIS", label: "Disney" },
+] as const;
+
+type StockQuoteConfig = (typeof STOCK_QUOTE_CONFIGS)[number];
 
 type StockTickerItem = {
-  symbol: typeof STOCK_SYMBOL;
-  label: "Apple";
+  symbol: string;
+  label: string;
   price: number;
   change: number;
   percentChange: number;
@@ -14,11 +37,11 @@ function parseNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-async function fetchFinnhubQuote(symbol: typeof STOCK_SYMBOL, apiKey: string) {
-  console.log("FINNHUB REQUEST SYMBOL", symbol);
+async function fetchFinnhubQuote(config: StockQuoteConfig, apiKey: string) {
+  console.log("FINNHUB REQUEST SYMBOL", config.symbol);
 
   const response = await fetch(
-    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(apiKey)}`,
+    `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(config.symbol)}&token=${encodeURIComponent(apiKey)}`,
     {
       cache: "no-store",
       next: { revalidate: 0 },
@@ -28,7 +51,7 @@ async function fetchFinnhubQuote(symbol: typeof STOCK_SYMBOL, apiKey: string) {
   const responseBodyText = await response.text();
 
   console.log("FINNHUB RAW RESPONSE", {
-    symbol,
+    symbol: config.symbol,
     ok: response.ok,
     status: response.status,
     body: responseBodyText,
@@ -43,7 +66,7 @@ async function fetchFinnhubQuote(symbol: typeof STOCK_SYMBOL, apiKey: string) {
   try {
     payload = JSON.parse(responseBodyText) as { c?: number; d?: number; dp?: number };
   } catch (error) {
-    console.error("FINNHUB RESPONSE PARSE FAILED", { symbol, error });
+    console.error("FINNHUB RESPONSE PARSE FAILED", { symbol: config.symbol, error });
     return null;
   }
 
@@ -52,7 +75,7 @@ async function fetchFinnhubQuote(symbol: typeof STOCK_SYMBOL, apiKey: string) {
   const percentChange = parseNumber(payload?.dp);
 
   console.log("API STOCK RAW AAPL", {
-    symbol,
+    symbol: config.symbol,
     raw: payload,
   });
 
@@ -61,21 +84,13 @@ async function fetchFinnhubQuote(symbol: typeof STOCK_SYMBOL, apiKey: string) {
   }
 
   return {
-    symbol,
-    label: "Apple",
+    symbol: config.symbol,
+    label: config.label,
     price,
     change,
     percentChange,
   } satisfies StockTickerItem;
 }
-
-const STOCK_API_FALLBACK_ITEM: StockTickerItem = {
-  symbol: "AAPL",
-  label: "Apple",
-  price: 306.31,
-  change: -5.75,
-  percentChange: -1.8426,
-};
 
 export async function GET() {
   const finnhubApiKey = process.env.FINNHUB_API_KEY?.trim();
@@ -84,8 +99,7 @@ export async function GET() {
 
   if (!finnhubApiKey) {
     const noKeyPayload = {
-      items: [STOCK_API_FALLBACK_ITEM],
-      debugFallback: true,
+      items: [] as StockTickerItem[],
     };
     console.log("STOCK API RESPONSE", noKeyPayload);
     console.log("STOCK API PARSED ITEMS", noKeyPayload.items);
@@ -98,9 +112,14 @@ export async function GET() {
   }
 
   try {
-    const item = await fetchFinnhubQuote(STOCK_SYMBOL, finnhubApiKey);
-    const items = item ? [item] : [];
-    console.log("STOCK API RESPONSE", item);
+    const results = await Promise.allSettled(
+      STOCK_QUOTE_CONFIGS.map((config) => fetchFinnhubQuote(config, finnhubApiKey))
+    );
+    console.log("STOCK API RESPONSE", results);
+
+    const items = results
+      .map((result) => (result.status === "fulfilled" ? result.value : null))
+      .filter((item) => item !== null) as StockTickerItem[];
 
     console.log("STOCK API PARSED ITEMS", items);
     console.log("API STOCK ITEMS RETURNED", items);
@@ -113,23 +132,11 @@ export async function GET() {
     };
 
     console.log("STOCK API FINAL JSON", finalPayload);
-
-    if (items.length > 0) {
-      return NextResponse.json(finalPayload, { status: 200 });
-    }
-
-    const fallbackPayload = {
-      items: [STOCK_API_FALLBACK_ITEM],
-      debugFallback: true,
-    };
-
-    console.log("STOCK API FINAL JSON", fallbackPayload);
-    return NextResponse.json(fallbackPayload, { status: 200 });
+    return NextResponse.json(finalPayload, { status: 200 });
   } catch (error) {
     console.error("Stocks API load failed", error);
     const errorPayload = {
-      items: [STOCK_API_FALLBACK_ITEM],
-      debugFallback: true,
+      items: [] as StockTickerItem[],
     };
     console.log("STOCK API RESPONSE", { error: error instanceof Error ? error.message : String(error) });
     console.log("STOCK API PARSED ITEMS", errorPayload.items);
