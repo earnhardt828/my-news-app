@@ -10723,8 +10723,7 @@ export default function Home() {
 
   const hasRenderableSportsVisual = useCallback(
     (article: Article, options?: { largeCard?: boolean }) =>
-      Boolean(getSportsCardVisual(article, options)) ||
-      (!options?.largeCard && hasMappedSourceLogo(getSafeSourceLabel(article.source))),
+      Boolean(getSportsCardVisual(article, options)),
     [getSportsCardVisual]
   );
 
@@ -15658,28 +15657,73 @@ export default function Home() {
       const safeCategoryName = getSafeCategoryLabel(article.category, article);
       const displayCategoryLabel =
         options?.categoryLabelOverride ?? getCategoryLabel(safeCategoryName);
-      const selectedImage = getBestArticleImage(article);
-      const imageSrc = selectedImage.src;
-      const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
-      const hasSourceLogoFallback = hasMappedSourceLogo(safeSourceName);
-      const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
-      const boxLogoFailureKey = boxLogoUrl
-        ? `${safeSourceName}:${boxLogoUrl}`
-        : `${safeSourceName}:none`;
-      const shouldUseLargeImage =
-        Boolean(imageSrc) &&
-        !failedArticleImages[imageFailureKey] &&
-        isLikelyHighQualityArticleImage(selectedImage.source, imageSrc);
-      const shouldUseBoxLogoFallback =
-        Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
+      const sharedDisplayImage = getArticleDisplayImage(article);
+      const sportsVisual = isBroadSportsArticle(article) ? getSportsCardVisual(article) : null;
+      const displayImage = sportsVisual ?? sharedDisplayImage;
+      const imageSrc = displayImage.src;
+      const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
+
+      if (!imageSrc) {
+        console.log("ARTICLE HIDDEN_NO_IMAGE", {
+          section: options?.categoryLabelOverride ?? safeCategoryName,
+          title: article.title,
+          source: article.source,
+        });
+        if (isBroadSportsArticle(article)) {
+          console.log("SPORTS CARD HIDDEN NO IMAGE", {
+            section: options?.categoryLabelOverride ?? safeCategoryName,
+            title: article.title,
+            source: article.source,
+          });
+        }
+        return null;
+      }
+
+      const hasFailedImage =
+        displayImage.kind === "real"
+          ? Boolean(failedArticleImages[imageFailureKey])
+          : Boolean(failedArticleBoxImages[imageFailureKey]);
+
+      if (hasFailedImage) {
+        console.log("ARTICLE HIDDEN_NO_IMAGE", {
+          section: options?.categoryLabelOverride ?? safeCategoryName,
+          title: article.title,
+          source: article.source,
+        });
+        if (isBroadSportsArticle(article)) {
+          console.log("SPORTS CARD HIDDEN NO IMAGE", {
+            section: options?.categoryLabelOverride ?? safeCategoryName,
+            title: article.title,
+            source: article.source,
+          });
+        }
+        return null;
+      }
+
+      const shouldUseLargeImage = displayImage.kind === "real";
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
 
+      if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
+        console.log("SPORTS CARD IMAGE SRC", {
+          title: cleanDisplayText(article.title),
+          source: safeSourceName,
+          imageSrc,
+        });
+        if (displayImage.kind && displayImage.kind !== "real") {
+          console.log("SPORTS CARD RENDERED WITH FALLBACK", {
+            title: cleanDisplayText(article.title),
+            source: safeSourceName,
+            imageSource: displayImage.kind,
+          });
+        }
+      }
+
       const visualBoxNode = shouldUseLargeImage ? (
         <div className="article-thumb-shell article-card-visual-shell" aria-hidden="true">
           <img
-            src={imageSrc as string}
+            src={imageSrc}
             alt={cleanDisplayText(article.title)}
             className="article-thumb-image article-card-visual-image"
             loading="lazy"
@@ -15698,54 +15742,30 @@ export default function Home() {
             }}
           />
         </div>
-      ) : shouldUseBoxLogoFallback && boxLogoUrl ? (
+      ) : (
         <div
           className="article-thumb-shell article-card-visual-shell article-card-visual-placeholder"
           aria-hidden="true"
         >
           <img
-            src={boxLogoUrl}
-            alt={`${safeSourceName} logo`}
+            src={imageSrc}
+            alt={cleanDisplayText(article.title)}
             className="article-card-visual-image article-card-box-logo-image"
             loading="lazy"
             decoding="async"
             onError={() => {
               setFailedArticleBoxImages((prev) => {
-                if (prev[boxLogoFailureKey]) {
+                if (prev[imageFailureKey]) {
                   return prev;
                 }
 
                 return {
                   ...prev,
-                  [boxLogoFailureKey]: true,
+                  [imageFailureKey]: true,
                 };
               });
             }}
           />
-        </div>
-      ) : hasSourceLogoFallback ? (
-        <div
-          className="article-thumb-shell article-card-visual-shell article-card-visual-placeholder"
-          aria-hidden="true"
-        >
-          <div className="article-card-visual-content article-card-visual-content-brand-fill">
-            <span className="article-card-visual-brand article-card-visual-brand-fill">
-              <SourceBadge
-                sourceName={safeSourceName}
-                className="article-card-source-fill-badge"
-                showInitialFallback={false}
-              />
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div
-          className={`article-thumb-shell article-card-visual-shell article-card-category-placeholder article-card-category-placeholder-${safeCategoryName.toLowerCase()}`}
-          aria-hidden="true"
-        >
-          <div className="article-card-visual-content">
-            <span className="article-card-category-chip">{getCategoryLabel(safeCategoryName)}</span>
-          </div>
         </div>
       );
 
@@ -18215,7 +18235,9 @@ export default function Home() {
 
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
-    const displayImage = getArticleDisplayImage(article);
+    const sharedDisplayImage = getArticleDisplayImage(article);
+    const sportsVisual = isBroadSportsArticle(article) ? getSportsCardVisual(article) : null;
+    const displayImage = sportsVisual ?? sharedDisplayImage;
     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
     if (!displayImage.src) {
@@ -18224,15 +18246,34 @@ export default function Home() {
         title: article.title,
         source: article.source,
       });
+      if (isBroadSportsArticle(article)) {
+        console.log("SPORTS CARD HIDDEN NO IMAGE", {
+          section: options?.imageFallbackLabel ?? safeCategoryName,
+          title: article.title,
+          source: article.source,
+        });
+      }
       return null;
     }
 
     if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
+      console.log("SPORTS CARD IMAGE SRC", {
+        title: cleanDisplayText(article.title),
+        source: safeSourceName,
+        imageSrc: displayImage.src,
+      });
       console.log("SPORTS IMAGE SOURCE USED", {
         title: cleanDisplayText(article.title),
         source: safeSourceName,
         imageSource: displayImage.kind ?? "none",
       });
+      if (displayImage.kind && displayImage.kind !== "real") {
+        console.log("SPORTS CARD RENDERED WITH FALLBACK", {
+          title: cleanDisplayText(article.title),
+          source: safeSourceName,
+          imageSource: displayImage.kind,
+        });
+      }
     }
 
     return (

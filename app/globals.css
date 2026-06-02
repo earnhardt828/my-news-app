@@ -3850,37 +3850,42 @@ input {
   position: relative;
   display: grid;
   place-items: center;
-  width: 100%;
-}
-
-.source-rankings-card-art-logo-wrap {
   width: 96px;
   height: 96px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
+  border-radius: 9999px;
+  overflow: hidden;
   background: color-mix(in srgb, var(--surface-strong) 96%, white);
   box-shadow:
     0 0 0 3px rgba(255, 255, 255, 0.96),
     0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.source-rankings-card-art-logo-wrap {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: transparent;
   overflow: hidden;
 }
 
 .source-rankings-card-art-logo {
-  width: 78px;
-  height: 78px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   object-position: center;
   display: block;
+  border: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 .source-rankings-card-art {
   width: 96px;
   height: 96px;
   border-radius: 999px;
-  box-shadow:
-    0 0 0 3px rgba(255, 255, 255, 0.96),
-    0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: none;
 }
 
 .source-rankings-card-copy {
