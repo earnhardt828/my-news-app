@@ -2780,6 +2780,12 @@ type StockTickerItem = {
   source: string;
 };
 
+const BUSINESS_STOCK_UI_TEST_ITEMS: StockTickerItem[] = [
+  { symbol: "AAPL", label: "Apple", price: 306.31, change: -5.75, percentChange: -1.84, source: "UI Test" },
+  { symbol: "MSFT", label: "Microsoft", price: 420.12, change: 2.15, percentChange: 0.51, source: "UI Test" },
+  { symbol: "NVDA", label: "Nvidia", price: 1120.5, change: 18.22, percentChange: 1.65, source: "UI Test" },
+];
+
 type TopicFallbackGroup = {
   keyword: string;
   pattern: RegExp;
@@ -5511,6 +5517,29 @@ function getSportsLargeCardSelection(articles: Article[]) {
   return selectedCandidate?.article ?? null;
 }
 
+function getBreakingLeadCardImageOverride(article: Article) {
+  const realImage = getLargeImageCardImageCandidate(article)?.src ?? null;
+
+  if (realImage) {
+    return realImage;
+  }
+
+  const topicFallbackImage = getTopicFallbackImage(article);
+
+  if (topicFallbackImage) {
+    return topicFallbackImage;
+  }
+
+  const safeSourceName = getSafeSourceLabel(article.source);
+  const sourceFallbackImage = getSourceBoxLogoUrl(safeSourceName);
+
+  if (sourceFallbackImage) {
+    return sourceFallbackImage;
+  }
+
+  return getCategoryImageUrl(getSafeCategoryLabel(article.category, article));
+}
+
 function getWorldLargeCardSelection(articles: Article[]) {
   const candidates = articles.map((article) => ({
     article,
@@ -6476,19 +6505,18 @@ export default function Home() {
 
         const payload = (await response.json()) as {
           items?: StockTickerItem[];
-          debug?: {
-            keyPresent?: boolean;
-            raw?: unknown;
-          };
+          debugFallback?: boolean;
         };
 
         console.log("BUSINESS STOCK JSON RECEIVED", payload);
         console.log("BUSINESS STOCK FETCH RESPONSE", {
           ok: response.ok,
           status: response.status,
-          keyPresent: payload.debug?.keyPresent ?? false,
+          debugFallback: payload.debugFallback ?? false,
           count: Array.isArray(payload.items) ? payload.items.length : 0,
         });
+        console.log("STOCK TICKER API ITEMS RECEIVED", payload.items ?? []);
+        console.log("BUSINESS STOCK DATA ITEMS", payload.items ?? []);
         console.log("BUSINESS STOCK ITEMS RECEIVED", payload.items ?? []);
         console.log("BUSINESS STOCK ITEMS LENGTH", Array.isArray(payload.items) ? payload.items.length : 0);
 
@@ -6518,6 +6546,10 @@ export default function Home() {
       isCancelled = true;
     };
   }, [sortMode]);
+
+  useEffect(() => {
+    console.log("STOCK TICKER COMPONENT MOUNTED", true);
+  }, []);
   const [isWeatherRadarOpen, setIsWeatherRadarOpen] = useState(false);
   const [breakingPreviewArticles, setBreakingPreviewArticles] = useState<Article[]>([]);
   const [isBreakingPreviewLoading, setIsBreakingPreviewLoading] = useState(false);
@@ -6561,7 +6593,10 @@ export default function Home() {
     celebrity: null,
     movies: null,
   });
-  const [breakingLeadCard, setBreakingLeadCard] = useState<Article | null>(null);
+  const [breakingLeadCard, setBreakingLeadCard] = useState<{
+    article: Article;
+    imageSrcOverride: string | null;
+  } | null>(null);
   const [popularMusicAlbums, setPopularMusicAlbums] = useState<PopularMusicAlbum[]>([]);
   const [theaterMovies, setTheaterMovies] = useState<TheaterMovieItem[]>([]);
   const [businessTickerItems, setBusinessTickerItems] = useState<StockTickerItem[]>([]);
@@ -13377,21 +13412,27 @@ export default function Home() {
     return selectedBreakingArticles;
   }, [breakingPreviewArticles, sortMode, topTenTrendingArticles, visibleArticles]);
 
-  const breakingNewsLeadArticle = useMemo(() => {
-    const firstArticle = breakingNewsPreviewArticles[0];
+  const breakingNewsLeadSelection = useMemo(() => {
+    for (const article of breakingNewsPreviewArticles) {
+      const imageSrcOverride = getBreakingLeadCardImageOverride(article);
 
-    if (!firstArticle) {
-      return null;
+      if (!imageSrcOverride) {
+        continue;
+      }
+
+      const imageFailureKey = `${article.id}:${imageSrcOverride}`;
+
+      if (failedArticleImages[imageFailureKey]) {
+        continue;
+      }
+
+      return {
+        article,
+        imageSrcOverride,
+      };
     }
 
-    const selectedImage = getLargeImageCardImageCandidate(firstArticle);
-
-    if (!selectedImage?.src) {
-      return null;
-    }
-
-    const imageFailureKey = `${firstArticle.id}:${selectedImage.src}`;
-    return failedArticleImages[imageFailureKey] ? null : firstArticle;
+    return null;
   }, [breakingNewsPreviewArticles, failedArticleImages]);
 
   useEffect(() => {
@@ -13401,43 +13442,40 @@ export default function Home() {
     }
 
     setBreakingLeadCard((previousCard) => {
-      if (breakingNewsLeadArticle) {
+      if (breakingNewsLeadSelection) {
         if (
           previousCard &&
-          getArticleDeduplicationKey(previousCard) === getArticleDeduplicationKey(breakingNewsLeadArticle)
+          getArticleDeduplicationKey(previousCard.article) ===
+            getArticleDeduplicationKey(breakingNewsLeadSelection.article)
         ) {
-          console.log("BREAKING LARGE CARD KEPT", {
-            title: previousCard.title,
-            source: previousCard.source,
+          console.log("BREAKING LEAD CARD SELECTED", {
+            title: previousCard.article.title,
+            source: previousCard.article.source,
+            image: previousCard.imageSrcOverride,
           });
           return previousCard;
         }
 
-        console.log(
-          previousCard ? "BREAKING LARGE CARD INITIAL" : "BREAKING LARGE CARD INITIAL",
-          {
-            title: breakingNewsLeadArticle.title,
-            source: breakingNewsLeadArticle.source,
-          }
-        );
-        console.log("BREAKING LARGE CARD SELECTED", {
-          title: breakingNewsLeadArticle.title,
-          source: breakingNewsLeadArticle.source,
+        console.log("BREAKING LEAD CARD SELECTED", {
+          title: breakingNewsLeadSelection.article.title,
+          source: breakingNewsLeadSelection.article.source,
+          image: breakingNewsLeadSelection.imageSrcOverride,
         });
-        return breakingNewsLeadArticle;
+        return breakingNewsLeadSelection;
       }
 
       if (previousCard) {
-        console.log("BREAKING LARGE CARD OVERWRITE_BLOCKED", {
-          title: previousCard.title,
-          source: previousCard.source,
+        console.log("BREAKING LEAD CARD NULL_OVERWRITE_BLOCKED", {
+          title: previousCard.article.title,
+          source: previousCard.article.source,
+          image: previousCard.imageSrcOverride,
         });
         return previousCard;
       }
 
       return null;
     });
-  }, [breakingNewsLeadArticle, sortMode]);
+  }, [breakingNewsLeadSelection, sortMode]);
 
   const topTenTrendingLeadArticle = useMemo(() => {
     const firstArticle = topTenTrendingArticles[0];
@@ -16186,7 +16224,8 @@ export default function Home() {
       return null;
     }
 
-    const leadBreakingArticle = breakingLeadCard;
+    const leadBreakingArticle = breakingLeadCard?.article ?? null;
+    const leadBreakingImageOverride = breakingLeadCard?.imageSrcOverride ?? null;
     const rankedBreakingArticles = leadBreakingArticle
       ? breakingNewsPreviewArticles
           .filter(
@@ -16206,7 +16245,11 @@ export default function Home() {
           </div>
         </div>
         <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
-          {leadBreakingArticle ? renderLargeImageArticleCard(leadBreakingArticle) : null}
+          {leadBreakingArticle
+            ? renderLargeImageArticleCard(leadBreakingArticle, {
+                imageSrcOverride: leadBreakingImageOverride,
+              })
+            : null}
           {rankedBreakingArticles.map((article, index) => (
             <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
               {renderCompactSideImageArticle(article, {
@@ -16604,91 +16647,75 @@ export default function Home() {
       return null;
     }
 
-    const apiKeyPresent =
-      businessTickerSource === "finnhub" || businessTickerSource === "alpha-vantage";
-    const tickerItems = businessTickerItems.filter(
+    const apiItems = businessTickerItems.filter(
       (item) => item.price !== null && Number.isFinite(item.price)
     );
-    const hasLiveTickerData = tickerItems.length > 0;
-    const marketDataUnavailable =
-      !hasLiveTickerData &&
-      (businessTickerSource === "error" ||
-        businessTickerSource === "no-api-key" ||
-        businessTickerSource === "finnhub-empty" ||
-        businessTickerSource === "alpha-vantage-empty");
+    const usingFallbackItems = apiItems.length === 0;
+    const tickerItems = usingFallbackItems ? BUSINESS_STOCK_UI_TEST_ITEMS : apiItems;
 
-    console.log("BUSINESS STOCK API_KEY_PRESENT", apiKeyPresent);
     console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
     console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
-    console.log("BUSINESS STOCK MARKET_DATA_UNAVAILABLE", marketDataUnavailable);
+    console.log("BUSINESS STOCK FALLBACK USED", usingFallbackItems);
     console.log("BUSINESS STOCK ITEMS RENDERED", tickerItems);
     console.log("BUSINESS STOCK RENDERING", {
-      hasLiveTickerData,
-      marketDataUnavailable,
+      usingFallbackItems,
       count: tickerItems.length,
     });
-    console.log("BUSINESS STOCK TICKER RENDERED", true);
-
-    if (!hasLiveTickerData && !marketDataUnavailable) {
-      return null;
-    }
+    console.log("STOCK TICKER UI TEST RENDERED", true);
+    console.log("BUSINESS STOCK RENDER SUCCESS", tickerItems.length > 0);
 
     return (
       <section className="home-section-block home-section-plain quick-watch-row">
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
             <strong className="profile-section-title home-section-title">Stock Market</strong>
-            {marketDataUnavailable ? (
-              <span className="muted" style={{ fontSize: "0.82rem" }}>
-                Market data temporarily unavailable.
-              </span>
-            ) : null}
+            <span className="muted" style={{ fontSize: "0.74rem" }}>
+              STOCK TICKER UI TEST ACTIVE
+            </span>
           </div>
         </div>
-        {hasLiveTickerData ? (
-          <div className="popular-music-scroll" role="list" aria-label="Business stock ticker">
-            {tickerItems.map((item) => {
-              const isPositive = (item.change ?? 0) >= 0;
+        <div className="popular-music-scroll" role="list" aria-label="Business stock ticker">
+          {tickerItems.map((item) => {
+            const isPositive = (item.change ?? 0) >= 0;
 
-              return (
+            return (
+              <div
+                key={`stock-${item.symbol}`}
+                className="popular-music-card"
+                role="listitem"
+              >
                 <div
-                  key={`stock-${item.symbol}`}
-                  className="popular-music-card"
-                  role="listitem"
+                  className="popular-music-card-art-shell"
+                  style={{
+                    background:
+                      isPositive
+                        ? "linear-gradient(160deg, rgba(16,185,129,0.28), rgba(5,150,105,0.12))"
+                        : "linear-gradient(160deg, rgba(239,68,68,0.28), rgba(185,28,28,0.12))",
+                  }}
                 >
-                  <div
-                    className="popular-music-card-art-shell"
-                    style={{
-                      background:
-                        isPositive
-                          ? "linear-gradient(160deg, rgba(16,185,129,0.28), rgba(5,150,105,0.12))"
-                          : "linear-gradient(160deg, rgba(239,68,68,0.28), rgba(185,28,28,0.12))",
-                    }}
-                  >
-                    <span className="popular-music-rank" style={{ fontSize: "0.95rem" }}>
-                      {item.symbol}
-                    </span>
-                  </div>
-                  <div className="popular-music-card-copy">
-                    <strong className="popular-music-card-title">{item.label}</strong>
-                    <span className="popular-music-card-artist">{item.symbol}</span>
-                    <strong className="popular-music-card-title">
-                      ${item.price!.toFixed(2)}
-                    </strong>
-                    <span
-                      className="popular-music-card-artist"
-                      style={{ color: isPositive ? "#16a34a" : "#dc2626" }}
-                    >
-                      {item.change !== null && item.percentChange !== null
-                        ? `${isPositive ? "+" : ""}${item.change.toFixed(2)} (${isPositive ? "+" : ""}${item.percentChange.toFixed(2)}%)`
-                        : ""}
-                    </span>
-                  </div>
+                  <span className="popular-music-rank" style={{ fontSize: "0.95rem" }}>
+                    {item.symbol}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        ) : null}
+                <div className="popular-music-card-copy">
+                  <strong className="popular-music-card-title">{item.label}</strong>
+                  <span className="popular-music-card-artist">{item.symbol}</span>
+                  <strong className="popular-music-card-title">
+                    ${Number(item.price ?? 0).toFixed(2)}
+                  </strong>
+                  <span
+                    className="popular-music-card-artist"
+                    style={{ color: isPositive ? "#16a34a" : "#dc2626" }}
+                  >
+                    {item.change !== null && item.percentChange !== null
+                      ? `${isPositive ? "+" : ""}${item.change.toFixed(2)} (${isPositive ? "+" : ""}${item.percentChange.toFixed(2)}%)`
+                      : ""}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </section>
     );
   };
