@@ -6431,6 +6431,7 @@ export default function Home() {
   const [isSavingCategories, setIsSavingCategories] = useState(false);
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
   const [failedArticleBoxImages, setFailedArticleBoxImages] = useState<Record<string, true>>({});
+  const [sportsArtworkCache, setSportsArtworkCache] = useState<Record<string, string | null>>({});
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
@@ -10551,6 +10552,172 @@ export default function Home() {
     return [] as Article[];
   }, [sortMode, sportsPreviewArticles, visibleArticles]);
 
+  const getSportsArtworkCacheKey = useCallback(
+    (article: Pick<Article, "title" | "url" | "source">) => getArticleDeduplicationKey(article as Article),
+    []
+  );
+
+  useEffect(() => {
+    if (sortMode !== "trending" && sortMode !== "sports") {
+      return;
+    }
+
+    const candidateArticles = dedupeArticlesByContent(sportsTabArticles).filter((article) => {
+      if (!isBroadSportsArticle(article) || isSportsBettingAd(article)) {
+        return false;
+      }
+
+      const selectedImage = getBestArticleImage(article);
+      const hasRealImage =
+        Boolean(selectedImage.src) &&
+        isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
+
+      if (hasRealImage) {
+        return false;
+      }
+
+      const cacheKey = getSportsArtworkCacheKey(article);
+      return !(cacheKey in sportsArtworkCache);
+    });
+
+    if (candidateArticles.length === 0) {
+      return;
+    }
+
+    void Promise.allSettled(
+      candidateArticles.slice(0, 24).map(async (article) => {
+        const cacheKey = getSportsArtworkCacheKey(article);
+        const response = await fetch(
+          `/api/sports-artwork?q=${encodeURIComponent(
+            `${article.title} ${article.description ?? ""} ${article.source} ${article.category}`
+          )}`
+        );
+        const payload = (await response.json()) as {
+          imageUrl?: string | null;
+          source?: string | null;
+        };
+
+        return {
+          cacheKey,
+          title: cleanDisplayText(article.title),
+          imageUrl: payload.imageUrl?.trim() || null,
+        };
+      })
+    ).then((results) => {
+      setSportsArtworkCache((prev) => {
+        const next = { ...prev };
+
+        results.forEach((result) => {
+          if (result.status !== "fulfilled") {
+            return;
+          }
+
+          next[result.value.cacheKey] = result.value.imageUrl;
+
+          if (result.value.imageUrl) {
+            console.log("SPORTSDB IMAGE USED", {
+              title: result.value.title,
+              imageUrl: result.value.imageUrl,
+            });
+          }
+        });
+
+        return next;
+      });
+    });
+  }, [getSportsArtworkCacheKey, sortMode, sportsArtworkCache, sportsTabArticles]);
+
+  const getSportsCardVisual = useCallback(
+    (article: Article, options?: { largeCard?: boolean }) => {
+      const safeSourceName = getSafeSourceLabel(article.source);
+      const selectedImage = getBestArticleImage(article);
+      const cacheKey = getSportsArtworkCacheKey(article);
+      const sportsDbImageUrl = sportsArtworkCache[cacheKey] ?? null;
+      const topicFallbackImageUrl = getTopicFallbackImage(article);
+      const sportsFallbackImageUrl = getSportsLeagueOrTeamFallbackImageUrl(article);
+      const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
+      const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
+      const selectedImageFailureKey = selectedImage.src
+        ? `${article.id}:${selectedImage.src}`
+        : `${article.id}:none`;
+      const sportsDbFailureKey = sportsDbImageUrl
+        ? `${safeSourceName}:${sportsDbImageUrl}:sportsdb`
+        : `${safeSourceName}:sportsdb:none`;
+      const topicFallbackFailureKey = topicFallbackImageUrl
+        ? `${safeSourceName}:${topicFallbackImageUrl}:topic`
+        : `${safeSourceName}:topic:none`;
+      const sportsFallbackFailureKey = sportsFallbackImageUrl
+        ? `${safeSourceName}:${sportsFallbackImageUrl}:sports`
+        : `${safeSourceName}:sports:none`;
+      const boxLogoFailureKey = boxLogoUrl ? `${safeSourceName}:${boxLogoUrl}` : `${safeSourceName}:none`;
+      const rectangleLogoFailureKey = rectangleLogoUrl
+        ? `${safeSourceName}:${rectangleLogoUrl}:rectangle`
+        : `${safeSourceName}:rectangle:none`;
+
+      if (
+        selectedImage.src &&
+        !failedArticleImages[selectedImageFailureKey] &&
+        isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src)
+      ) {
+        return {
+          src: selectedImage.src,
+          kind: "real" as const,
+          failureKey: selectedImageFailureKey,
+        };
+      }
+
+      if (sportsDbImageUrl && !failedArticleBoxImages[sportsDbFailureKey]) {
+        return {
+          src: sportsDbImageUrl,
+          kind: "sportsdb" as const,
+          failureKey: sportsDbFailureKey,
+        };
+      }
+
+      if (topicFallbackImageUrl && !failedArticleBoxImages[topicFallbackFailureKey]) {
+        return {
+          src: topicFallbackImageUrl,
+          kind: "topic-fallback" as const,
+          failureKey: topicFallbackFailureKey,
+        };
+      }
+
+      if (sportsFallbackImageUrl && !failedArticleBoxImages[sportsFallbackFailureKey]) {
+        return {
+          src: sportsFallbackImageUrl,
+          kind: "league-team-fallback" as const,
+          failureKey: sportsFallbackFailureKey,
+        };
+      }
+
+      if (!options?.largeCard && boxLogoUrl && !failedArticleBoxImages[boxLogoFailureKey]) {
+        return {
+          src: boxLogoUrl,
+          kind: "box-logo" as const,
+          failureKey: boxLogoFailureKey,
+        };
+      }
+
+      if (!options?.largeCard && rectangleLogoUrl && !failedArticleBoxImages[rectangleLogoFailureKey]) {
+        return {
+          src: rectangleLogoUrl,
+          kind: "rectangle-logo" as const,
+          failureKey: rectangleLogoFailureKey,
+        };
+      }
+
+      return null;
+    },
+    [failedArticleBoxImages, failedArticleImages, getSportsArtworkCacheKey, sportsArtworkCache]
+  );
+
+  const hasRenderableSportsVisual = useCallback(
+    (article: Article, options?: { largeCard?: boolean }) =>
+      Boolean(getSportsCardVisual(article, options)) ||
+      (!options?.largeCard && hasMappedSourceLogo(getSafeSourceLabel(article.source))),
+    [getSportsCardVisual]
+  );
+
   const localSportsArticles = useMemo(() => {
     const candidateArticles =
       sortMode === "sports"
@@ -10579,30 +10746,18 @@ export default function Home() {
     );
 
     const diagnostics = sportsArticles.map((article) => {
-      const safeSourceName = getSafeSourceLabel(article.source);
       const selectedImage = getBestArticleImage(article);
       const hasRealImage =
         Boolean(selectedImage.src) &&
         isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
-      const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
-      const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
-      const leagueOrTeamImageUrl = getSportsLeagueOrTeamFallbackImageUrl(article);
+      const visual = getSportsCardVisual(article);
+      const hasSourceBadgeFallback = !visual && hasMappedSourceLogo(getSafeSourceLabel(article.source));
 
       return {
         article,
-        imageSource: hasRealImage
-          ? selectedImage.source ?? "real"
-          : boxLogoUrl
-            ? "box-logo"
-            : rectangleLogoUrl
-              ? "rectangle-logo"
-              : leagueOrTeamImageUrl
-                ? "league-team-fallback"
-              : hasMappedSourceLogo(safeSourceName)
-                ? "source-badge"
-                : "category-fallback",
+        imageSource: visual?.kind ?? (hasSourceBadgeFallback ? "source-badge" : "none"),
         hasRealImage,
-        hasFallbackImage: Boolean(boxLogoUrl || rectangleLogoUrl || leagueOrTeamImageUrl),
+        hasFallbackImage: Boolean((visual && !hasRealImage) || hasSourceBadgeFallback),
       };
     });
 
@@ -10616,13 +10771,20 @@ export default function Home() {
         (entry) => !entry.hasRealImage && !entry.hasFallbackImage
       ).length,
     };
-  }, [sportsTabArticles]);
+  }, [getSportsCardVisual, sportsTabArticles]);
 
   useEffect(() => {
     if (sportsImageDiagnostics.diagnostics.length === 0) {
       return;
     }
 
+    console.log("SPORTS IMAGE_ONLY RAW COUNT", sportsImageDiagnostics.diagnostics.length);
+    console.log(
+      "SPORTS IMAGE_ONLY FINAL COUNT",
+      sportsImageDiagnostics.diagnostics.filter(
+        (entry) => entry.hasRealImage || entry.hasFallbackImage
+      ).length
+    );
     console.log("SPORTS REAL IMAGE COUNT", sportsImageDiagnostics.realImageCount);
     console.log("SPORTS FALLBACK IMAGE COUNT", sportsImageDiagnostics.fallbackImageCount);
     console.log("SPORTS CARD REAL IMAGE COUNT", sportsImageDiagnostics.realImageCount);
@@ -13880,7 +14042,21 @@ export default function Home() {
           return getArticlePriorityScore(rightArticle) - getArticlePriorityScore(leftArticle);
         });
 
-        const selectedArticles = selectSourceBalancedArticles(sortedArticles, 6);
+        const selectedArticles = selectSourceBalancedArticles(sortedArticles, 6).filter((article) => {
+          const isRenderable = hasRenderableSportsVisual(article, {
+            largeCard: false,
+          });
+
+          if (!isRenderable) {
+            console.log("SPORTS ARTICLE HIDDEN_NO_IMAGE", {
+              section: section.key,
+              title: article.title,
+              source: article.source,
+            });
+          }
+
+          return isRenderable;
+        });
         const leadArticle = section.getLead(selectedArticles);
         const articleKeysToReserve = new Set(
           selectedArticles.map((article) => getArticleDeduplicationKey(article))
@@ -13922,7 +14098,7 @@ export default function Home() {
 
     console.log("SPORTS GROUPED SECTION COUNT", sections.length);
     return sections;
-  }, [sortMode, sportsTabArticles]);
+  }, [hasRenderableSportsVisual, sortMode, sportsTabArticles]);
 
   const favoriteTeamGames = useMemo(() => {
     const matchedGames: SportsScoreGame[] = [];
@@ -14094,7 +14270,21 @@ export default function Home() {
       });
 
       const sectionArticleLimit = section.key === "NBA" || section.key === "MLS" ? 6 : 5;
-      const selectedArticles = selectSourceBalancedArticles(sortedArticles, sectionArticleLimit);
+      const selectedArticles = selectSourceBalancedArticles(sortedArticles, sectionArticleLimit).filter(
+        (article) => {
+          const isRenderable = hasRenderableSportsVisual(article);
+
+          if (!isRenderable) {
+            console.log("SPORTS ARTICLE HIDDEN_NO_IMAGE", {
+              section: section.key,
+              title: article.title,
+              source: article.source,
+            });
+          }
+
+          return isRenderable;
+        }
+      );
       console.log("SPORTS SECTION RANKED ARTICLES", {
         section: section.key,
         count: selectedArticles.length,
@@ -14161,7 +14351,7 @@ export default function Home() {
         videos: visibleVideos,
       };
     }).filter((section) => section.scores.length > 0 || section.articles.length > 0 || section.videos.length > 0);
-  }, [favoriteTeams, fightingSectionArticles, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresDisplayByLeague, sportsStandardArticles, sportsVideoPool]);
+  }, [favoriteTeams, fightingSectionArticles, hasRenderableSportsVisual, mlbSectionArticles, mlbSectionVideos, mlsSectionArticles, nbaSectionArticles, nbaSectionVideos, nflSectionArticles, nflSectionVideos, nhlSectionArticles, nhlSectionVideos, sortMode, sportsFeaturedArticles, sportsScoresDisplayByLeague, sportsStandardArticles, sportsVideoPool]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -15234,14 +15424,9 @@ export default function Home() {
   const sportsImageCount = useMemo(
     () =>
       sportsTabArticles.filter((article) => {
-        const sourceName = getSafeSourceLabel(article.source);
-        const image = getBestArticleImage(article);
-        return (
-          (Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src)) ||
-          hasMappedSourceLogo(sourceName)
-        );
+        return hasRenderableSportsVisual(article);
       }).length,
-    [sportsTabArticles]
+    [hasRenderableSportsVisual, sportsTabArticles]
   );
 
   useEffect(() => {
@@ -15728,6 +15913,20 @@ export default function Home() {
   };
 
   const getLargeImageCardImage = (article: Article) => {
+    if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
+      const sportsVisual = getSportsCardVisual(article, { largeCard: true });
+
+      if (!sportsVisual?.src) {
+        return null;
+      }
+
+      return {
+        src: sportsVisual.src,
+        failureKey: sportsVisual.failureKey,
+        kind: sportsVisual.kind,
+      };
+    }
+
     const selectedImage = getBestArticleImage(article);
     const imageSrc = selectedImage.src;
     const imageFailureKey = imageSrc ? `${article.id}:${imageSrc}` : `${article.id}:none`;
@@ -15743,6 +15942,7 @@ export default function Home() {
     return {
       src: imageSrc,
       failureKey: imageFailureKey,
+      kind: "real" as const,
     };
   };
 
@@ -15760,6 +15960,7 @@ export default function Home() {
       ? {
           src: options.imageSrcOverride,
           failureKey: `${article.id}:override:${options.imageSrcOverride}`,
+          kind: "real" as const,
         }
       : getLargeImageCardImage(article);
 
@@ -15801,7 +16002,21 @@ export default function Home() {
           void handlePrimaryArticleOpen(event, article);
         }}
         onImageError={() => {
-          setFailedArticleImages((prev) => {
+          if (realImage.kind === "real") {
+            setFailedArticleImages((prev) => {
+              if (prev[realImage.failureKey]) {
+                return prev;
+              }
+
+              return {
+                ...prev,
+                [realImage.failureKey]: true,
+              };
+            });
+            return;
+          }
+
+          setFailedArticleBoxImages((prev) => {
             if (prev[realImage.failureKey]) {
               return prev;
             }
@@ -18003,47 +18218,8 @@ export default function Home() {
 
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
-    const selectedImage = getBestArticleImage(article);
-    const topicFallbackImageUrl = getTopicFallbackImage(article);
-    const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
-    const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
-    const sportsFallbackImageUrl = isBroadSportsArticle(article)
-      ? getSportsLeagueOrTeamFallbackImageUrl(article)
-      : null;
-    const boxLogoFailureKey = boxLogoUrl ? `${safeSourceName}:${boxLogoUrl}` : `${safeSourceName}:none`;
-    const rectangleLogoFailureKey = rectangleLogoUrl
-      ? `${safeSourceName}:${rectangleLogoUrl}:rectangle`
-      : `${safeSourceName}:rectangle:none`;
-    const topicFallbackFailureKey = topicFallbackImageUrl
-      ? `${safeSourceName}:${topicFallbackImageUrl}:topic`
-      : `${safeSourceName}:topic:none`;
-    const sportsFallbackFailureKey = sportsFallbackImageUrl
-      ? `${safeSourceName}:${sportsFallbackImageUrl}:sports`
-      : `${safeSourceName}:sports:none`;
-    const shouldUseImage =
-      Boolean(selectedImage.src) &&
-      isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
-    const shouldUseBoxLogoFallback =
-      Boolean(boxLogoUrl) && !failedArticleBoxImages[boxLogoFailureKey];
-    const shouldUseRectangleLogoFallback =
-      Boolean(rectangleLogoUrl) && !failedArticleBoxImages[rectangleLogoFailureKey];
-    const shouldUseTopicFallbackImage =
-      Boolean(topicFallbackImageUrl) && !failedArticleBoxImages[topicFallbackFailureKey];
-    const shouldUseSportsFallbackImage =
-      Boolean(sportsFallbackImageUrl) && !failedArticleBoxImages[sportsFallbackFailureKey];
-    const compactImageSourceUsed = shouldUseImage
-      ? selectedImage.source ?? "real"
-      : shouldUseTopicFallbackImage
-        ? "topic-fallback"
-      : shouldUseBoxLogoFallback
-        ? "box-logo"
-        : shouldUseRectangleLogoFallback
-          ? "rectangle-logo"
-          : shouldUseSportsFallbackImage
-            ? "sports-fallback"
-        : hasMappedSourceLogo(safeSourceName)
-          ? "source-badge"
-          : "category-fallback";
+    const sportsVisual = isBroadSportsArticle(article) ? getSportsCardVisual(article) : null;
+    const compactImageSourceUsed = sportsVisual?.kind ?? "category-fallback";
 
     if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
       console.log("SPORTS IMAGE SOURCE USED", {
@@ -18051,6 +18227,15 @@ export default function Home() {
         source: safeSourceName,
         imageSource: compactImageSourceUsed,
       });
+
+      if (!sportsVisual?.src && !hasMappedSourceLogo(safeSourceName)) {
+        console.log("SPORTS ARTICLE HIDDEN_NO_IMAGE", {
+          section: options?.imageFallbackLabel ?? "Sports",
+          title: article.title,
+          source: article.source,
+        });
+        return null;
+      }
     }
 
     return (
@@ -18123,90 +18308,40 @@ export default function Home() {
             <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
           </div>
           <div className="top-trending-list-media" aria-hidden="true">
-            {shouldUseImage && selectedImage.src ? (
+            {sportsVisual?.src ? (
               <img
-                src={selectedImage.src}
-                alt={cleanDisplayText(article.title)}
-                className="top-trending-list-image"
-                loading="lazy"
-                decoding="async"
-              />
-            ) : shouldUseTopicFallbackImage && topicFallbackImageUrl ? (
-              <img
-                src={topicFallbackImageUrl}
+                src={sportsVisual.src}
                 alt={cleanDisplayText(article.title)}
                 className="top-trending-list-image"
                 loading="lazy"
                 decoding="async"
                 onError={() => {
+                  if (!sportsVisual.failureKey) {
+                    return;
+                  }
+
+                  if (sportsVisual.kind === "real") {
+                    setFailedArticleImages((prev) => {
+                      if (prev[sportsVisual.failureKey]) {
+                        return prev;
+                      }
+
+                      return {
+                        ...prev,
+                        [sportsVisual.failureKey]: true,
+                      };
+                    });
+                    return;
+                  }
+
                   setFailedArticleBoxImages((prev) => {
-                    if (prev[topicFallbackFailureKey]) {
+                    if (prev[sportsVisual.failureKey]) {
                       return prev;
                     }
 
                     return {
                       ...prev,
-                      [topicFallbackFailureKey]: true,
-                    };
-                  });
-                }}
-              />
-            ) : shouldUseBoxLogoFallback && boxLogoUrl ? (
-              <img
-                src={boxLogoUrl}
-                alt={`${safeSourceName} logo`}
-                className="top-trending-list-image top-trending-list-box-logo-image"
-                loading="lazy"
-                decoding="async"
-                onError={() => {
-                  setFailedArticleBoxImages((prev) => {
-                    if (prev[boxLogoFailureKey]) {
-                      return prev;
-                    }
-
-                    return {
-                      ...prev,
-                      [boxLogoFailureKey]: true,
-                    };
-                  });
-                }}
-              />
-            ) : shouldUseRectangleLogoFallback && rectangleLogoUrl ? (
-              <img
-                src={rectangleLogoUrl}
-                alt={`${safeSourceName} logo`}
-                className="top-trending-list-image top-trending-list-box-logo-image"
-                loading="lazy"
-                decoding="async"
-                onError={() => {
-                  setFailedArticleBoxImages((prev) => {
-                    if (prev[rectangleLogoFailureKey]) {
-                      return prev;
-                    }
-
-                    return {
-                      ...prev,
-                      [rectangleLogoFailureKey]: true,
-                    };
-                  });
-                }}
-              />
-            ) : shouldUseSportsFallbackImage && sportsFallbackImageUrl ? (
-              <img
-                src={sportsFallbackImageUrl}
-                alt={`${safeCategoryName} image`}
-                className="top-trending-list-image"
-                loading="lazy"
-                decoding="async"
-                onError={() => {
-                  setFailedArticleBoxImages((prev) => {
-                    if (prev[sportsFallbackFailureKey]) {
-                      return prev;
-                    }
-
-                    return {
-                      ...prev,
-                      [sportsFallbackFailureKey]: true,
+                      [sportsVisual.failureKey]: true,
                     };
                   });
                 }}
