@@ -2936,6 +2936,15 @@ input {
   box-shadow: none;
 }
 
+.local-text-only-card {
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
+.local-text-only-card-compact {
+  min-height: 0;
+}
+
 .compact-feed-module {
   gap: 10px;
   padding: 14px 16px;

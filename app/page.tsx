@@ -15607,6 +15607,140 @@ export default function Home() {
     });
   }, [balancedTrendingArticles, breakingNewsPreviewArticles]);
 
+  useEffect(() => {
+    console.log("GLOBAL IMAGE_ONLY_ACTIVE", true);
+  }, []);
+
+  useEffect(() => {
+    if (sortMode !== "local") {
+      return;
+    }
+
+    const imagelessCount = balancedLocalArticles.filter(
+      (article) => !getArticleDisplayImage(article).src
+    ).length;
+
+    console.log("LOCAL NEWS IMAGELESS_ALLOWED", true);
+    console.log("LOCAL NEWS IMAGELESS_COUNT", imagelessCount);
+  }, [balancedLocalArticles, sortMode]);
+
+  const renderLocalTextOnlyArticleCard = (
+    article: Article,
+    options?: {
+      rankLabel?: string | null;
+      sectionLabel?: string | null;
+      compact?: boolean;
+    }
+  ) => {
+    const articleRouteId = getArticleRouteId(article);
+
+    if (!articleRouteId || !isRenderableArticleRecord(article)) {
+      return null;
+    }
+
+    const safeSourceName = getSafeSourceLabel(article.source);
+    const safeCategoryName = getSafeCategoryLabel(article.category, article);
+    const displaySectionLabel = options?.sectionLabel ?? getCategoryLabel(safeCategoryName);
+    const publishedLabel = formatPublishedDate(article.publishedAt, article.time);
+
+    return (
+      <article
+        className={`news-card local-text-only-card ${options?.compact ? "local-text-only-card-compact" : ""} ${
+          options?.rankLabel ? "news-card-has-rank" : ""
+        }`}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openLongPressMenu(article);
+        }}
+        onTouchStart={() => {
+          clearArticleLongPressTimer();
+          articleLongPressTimerRef.current = window.setTimeout(() => {
+            openLongPressMenu(article);
+          }, 420);
+        }}
+        onTouchEnd={clearArticleLongPressTimer}
+        onTouchCancel={clearArticleLongPressTimer}
+        onTouchMove={clearArticleLongPressTimer}
+      >
+        <div className="news-card-top-row news-card-top-row-brand">
+          <div className="trending-source-stack trending-source-stack-primary">
+            <div className="trending-source-brand trending-source-brand-static">
+              <SourceHeaderMark
+                sourceName={safeSourceName}
+                className="trending-source-header-mark"
+                fallbackMode="text"
+              />
+              <span className="trending-source-category-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="trending-source-category-inline">{displaySectionLabel}</span>
+              <span className="trending-source-category-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="trending-source-category-inline">
+                {selectedLocalCity ?? DEFAULT_LOCAL_CITY}
+              </span>
+            </div>
+          </div>
+          <div className="trending-card-top-meta">
+            {options?.rankLabel ? (
+              <span className="chip trending-rank-badge news-card-rank-badge">
+                {options.rankLabel}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <Link
+          href={`/article/${articleRouteId}/`}
+          className="article-link"
+          onClick={(event) => {
+            void handlePrimaryArticleOpen(event, article);
+          }}
+        >
+          <div className="news-card-body news-card-body-text-only">
+            <div className="news-card-copy">
+              <div className="trending-title-row">
+                <h3 className="trending-article-title">{cleanDisplayText(article.title)}</h3>
+              </div>
+              {article.description ? (
+                <p className="article-card-summary">
+                  {cleanDisplayText(article.description)
+                    .split(/(?<=[.!?])\s+/)
+                    .slice(0, 2)
+                    .join(" ")
+                    .trim()}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </Link>
+        <div className="news-card-footer">
+          <span className="trending-published-date news-card-footer-date feed-meta-inline">
+            <span>{publishedLabel}</span>
+            <span className="feed-meta-inline-group">
+              <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
+              </svg>
+              <span>{article.likes}</span>
+            </span>
+            <span className="feed-meta-inline-group">
+              <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+              </svg>
+              <span>{article.comments.length}</span>
+            </span>
+            <span className="feed-meta-inline-group">
+              <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
+                <path d="M6 4.5h12A1.5 1.5 0 0 1 19.5 6v14l-7.5-4-7.5 4V6A1.5 1.5 0 0 1 6 4.5Z" />
+              </svg>
+              <span>{article.saved ? "Saved" : "Save"}</span>
+            </span>
+          </span>
+        </div>
+      </article>
+    );
+  };
+
   const renderArticleFeedCard = (
     article: Article,
     options?: {
@@ -15631,6 +15765,12 @@ export default function Home() {
       const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
       if (!imageSrc) {
+        if (sortMode === "local") {
+          return renderLocalTextOnlyArticleCard(article, {
+            rankLabel: options?.rankLabel ?? null,
+            sectionLabel: options?.categoryLabelOverride ?? safeCategoryName,
+          });
+        }
         console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
           section: options?.categoryLabelOverride ?? safeCategoryName,
           title: article.title,
@@ -15649,6 +15789,12 @@ export default function Home() {
       const hasFailedImage = Boolean(failedArticleImages[imageFailureKey]);
 
       if (hasFailedImage) {
+        if (sortMode === "local") {
+          return renderLocalTextOnlyArticleCard(article, {
+            rankLabel: options?.rankLabel ?? null,
+            sectionLabel: options?.categoryLabelOverride ?? safeCategoryName,
+          });
+        }
         console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
           section: options?.categoryLabelOverride ?? safeCategoryName,
           title: article.title,
@@ -18179,6 +18325,13 @@ export default function Home() {
     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
     if (!displayImage.src) {
+      if (sortMode === "local") {
+        return renderLocalTextOnlyArticleCard(article, {
+          rankLabel: options?.showRank ? String(options.showRank) : null,
+          sectionLabel: options?.imageFallbackLabel ?? safeCategoryName,
+          compact: true,
+        });
+      }
       console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
         section: options?.imageFallbackLabel ?? safeCategoryName,
         title: article.title,
@@ -18766,21 +18919,14 @@ export default function Home() {
               </div>
             ) : (
               <div className="stack" style={{ gap: "18px" }}>
-                {trendingWeatherSections.localWeather.length > 0 ? (
-                  <section className="home-section-block home-section-plain">
-                    <div className="home-section-header">
-                      <div className="stack" style={{ gap: "4px" }}>
-                        <strong className="profile-section-title home-section-title">Local Weather</strong>
-                      </div>
-                    </div>
-                    {renderStandardArticleSection(trendingWeatherSections.localWeather, {
-                      limit: 6,
-                      excludeArticleKey: trendingWeatherLeadArticle
-                        ? getArticleDeduplicationKey(trendingWeatherLeadArticle)
-                        : null,
-                    })}
-                  </section>
-                ) : null}
+                {trendingWeatherSections.localWeather.length > 0
+                  ? (() => {
+                      console.log("TRENDING LOCAL WEATHER HIDDEN", {
+                        count: trendingWeatherSections.localWeather.length,
+                      });
+                      return null;
+                    })()
+                  : null}
 
                 {trendingWeatherSections.nationalWeather.length > 0 ? (
                   <section className="home-section-block home-section-plain">
