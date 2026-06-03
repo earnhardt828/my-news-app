@@ -35,6 +35,7 @@ export type PodcastShow = {
   category: PodcastFeedCategory;
   feedUrl: string;
   episodeCount: number;
+  provider: PodcastProvider;
   sourceProvider: PodcastProvider;
   featured: boolean;
   latestEpisode: PodcastEpisode | null;
@@ -294,6 +295,7 @@ async function fetchPodcastShow(candidate: DiscoveryCandidate): Promise<PodcastS
     category: candidate.category,
     feedUrl: candidate.feedUrl,
     episodeCount: episodes.length || candidate.episodeCount,
+    provider: candidate.sourceProvider,
     sourceProvider: candidate.sourceProvider,
     featured: candidate.featured,
     latestEpisode: episodes[0] ?? null,
@@ -373,8 +375,8 @@ async function fetchPodcastIndexPodcasts(
   term: string,
   category: PodcastFeedCategory
 ): Promise<DiscoveryCandidate[]> {
-  const apiKey = process.env.PODCAST_INDEX_API_KEY?.trim();
-  const apiSecret = process.env.PODCAST_INDEX_API_SECRET?.trim();
+  const apiKey = process.env.PODCASTINDEX_API_KEY?.trim();
+  const apiSecret = process.env.PODCASTINDEX_API_SECRET?.trim();
 
   if (!apiKey || !apiSecret) {
     return [];
