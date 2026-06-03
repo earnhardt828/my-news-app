@@ -17063,7 +17063,7 @@ export default function Home() {
               logoUrl,
               showLogo,
             });
-            console.log("STOCK LOGO PATH USED", {
+            console.log("STOCK LOGO FILE USED", {
               symbol: item.symbol,
               logoUrl,
             });

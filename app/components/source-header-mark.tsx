@@ -6,6 +6,8 @@ import {
 } from "../../lib/source-logos";
 import SourceBadge from "./source-badge";
 
+let hasLoggedHeaderLogoSync = false;
+
 type SourceHeaderMarkProps = {
   sourceName: string;
   className?: string;
@@ -24,6 +26,11 @@ export default function SourceHeaderMark({
   useEffect(() => {
     if (typeof document === "undefined") {
       return;
+    }
+
+    if (!hasLoggedHeaderLogoSync) {
+      console.log("HEADER LOGOS SYNCED", true);
+      hasLoggedHeaderLogoSync = true;
     }
 
     const updateTheme = () => {
@@ -47,6 +54,16 @@ export default function SourceHeaderMark({
     theme === "dark"
       ? (darkLogoUrl && failedDarkLogoUrl !== darkLogoUrl ? darkLogoUrl : null)
       : (lightLogoUrl && failedLightLogoUrl !== lightLogoUrl ? lightLogoUrl : null);
+
+  useEffect(() => {
+    if (activeLogoUrl) {
+      console.log("HEADER LOGO FILE USED", {
+        sourceName,
+        logoUrl: activeLogoUrl,
+        theme,
+      });
+    }
+  }, [activeLogoUrl, sourceName, theme]);
 
   if (activeLogoUrl) {
     return (
