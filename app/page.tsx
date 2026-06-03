@@ -103,7 +103,7 @@ import {
   isStrictTechnologyVideo,
   isStrictWorldVideo,
 } from "../lib/video-filters";
-import { POLLS_DISABLED } from "../lib/feature-flags";
+import { MY_NEWS_DISABLED, POLLS_DISABLED } from "../lib/feature-flags";
 
 const FEED_PAGE_SIZE = 25;
 const INITIAL_FEED_WARNING_MS = 4200;
@@ -6899,6 +6899,18 @@ export default function Home() {
       setSortMode("trending");
     }
   }, [sortMode]);
+
+  useEffect(() => {
+    if (MY_NEWS_DISABLED && sortMode === "mynews") {
+      setSortMode("trending");
+    }
+  }, [sortMode]);
+
+  useEffect(() => {
+    if (MY_NEWS_DISABLED) {
+      console.log("MY_NEWS_DISABLED_ACTIVE", true);
+    }
+  }, []);
 
   const articleDisplayImageCount = useMemo(
     () => articles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length,
@@ -18500,16 +18512,18 @@ export default function Home() {
         >
           Trending
         </button>
-        <button
-          ref={(node) => {
-            topTabButtonRefs.current.mynews = node;
-          }}
-          className={`toolbar-pill ${activeMode === "mynews" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("mynews")}
-        >
-          My News
-        </button>
+        {!MY_NEWS_DISABLED ? (
+          <button
+            ref={(node) => {
+              topTabButtonRefs.current.mynews = node;
+            }}
+            className={`toolbar-pill ${activeMode === "mynews" ? "toolbar-pill-active" : ""}`}
+            type="button"
+            onClick={() => setSortMode("mynews")}
+          >
+            My News
+          </button>
+        ) : null}
         <button
           ref={(node) => {
             topTabButtonRefs.current.local = node;
@@ -19049,64 +19063,73 @@ export default function Home() {
           )}
         </section>
 
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Suggested Categories</strong>
-              <span className="muted">Swipe through official topics to shape your feed.</span>
-            </div>
-            {userId ? (
-              <Link href="/profile/categories/" className="button button-secondary">
-                Edit all
-              </Link>
-            ) : (
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => alert("Log in to customize categories.")}
-              >
-                Log in
-              </button>
+        {!MY_NEWS_DISABLED ? (
+          <>
+            <section className="home-section-block home-section-plain">
+              <div className="home-section-header">
+                <div className="stack" style={{ gap: "4px" }}>
+                  <strong className="profile-section-title home-section-title">Suggested Categories</strong>
+                  <span className="muted">Swipe through official topics to shape your feed.</span>
+                </div>
+                {userId ? (
+                  <Link href="/profile/categories/" className="button button-secondary">
+                    Edit all
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => alert("Log in to customize categories.")}
+                  >
+                    Log in
+                  </button>
+                )}
+              </div>
+
+              <div className="category-swipe-row" role="list" aria-label="Suggested categories">
+                {CATEGORY_OPTIONS.map((category, index) => {
+                  const isSelected = categories.includes(category);
+                  const label = getCategoryLabel(category);
+
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      role="listitem"
+                      className={`category-swipe-card ${
+                        isSelected ? "category-swipe-card-active" : ""
+                      }`}
+                      onClick={() => void handleQuickToggleCategory(category)}
+                      disabled={isSavingCategories}
+                    >
+                      <span
+                        className={`category-swipe-card-art category-art-${index % 8} ${
+                          isSelected ? "category-swipe-card-art-active" : ""
+                        }`}
+                        style={getCategorySwipeArtStyle(category, index)}
+                        aria-hidden="true"
+                      />
+                      <span className="category-swipe-card-label">{label}</span>
+                      <span className="category-swipe-card-meta">
+                        {isSelected ? "Added" : userId ? "Tap to add" : "Log in to add"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {renderTallTrendingQuickWatchRow(
+              "Quick Watch",
+              trendingTallQuickWatchSections.addCategories,
+              "add-categories-quickwatch"
             )}
-          </div>
-
-          <div className="category-swipe-row" role="list" aria-label="Suggested categories">
-            {CATEGORY_OPTIONS.map((category, index) => {
-              const isSelected = categories.includes(category);
-              const label = getCategoryLabel(category);
-
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  role="listitem"
-                  className={`category-swipe-card ${
-                    isSelected ? "category-swipe-card-active" : ""
-                  }`}
-                  onClick={() => void handleQuickToggleCategory(category)}
-                  disabled={isSavingCategories}
-                >
-                  <span
-                    className={`category-swipe-card-art category-art-${index % 8} ${
-                      isSelected ? "category-swipe-card-art-active" : ""
-                    }`}
-                    style={getCategorySwipeArtStyle(category, index)}
-                    aria-hidden="true"
-                  />
-                  <span className="category-swipe-card-label">{label}</span>
-                  <span className="category-swipe-card-meta">
-                    {isSelected ? "Added" : userId ? "Tap to add" : "Log in to add"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {renderTallTrendingQuickWatchRow(
-          "Quick Watch",
-          trendingTallQuickWatchSections.addCategories,
-          "add-categories-quickwatch"
+          </>
+        ) : (
+          (() => {
+            console.log("TRENDING_SUGGESTED_CATEGORIES_HIDDEN", true);
+            return null;
+          })()
         )}
 
         <section className="home-section-block home-section-plain">

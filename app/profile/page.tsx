@@ -23,7 +23,7 @@ import { hydratePolls, type PollRecord, type PollWithResults } from "../../lib/p
 import { cleanDisplayText } from "../../lib/display-text";
 import { SUPPORTED_LOCAL_CITIES } from "../../lib/local-news";
 import { isUsernameAllowed } from "../../lib/moderation";
-import { POLLS_DISABLED } from "../../lib/feature-flags";
+import { MY_NEWS_DISABLED, POLLS_DISABLED } from "../../lib/feature-flags";
 import { supabase } from "../../lib/supabase";
 
 type UserState = {
@@ -160,6 +160,12 @@ export default function Profile() {
           ? "Your account has been deleted."
           : ""
       : "";
+
+  useEffect(() => {
+    if (MY_NEWS_DISABLED) {
+      console.log("PROFILE_MY_NEWS_CATEGORIES_HIDDEN", true);
+    }
+  }, []);
 
   const clearProfileState = useCallback(() => {
     setUsername("");
@@ -1291,7 +1297,7 @@ export default function Profile() {
                   </div>
                 </div>
                 <div className="profile-meta-row">
-                  <span className="chip">{categories.length} categories selected</span>
+                  {!MY_NEWS_DISABLED ? <span className="chip">{categories.length} categories selected</span> : null}
                   <Link href={`/user/${currentUserId}/`} className="chip chip-accent">
                     View public profile
                   </Link>
@@ -1395,17 +1401,21 @@ export default function Profile() {
                 </button>
               </div>
 
-              <div className="profile-divider" />
+              {!MY_NEWS_DISABLED ? (
+                <>
+                  <div className="profile-divider" />
 
-              <Link href="/profile/categories/" className="settings-list-row">
-                <div className="settings-list-copy">
-                  <strong>My News Categories</strong>
-                  <span>Add or edit the topics used for your personalized news section.</span>
-                </div>
-                <span className="settings-chevron" aria-hidden="true">
-                  ›
-                </span>
-              </Link>
+                  <Link href="/profile/categories/" className="settings-list-row">
+                    <div className="settings-list-copy">
+                      <strong>My News Categories</strong>
+                      <span>Add or edit the topics used for your personalized news section.</span>
+                    </div>
+                    <span className="settings-chevron" aria-hidden="true">
+                      ›
+                    </span>
+                  </Link>
+                </>
+              ) : null}
 
               <div className="profile-divider" />
 
