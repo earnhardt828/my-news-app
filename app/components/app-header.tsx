@@ -127,6 +127,66 @@ export default function AppHeader() {
     ? getSourceNameFromSlug(sourcePathSegments[sourcePathSegments.length - 1] ?? "")
     : "Source";
 
+  const notificationButton = (
+    <Link
+      href="/notifications/"
+      className="header-icon-button"
+      aria-label="Open notifications"
+    >
+      <span className="header-icon-glyph" aria-hidden="true">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+          <path d="M10 17a2 2 0 0 0 4 0" />
+        </svg>
+      </span>
+      {hasUnreadNotifications ? <span className="header-notification-dot" /> : null}
+    </Link>
+  );
+
+  const settingsButton = (
+    <Link
+      href="/settings/"
+      className="header-icon-button"
+      aria-label="Open settings"
+    >
+      <span className="header-icon-glyph" aria-hidden="true">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M12 2.75v2.1" />
+          <path d="m15.74 4.26-1.05 1.82" />
+          <path d="m19.74 8.26-1.82 1.05" />
+          <path d="M21.25 12h-2.1" />
+          <path d="m19.74 15.74-1.82-1.05" />
+          <path d="m15.74 19.74-1.05-1.82" />
+          <path d="M12 21.25v-2.1" />
+          <path d="m8.26 19.74 1.05-1.82" />
+          <path d="m4.26 15.74 1.82-1.05" />
+          <path d="M2.75 12h2.1" />
+          <path d="m4.26 8.26 1.82 1.05" />
+          <path d="m8.26 4.26 1.05 1.82" />
+        </svg>
+      </span>
+    </Link>
+  );
+
   const closeTo = (fallbackPath: string) => {
     if (typeof window !== "undefined") {
       const storedArticleReturnState = readArticleReturnState();
@@ -806,28 +866,7 @@ export default function AppHeader() {
             </span>
           </Link>
           <h1 className="brand-title">Profile</h1>
-          <Link
-            href="/notifications/"
-            className="header-icon-button"
-            aria-label="Open notifications"
-          >
-            <span className="header-icon-glyph" aria-hidden="true">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                <path d="M10 17a2 2 0 0 0 4 0" />
-              </svg>
-            </span>
-            {hasUnreadNotifications ? <span className="header-notification-dot" /> : null}
-          </Link>
+          {settingsButton}
         </div>
       );
     }
@@ -895,18 +934,7 @@ export default function AppHeader() {
       </Link>
 
       <div className="header-actions-cluster">
-        {!POLLS_DISABLED ? (
-          <button
-            type="button"
-            className="category-launch-button"
-            aria-label="Create poll"
-            onClick={() => {
-              router.push("/profile/polls/new/");
-            }}
-          >
-            +
-          </button>
-        ) : null}
+        {notificationButton}
       </div>
     </div>
   );

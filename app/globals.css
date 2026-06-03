@@ -5126,6 +5126,18 @@ input {
   align-items: flex-start;
 }
 
+.profile-page-root {
+  gap: 12px;
+}
+
+.profile-page-shell {
+  gap: 12px;
+}
+
+.profile-main-card {
+  padding-top: 14px;
+}
+
 .profile-auth-shell {
   padding-top: 4px;
 }
@@ -5213,18 +5225,6 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.profile-settings-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--button-secondary-bg);
-  color: var(--foreground);
 }
 
 .profile-stats-row {
