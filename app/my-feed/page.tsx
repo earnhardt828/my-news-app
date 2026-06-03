@@ -54,15 +54,19 @@ type FeedArticle = {
 function getFeedProviderLabel(provider: string | null | undefined) {
   const normalizedProvider = cleanDisplayText(provider ?? "").trim().toLowerCase();
 
+  if (normalizedProvider === "gnews") {
+    return "GNEWS";
+  }
+
   if (normalizedProvider === "guardian") {
-    return "guardian";
+    return "GUARDIAN";
   }
 
   if (normalizedProvider === "nyt") {
-    return "nyt";
+    return "NYT";
   }
 
-  return "current";
+  return "CURRENT";
 }
 
 export default function MyFeed() {

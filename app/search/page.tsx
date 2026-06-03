@@ -96,6 +96,7 @@ const TRUSTED_SEARCH_SOURCES = [
   "NPR",
   "PBS",
   "The Guardian",
+  "The New York Times",
   "New York Times",
   "Washington Post",
   "Wall Street Journal",
@@ -233,15 +234,19 @@ function isTrustedSearchSource(sourceName: string | null | undefined) {
 function getSearchProviderLabel(provider: string | null | undefined) {
   const normalizedProvider = cleanDisplayText(provider ?? "").trim().toLowerCase();
 
+  if (normalizedProvider === "gnews") {
+    return "GNEWS";
+  }
+
   if (normalizedProvider === "guardian") {
-    return "guardian";
+    return "GUARDIAN";
   }
 
   if (normalizedProvider === "nyt") {
-    return "nyt";
+    return "NYT";
   }
 
-  return "current";
+  return "CURRENT";
 }
 
 function formatSearchDate(publishedAt?: string | null, fallback?: string) {

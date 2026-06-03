@@ -44,11 +44,18 @@ export async function GET() {
             Number(left.width ?? 0) * Number(left.height ?? 0)
         )[0] ?? null;
 
+    const largestImageUrl = largestImage?.url ?? null;
+    const fullImageUrl = largestImageUrl
+      ? largestImageUrl.startsWith("http")
+        ? largestImageUrl
+        : `https://static01.nyt.com/${largestImageUrl.replace(/^\/+/, "")}`
+      : null;
+
     return {
       title: article.title ?? null,
       url: article.url ?? null,
-      imageUrl: largestImage?.url ?? null,
-      hasImage: Boolean(largestImage?.url),
+      imageUrl: fullImageUrl,
+      hasImage: Boolean(fullImageUrl),
     };
   });
 

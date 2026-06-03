@@ -711,15 +711,19 @@ function isDedicatedMlbCategory(category: string) {
 function getArticleProviderLabel(provider: string | null | undefined) {
   const normalizedProvider = cleanDisplayText(provider ?? "").trim().toLowerCase();
 
+  if (normalizedProvider === "gnews") {
+    return "GNEWS";
+  }
+
   if (normalizedProvider === "guardian") {
-    return "guardian";
+    return "GUARDIAN";
   }
 
   if (normalizedProvider === "nyt") {
-    return "nyt";
+    return "NYT";
   }
 
-  return "current";
+  return "CURRENT";
 }
 const CELEBRITY_FEED_QUERY =
   "entertainment news | celebrity news | celebrity gossip | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard | Rolling Stone | Vulture | IndieWire | Screen Rant | Collider | TheWrap | Hollywood Life | Pitchfork | Complex | NME | TVLine | Deadline TV | Variety TV | Billboard Music | Rolling Stone Music";

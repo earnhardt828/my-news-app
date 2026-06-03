@@ -1719,6 +1719,35 @@ function hasUsablePrimaryImageUrl(imageUrl: string | null | undefined) {
   return !looksLikeLowQualityImageUrl(trimmed);
 }
 
+function getPipelineProviderBucket(provider: string | null | undefined) {
+  const normalizedProvider = (provider ?? "").trim().toLowerCase();
+
+  if (normalizedProvider === "guardian") {
+    return "guardian";
+  }
+
+  if (normalizedProvider === "nyt") {
+    return "nyt";
+  }
+
+  return "current";
+}
+
+function getPipelineProviderCounts(articles: NormalizedArticle[]) {
+  return articles.reduce(
+    (counts, article) => {
+      const bucket = getPipelineProviderBucket(article.provider);
+      counts[bucket] += 1;
+      return counts;
+    },
+    {
+      current: 0,
+      guardian: 0,
+      nyt: 0,
+    }
+  );
+}
+
 function logProviderArticleStats(providerName: string, articles: NormalizedArticle[]) {
   console.log("NEWS PROVIDER ARTICLE COUNT", {
     provider: providerName,
@@ -3120,14 +3149,37 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
   const data = (await response.json()) as GuardianApiResponse;
   console.log("GUARDIAN RAW COUNT", data.response?.results?.length ?? 0);
   const normalizedArticles = (data.response?.results ?? [])
-    .map((article, index) =>
-      buildNormalizedArticle(
+    .map((article, index) => {
+      const imageUrl = article.fields?.thumbnail ?? null;
+
+      if (!imageUrl) {
+        console.log("PROVIDER ARTICLE REJECTED REASON", {
+          provider: "guardian",
+          reason: "missing_thumbnail",
+          title: article.fields?.headline ?? article.webTitle ?? null,
+          url: article.webUrl ?? null,
+        });
+        return null;
+      }
+
+      if (looksLikeLowQualityImageUrl(imageUrl)) {
+        console.log("PROVIDER ARTICLE REJECTED REASON", {
+          provider: "guardian",
+          reason: "low_quality_thumbnail",
+          title: article.fields?.headline ?? article.webTitle ?? null,
+          url: article.webUrl ?? null,
+          imageUrl,
+        });
+        return null;
+      }
+
+      return buildNormalizedArticle(
         {
           title: article.fields?.headline ?? article.webTitle,
           description: article.fields?.trailText ?? null,
           content: article.fields?.bodyText ?? null,
           url: article.webUrl,
-          imageUrl: article.fields?.thumbnail ?? null,
+          imageUrl,
           publishedAt: article.webPublicationDate,
           source_name: "The Guardian",
           category: article.sectionName ?? categories[0] ?? "News",
@@ -3139,8 +3191,8 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
           fallbackPublishedOffsetHours: index,
           provider: "guardian",
         }
-      )
-    )
+      );
+    })
     .filter(Boolean) as NormalizedArticle[];
 
   console.log("GUARDIAN ARTICLE COUNT", normalizedArticles.length);
@@ -3200,13 +3252,40 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
         [...(article.multimedia ?? [])]
           .filter((item) => Boolean(item.url))
           .sort((left, right) => (Number(right.width ?? 0) * Number(right.height ?? 0)) - (Number(left.width ?? 0) * Number(left.height ?? 0)))[0] ?? null;
+      const largestImageUrl = largestImage?.url?.trim() ?? null;
+      const fullImageUrl = largestImageUrl
+        ? largestImageUrl.startsWith("http")
+          ? largestImageUrl
+          : `https://static01.nyt.com/${largestImageUrl.replace(/^\/+/, "")}`
+        : null;
+
+      if (!fullImageUrl) {
+        console.log("PROVIDER ARTICLE REJECTED REASON", {
+          provider: "nyt",
+          reason: "missing_multimedia_image",
+          title: article.title ?? null,
+          url: article.url ?? null,
+        });
+        return null;
+      }
+
+      if (looksLikeLowQualityImageUrl(fullImageUrl)) {
+        console.log("PROVIDER ARTICLE REJECTED REASON", {
+          provider: "nyt",
+          reason: "low_quality_multimedia_image",
+          title: article.title ?? null,
+          url: article.url ?? null,
+          imageUrl: fullImageUrl,
+        });
+        return null;
+      }
 
       return buildNormalizedArticle(
         {
           title: article.title ?? null,
           description: article.abstract ?? null,
           url: article.url ?? null,
-          imageUrl: largestImage?.url?.trim() ?? null,
+          imageUrl: fullImageUrl,
           publishedAt: article.published_date ?? null,
           source_name: "The New York Times",
           category: article.section ?? article.subsection ?? categories[0] ?? "News",
@@ -4061,6 +4140,11 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const combined = providerResponses.flatMap((result) =>
     result.status === "fulfilled" ? result.value.articles : []
   );
+  const combinedProviderCounts = getPipelineProviderCounts(combined);
+  console.log("MAIN PIPELINE CURRENT COUNT", combinedProviderCounts.current);
+  console.log("MAIN PIPELINE GUARDIAN COUNT", combinedProviderCounts.guardian);
+  console.log("MAIN PIPELINE NYT COUNT", combinedProviderCounts.nyt);
+  console.log("MAIN PIPELINE MERGED COUNT", combined.length);
   console.log("NEWS MERGED COUNT", combined.length);
   console.log(
     "NEWS MERGED IMAGE_ONLY COUNT",
@@ -4072,17 +4156,22 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   console.log("NEWS DEDUPED COUNT", deduped.length);
   const sorted = sortArticlesForMode(deduped, params);
   const imageFirstSorted = sortImageFirstArticles(sorted);
+  const afterImageFilter = imageFirstSorted.filter((article) => hasRealArticleImage(article));
+  console.log("MAIN PIPELINE AFTER IMAGE FILTER COUNT", afterImageFilter.length);
+  const afterSourceFilter = afterImageFilter;
+  console.log("MAIN PIPELINE AFTER SOURCE FILTER COUNT", afterSourceFilter.length);
   console.log(
     "NEWS IMAGE_FIRST COUNT",
     imageFirstSorted.filter((article) => hasRealArticleImage(article)).length
   );
-  const realArticles = imageFirstSorted.filter((article) => !isFallbackArticle(article));
+  const realArticles = afterSourceFilter.filter((article) => !isFallbackArticle(article));
   const enrichedRealArticles =
     params.mode === "trending" && params.page === 1
       ? await enrichTrendingArticleImages(realArticles)
       : realArticles;
   const finalRealArticles =
     params.mode === "trending" ? balanceTrendingArticles(enrichedRealArticles) : enrichedRealArticles;
+  console.log("MAIN PIPELINE FINAL RENDER COUNT", finalRealArticles.length);
   const realSliced = finalRealArticles.slice(0, params.pageSize);
   const hasMore = providerResponses.some(
     (result) => result.status === "fulfilled" && result.value.hasMore
