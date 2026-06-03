@@ -169,19 +169,10 @@ export default function AppHeader() {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <circle cx="12" cy="12" r="3.2" />
-          <path d="M12 2.75v2.1" />
-          <path d="m15.74 4.26-1.05 1.82" />
-          <path d="m19.74 8.26-1.82 1.05" />
-          <path d="M21.25 12h-2.1" />
-          <path d="m19.74 15.74-1.82-1.05" />
-          <path d="m15.74 19.74-1.05-1.82" />
-          <path d="M12 21.25v-2.1" />
-          <path d="m8.26 19.74 1.05-1.82" />
-          <path d="m4.26 15.74 1.82-1.05" />
-          <path d="M2.75 12h2.1" />
-          <path d="m4.26 8.26 1.82 1.05" />
-          <path d="m8.26 4.26 1.05 1.82" />
+          <path d="M14.7 6.3a3 3 0 0 0-4.2 0l-4 4a3 3 0 0 0 0 4.2l.8.8" />
+          <path d="m8.4 15.6 5.8-5.8" />
+          <path d="m13.2 4.2 6.6 6.6" />
+          <path d="M14.9 2.5 21.5 9" />
         </svg>
       </span>
     </Link>

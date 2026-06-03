@@ -1264,7 +1264,7 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="stack">
+            <div className="stack profile-content-stack">
               <div className="profile-bio-block">
                 <span className="profile-section-label">Bio</span>
                 {isEditingBio ? (

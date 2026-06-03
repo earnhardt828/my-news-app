@@ -493,6 +493,10 @@ input {
   scrollbar-width: none;
 }
 
+.home-sections-shell > .trending-tabs-wrap.home-sections-nav {
+  margin-top: -4px;
+}
+
 .home-sections-nav::-webkit-scrollbar {
   display: none;
 }
@@ -516,6 +520,7 @@ input {
   padding: 0;
   border: 0;
   box-shadow: none;
+  margin-top: -2px;
 }
 
 .home-section-plain {
@@ -2678,7 +2683,7 @@ input {
 
 .search-bar-shell {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .search-card {
@@ -2732,7 +2737,8 @@ input {
 }
 
 .search-tabs-wrap {
-  margin-top: -4px;
+  margin-top: -12px;
+  margin-bottom: 2px;
 }
 
 .search-results-section-heading {
@@ -2800,7 +2806,7 @@ input {
 
 .search-results-shell {
   gap: 10px;
-  margin-top: 2px;
+  margin-top: 0;
   min-height: 52vh;
   align-content: start;
 }
@@ -5798,7 +5804,7 @@ input {
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .profile-follow-button {
@@ -5818,6 +5824,11 @@ input {
 .profile-bio-block {
   display: grid;
   gap: 10px;
+}
+
+.profile-content-stack {
+  gap: 12px;
+  margin-top: -8px;
 }
 
 .profile-bio-button {

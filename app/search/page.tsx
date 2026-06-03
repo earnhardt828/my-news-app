@@ -122,7 +122,7 @@ const TRUSTED_SEARCH_SOURCES = [
   "Space.com",
 ] as const;
 
-type SearchTab = "articles" | "users";
+type SearchTab = "articles" | "users" | "trending";
 
 const TITLE_STOP_WORDS = new Set([
   "after",
@@ -577,7 +577,7 @@ function normalizeSearchPayload(payload: NewsArticle[] | SearchNewsResponse) {
 export default function Search() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<SearchTab>("articles");
+  const [activeTab, setActiveTab] = useState<SearchTab>("trending");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [searchArticles, setSearchArticles] = useState<NewsArticle[]>([]);
   const [sourceFallbackArticles, setSourceFallbackArticles] = useState<NewsArticle[]>([]);
@@ -1338,7 +1338,13 @@ export default function Search() {
             type="text"
             placeholder="Search news, sources, or topics"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const nextQuery = event.target.value;
+              setQuery(nextQuery);
+              if (nextQuery.trim() && activeTab === "trending") {
+                setActiveTab("articles");
+              }
+            }}
           />
         </label>
       </section>
@@ -1363,10 +1369,19 @@ export default function Search() {
           >
             Users
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "trending"}
+            className={`toolbar-pill ${activeTab === "trending" ? "toolbar-pill-active" : ""}`}
+            onClick={() => setActiveTab("trending")}
+          >
+            Trending
+          </button>
         </div>
       </div>
 
-      {!query.trim() ? (
+      {activeTab === "trending" || !query.trim() ? (
         <section className="section-card stack">
           <div className="search-section-header">
             <strong className="search-section-title">Trending Now</strong>

@@ -19116,7 +19116,7 @@ export default function Home() {
         ) : null}
 
         {renderTallTrendingQuickWatchRow(
-          "Quick Watch",
+          todayLabel,
           trendingTallQuickWatchSections.featuredSources,
           "featured-sources-quickwatch"
         )}
