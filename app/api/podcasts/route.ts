@@ -2,6 +2,7 @@ import {
   buildStaticFallbackPodcastDirectory,
   fetchPodcastDirectory,
   fetchPodcastEpisodeBySlug,
+  fetchPodcastShowBySlug,
 } from "../../../lib/podcasts";
 
 export async function GET(request: Request) {
@@ -11,6 +12,16 @@ export async function GET(request: Request) {
   const query = requestUrl.searchParams.get("q")?.trim() ?? "";
 
   try {
+    if (podcastSlug && !episodeSlug) {
+      const result = await fetchPodcastShowBySlug(podcastSlug);
+
+      if (!result) {
+        return Response.json({ podcast: null }, { status: 404 });
+      }
+
+      return Response.json({ podcast: { show: result, episode: result.latestEpisode } });
+    }
+
     if (podcastSlug && episodeSlug) {
       const result = await fetchPodcastEpisodeBySlug(podcastSlug, episodeSlug);
 

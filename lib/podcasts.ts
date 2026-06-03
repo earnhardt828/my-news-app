@@ -7,7 +7,7 @@ import {
 } from "./podcast-feeds";
 
 export type PodcastProvider =
-  | "rss"
+  | "curated"
   | "itunes"
   | "apple"
   | "podcast-index"
@@ -73,6 +73,8 @@ type DiscoveryCandidate = {
   lastPublishedAt: string | null;
   searchTerms: string[];
 };
+
+export const PODCAST_INDEX_BACKGROUND_ONLY = true;
 
 function decodeXmlEntities(value: string) {
   return value
@@ -182,7 +184,7 @@ function scoreDiscoveryCandidate(candidate: DiscoveryCandidate) {
     );
   }
 
-  if (candidate.sourceProvider === "rss") {
+  if (candidate.sourceProvider === "curated") {
     score += 80;
   }
 
@@ -194,7 +196,7 @@ function createCandidateFromFeed(config: PodcastFeedConfig): DiscoveryCandidate 
   const publisher = config.publisher.trim();
 
   return {
-    id: buildPodcastId(["rss", config.feedUrl, title]),
+    id: buildPodcastId(["curated", config.feedUrl, title]),
     slug: config.slug,
     title,
     description: null,
@@ -203,7 +205,7 @@ function createCandidateFromFeed(config: PodcastFeedConfig): DiscoveryCandidate 
     category: config.category,
     feedUrl: config.feedUrl,
     episodeCount: 0,
-    sourceProvider: "rss",
+    sourceProvider: "curated",
     featured: Boolean(config.featured),
     score: 0,
     lastPublishedAt: null,
@@ -621,7 +623,9 @@ async function fetchDiscoveryCandidates(searchQuery?: string) {
     return activeTerms.flatMap((term) => [
       fetchItunesPodcasts(term, category, "itunes"),
       fetchItunesPodcasts(term, category, "apple"),
-      fetchPodcastIndexPodcasts(term, category),
+      ...(!PODCAST_INDEX_BACKGROUND_ONLY || Boolean(searchQuery)
+        ? [fetchPodcastIndexPodcasts(term, category)]
+        : []),
       fetchListenNotesPodcasts(term, category),
     ]);
   });
@@ -645,7 +649,7 @@ async function fetchDiscoveryCandidates(searchQuery?: string) {
   const providerCounts = discoveredCandidates.reduce<Record<string, number>>((accumulator, candidate) => {
     accumulator[candidate.sourceProvider] = (accumulator[candidate.sourceProvider] ?? 0) + 1;
     return accumulator;
-  }, { rss: baseCandidates.length });
+  }, { curated: baseCandidates.length });
 
   console.log("PODCAST_PROVIDER_COUNT", providerCounts);
 
@@ -731,7 +735,7 @@ export async function fetchPodcastDirectory(searchQuery?: string): Promise<Podca
 
   const hydratedSlugs = new Set(playableShows.map((show) => show.slug));
   const fallbackShows = mergedCandidates
-    .filter((candidate) => candidate.sourceProvider === "rss" && !hydratedSlugs.has(candidate.slug))
+    .filter((candidate) => candidate.sourceProvider === "curated" && !hydratedSlugs.has(candidate.slug))
     .map(createFallbackShowFromCandidate);
 
   const allShows = [...playableShows, ...fallbackShows];
@@ -789,4 +793,35 @@ export async function fetchPodcastEpisodeBySlug(podcastSlug: string, episodeSlug
     show,
     episode,
   };
+}
+
+export async function fetchPodcastShowBySlug(podcastSlug: string) {
+  const fallbackShow =
+    buildStaticFallbackPodcastDirectory().shows.find((entry) => entry.slug === podcastSlug) ?? null;
+
+  if (!fallbackShow) {
+    return null;
+  }
+
+  const candidate = createCandidateFromFeed(
+    PODCAST_FEEDS.find((entry) => entry.slug === podcastSlug) ?? {
+      slug: fallbackShow.slug,
+      title: fallbackShow.title,
+      publisher: fallbackShow.publisher,
+      category: fallbackShow.category,
+      featured: fallbackShow.featured,
+      feedUrl: fallbackShow.feedUrl,
+    }
+  );
+
+  try {
+    const hydratedShow = await fetchPodcastShow(candidate);
+    return hydratedShow;
+  } catch (error) {
+    console.error("PODCAST SHOW LOAD FAILED", {
+      podcastSlug,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return fallbackShow;
+  }
 }

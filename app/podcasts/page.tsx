@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "../../lib/api-base";
 import {
   buildStaticFallbackPodcastDirectory,
+  PODCAST_INDEX_BACKGROUND_ONLY,
   type PodcastDirectory,
   type PodcastShow,
 } from "../../lib/podcasts";
@@ -73,24 +74,27 @@ function PodcastSectionRow({
             </>
           );
 
-          return latestEpisode ? (
+          const clickTarget = `/podcasts/${show.slug}/`;
+          console.log("PODCAST CARD CLICK_TARGET", {
+            slug: show.slug,
+            href: clickTarget,
+          });
+
+          return (
             <Link
               key={`${title}-${show.slug}`}
-              href={`/podcasts/${show.slug}/${latestEpisode.slug}/`}
+              href={clickTarget}
               className="podcast-card"
               role="listitem"
+              onClick={() => {
+                console.log("PODCAST CARD CLICKED", {
+                  slug: show.slug,
+                  href: clickTarget,
+                });
+              }}
             >
               {cardContent}
             </Link>
-          ) : (
-            <div
-              key={`${title}-${show.slug}`}
-              className="podcast-card"
-              role="listitem"
-              aria-label={`${show.title} podcast`}
-            >
-              {cardContent}
-            </div>
           );
         })}
       </div>
@@ -104,6 +108,13 @@ export default function PodcastsPage() {
     buildStaticFallbackPodcastDirectory()
   );
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    console.log("PODCASTS PAGE INITIAL_RENDER", {
+      fallbackCount: directory.shows.length,
+      podcastIndexBackgroundOnly: PODCAST_INDEX_BACKGROUND_ONLY,
+    });
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -195,9 +206,9 @@ export default function PodcastsPage() {
           ) : null}
         </div>
 
-        {isLoading ? (
-          <div className="muted">Loading podcasts...</div>
-        ) : !directory || directory.shows.length === 0 ? (
+        {isLoading ? <div className="muted">Refreshing podcasts...</div> : null}
+
+        {!directory || directory.shows.length === 0 ? (
           <div className="empty-state compact-empty-state">
             <strong>No podcasts available right now.</strong>
             <span>Check back shortly while the podcast feeds refresh.</span>
