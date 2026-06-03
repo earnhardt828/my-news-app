@@ -166,22 +166,21 @@ type GuardianApiResponse = {
   };
 };
 
-type NytApiResponse = {
-  response?: {
-    docs?: Array<{
-      headline?: {
-        main?: string | null;
-      } | null;
-      abstract?: string | null;
-      web_url?: string | null;
-      pub_date?: string | null;
-      section_name?: string | null;
-      multimedia?: Array<{
-        url?: string | null;
-        subtype?: string | null;
-      }> | null;
-    }>;
-  };
+type NytTopStoriesResponse = {
+  results?: Array<{
+    title?: string | null;
+    abstract?: string | null;
+    url?: string | null;
+    published_date?: string | null;
+    section?: string | null;
+    subsection?: string | null;
+    multimedia?: Array<{
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      format?: string | null;
+    }> | null;
+  }>;
 };
 
 type NewsApiResponse = {
@@ -1775,6 +1774,46 @@ function getModeCategories(mode: NewsMode, categories: string[]) {
   return ["Breaking News", "Politics", "World", "Business", "Tech", "Sports"];
 }
 
+function getNytTopStoriesSections(mode: NewsMode, categories: string[]) {
+  const sectionMap: Record<string, string[]> = {
+    "Breaking News": ["home", "us", "world"],
+    Politics: ["politics", "us"],
+    World: ["world"],
+    Business: ["business"],
+    Finance: ["business"],
+    Tech: ["technology"],
+    Technology: ["technology"],
+    Science: ["science"],
+    Sports: ["sports"],
+    Entertainment: ["arts", "movies", "theater"],
+    Celebrity: ["arts", "movies", "theater"],
+    Travel: ["travel"],
+    Food: ["food"],
+    Auto: ["business", "technology"],
+    Weather: ["home", "us", "world"],
+    Opinion: ["home"],
+    Local: ["us"],
+    News: ["home"],
+  };
+
+  const requestedCategories = getModeCategories(mode, categories);
+  const derivedSections = requestedCategories.flatMap(
+    (category) => sectionMap[category] ?? ["home"]
+  );
+
+  if (mode === "search") {
+    derivedSections.unshift("home");
+  }
+
+  return Array.from(
+    new Set(
+      (derivedSections.length > 0 ? derivedSections : ["home", "world", "us"])
+        .filter(Boolean)
+        .slice(0, 4)
+    )
+  );
+}
+
 function getCategoryQuery(category: string) {
   return CATEGORY_QUERY_MAP[category] ?? category;
 }
@@ -3120,60 +3159,60 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
   }
 
   const categories = getModeCategories(params.mode, params.categories);
-  const effectiveQuery = getEffectiveQuery(params) || categories[0] || "news";
-  const url = new URL("https://api.nytimes.com/svc/search/v2/articlesearch.json");
-  url.searchParams.set("api-key", NYT_API_KEY);
-  url.searchParams.set("q", effectiveQuery);
-  url.searchParams.set("page", String(Math.max(0, params.page - 1)));
+  const sections = getNytTopStoriesSections(params.mode, params.categories);
 
   logProviderRequest("New York Times", {
     mode: params.mode,
     page: params.page,
-    query: effectiveQuery,
+    sections,
   });
 
-  const response = await fetch(url.toString(), {
-    next: { revalidate: 600 },
-  });
+  const sectionResponses = await Promise.allSettled(
+    sections.map(async (section) => {
+      const url = new URL(`https://api.nytimes.com/svc/topstories/v2/${section}.json`);
+      url.searchParams.set("api-key", NYT_API_KEY);
 
-  if (!response.ok) {
-    console.error("New York Times provider error:", response.status, response.statusText);
-    return { articles: [], hasMore: false };
-  }
+      const response = await fetch(url.toString(), {
+        next: { revalidate: 600 },
+      });
 
-  const payload = (await response.json()) as NytApiResponse;
-  const docs = payload.response?.docs ?? [];
-  const normalizedArticles = docs
-    .slice(0, params.pageSize)
+      if (!response.ok) {
+        throw new Error(`New York Times ${section} failed (${response.status})`);
+      }
+
+      const payload = (await response.json()) as NytTopStoriesResponse;
+      return { section, results: payload.results ?? [] };
+    })
+  );
+
+  const normalizedArticles = sectionResponses
+    .flatMap((result) => (result.status === "fulfilled" ? result.value.results : []))
     .map((article, index) => {
-      const multimediaUrl =
-        article.multimedia?.find((item) => item.url)?.url?.trim() ?? null;
-      const fullMultimediaUrl = multimediaUrl
-        ? multimediaUrl.startsWith("http")
-          ? multimediaUrl
-          : `https://www.nytimes.com/${multimediaUrl.replace(/^\/+/, "")}`
-        : null;
+      const largestImage =
+        [...(article.multimedia ?? [])]
+          .filter((item) => Boolean(item.url))
+          .sort((left, right) => (Number(right.width ?? 0) * Number(right.height ?? 0)) - (Number(left.width ?? 0) * Number(left.height ?? 0)))[0] ?? null;
 
       return buildNormalizedArticle(
         {
-          title: article.headline?.main ?? null,
-          description: article.abstract,
-          url: article.web_url,
-          imageUrl: fullMultimediaUrl,
-          publishedAt: article.pub_date,
+          title: article.title ?? null,
+          description: article.abstract ?? null,
+          url: article.url ?? null,
+          imageUrl: largestImage?.url?.trim() ?? null,
+          publishedAt: article.published_date ?? null,
           source_name: "The New York Times",
-          category: article.section_name ?? categories[0] ?? "News",
+          category: article.section ?? article.subsection ?? categories[0] ?? "News",
         },
         {
           source: "The New York Times",
-          category: article.section_name ?? categories[0] ?? "News",
-          uniqueSeed: `nyt-${params.page}-${index}`,
+          category: article.section ?? article.subsection ?? categories[0] ?? "News",
+          uniqueSeed: `nyt-topstories-${params.page}-${index}`,
           fallbackPublishedOffsetHours: index,
-          provider: "New York Times",
+          provider: "nyt",
         }
       );
     })
-    .filter(Boolean) as NormalizedArticle[];
+    .filter((article) => Boolean(article && hasRealArticleImage(article))) as NormalizedArticle[];
 
   logProviderArticleStats("New York Times", normalizedArticles);
   return {
