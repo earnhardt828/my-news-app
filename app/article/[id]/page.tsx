@@ -1516,7 +1516,7 @@ export default function ArticleDetailPage() {
         category: article.category,
         time: article.time,
         url: article.url ?? null,
-        image: getBestArticleImage(article).src,
+        image: getArticleDisplayImage(article).src,
         published_at: article.publishedAt ?? null,
       },
       {
@@ -1633,7 +1633,7 @@ export default function ArticleDetailPage() {
 
     const currentCommentArticle = compareArticle ?? article;
     const currentCommentArticleImage = currentCommentArticle
-      ? getBestArticleImage(currentCommentArticle).src
+      ? getArticleDisplayImage(currentCommentArticle).src
       : null;
     const commentInsertPayload = {
       article_id: articleId,

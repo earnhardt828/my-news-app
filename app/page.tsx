@@ -10646,86 +10646,25 @@ export default function Home() {
 
   const getSportsCardVisual = useCallback(
     (article: Article, options?: { largeCard?: boolean }) => {
-      const safeSourceName = getSafeSourceLabel(article.source);
-      const selectedImage = getBestArticleImage(article);
-      const cacheKey = getSportsArtworkCacheKey(article);
-      const sportsDbImageUrl = sportsArtworkCache[cacheKey] ?? null;
-      const topicFallbackImageUrl = getTopicFallbackImage(article);
-      const sportsFallbackImageUrl = getSportsLeagueOrTeamFallbackImageUrl(article);
-      const boxLogoUrl = getSourceBoxLogoUrl(safeSourceName);
-      const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
-      const selectedImageFailureKey = selectedImage.src
-        ? `${article.id}:${selectedImage.src}`
-        : `${article.id}:none`;
-      const sportsDbFailureKey = sportsDbImageUrl
-        ? `${safeSourceName}:${sportsDbImageUrl}:sportsdb`
-        : `${safeSourceName}:sportsdb:none`;
-      const topicFallbackFailureKey = topicFallbackImageUrl
-        ? `${safeSourceName}:${topicFallbackImageUrl}:topic`
-        : `${safeSourceName}:topic:none`;
-      const sportsFallbackFailureKey = sportsFallbackImageUrl
-        ? `${safeSourceName}:${sportsFallbackImageUrl}:sports`
-        : `${safeSourceName}:sports:none`;
-      const boxLogoFailureKey = boxLogoUrl ? `${safeSourceName}:${boxLogoUrl}` : `${safeSourceName}:none`;
-      const rectangleLogoFailureKey = rectangleLogoUrl
-        ? `${safeSourceName}:${rectangleLogoUrl}:rectangle`
-        : `${safeSourceName}:rectangle:none`;
+      const displayImage = getArticleDisplayImage(article, { largeCard: options?.largeCard });
 
-      if (
-        selectedImage.src &&
-        !failedArticleImages[selectedImageFailureKey] &&
-        isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src)
-      ) {
-        return {
-          src: selectedImage.src,
-          kind: "real" as const,
-          failureKey: selectedImageFailureKey,
-        };
+      if (!displayImage.src || displayImage.kind !== "real") {
+        return null;
       }
 
-      if (sportsDbImageUrl && !failedArticleBoxImages[sportsDbFailureKey]) {
-        return {
-          src: sportsDbImageUrl,
-          kind: "sportsdb" as const,
-          failureKey: sportsDbFailureKey,
-        };
+      const failureKey = displayImage.failureKey ?? `${article.id}:none`;
+
+      if (failedArticleImages[failureKey]) {
+        return null;
       }
 
-      if (topicFallbackImageUrl && !failedArticleBoxImages[topicFallbackFailureKey]) {
-        return {
-          src: topicFallbackImageUrl,
-          kind: "topic-fallback" as const,
-          failureKey: topicFallbackFailureKey,
-        };
-      }
-
-      if (sportsFallbackImageUrl && !failedArticleBoxImages[sportsFallbackFailureKey]) {
-        return {
-          src: sportsFallbackImageUrl,
-          kind: "league-team-fallback" as const,
-          failureKey: sportsFallbackFailureKey,
-        };
-      }
-
-      if (!options?.largeCard && boxLogoUrl && !failedArticleBoxImages[boxLogoFailureKey]) {
-        return {
-          src: boxLogoUrl,
-          kind: "box-logo" as const,
-          failureKey: boxLogoFailureKey,
-        };
-      }
-
-      if (!options?.largeCard && rectangleLogoUrl && !failedArticleBoxImages[rectangleLogoFailureKey]) {
-        return {
-          src: rectangleLogoUrl,
-          kind: "rectangle-logo" as const,
-          failureKey: rectangleLogoFailureKey,
-        };
-      }
-
-      return null;
+      return {
+        src: displayImage.src,
+        kind: "real" as const,
+        failureKey,
+      };
     },
-    [failedArticleBoxImages, failedArticleImages, getSportsArtworkCacheKey, sportsArtworkCache]
+    [failedArticleImages]
   );
 
   const hasRenderableSportsVisual = useCallback(
@@ -15427,14 +15366,7 @@ export default function Home() {
       ...myNewsFeaturedArticles,
     ];
 
-    return sampleArticles.filter((article) => {
-      const sourceName = getSafeSourceLabel(article.source);
-      const image = getBestArticleImage(article);
-      return (
-        (Boolean(image.src) && isLikelyHighQualityArticleImage(image.source, image.src)) ||
-        hasMappedSourceLogo(sourceName)
-      );
-    }).length;
+    return sampleArticles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length;
   }, [breakingNewsPreviewArticles, myNewsFeaturedArticles, topTenTrendingArticles]);
 
   const sportsImageCount = useMemo(
@@ -15635,15 +15567,26 @@ export default function Home() {
     balancedTrendingArticles
       .slice(0, 10)
       .forEach((article) => {
-        const selectedImage = getBestArticleImage(article);
+        const selectedImage = getArticleDisplayImage(article);
         console.log("TRENDING IMAGE SELECTED", {
           title: article.title,
           source: article.source,
           imageUrl: selectedImage.src,
-          selectedFrom: selectedImage.source,
+          selectedFrom: selectedImage.kind,
         });
       });
   }, [balancedTrendingArticles, sortMode]);
+
+  useEffect(() => {
+    console.log("SECTION IMAGE_ONLY_FINAL_COUNT", {
+      section: "Trending",
+      count: balancedTrendingArticles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length,
+    });
+    console.log("SECTION IMAGE_ONLY_FINAL_COUNT", {
+      section: "Breaking News",
+      count: breakingNewsPreviewArticles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length,
+    });
+  }, [balancedTrendingArticles, breakingNewsPreviewArticles]);
 
   const renderArticleFeedCard = (
     article: Article,
@@ -15664,14 +15607,12 @@ export default function Home() {
       const safeCategoryName = getSafeCategoryLabel(article.category, article);
       const displayCategoryLabel =
         options?.categoryLabelOverride ?? getCategoryLabel(safeCategoryName);
-      const sharedDisplayImage = getArticleDisplayImage(article);
-      const sportsVisual = isBroadSportsArticle(article) ? getSportsCardVisual(article) : null;
-      const displayImage = sportsVisual ?? sharedDisplayImage;
+      const displayImage = getArticleDisplayImage(article);
       const imageSrc = displayImage.src;
       const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
       if (!imageSrc) {
-        console.log("ARTICLE HIDDEN_NO_IMAGE", {
+        console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
           section: options?.categoryLabelOverride ?? safeCategoryName,
           title: article.title,
           source: article.source,
@@ -15686,13 +15627,10 @@ export default function Home() {
         return null;
       }
 
-      const hasFailedImage =
-        displayImage.kind === "real"
-          ? Boolean(failedArticleImages[imageFailureKey])
-          : Boolean(failedArticleBoxImages[imageFailureKey]);
+      const hasFailedImage = Boolean(failedArticleImages[imageFailureKey]);
 
       if (hasFailedImage) {
-        console.log("ARTICLE HIDDEN_NO_IMAGE", {
+        console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
           section: options?.categoryLabelOverride ?? safeCategoryName,
           title: article.title,
           source: article.source,
@@ -15707,7 +15645,6 @@ export default function Home() {
         return null;
       }
 
-      const shouldUseLargeImage = displayImage.kind === "real";
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
@@ -15718,16 +15655,9 @@ export default function Home() {
           source: safeSourceName,
           imageSrc,
         });
-        if (displayImage.kind && displayImage.kind !== "real") {
-          console.log("SPORTS CARD RENDERED WITH FALLBACK", {
-            title: cleanDisplayText(article.title),
-            source: safeSourceName,
-            imageSource: displayImage.kind,
-          });
-        }
       }
 
-      const visualBoxNode = shouldUseLargeImage ? (
+      const visualBoxNode = (
         <div className="article-thumb-shell article-card-visual-shell" aria-hidden="true">
           <img
             src={imageSrc}
@@ -15737,31 +15667,6 @@ export default function Home() {
             decoding="async"
             onError={() => {
               setFailedArticleImages((prev) => {
-                if (prev[imageFailureKey]) {
-                  return prev;
-                }
-
-                return {
-                  ...prev,
-                  [imageFailureKey]: true,
-                };
-              });
-            }}
-          />
-        </div>
-      ) : (
-        <div
-          className="article-thumb-shell article-card-visual-shell article-card-visual-placeholder"
-          aria-hidden="true"
-        >
-          <img
-            src={imageSrc}
-            alt={cleanDisplayText(article.title)}
-            className="article-card-visual-image article-card-box-logo-image"
-            loading="lazy"
-            decoding="async"
-            onError={() => {
-              setFailedArticleBoxImages((prev) => {
                 if (prev[imageFailureKey]) {
                   return prev;
                 }
@@ -16516,14 +16421,20 @@ export default function Home() {
         </div>
         <div className="featured-stories-scroll" role="list" aria-label="Featured articles">
           {rowArticles.map((article) => {
-            const selectedImage = getBestArticleImage(article);
+            const displayImage = getArticleDisplayImage(article);
             const imageSrc =
-              selectedImage.src && !usedImageSources.has(selectedImage.src)
-                ? selectedImage.src
+              displayImage.src && !usedImageSources.has(displayImage.src)
+                ? displayImage.src
                 : null;
 
             if (imageSrc) {
               usedImageSources.add(imageSrc);
+            } else {
+              console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
+                section: "Featured Articles",
+                title: article.title,
+                source: article.source,
+              });
             }
 
             return renderFeaturedStoryTile(article, {
@@ -16638,16 +16549,15 @@ export default function Home() {
     }
   ) => {
     const articleRouteId = getArticleRouteId(article);
-    const imageSrc = getBestArticleImage(article).src;
+    const imageSrc = getArticleDisplayImage(article).src;
     const safeSourceName = getSafeSourceLabel(article.source);
-    const rectangleLogoUrl = getSourceRectangleLogoUrl(safeSourceName);
-    const rectangleLogoFailureKey = rectangleLogoUrl
-      ? `${safeSourceName}:rectangle:${rectangleLogoUrl}`
-      : `${safeSourceName}:rectangle:none`;
-    const shouldUseRectangleLogo =
-      Boolean(rectangleLogoUrl) && !failedArticleBoxImages[rectangleLogoFailureKey];
 
-    if (!articleRouteId) {
+    if (!articleRouteId || !imageSrc) {
+      console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
+        section: "Featured Stories",
+        title: article.title,
+        source: article.source,
+      });
       return null;
     }
 
@@ -16661,40 +16571,14 @@ export default function Home() {
           void handlePrimaryArticleOpen(event, article);
         }}
       >
-        {imageSrc ? (
-          <img
-            src={imageSrc}
-            alt={cleanDisplayText(article.title)}
-            className="featured-story-image"
-            loading="lazy"
-            decoding="async"
-          />
-        ) : shouldUseRectangleLogo && rectangleLogoUrl ? (
-          <img
-            src={rectangleLogoUrl}
-            alt={`${safeSourceName} logo`}
-            className="featured-story-image featured-story-rectangle-logo"
-            loading="lazy"
-            decoding="async"
-            onError={() => {
-              setFailedArticleBoxImages((prev) => {
-                if (prev[rectangleLogoFailureKey]) {
-                  return prev;
-                }
-
-                return {
-                  ...prev,
-                  [rectangleLogoFailureKey]: true,
-                };
-              });
-            }}
-          />
-        ) : (
-          <div className="featured-story-fallback-brand" aria-hidden="true">
-            <SourceBadge sourceName={safeSourceName} />
-          </div>
-        )}
-        <div className={`featured-story-overlay ${imageSrc ? "" : "featured-story-overlay-solid"}`} />
+        <img
+          src={imageSrc}
+          alt={cleanDisplayText(article.title)}
+          className="featured-story-image"
+          loading="lazy"
+          decoding="async"
+        />
+        <div className="featured-story-overlay" />
         <div className="featured-story-copy">
           <span className="featured-story-source">{safeSourceName}</span>
           <h3 className="featured-story-title">{cleanDisplayText(article.title)}</h3>
@@ -16803,10 +16687,15 @@ export default function Home() {
               })
             : fallbackArticles.map((article, index) => {
                 const articleRouteId = getArticleRouteId(article);
-                const imageSrc = getBestArticleImage(article).src ?? getTopicFallbackImage(article);
+                const imageSrc = getArticleDisplayImage(article).src;
                 const score = getEntertainmentMovieScore(article);
 
                 if (!articleRouteId || !imageSrc) {
+                  console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
+                    section: "Movies In Theaters",
+                    title: article.title,
+                    source: article.source,
+                  });
                   return null;
                 }
 
@@ -16897,10 +16786,15 @@ export default function Home() {
               ))
             : fallbackArticles.map((article, index) => {
                 const articleRouteId = getArticleRouteId(article);
-                const imageSrc = getBestArticleImage(article).src;
+                const imageSrc = getArticleDisplayImage(article).src;
                 const musicMeta = getEntertainmentPopularMusicCardMeta(article);
 
                 if (!articleRouteId || !imageSrc) {
+                  console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
+                    section: "Popular Music",
+                    title: article.title,
+                    source: article.source,
+                  });
                   return null;
                 }
 
@@ -18139,7 +18033,7 @@ export default function Home() {
     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
     if (!displayImage.src) {
-      console.log("ARTICLE HIDDEN_NO_IMAGE", {
+      console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
         section: "Top 10 Trending",
         title: article.title,
         source: article.source,
@@ -18244,13 +18138,11 @@ export default function Home() {
 
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
-    const sharedDisplayImage = getArticleDisplayImage(article);
-    const sportsVisual = isBroadSportsArticle(article) ? getSportsCardVisual(article) : null;
-    const displayImage = sportsVisual ?? sharedDisplayImage;
+    const displayImage = getArticleDisplayImage(article);
     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
     if (!displayImage.src) {
-      console.log("ARTICLE HIDDEN_NO_IMAGE", {
+      console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
         section: options?.imageFallbackLabel ?? safeCategoryName,
         title: article.title,
         source: article.source,
@@ -18276,13 +18168,6 @@ export default function Home() {
         source: safeSourceName,
         imageSource: displayImage.kind ?? "none",
       });
-      if (displayImage.kind && displayImage.kind !== "real") {
-        console.log("SPORTS CARD RENDERED WITH FALLBACK", {
-          title: cleanDisplayText(article.title),
-          source: safeSourceName,
-          imageSource: displayImage.kind,
-        });
-      }
     }
 
     return (

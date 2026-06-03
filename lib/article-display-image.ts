@@ -20,11 +20,7 @@ type ArticleLike = ArticleImageFields & {
 };
 
 export type ArticleDisplayImageKind =
-  | "real"
-  | "topic-fallback"
-  | "source-logo"
-  | "rectangle-logo"
-  | "category-fallback";
+  | "real";
 
 export type ArticleDisplayImage = {
   src: string | null;
@@ -300,7 +296,7 @@ export function getArticleDisplayImage(
     imageSrc &&
     isLikelyHighQualityArticleImage(selectedImage.source, imageSrc)
   ) {
-    console.log("ARTICLE IMAGE REAL_USED", {
+    console.log("ARTICLE REAL_IMAGE_USED", {
       title: article.title ?? "",
       source: article.source ?? "",
       imageSource: selectedImage.source,
@@ -314,58 +310,24 @@ export function getArticleDisplayImage(
   }
 
   const topicFallbackImage = getTopicFallbackImage(article);
-
-  if (topicFallbackImage) {
-    console.log("ARTICLE IMAGE TOPIC_FALLBACK_USED", {
-      title: article.title ?? "",
-      source: article.source ?? "",
-      image: topicFallbackImage,
-    });
-    return {
-      src: topicFallbackImage,
-      kind: "topic-fallback",
-      isReal: false,
-      failureKey: getFailureKey(article, topicFallbackImage),
-    };
-  }
-
   const sourceName = article.source?.trim() ?? "";
   const sourceLogo = sourceName ? getSourceBoxLogoUrl(sourceName) : null;
+  const rectangleLogo = sourceName ? getSourceRectangleLogoUrl(sourceName) : null;
+  const categoryFallback = article.category ? getCategoryImageUrl(article.category) : null;
+  const rejectedFallbacks = [
+    topicFallbackImage ? "topic-fallback" : null,
+    sourceLogo ? "source-logo" : null,
+    rectangleLogo ? "rectangle-logo" : null,
+    categoryFallback ? "category-fallback" : null,
+  ].filter(Boolean);
 
-  if (!options?.largeCard && sourceLogo) {
-    console.log("ARTICLE IMAGE SOURCE_LOGO_USED", {
+  if (rejectedFallbacks.length > 0) {
+    console.log("ARTICLE FALLBACK_IMAGE_REJECTED", {
       title: article.title ?? "",
       source: sourceName,
-      image: sourceLogo,
+      rejectedFallbacks,
+      largeCard: Boolean(options?.largeCard),
     });
-    return {
-      src: sourceLogo,
-      kind: "source-logo",
-      isReal: false,
-      failureKey: getFailureKey(article, sourceLogo),
-    };
-  }
-
-  const rectangleLogo = sourceName ? getSourceRectangleLogoUrl(sourceName) : null;
-
-  if (!options?.largeCard && rectangleLogo) {
-    return {
-      src: rectangleLogo,
-      kind: "rectangle-logo",
-      isReal: false,
-      failureKey: getFailureKey(article, rectangleLogo),
-    };
-  }
-
-  const categoryFallback = article.category ? getCategoryImageUrl(article.category) : null;
-
-  if (!options?.largeCard && categoryFallback) {
-    return {
-      src: categoryFallback,
-      kind: "category-fallback",
-      isReal: false,
-      failureKey: getFailureKey(article, categoryFallback),
-    };
   }
 
   return {

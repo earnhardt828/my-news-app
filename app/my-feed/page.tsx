@@ -191,6 +191,13 @@ export default function MyFeed() {
     );
   }, [articles]);
 
+  useEffect(() => {
+    console.log("SECTION IMAGE_ONLY_FINAL_COUNT", {
+      section: "My Feed",
+      count: articles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length,
+    });
+  }, [articles]);
+
   const handleToggleSaveArticle = async (article: FeedArticle) => {
     if (!userId) {
       alert("Log in to save articles");
@@ -397,7 +404,7 @@ export default function MyFeed() {
                 const hasFailedImage = Boolean(failedArticleImages[imageFailureKey]);
 
                 if (!imageSrc || hasFailedImage) {
-                  console.log("ARTICLE HIDDEN_NO_IMAGE", {
+                  console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
                     section: "My Feed",
                     title: article.title,
                     source: article.source,

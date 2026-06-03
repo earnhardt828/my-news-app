@@ -126,7 +126,7 @@ export default function ProfileBookmarksPage() {
               });
 
               if (!displayImage.src) {
-                console.log("ARTICLE HIDDEN_NO_IMAGE", {
+                console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
                   section: "Bookmarks",
                   title: article.title,
                   source: article.source,

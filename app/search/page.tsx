@@ -9,9 +9,6 @@ import {
   consumePendingArticleReturnState,
   saveArticleReturnState,
 } from "../../lib/article-navigation";
-import {
-  getBestArticleImage,
-} from "../../lib/article-images";
 import { getArticleDisplayImage } from "../../lib/article-display-image";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
@@ -392,10 +389,6 @@ function getMatchScore(article: NewsArticle, query: string) {
   });
 
   return score;
-}
-
-function getSearchResultImage(article: NewsArticle) {
-  return getBestArticleImage(article).src;
 }
 
 function sanitizeSourceName(value: string | null | undefined) {
@@ -1154,6 +1147,13 @@ export default function Search() {
     console.log("ARTICLE DISPLAY_IMAGE FINAL_COUNT", displayableSearchResultCount);
   }, [displayableSearchResultCount]);
 
+  useEffect(() => {
+    console.log("SECTION IMAGE_ONLY_FINAL_COUNT", {
+      section: "Search",
+      count: displayableSearchResultCount,
+    });
+  }, [displayableSearchResultCount]);
+
   return (
     <section className="page-shell search-shell">
       <section className="search-bar-shell">
@@ -1350,7 +1350,7 @@ export default function Search() {
                     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
                     if (!imageSrc || failedSearchImages[imageFailureKey]) {
-                      console.log("ARTICLE HIDDEN_NO_IMAGE", {
+                      console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
                         section: "Search",
                         title: article.title,
                         source: article.source,
