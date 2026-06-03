@@ -2801,6 +2801,14 @@ input {
 .search-results-shell {
   gap: 10px;
   margin-top: 2px;
+  min-height: 52vh;
+  align-content: start;
+}
+
+.search-results-loading-shell {
+  min-height: 220px;
+  display: grid;
+  align-content: start;
 }
 
 .following-compact-list {

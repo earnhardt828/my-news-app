@@ -3045,6 +3045,8 @@ async function fetchMediaStackArticles(params: ProviderFetchParams): Promise<Pro
 }
 
 async function fetchGuardianArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  console.log("GUARDIAN API KEY PRESENT", Boolean(GUARDIAN_API_KEY));
+
   if (!GUARDIAN_API_KEY) {
     logProviderSkip("The Guardian", "GUARDIAN_API_KEY is missing");
     return { articles: [], hasMore: false };
@@ -3093,12 +3095,17 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
           category: article.sectionName ?? categories[0] ?? "News",
           uniqueSeed: `guardian-${params.page}-${index}`,
           fallbackPublishedOffsetHours: index,
-          provider: "The Guardian",
+          provider: "guardian",
         }
       )
     )
     .filter(Boolean) as NormalizedArticle[];
 
+  console.log("GUARDIAN ARTICLE COUNT", normalizedArticles.length);
+  console.log(
+    "GUARDIAN IMAGE_ARTICLE_COUNT",
+    normalizedArticles.filter((article) => hasRealArticleImage(article)).length
+  );
   logProviderArticleStats("The Guardian", normalizedArticles);
   return {
     articles: normalizedArticles,

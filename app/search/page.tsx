@@ -576,6 +576,7 @@ export default function Search() {
   const [failedSearchImages, setFailedSearchImages] = useState<Record<string, boolean>>({});
   const [blockingUserId, setBlockingUserId] = useState<string | null>(null);
   const loadMoreSearchSentinelRef = useRef<HTMLDivElement | null>(null);
+  const resultsAreaRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextSearchPageRef = useRef(false);
 
   useEffect(() => {
@@ -732,6 +733,28 @@ export default function Search() {
       setActiveTab("articles");
     }
   }, [normalizedQuery]);
+
+  useEffect(() => {
+    if (!normalizedQuery) {
+      return;
+    }
+
+    console.log("SEARCH QUERY_STARTED", {
+      query: normalizedQuery,
+      tab: activeTab,
+    });
+
+    if (resultsAreaRef.current && typeof window !== "undefined") {
+      const top = resultsAreaRef.current.getBoundingClientRect().top + window.scrollY - 12;
+      window.scrollTo({
+        top: Math.max(top, 0),
+        behavior: "auto",
+      });
+      console.log("SEARCH RESULTS_RENDERED_TOP", {
+        query: normalizedQuery,
+      });
+    }
+  }, [activeTab, normalizedQuery]);
 
   useEffect(() => {
     const sentinel = loadMoreSearchSentinelRef.current;
@@ -1236,6 +1259,15 @@ export default function Search() {
     });
   }, [displayableSearchResultCount]);
 
+  useEffect(() => {
+    console.log("SEARCH RESULT_COUNT", {
+      articles: displayableSearchResultCount,
+      users: userResults.length,
+      tab: activeTab,
+      query: normalizedQuery,
+    });
+  }, [activeTab, displayableSearchResultCount, normalizedQuery, userResults.length]);
+
   const handleBlockUser = async (user: UserProfileSearchResult) => {
     const targetUserId = getProfileIdentity(user);
 
@@ -1354,7 +1386,7 @@ export default function Search() {
           )}
         </section>
       ) : (
-        <section className="stack search-results-shell">
+        <section ref={resultsAreaRef} className="stack search-results-shell">
           {activeTab === "articles" && matchedSourceName ? (
             <div className="search-results-section search-results-section-sources">
               <p className="search-results-section-heading">Sources</p>
@@ -1497,9 +1529,9 @@ export default function Search() {
               </div>
             ) : null
           ) : isSearchLoading ? (
-            <div className="search-inline-loading" role="status" aria-live="polite">
-              Searching recent articles...
-            </div>
+            <section className="search-results-loading-shell" role="status" aria-live="polite">
+              <div className="search-inline-loading">Searching recent articles...</div>
+            </section>
           ) : activeTab === "articles" && filteredResults.length === 0 ? (
             <div className="empty-state">
               <strong>No results found</strong>
