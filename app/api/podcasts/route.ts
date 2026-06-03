@@ -4,6 +4,7 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const podcastSlug = requestUrl.searchParams.get("podcastSlug")?.trim() ?? "";
   const episodeSlug = requestUrl.searchParams.get("episodeSlug")?.trim() ?? "";
+  const query = requestUrl.searchParams.get("q")?.trim() ?? "";
 
   try {
     if (podcastSlug && episodeSlug) {
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
       return Response.json({ podcast: result });
     }
 
-    const directory = await fetchPodcastDirectory();
+    const directory = await fetchPodcastDirectory(query || undefined);
     return Response.json(directory);
   } catch (error) {
     console.error("PODCAST API ERROR", error);
@@ -25,15 +26,12 @@ export async function GET(request: Request) {
         shows: [],
         sections: {
           featured: [],
-          worldNews: [],
-          sports: [],
-          celebrity: [],
-          music: [],
-          movies: [],
+          science: [],
+          trueCrime: [],
+          arts: [],
           business: [],
-          technology: [],
-          food: [],
-          travel: [],
+          sports: [],
+          politics: [],
         },
       },
       { status: 200 }

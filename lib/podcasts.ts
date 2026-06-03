@@ -1,24 +1,76 @@
-import { PODCAST_FEEDS, type PodcastFeedCategory, type PodcastFeedConfig } from "./podcast-feeds";
+import { createHash } from "node:crypto";
+import {
+  PODCAST_CATEGORY_SEARCH_TERMS,
+  PODCAST_FEEDS,
+  type PodcastFeedCategory,
+  type PodcastFeedConfig,
+} from "./podcast-feeds";
+
+export type PodcastProvider =
+  | "rss"
+  | "itunes"
+  | "apple"
+  | "podcast-index"
+  | "listen-notes";
 
 export type PodcastEpisode = {
+  id: string;
   slug: string;
   title: string;
   publishedAt: string | null;
   description: string | null;
   audioUrl: string | null;
   duration: string | null;
+  episodeUrl: string | null;
 };
 
 export type PodcastShow = {
+  id: string;
   slug: string;
   title: string;
+  description: string | null;
   publisher: string;
-  category: PodcastFeedCategory;
+  image: string | null;
   coverArt: string | null;
-  featured: boolean;
+  category: PodcastFeedCategory;
   feedUrl: string;
+  episodeCount: number;
+  sourceProvider: PodcastProvider;
+  featured: boolean;
   latestEpisode: PodcastEpisode | null;
   episodes: PodcastEpisode[];
+  lastPublishedAt: string | null;
+};
+
+type PodcastDirectory = {
+  shows: PodcastShow[];
+  sections: Record<
+    | "featured"
+    | "science"
+    | "trueCrime"
+    | "arts"
+    | "business"
+    | "sports"
+    | "politics",
+    PodcastShow[]
+  >;
+};
+
+type DiscoveryCandidate = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  publisher: string;
+  image: string | null;
+  category: PodcastFeedCategory;
+  feedUrl: string;
+  episodeCount: number;
+  sourceProvider: PodcastProvider;
+  featured: boolean;
+  score: number;
+  lastPublishedAt: string | null;
+  searchTerms: string[];
 };
 
 function decodeXmlEntities(value: string) {
@@ -91,27 +143,110 @@ function stripHtml(value: string | null) {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-async function fetchPodcastShow(config: PodcastFeedConfig): Promise<PodcastShow> {
-  const response = await fetch(config.feedUrl, {
+function buildPodcastId(parts: Array<string | null | undefined>) {
+  return createHash("sha1").update(parts.filter(Boolean).join("|")).digest("hex").slice(0, 16);
+}
+
+function normalizePodcastText(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function looksLikeUsablePodcastImage(value: string | null | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  return /^https?:\/\//i.test(value) || value.startsWith("/");
+}
+
+function scoreDiscoveryCandidate(candidate: DiscoveryCandidate) {
+  let score = 0;
+
+  if (candidate.featured) {
+    score += 300;
+  }
+
+  if (candidate.image) {
+    score += 120;
+  }
+
+  if (candidate.episodeCount > 0) {
+    score += Math.min(candidate.episodeCount, 200);
+  }
+
+  if (candidate.lastPublishedAt) {
+    score += Math.max(
+      0,
+      100 - Math.floor((Date.now() - new Date(candidate.lastPublishedAt).getTime()) / 86_400_000)
+    );
+  }
+
+  if (candidate.sourceProvider === "rss") {
+    score += 80;
+  }
+
+  return score;
+}
+
+function createCandidateFromFeed(config: PodcastFeedConfig): DiscoveryCandidate {
+  const title = config.title.trim();
+  const publisher = config.publisher.trim();
+
+  return {
+    id: buildPodcastId(["rss", config.feedUrl, title]),
+    slug: config.slug,
+    title,
+    description: null,
+    publisher,
+    image: null,
+    category: config.category,
+    feedUrl: config.feedUrl,
+    episodeCount: 0,
+    sourceProvider: "rss",
+    featured: Boolean(config.featured),
+    score: 0,
+    lastPublishedAt: null,
+    searchTerms: config.searchTerms ?? [title, publisher, config.category],
+  };
+}
+
+function matchesPodcastSearch(candidate: DiscoveryCandidate, query: string) {
+  const normalizedQuery = normalizePodcastText(query);
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return [candidate.title, candidate.publisher, candidate.category, candidate.description]
+    .filter(Boolean)
+    .some((value) => normalizePodcastText(value).includes(normalizedQuery));
+}
+
+async function fetchPodcastShow(candidate: DiscoveryCandidate): Promise<PodcastShow> {
+  const response = await fetch(candidate.feedUrl, {
     next: { revalidate: 1800 },
   });
 
   if (!response.ok) {
-    throw new Error(`Podcast feed request failed for ${config.title} (${response.status})`);
+    throw new Error(`Podcast feed request failed for ${candidate.title} (${response.status})`);
   }
 
   const xml = await response.text();
   const channelBlock = xml.match(/<channel\b[\s\S]*<\/channel>/i)?.[0] ?? xml;
-  const showTitle = extractXmlTag(channelBlock, "title") ?? config.title;
+  const showTitle = extractXmlTag(channelBlock, "title") ?? candidate.title;
   const publisher =
     extractXmlTag(channelBlock, "itunes:author") ??
     extractXmlTag(channelBlock, "managingEditor") ??
     extractXmlTag(channelBlock, "author") ??
-    config.publisher;
+    candidate.publisher;
+  const description =
+    stripHtml(extractXmlTag(channelBlock, "itunes:summary")) ??
+    stripHtml(extractXmlTag(channelBlock, "description")) ??
+    candidate.description;
   const coverArt =
     extractImageHref(channelBlock, "itunes:image") ??
-    extractXmlTag(channelBlock, "url") ??
     xml.match(/<image>[\s\S]*?<url>([^<]+)<\/url>[\s\S]*?<\/image>/i)?.[1] ??
+    candidate.image ??
     null;
   const itemBlocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
 
@@ -126,16 +261,19 @@ async function fetchPodcastShow(config: PodcastFeedConfig): Promise<PodcastShow>
 
       const guid = extractXmlTag(item, "guid");
       const episodeSlug = slugifyValue(guid ?? title);
+      const publishedAt = normalizeDate(extractXmlTag(item, "pubDate"));
 
       return {
+        id: buildPodcastId([candidate.feedUrl, guid ?? title, publishedAt]),
         slug: episodeSlug,
         title,
-        publishedAt: normalizeDate(extractXmlTag(item, "pubDate")),
+        publishedAt,
         description:
           stripHtml(extractXmlTag(item, "content:encoded")) ??
           stripHtml(extractXmlTag(item, "description")),
         audioUrl,
         duration: extractXmlTag(item, "itunes:duration"),
+        episodeUrl: extractXmlTag(item, "link"),
       };
     })
     .filter((episode): episode is PodcastEpisode => episode !== null)
@@ -146,53 +284,391 @@ async function fetchPodcastShow(config: PodcastFeedConfig): Promise<PodcastShow>
     });
 
   return {
-    slug: config.slug,
+    id: candidate.id,
+    slug: candidate.slug || slugifyValue(showTitle),
     title: showTitle,
+    description,
     publisher,
-    category: config.category,
-    coverArt,
-    featured: Boolean(config.featured),
-    feedUrl: config.feedUrl,
+    image: looksLikeUsablePodcastImage(coverArt) ? coverArt : null,
+    coverArt: looksLikeUsablePodcastImage(coverArt) ? coverArt : null,
+    category: candidate.category,
+    feedUrl: candidate.feedUrl,
+    episodeCount: episodes.length || candidate.episodeCount,
+    sourceProvider: candidate.sourceProvider,
+    featured: candidate.featured,
     latestEpisode: episodes[0] ?? null,
     episodes,
+    lastPublishedAt: episodes[0]?.publishedAt ?? candidate.lastPublishedAt,
   };
 }
 
-export async function fetchPodcastDirectory() {
-  const results = await Promise.allSettled(PODCAST_FEEDS.map((feed) => fetchPodcastShow(feed)));
+async function fetchItunesPodcasts(
+  term: string,
+  category: PodcastFeedCategory,
+  provider: "itunes" | "apple"
+): Promise<DiscoveryCandidate[]> {
+  const requestUrl = new URL("https://itunes.apple.com/search");
+  requestUrl.searchParams.set("media", "podcast");
+  requestUrl.searchParams.set("entity", "podcast");
+  requestUrl.searchParams.set("limit", "8");
+  requestUrl.searchParams.set("term", term);
 
-  const shows = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
-  const errors = results
-    .map((result, index) =>
-      result.status === "rejected"
-        ? {
-            feed: PODCAST_FEEDS[index]?.title ?? "Unknown podcast",
-            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-          }
-        : null
-    )
-    .filter((entry): entry is { feed: string; error: string } => entry !== null);
+  const response = await fetch(requestUrl.toString(), {
+    next: { revalidate: 1800 },
+  });
 
-  if (errors.length > 0) {
-    console.error("PODCAST RSS FAILURES", errors);
+  if (!response.ok) {
+    throw new Error(`${provider} search failed (${response.status})`);
   }
 
-  const featured = shows.filter((show) => show.featured).slice(0, 8);
+  const payload = (await response.json()) as {
+    results?: Array<{
+      collectionId?: number;
+      collectionName?: string;
+      artistName?: string;
+      artworkUrl600?: string;
+      artworkUrl100?: string;
+      feedUrl?: string;
+      primaryGenreName?: string;
+      trackCount?: number;
+      releaseDate?: string;
+    }>;
+  };
+
+  return (payload.results ?? [])
+    .map((result) => {
+      const title = result.collectionName?.trim();
+      const feedUrl = result.feedUrl?.trim();
+      const image = result.artworkUrl600?.trim() || result.artworkUrl100?.trim() || null;
+
+      if (!title || !feedUrl || !looksLikeUsablePodcastImage(image)) {
+        return null;
+      }
+
+      const publisher = result.artistName?.trim() || "Podcast";
+      const slug = slugifyValue(`${title}-${publisher}`);
+      const candidate: DiscoveryCandidate = {
+        id: buildPodcastId([provider, String(result.collectionId ?? feedUrl), title]),
+        slug,
+        title,
+        description: result.primaryGenreName?.trim() || null,
+        publisher,
+        image,
+        category,
+        feedUrl,
+        episodeCount: Number(result.trackCount ?? 0),
+        sourceProvider: provider,
+        featured: false,
+        score: 0,
+        lastPublishedAt: normalizeDate(result.releaseDate ?? null),
+        searchTerms: [term, title, publisher, category],
+      };
+      candidate.score = scoreDiscoveryCandidate(candidate);
+      return candidate;
+    })
+    .filter((candidate): candidate is DiscoveryCandidate => candidate !== null);
+}
+
+async function fetchPodcastIndexPodcasts(
+  term: string,
+  category: PodcastFeedCategory
+): Promise<DiscoveryCandidate[]> {
+  const apiKey = process.env.PODCAST_INDEX_API_KEY?.trim();
+  const apiSecret = process.env.PODCAST_INDEX_API_SECRET?.trim();
+
+  if (!apiKey || !apiSecret) {
+    return [];
+  }
+
+  const authDate = Math.floor(Date.now() / 1000).toString();
+  const authorization = createHash("sha1")
+    .update(apiKey + apiSecret + authDate)
+    .digest("hex");
+  const requestUrl = new URL("https://api.podcastindex.org/api/1.0/search/byterm");
+  requestUrl.searchParams.set("q", term);
+  requestUrl.searchParams.set("max", "8");
+
+  const response = await fetch(requestUrl.toString(), {
+    headers: {
+      "X-Auth-Date": authDate,
+      "X-Auth-Key": apiKey,
+      Authorization: authorization,
+      "User-Agent": "Graffiti/1.0",
+    },
+    next: { revalidate: 1800 },
+  });
+
+  if (!response.ok) {
+    throw new Error(`podcast-index search failed (${response.status})`);
+  }
+
+  const payload = (await response.json()) as {
+    feeds?: Array<{
+      id?: number;
+      title?: string;
+      description?: string;
+      author?: string;
+      image?: string;
+      url?: string;
+      episodeCount?: number;
+      lastUpdateTime?: number;
+    }>;
+  };
+
+  return (payload.feeds ?? [])
+    .map((feed) => {
+      const title = feed.title?.trim();
+      const feedUrl = feed.url?.trim();
+      const image = feed.image?.trim() ?? null;
+
+      if (!title || !feedUrl || !looksLikeUsablePodcastImage(image)) {
+        return null;
+      }
+
+      const publisher = feed.author?.trim() || "Podcast";
+      const candidate: DiscoveryCandidate = {
+        id: buildPodcastId(["podcast-index", String(feed.id ?? feedUrl), title]),
+        slug: slugifyValue(`${title}-${publisher}`),
+        title,
+        description: stripHtml(feed.description ?? null),
+        publisher,
+        image,
+        category,
+        feedUrl,
+        episodeCount: Number(feed.episodeCount ?? 0),
+        sourceProvider: "podcast-index",
+        featured: false,
+        score: 0,
+        lastPublishedAt:
+          typeof feed.lastUpdateTime === "number" && Number.isFinite(feed.lastUpdateTime)
+            ? new Date(feed.lastUpdateTime * 1000).toISOString()
+            : null,
+        searchTerms: [term, title, publisher, category],
+      };
+      candidate.score = scoreDiscoveryCandidate(candidate);
+      return candidate;
+    })
+    .filter((candidate): candidate is DiscoveryCandidate => candidate !== null);
+}
+
+async function fetchListenNotesPodcasts(
+  term: string,
+  category: PodcastFeedCategory
+): Promise<DiscoveryCandidate[]> {
+  const apiKey = process.env.LISTEN_NOTES_API_KEY?.trim();
+
+  if (!apiKey) {
+    return [];
+  }
+
+  const requestUrl = new URL("https://listen-api.listennotes.com/api/v2/search");
+  requestUrl.searchParams.set("q", term);
+  requestUrl.searchParams.set("type", "podcast");
+  requestUrl.searchParams.set("offset", "0");
+  requestUrl.searchParams.set("len_min", "5");
+  requestUrl.searchParams.set("sort_by_date", "0");
+
+  const response = await fetch(requestUrl.toString(), {
+    headers: {
+      "X-ListenAPI-Key": apiKey,
+    },
+    next: { revalidate: 1800 },
+  });
+
+  if (!response.ok) {
+    throw new Error(`listen-notes search failed (${response.status})`);
+  }
+
+  const payload = (await response.json()) as {
+    results?: Array<{
+      id?: string;
+      title_original?: string;
+      description_original?: string;
+      publisher_original?: string;
+      image?: string;
+      rss?: string;
+      total_episodes?: number;
+      latest_pub_date_ms?: number;
+    }>;
+  };
+
+  return (payload.results ?? [])
+    .map((result) => {
+      const title = result.title_original?.trim();
+      const feedUrl = result.rss?.trim();
+      const image = result.image?.trim() ?? null;
+
+      if (!title || !feedUrl || !looksLikeUsablePodcastImage(image)) {
+        return null;
+      }
+
+      const publisher = result.publisher_original?.trim() || "Podcast";
+      const candidate: DiscoveryCandidate = {
+        id: buildPodcastId(["listen-notes", result.id ?? feedUrl, title]),
+        slug: slugifyValue(`${title}-${publisher}`),
+        title,
+        description: stripHtml(result.description_original ?? null),
+        publisher,
+        image,
+        category,
+        feedUrl,
+        episodeCount: Number(result.total_episodes ?? 0),
+        sourceProvider: "listen-notes",
+        featured: false,
+        score: 0,
+        lastPublishedAt:
+          typeof result.latest_pub_date_ms === "number" && Number.isFinite(result.latest_pub_date_ms)
+            ? new Date(result.latest_pub_date_ms).toISOString()
+            : null,
+        searchTerms: [term, title, publisher, category],
+      };
+      candidate.score = scoreDiscoveryCandidate(candidate);
+      return candidate;
+    })
+    .filter((candidate): candidate is DiscoveryCandidate => candidate !== null);
+}
+
+function dedupeDiscoveryCandidates(candidates: DiscoveryCandidate[]) {
+  const seenKeys = new Set<string>();
+  const deduped: DiscoveryCandidate[] = [];
+
+  candidates
+    .slice()
+    .sort((left, right) => right.score - left.score)
+    .forEach((candidate) => {
+      const keys = [
+        normalizePodcastText(candidate.feedUrl),
+        `${normalizePodcastText(candidate.publisher)}::${normalizePodcastText(candidate.title)}`,
+        normalizePodcastText(candidate.title),
+      ].filter(Boolean);
+
+      if (keys.some((key) => seenKeys.has(key))) {
+        return;
+      }
+
+      keys.forEach((key) => seenKeys.add(key));
+      deduped.push(candidate);
+    });
+
+  return deduped;
+}
+
+async function fetchDiscoveryCandidates(searchQuery?: string) {
+  const baseCandidates = PODCAST_FEEDS.map(createCandidateFromFeed);
+  const queriesByCategory = Object.entries(PODCAST_CATEGORY_SEARCH_TERMS) as Array<
+    [PodcastFeedCategory, string[]]
+  >;
+
+  const discoveryPromises = queriesByCategory.flatMap(([category, terms]) => {
+    const activeTerms = searchQuery ? [searchQuery] : terms.slice(0, 4);
+
+    return activeTerms.flatMap((term) => [
+      fetchItunesPodcasts(term, category, "itunes"),
+      fetchItunesPodcasts(term, category, "apple"),
+      fetchPodcastIndexPodcasts(term, category),
+      fetchListenNotesPodcasts(term, category),
+    ]);
+  });
+
+  const settledResults = await Promise.allSettled(discoveryPromises);
+  const discoveredCandidates = settledResults.flatMap((result) =>
+    result.status === "fulfilled" ? result.value : []
+  );
+
+  const providerCounts = discoveredCandidates.reduce<Record<string, number>>((accumulator, candidate) => {
+    accumulator[candidate.sourceProvider] = (accumulator[candidate.sourceProvider] ?? 0) + 1;
+    return accumulator;
+  }, { rss: baseCandidates.length });
+
+  console.log("PODCAST_PROVIDER_COUNT", providerCounts);
+
+  const mergedCandidates = dedupeDiscoveryCandidates(
+    [...baseCandidates, ...discoveredCandidates]
+      .filter((candidate) => !searchQuery || matchesPodcastSearch(candidate, searchQuery))
+      .map((candidate) => {
+        const nextCandidate = { ...candidate };
+        nextCandidate.score = scoreDiscoveryCandidate(nextCandidate);
+        return nextCandidate;
+      })
+  );
+
+  console.log("PODCAST_MERGED_COUNT", mergedCandidates.length);
+
+  return mergedCandidates;
+}
+
+function rankShowsForCategory(shows: PodcastShow[]) {
+  return shows
+    .slice()
+    .sort((left, right) => {
+      const rightDate = right.lastPublishedAt ? new Date(right.lastPublishedAt).getTime() : 0;
+      const leftDate = left.lastPublishedAt ? new Date(left.lastPublishedAt).getTime() : 0;
+
+      if (Number(right.featured) !== Number(left.featured)) {
+        return Number(right.featured) - Number(left.featured);
+      }
+
+      if (rightDate !== leftDate) {
+        return rightDate - leftDate;
+      }
+
+      if (right.episodeCount !== left.episodeCount) {
+        return right.episodeCount - left.episodeCount;
+      }
+
+      return left.title.localeCompare(right.title);
+    });
+}
+
+function buildPodcastSections(shows: PodcastShow[]): PodcastDirectory["sections"] {
+  const science = rankShowsForCategory(shows.filter((show) => show.category === "Science"));
+  const trueCrime = rankShowsForCategory(shows.filter((show) => show.category === "True Crime"));
+  const arts = rankShowsForCategory(shows.filter((show) => show.category === "Arts"));
+  const business = rankShowsForCategory(shows.filter((show) => show.category === "Business"));
+  const sports = rankShowsForCategory(shows.filter((show) => show.category === "Sports"));
+  const politics = rankShowsForCategory(shows.filter((show) => show.category === "Politics"));
+  const featured = rankShowsForCategory(shows.filter((show) => show.featured)).slice(0, 12);
+
+  const categoryCounts = {
+    featured: featured.length,
+    science: science.length,
+    trueCrime: trueCrime.length,
+    arts: arts.length,
+    business: business.length,
+    sports: sports.length,
+    politics: politics.length,
+  };
+
+  console.log("PODCAST_CATEGORY_COUNT", categoryCounts);
+
+  return {
+    featured,
+    science,
+    trueCrime,
+    arts,
+    business,
+    sports,
+    politics,
+  };
+}
+
+export async function fetchPodcastDirectory(searchQuery?: string): Promise<PodcastDirectory> {
+  const mergedCandidates = await fetchDiscoveryCandidates(searchQuery);
+  const hydratedShows = await Promise.allSettled(
+    mergedCandidates.slice(0, searchQuery ? 36 : 48).map((candidate) => fetchPodcastShow(candidate))
+  );
+
+  const shows = hydratedShows
+    .flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))
+    .filter((show) => Boolean(show.image) && Boolean(show.latestEpisode?.audioUrl));
+
+  if (searchQuery) {
+    console.log("PODCAST_SEARCH_COUNT", shows.length);
+  }
 
   return {
     shows,
-    sections: {
-      featured,
-      worldNews: shows.filter((show) => show.category === "World News"),
-      sports: shows.filter((show) => show.category === "Sports"),
-      celebrity: shows.filter((show) => show.category === "Celebrity"),
-      music: shows.filter((show) => show.category === "Music"),
-      movies: shows.filter((show) => show.category === "Movies"),
-      business: shows.filter((show) => show.category === "Business"),
-      technology: shows.filter((show) => show.category === "Technology"),
-      food: shows.filter((show) => show.category === "Food"),
-      travel: shows.filter((show) => show.category === "Travel"),
-    },
+    sections: buildPodcastSections(shows),
   };
 }
 

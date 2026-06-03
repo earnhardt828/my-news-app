@@ -15,21 +15,18 @@ type PodcastEpisode = {
 };
 
 type PodcastShow = {
+  id: string;
   slug: string;
   title: string;
+  description: string | null;
   publisher: string;
-  category:
-    | "World News"
-    | "Sports"
-    | "Celebrity"
-    | "Music"
-    | "Movies"
-    | "Business"
-    | "Technology"
-    | "Food"
-    | "Travel";
+  category: "Science" | "True Crime" | "Arts" | "Business" | "Sports" | "Politics";
+  image: string | null;
   coverArt: string | null;
   featured: boolean;
+  feedUrl: string;
+  episodeCount: number;
+  sourceProvider: string;
   latestEpisode: PodcastEpisode | null;
 };
 
@@ -37,15 +34,12 @@ type PodcastDirectoryResponse = {
   shows: PodcastShow[];
   sections: {
     featured: PodcastShow[];
-    worldNews: PodcastShow[];
-    sports: PodcastShow[];
-    celebrity: PodcastShow[];
-    music: PodcastShow[];
-    movies: PodcastShow[];
+    science: PodcastShow[];
+    trueCrime: PodcastShow[];
+    arts: PodcastShow[];
     business: PodcastShow[];
-    technology: PodcastShow[];
-    food: PodcastShow[];
-    travel: PodcastShow[];
+    sports: PodcastShow[];
+    politics: PodcastShow[];
   };
 };
 
@@ -84,9 +78,9 @@ function PodcastSectionRow({
               role="listitem"
             >
               <div className="podcast-card-art-shell" aria-hidden="true">
-                {show.coverArt ? (
+                {show.image || show.coverArt ? (
                   <img
-                    src={show.coverArt}
+                    src={show.image || show.coverArt || ""}
                     alt={show.title}
                     className="podcast-card-art"
                     loading="lazy"
@@ -117,6 +111,7 @@ function PodcastSectionRow({
 export default function PodcastsPage() {
   const [directory, setDirectory] = useState<PodcastDirectoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -125,7 +120,12 @@ export default function PodcastsPage() {
       setIsLoading(true);
 
       try {
-        const response = await apiFetch("/api/podcasts");
+        const params = new URLSearchParams();
+        if (searchQuery.trim()) {
+          params.set("q", searchQuery.trim());
+        }
+
+        const response = await apiFetch(`/api/podcasts${params.toString() ? `?${params.toString()}` : ""}`);
         const payload = (await response.json()) as PodcastDirectoryResponse;
 
         if (!isMounted) {
@@ -141,15 +141,12 @@ export default function PodcastsPage() {
             shows: [],
             sections: {
               featured: [],
-              worldNews: [],
-              sports: [],
-              celebrity: [],
-              music: [],
-              movies: [],
+              science: [],
+              trueCrime: [],
+              arts: [],
               business: [],
-              technology: [],
-              food: [],
-              travel: [],
+              sports: [],
+              politics: [],
             },
           });
         }
@@ -165,7 +162,7 @@ export default function PodcastsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [searchQuery]);
 
   return (
     <section className="page-shell home-sections-shell">
@@ -174,6 +171,20 @@ export default function PodcastsPage() {
           <div className="stack" style={{ gap: "4px" }}>
             <strong className="profile-section-title home-section-title">Podcasts</strong>
           </div>
+        </div>
+
+        <div className="stack" style={{ gap: "10px", marginBottom: "16px" }}>
+          <input
+            type="search"
+            className="input"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search podcasts by title, publisher, or category"
+            aria-label="Search podcasts"
+          />
+          {searchQuery.trim() ? (
+            <span className="muted">Searching across RSS, iTunes, Apple, and available podcast APIs.</span>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -186,15 +197,12 @@ export default function PodcastsPage() {
         ) : (
           <div className="stack home-section-list">
             <PodcastSectionRow title="Featured Podcasts" shows={directory.sections.featured} />
-            <PodcastSectionRow title="World News" shows={directory.sections.worldNews} />
-            <PodcastSectionRow title="Sports" shows={directory.sections.sports} />
-            <PodcastSectionRow title="Celebrity" shows={directory.sections.celebrity} />
-            <PodcastSectionRow title="Music" shows={directory.sections.music} />
-            <PodcastSectionRow title="Movies" shows={directory.sections.movies} />
+            <PodcastSectionRow title="Science" shows={directory.sections.science} />
+            <PodcastSectionRow title="True Crime" shows={directory.sections.trueCrime} />
+            <PodcastSectionRow title="Arts" shows={directory.sections.arts} />
             <PodcastSectionRow title="Business" shows={directory.sections.business} />
-            <PodcastSectionRow title="Technology" shows={directory.sections.technology} />
-            <PodcastSectionRow title="Food" shows={directory.sections.food} />
-            <PodcastSectionRow title="Travel" shows={directory.sections.travel} />
+            <PodcastSectionRow title="Sports" shows={directory.sections.sports} />
+            <PodcastSectionRow title="Politics" shows={directory.sections.politics} />
           </div>
         )}
       </section>

@@ -15,12 +15,18 @@ type PodcastEpisode = {
 };
 
 type PodcastShow = {
+  id: string;
   slug: string;
   title: string;
+  description: string | null;
   publisher: string;
-  category: "News" | "Sports" | "Business" | "Technology";
+  category: "Science" | "True Crime" | "Arts" | "Business" | "Sports" | "Politics";
+  image: string | null;
   coverArt: string | null;
   featured: boolean;
+  feedUrl: string;
+  episodeCount: number;
+  sourceProvider: string;
 };
 
 type PodcastResponse = {
@@ -99,9 +105,9 @@ export default function PodcastEpisodePage() {
           <div className="podcast-player-shell">
             <div className="podcast-player-hero">
               <div className="podcast-player-art-shell" aria-hidden="true">
-                {payload.show.coverArt ? (
+                {payload.show.image || payload.show.coverArt ? (
                   <img
-                    src={payload.show.coverArt}
+                    src={payload.show.image || payload.show.coverArt || ""}
                     alt={payload.show.title}
                     className="podcast-player-art"
                     loading="lazy"
