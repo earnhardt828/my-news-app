@@ -206,6 +206,15 @@ export default function VideoFeedCard({
   const publishedLabel = useRelativeTime
     ? formatRelativeTimestamp(video.publishedAt)
     : formatVideoPublishedDate(video.publishedAt);
+  const shouldShowTopRightTimePill = isArticleVariant && Boolean(publishedLabel);
+
+  if (shouldShowTopRightTimePill) {
+    console.log("TRENDING_VIDEO_TIME_TOP_RIGHT", {
+      videoId: video.id,
+      title: video.title,
+      publishedLabel,
+    });
+  }
   const handleOpenVideo = () => {
     if (
       video.fallback &&
@@ -232,6 +241,12 @@ export default function VideoFeedCard({
   }
 
   if (isArticleVariant) {
+    console.log("TRENDING_VIDEO_CUSTOM_CARD_USED", {
+      videoId: video.id,
+      title: video.title,
+      creator: video.creator,
+    });
+
     return (
       <article
         id={`video-${video.id}`}
@@ -246,17 +261,6 @@ export default function VideoFeedCard({
             {rankBadgeLabel}
           </span>
         ) : null}
-        <div className="trending-source-row video-card-article-source-row">
-          <div className="trending-source-brand">
-            <SourceBadge sourceName={video.creator} />
-            <span className="trending-source-name">{video.creator}</span>
-          </div>
-        </div>
-
-        <div className="trending-meta-row">
-          <span className="trending-published-date">{publishedLabel}</span>
-        </div>
-
         <div
           ref={frameRef}
           data-video-key={autoplayKey ?? video.id}
@@ -265,54 +269,43 @@ export default function VideoFeedCard({
             video.theme ?? "video-card-theme-rose"
           }`}
         >
-          {shouldAutoplayFrame && !video.fallback && previewEmbedUrl ? (
-            <>
-              <iframe
-                src={previewEmbedUrl}
-                title={video.title}
-                className="video-player-frame"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
+          <button
+            className="video-frame-button"
+            onClick={handleOpenVideo}
+            aria-label={`Play ${video.title}`}
+          >
+            {video.thumbnailUrl ? (
+              <Image
+                src={video.thumbnailUrl}
+                alt={video.title}
+                fill
+                sizes="(max-width: 768px) 100vw, 420px"
+                className="video-thumbnail"
+                unoptimized
               />
-              <button
-                type="button"
-                className="video-frame-hitbox"
-                onClick={handleOpenVideo}
-                aria-label={`Open ${video.title}`}
-              />
-              <div className="video-card-title-overlay" aria-hidden="true">
+            ) : null}
+            {shouldShowTopRightTimePill ? (
+              <span className="video-time-pill video-time-pill-top-right">{publishedLabel}</span>
+            ) : null}
+            <div className="video-frame-overlay">
+              <span className="video-play-badge" aria-hidden="true" />
+            </div>
+            <div className="video-card-title-overlay">
+              <h3 className="video-card-title-overlay-text">{video.title}</h3>
+            </div>
+            {!video.thumbnailUrl ? (
+              <div className="video-frame-fallback-copy">
                 <h3 className="video-card-title-overlay-text">{video.title}</h3>
               </div>
-            </>
-          ) : (
-            <button
-              className="video-frame-button"
-              onClick={handleOpenVideo}
-              aria-label={`Play ${video.title}`}
-            >
-              {video.thumbnailUrl ? (
-                <Image
-                  src={video.thumbnailUrl}
-                  alt={video.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 420px"
-                  className="video-thumbnail"
-                  unoptimized
-                />
-              ) : null}
-              <div className="video-frame-overlay">
-                <span className="video-play-badge" aria-hidden="true" />
-              </div>
-              <div className="video-card-title-overlay">
-                <h3 className="video-card-title-overlay-text">{video.title}</h3>
-              </div>
-              {!video.thumbnailUrl ? (
-                <div className="video-frame-fallback-copy">
-                  <h3 className="video-card-title-overlay-text">{video.title}</h3>
-                </div>
-              ) : null}
-            </button>
-          )}
+            ) : null}
+          </button>
+        </div>
+
+        <div className="trending-meta-row video-card-article-bottom-meta">
+          <div className="trending-source-brand">
+            <SourceBadge sourceName={video.creator} />
+            <span className="trending-source-name">{video.creator}</span>
+          </div>
         </div>
 
         {hideActions ? null : (
@@ -395,7 +388,7 @@ export default function VideoFeedCard({
             isAutoplaying ? "video-frame-live" : ""
           }`}
         >
-          {isAutoplaying && !video.fallback && previewEmbedUrl ? (
+          {shouldAutoplayFrame && !video.fallback && previewEmbedUrl ? (
             <iframe
               src={previewEmbedUrl}
               title={video.title}

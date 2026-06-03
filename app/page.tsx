@@ -999,6 +999,9 @@ const BREAKING_NEWS_TRUSTED_SOURCES = [
   "ABC News",
   "The New York Times",
   "The Washington Post",
+  "The Guardian",
+  "PBS",
+  "PBS NewsHour",
   "Politico",
   "Bloomberg",
   "NPR",
@@ -4437,6 +4440,35 @@ function selectSourceBalancedArticles<T extends { source: string }>(articles: T[
   return [...selected, ...deferred.slice(0, remainingSlots)].slice(0, limit);
 }
 
+function selectArticlesWithPreferredSourceCap<T extends { source: string }>(
+  articles: T[],
+  limit: number,
+  preferredMaxPerSource = 1
+) {
+  if (articles.length <= limit) {
+    return articles.slice(0, limit);
+  }
+
+  const sourceCounts = new Map<string, number>();
+  const firstPass: T[] = [];
+  const deferred: T[] = [];
+
+  articles.forEach((article) => {
+    const normalizedSource = cleanDisplayText(article.source).trim().toLowerCase() || "unknown";
+    const currentCount = sourceCounts.get(normalizedSource) ?? 0;
+
+    if (currentCount < preferredMaxPerSource) {
+      sourceCounts.set(normalizedSource, currentCount + 1);
+      firstPass.push(article);
+      return;
+    }
+
+    deferred.push(article);
+  });
+
+  return [...firstPass, ...deferred].slice(0, limit);
+}
+
 function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
   if (Array.isArray(payload)) {
     const renderableArticles = payload.filter((article) => isRenderableArticleRecord(article));
@@ -5606,21 +5638,7 @@ function getBreakingLeadCardImageOverride(article: Article) {
   if (realImage) {
     return realImage;
   }
-
-  const topicFallbackImage = getTopicFallbackImage(article);
-
-  if (topicFallbackImage) {
-    return topicFallbackImage;
-  }
-
-  const safeSourceName = getSafeSourceLabel(article.source);
-  const sourceFallbackImage = getSourceBoxLogoUrl(safeSourceName);
-
-  if (sourceFallbackImage) {
-    return sourceFallbackImage;
-  }
-
-  return getCategoryImageUrl(getSafeCategoryLabel(article.category, article));
+  return null;
 }
 
 function getBusinessTickerLogoUrl(symbol: string) {
@@ -13660,8 +13678,8 @@ export default function Home() {
     };
   }, [myNewsQuickWatchVideos, myNewsVideoPool, sortMode, trendingBreakingFeaturedVideos]);
 
-  const topTenTrendingArticles = useMemo(
-    () => balancedTrendingArticles.filter((article) => !isLowInformationLiveStreamArticle(article)).slice(0, 10),
+  const topFiveTrendingArticles = useMemo(
+    () => balancedTrendingArticles.filter((article) => !isLowInformationLiveStreamArticle(article)).slice(0, 5),
     [balancedTrendingArticles]
   );
 
@@ -13671,7 +13689,7 @@ export default function Home() {
     }
 
     const topTrendingKeys = new Set(
-      topTenTrendingArticles.map((article) => getArticleDeduplicationKey(article))
+      topFiveTrendingArticles.map((article) => getArticleDeduplicationKey(article))
     );
 
     const trustedBreakingArticles = breakingPreviewArticles.filter((article) => {
@@ -13711,37 +13729,48 @@ export default function Home() {
           ? trustedBreakingArticles
           : broaderBreakingArticles;
 
-    const selectedBreakingArticles = selectSourceBalancedArticles(
-      candidateArticles
-        .filter((article) => {
-          if (topTrendingKeys.has(getArticleDeduplicationKey(article))) {
-            return false;
-          }
+    const rankedBreakingCandidates = candidateArticles
+      .filter((article) => {
+        if (topTrendingKeys.has(getArticleDeduplicationKey(article))) {
+          return false;
+        }
 
-          return getBreakingNewsRelevanceScore(article) > 0;
-        })
-        .sort((leftArticle, rightArticle) => {
-          const relevanceDelta =
-            getBreakingNewsRelevanceScore(rightArticle) - getBreakingNewsRelevanceScore(leftArticle);
+        return getBreakingNewsRelevanceScore(article) > 0;
+      })
+      .sort((leftArticle, rightArticle) => {
+        const relevanceDelta =
+          getBreakingNewsRelevanceScore(rightArticle) - getBreakingNewsRelevanceScore(leftArticle);
 
-          if (relevanceDelta !== 0) {
-            return relevanceDelta;
-          }
+        if (relevanceDelta !== 0) {
+          return relevanceDelta;
+        }
 
-          const leftTime = leftArticle.publishedAt
-            ? new Date(leftArticle.publishedAt).getTime()
-            : 0;
-          const rightTime = rightArticle.publishedAt
-            ? new Date(rightArticle.publishedAt).getTime()
-            : 0;
-          return rightTime - leftTime;
-        }),
-      5
+        const leftTime = leftArticle.publishedAt
+          ? new Date(leftArticle.publishedAt).getTime()
+          : 0;
+        const rightTime = rightArticle.publishedAt
+          ? new Date(rightArticle.publishedAt).getTime()
+          : 0;
+        return rightTime - leftTime;
+      });
+
+    const balancedBreakingArticles = selectSourceBalancedArticles(rankedBreakingCandidates, 12);
+    const selectedBreakingArticles = selectArticlesWithPreferredSourceCap(
+      balancedBreakingArticles,
+      5,
+      1
     ).slice(0, 5);
+    const breakingSourceCounts = selectedBreakingArticles.reduce<Record<string, number>>((counts, article) => {
+      const source = getSafeSourceLabel(article.source);
+      counts[source] = (counts[source] ?? 0) + 1;
+      return counts;
+    }, {});
 
+    console.log("BREAKING_SOURCE_DIVERSITY_APPLIED", true);
+    console.log("BREAKING_SOURCE_COUNTS", breakingSourceCounts);
     console.log("BREAKING NEWS FINAL COUNT", selectedBreakingArticles.length);
     return selectedBreakingArticles;
-  }, [breakingPreviewArticles, sortMode, topTenTrendingArticles, visibleArticles]);
+  }, [breakingPreviewArticles, sortMode, topFiveTrendingArticles, visibleArticles]);
 
   const breakingNewsLeadSelection = useMemo(() => {
     for (const article of breakingNewsPreviewArticles) {
@@ -13808,8 +13837,8 @@ export default function Home() {
     });
   }, [breakingNewsLeadSelection, sortMode]);
 
-  const topTenTrendingLeadArticle = useMemo(() => {
-    const firstArticle = topTenTrendingArticles[0];
+  const topFiveTrendingLeadArticle = useMemo(() => {
+    const firstArticle = topFiveTrendingArticles[0];
 
     if (!firstArticle) {
       return null;
@@ -13823,7 +13852,7 @@ export default function Home() {
 
     const imageFailureKey = `${firstArticle.id}:${selectedImage.src}`;
     return failedArticleImages[imageFailureKey] ? null : firstArticle;
-  }, [failedArticleImages, topTenTrendingArticles]);
+  }, [failedArticleImages, topFiveTrendingArticles]);
 
   const myNewsFeaturedArticles = useMemo(() => {
     if (sortMode !== "trending") {
@@ -13833,7 +13862,7 @@ export default function Home() {
     const usedKeys = new Set(
       [
         ...breakingNewsPreviewArticles,
-        ...topTenTrendingArticles,
+        ...topFiveTrendingArticles,
       ].map((article) => getArticleDeduplicationKey(article))
     );
 
@@ -13887,7 +13916,7 @@ export default function Home() {
     balancedTrendingArticles,
     breakingNewsPreviewArticles,
     sortMode,
-    topTenTrendingArticles,
+    topFiveTrendingArticles,
     visibleArticles,
   ]);
 
@@ -14819,7 +14848,7 @@ export default function Home() {
     let isCancelled = false;
 
     async function loadEntertainmentSections() {
-      if (sortMode !== "celebrity") {
+      if (sortMode !== "celebrity" && sortMode !== "trending") {
         setEntertainmentSectionArticles([]);
         setEntertainmentSectionFeeds({
           music: [],
@@ -14877,6 +14906,14 @@ export default function Home() {
           ...sectionFeeds.celebrity,
           ...sectionFeeds.movies,
         ]);
+
+        const providerCounts = nextArticles.reduce<Record<string, number>>((counts, article) => {
+          const provider = getArticleProviderLabel(article.provider).toLowerCase();
+          counts[provider] = (counts[provider] ?? 0) + 1;
+          return counts;
+        }, {});
+
+        console.log("ENTERTAINMENT_PROVIDER_COUNTS", providerCounts);
 
         setEntertainmentSectionFeeds(sectionFeeds);
         setEntertainmentSectionArticles(nextArticles);
@@ -15071,6 +15108,12 @@ export default function Home() {
     }
 
     const filteredArticles = dedupeArticlesByContent([
+      ...entertainmentSectionArticles,
+      ...entertainmentSectionFeeds.gossip,
+      ...entertainmentSectionFeeds.music,
+      ...entertainmentSectionFeeds.tvShows,
+      ...entertainmentSectionFeeds.celebrity,
+      ...entertainmentSectionFeeds.movies,
       ...celebrityPreviewArticles,
       ...visibleArticles.slice(0, 80),
     ])
@@ -15087,7 +15130,17 @@ export default function Home() {
     const selectedArticles = selectSourceBalancedArticles(filteredArticles, 8);
     console.log("TRENDING ENTERTAINMENT ARTICLE COUNT", selectedArticles.length);
     return selectedArticles;
-  }, [celebrityPreviewArticles, sortMode, visibleArticles]);
+  }, [
+    celebrityPreviewArticles,
+    entertainmentSectionArticles,
+    entertainmentSectionFeeds.celebrity,
+    entertainmentSectionFeeds.gossip,
+    entertainmentSectionFeeds.movies,
+    entertainmentSectionFeeds.music,
+    entertainmentSectionFeeds.tvShows,
+    sortMode,
+    visibleArticles,
+  ]);
 
   const trendingEntertainmentLeadArticle = useMemo(() => {
     if (sortMode !== "trending") {
@@ -15492,12 +15545,12 @@ export default function Home() {
   const myNewsImageCount = useMemo(() => {
     const sampleArticles = [
       ...breakingNewsPreviewArticles,
-      ...topTenTrendingArticles,
+      ...topFiveTrendingArticles,
       ...myNewsFeaturedArticles,
     ];
 
     return sampleArticles.filter((article) => Boolean(getArticleDisplayImage(article).src)).length;
-  }, [breakingNewsPreviewArticles, myNewsFeaturedArticles, topTenTrendingArticles]);
+  }, [breakingNewsPreviewArticles, myNewsFeaturedArticles, topFiveTrendingArticles]);
 
   const sportsImageCount = useMemo(
     () =>
@@ -18773,22 +18826,26 @@ export default function Home() {
         <section className="home-section-block home-section-plain home-top-trending-block">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Trending Top 10</strong>
+              <strong className="profile-section-title home-section-title">Trending Top 5</strong>
             </div>
           </div>
           <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
-            {topTenTrendingLeadArticle ? renderLargeImageArticleCard(topTenTrendingLeadArticle) : null}
-            {(topTenTrendingLeadArticle
-              ? topTenTrendingArticles.filter(
+            {(() => {
+              console.log("TRENDING_TOP_5_RENDERED", true);
+              return null;
+            })()}
+            {topFiveTrendingLeadArticle ? renderLargeImageArticleCard(topFiveTrendingLeadArticle) : null}
+            {(topFiveTrendingLeadArticle
+              ? topFiveTrendingArticles.filter(
                   (article) =>
                     getArticleDeduplicationKey(article) !==
-                    getArticleDeduplicationKey(topTenTrendingLeadArticle)
+                    getArticleDeduplicationKey(topFiveTrendingLeadArticle)
                 )
-              : topTenTrendingArticles
+              : topFiveTrendingArticles
             ).map((article, index) => (
               <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                 {renderCompactSideImageArticle(article, {
-                  showRank: topTenTrendingLeadArticle ? index + 2 : index + 1,
+                  showRank: topFiveTrendingLeadArticle ? index + 2 : index + 1,
                 })}
               </div>
             ))}
@@ -19251,11 +19308,6 @@ export default function Home() {
               </div>
             </section>
 
-            {renderTallTrendingQuickWatchRow(
-              "Quick Watch",
-              trendingTallQuickWatchSections.addCategories,
-              "add-categories-quickwatch"
-            )}
           </>
         ) : (
           (() => {
@@ -19285,6 +19337,36 @@ export default function Home() {
           )}
         </section>
 
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Food</strong>
+            </div>
+          </div>
+
+          {foodTabArticles.length === 0 ? (
+            isFoodPreviewLoading ? (
+              <div className="muted">Loading food stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No food stories yet</strong>
+                <span>Check back shortly for fresh food coverage.</span>
+              </div>
+            )
+          ) : (
+            renderArticleSectionWithLargeLead(foodTabArticles, { limit: 6 })
+          )}
+        </section>
+
+        {(() => {
+          console.log("QUICK_WATCH_MOVED_BETWEEN_FOOD_BUSINESS", true);
+          return renderTallTrendingQuickWatchRow(
+            "Quick Watch",
+            trendingTallQuickWatchSections.addCategories,
+            "add-categories-quickwatch"
+          );
+        })()}
+
         {renderFeaturedVideosBreak()}
 
         <section className="home-section-block home-section-plain">
@@ -19307,27 +19389,6 @@ export default function Home() {
             )
           ) : (
             renderArticleSectionWithLargeLead(businessTabArticles, { limit: 6 })
-          )}
-        </section>
-
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Food</strong>
-            </div>
-          </div>
-
-          {foodTabArticles.length === 0 ? (
-            isFoodPreviewLoading ? (
-              <div className="muted">Loading food stories...</div>
-            ) : (
-              <div className="empty-state compact-empty-state">
-                <strong>No food stories yet</strong>
-                <span>Check back shortly for fresh food coverage.</span>
-              </div>
-            )
-          ) : (
-            renderArticleSectionWithLargeLead(foodTabArticles, { limit: 6 })
           )}
         </section>
 

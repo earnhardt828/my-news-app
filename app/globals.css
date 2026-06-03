@@ -7049,6 +7049,10 @@ input {
   font-size: 0.78rem;
 }
 
+.video-card-article-bottom-meta {
+  margin-top: 2px;
+}
+
 .video-chip {
   width: fit-content;
   min-height: 28px;
@@ -7190,6 +7194,30 @@ input {
   text-align: center;
   color: white;
   background: linear-gradient(180deg, rgba(10, 14, 24, 0.06), rgba(10, 14, 24, 0.12));
+}
+
+.video-time-pill {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  max-width: calc(100% - 28px);
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(9, 14, 23, 0.76);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.video-time-pill-top-right {
+  top: 12px;
+  right: 12px;
 }
 
 .video-play-badge {
