@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../../../lib/api-base";
@@ -75,18 +74,20 @@ export default function PodcastEpisodePage() {
     };
   }, [params.episodeSlug, params.podcastSlug]);
 
+  useEffect(() => {
+    const headerTitle =
+      payload?.show.title?.trim() ||
+      payload?.show.publisher?.trim() ||
+      "Podcast";
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("reflekt:podcast-title", { detail: headerTitle }));
+    }
+  }, [payload]);
+
   return (
     <section className="page-shell home-sections-shell">
       <section className="home-section-block home-section-plain home-top-trending-block">
-        <div className="home-section-header">
-          <Link href="/podcasts/" className="button button-secondary">
-            Back
-          </Link>
-          <div className="stack" style={{ gap: "4px", flex: 1 }}>
-            <strong className="profile-section-title home-section-title">Podcast Player</strong>
-          </div>
-        </div>
-
         {isLoading ? (
           <div className="muted">Loading episode...</div>
         ) : !payload ? (

@@ -119,6 +119,7 @@ export default function AppHeader() {
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [articleHeaderSource, setArticleHeaderSource] = useState("Article");
   const [videoHeaderSource, setVideoHeaderSource] = useState("Video");
+  const [podcastHeaderTitle, setPodcastHeaderTitle] = useState("Podcast");
   const [sourceHeaderTitle, setSourceHeaderTitle] = useState<string | null>(null);
   const [userHeaderTitle, setUserHeaderTitle] = useState<string | null>(null);
   const sourcePathSegments = pathname.split("/");
@@ -220,6 +221,25 @@ export default function AppHeader() {
     return () => {
       window.removeEventListener("reflekt:video-source", handleVideoSource as EventListener);
       setVideoHeaderSource("Video");
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/podcasts/") || pathname === "/podcasts") {
+      setPodcastHeaderTitle("Podcast");
+      return;
+    }
+
+    const handlePodcastTitle = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      setPodcastHeaderTitle(customEvent.detail || "Podcast");
+    };
+
+    window.addEventListener("reflekt:podcast-title", handlePodcastTitle as EventListener);
+
+    return () => {
+      window.removeEventListener("reflekt:podcast-title", handlePodcastTitle as EventListener);
+      setPodcastHeaderTitle("Podcast");
     };
   }, [pathname]);
 
@@ -408,6 +428,25 @@ export default function AppHeader() {
         </button>
         <div className="app-header-article-source" aria-live="polite">
           {videoHeaderSource}
+        </div>
+        <span className="app-header-article-spacer" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (pathname.startsWith("/podcasts/") && pathname !== "/podcasts") {
+    return (
+      <div className="app-header-article-bar">
+        <button
+          type="button"
+          className="article-close-button app-header-article-close"
+          aria-label="Close podcast player"
+          onClick={() => closeTo("/podcasts/")}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        <div className="app-header-article-source" aria-live="polite">
+          {podcastHeaderTitle || "Podcast"}
         </div>
         <span className="app-header-article-spacer" aria-hidden="true" />
       </div>
@@ -728,6 +767,16 @@ export default function AppHeader() {
         <div className="app-header-title-wrap app-header-title-wrap-center">
           <span className="app-header-side-spacer" aria-hidden="true" />
           <h1 className="brand-title">Search</h1>
+          <span className="app-header-side-spacer" aria-hidden="true" />
+        </div>
+      );
+    }
+
+    if (pathname === "/podcasts") {
+      return (
+        <div className="app-header-title-wrap app-header-title-wrap-center">
+          <span className="app-header-side-spacer" aria-hidden="true" />
+          <h1 className="brand-title">Podcasts</h1>
           <span className="app-header-side-spacer" aria-hidden="true" />
         </div>
       );
