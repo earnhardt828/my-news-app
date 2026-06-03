@@ -20,6 +20,18 @@ type PodcastEpisode = {
   duration: string | null;
 };
 
+function getPodcastCardImage(show: PodcastShow) {
+  return (
+    show.image ||
+    show.artworkUrl600 ||
+    show.artworkUrl100 ||
+    show.artwork ||
+    show.podcastImage ||
+    show.coverArt ||
+    null
+  );
+}
+
 function PodcastSectionRow({
   title,
   shows,
@@ -27,6 +39,8 @@ function PodcastSectionRow({
   title: string;
   shows: PodcastShow[];
 }) {
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+
   if (shows.length === 0) {
     return null;
   }
@@ -42,16 +56,44 @@ function PodcastSectionRow({
       <div className="podcast-scroll-row" role="list" aria-label={title}>
         {shows.map((show) => {
           const latestEpisode = show.latestEpisode;
+          const imageUrl = getPodcastCardImage(show);
+          const imageKey = `${show.slug}:${imageUrl ?? "none"}`;
+          const showImage = Boolean(imageUrl) && !failedImages[imageKey];
+
+          if (showImage && imageUrl) {
+            console.log("PODCAST CARD IMAGE_USED", {
+              slug: show.slug,
+              imageUrl,
+            });
+          } else {
+            console.log("PODCAST CARD IMAGE_MISSING", {
+              slug: show.slug,
+              imageUrl,
+            });
+          }
+
           const cardContent = (
             <>
               <div className="podcast-card-art-shell" aria-hidden="true">
-                {show.image || show.coverArt ? (
+                {showImage && imageUrl ? (
                   <img
-                    src={show.image || show.coverArt || ""}
+                    src={imageUrl}
                     alt={show.title}
                     className="podcast-card-art"
                     loading="lazy"
                     decoding="async"
+                    onError={() => {
+                      setFailedImages((prev) => {
+                        if (prev[imageKey]) {
+                          return prev;
+                        }
+
+                        return {
+                          ...prev,
+                          [imageKey]: true,
+                        };
+                      });
+                    }}
                   />
                 ) : (
                   <div className="podcast-card-art podcast-card-art-fallback">

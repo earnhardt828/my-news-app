@@ -31,6 +31,10 @@ export type PodcastShow = {
   description: string | null;
   publisher: string;
   image: string | null;
+  artworkUrl600?: string | null;
+  artworkUrl100?: string | null;
+  artwork?: string | null;
+  podcastImage?: string | null;
   coverArt: string | null;
   category: PodcastFeedCategory;
   feedUrl: string;
@@ -64,6 +68,10 @@ type DiscoveryCandidate = {
   description: string | null;
   publisher: string;
   image: string | null;
+  artworkUrl600?: string | null;
+  artworkUrl100?: string | null;
+  artwork?: string | null;
+  podcastImage?: string | null;
   category: PodcastFeedCategory;
   feedUrl: string;
   episodeCount: number;
@@ -233,6 +241,10 @@ function createFallbackShowFromCandidate(candidate: DiscoveryCandidate): Podcast
     description: candidate.description,
     publisher: candidate.publisher,
     image: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
+    artworkUrl600: looksLikeUsablePodcastImage(candidate.artworkUrl600) ? candidate.artworkUrl600 : null,
+    artworkUrl100: looksLikeUsablePodcastImage(candidate.artworkUrl100) ? candidate.artworkUrl100 : null,
+    artwork: looksLikeUsablePodcastImage(candidate.artwork) ? candidate.artwork : null,
+    podcastImage: looksLikeUsablePodcastImage(candidate.podcastImage) ? candidate.podcastImage : null,
     coverArt: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
     category: candidate.category,
     feedUrl: candidate.feedUrl,
@@ -314,6 +326,10 @@ async function fetchPodcastShow(candidate: DiscoveryCandidate): Promise<PodcastS
     description,
     publisher,
     image: looksLikeUsablePodcastImage(coverArt) ? coverArt : null,
+    artworkUrl600: null,
+    artworkUrl100: null,
+    artwork: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
+    podcastImage: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
     coverArt: looksLikeUsablePodcastImage(coverArt) ? coverArt : null,
     category: candidate.category,
     feedUrl: candidate.feedUrl,
@@ -379,6 +395,10 @@ async function fetchItunesPodcasts(
         description: result.primaryGenreName?.trim() || null,
         publisher,
         image,
+        artworkUrl600: result.artworkUrl600?.trim() || null,
+        artworkUrl100: result.artworkUrl100?.trim() || null,
+        artwork: image,
+        podcastImage: image,
         category,
         feedUrl,
         episodeCount: Number(result.trackCount ?? 0),
@@ -565,8 +585,8 @@ async function fetchListenNotesPodcasts(
 }
 
 function dedupeDiscoveryCandidates(candidates: DiscoveryCandidate[]) {
-  const seenKeys = new Set<string>();
-  const deduped: DiscoveryCandidate[] = [];
+  const dedupedByKey = new Map<string, DiscoveryCandidate>();
+  const aliasToPrimaryKey = new Map<string, string>();
 
   candidates
     .slice()
@@ -578,15 +598,51 @@ function dedupeDiscoveryCandidates(candidates: DiscoveryCandidate[]) {
         normalizePodcastText(candidate.title),
       ].filter(Boolean);
 
-      if (keys.some((key) => seenKeys.has(key))) {
+      const existingPrimaryKey = keys
+        .map((key) => aliasToPrimaryKey.get(key))
+        .find((value): value is string => Boolean(value));
+
+      if (!existingPrimaryKey) {
+        const primaryKey = keys[0] ?? candidate.id;
+        dedupedByKey.set(primaryKey, candidate);
+        keys.forEach((key) => aliasToPrimaryKey.set(key, primaryKey));
         return;
       }
 
-      keys.forEach((key) => seenKeys.add(key));
-      deduped.push(candidate);
+      const existing = dedupedByKey.get(existingPrimaryKey);
+      if (!existing) {
+        dedupedByKey.set(existingPrimaryKey, candidate);
+        keys.forEach((key) => aliasToPrimaryKey.set(key, existingPrimaryKey));
+        return;
+      }
+
+      const merged: DiscoveryCandidate = {
+        ...existing,
+        ...candidate,
+        image: existing.image || candidate.image,
+        artworkUrl600: existing.artworkUrl600 || candidate.artworkUrl600 || existing.image || candidate.image,
+        artworkUrl100: existing.artworkUrl100 || candidate.artworkUrl100 || candidate.image,
+        artwork: existing.artwork || candidate.artwork || existing.image || candidate.image,
+        podcastImage: existing.podcastImage || candidate.podcastImage || existing.image || candidate.image,
+        feedUrl: existing.feedUrl || candidate.feedUrl,
+        searchTerms: Array.from(new Set([...(existing.searchTerms ?? []), ...(candidate.searchTerms ?? [])])),
+        score: Math.max(existing.score, candidate.score),
+        featured: existing.featured || candidate.featured,
+      };
+
+      if (!existing.image && merged.image) {
+        console.log("PODCAST ARTWORK_ENRICHED", {
+          title: merged.title,
+          provider: candidate.sourceProvider,
+          image: merged.image,
+        });
+      }
+
+      dedupedByKey.set(existingPrimaryKey, merged);
+      keys.forEach((key) => aliasToPrimaryKey.set(key, existingPrimaryKey));
     });
 
-  return deduped;
+  return Array.from(dedupedByKey.values());
 }
 
 export function buildStaticFallbackPodcastDirectory(searchQuery?: string): PodcastDirectory {
