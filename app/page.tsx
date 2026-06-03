@@ -18330,16 +18330,6 @@ export default function Home() {
         >
           Local
         </button>
-        <button
-          ref={(node) => {
-            topTabButtonRefs.current.weather = node;
-          }}
-          className={`toolbar-pill ${activeMode === "weather" ? "toolbar-pill-active" : ""}`}
-          type="button"
-          onClick={() => setSortMode("weather")}
-        >
-          Weather
-        </button>
       </div>
     </div>
   );

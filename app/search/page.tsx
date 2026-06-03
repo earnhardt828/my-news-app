@@ -10,10 +10,12 @@ import {
   saveArticleReturnState,
 } from "../../lib/article-navigation";
 import { getArticleDisplayImage } from "../../lib/article-display-image";
+import { createBlockedUser } from "../../lib/blocked-users";
 import SourceBadge from "../components/source-badge";
 import { getCategoryLabel, getDisplayCategory } from "../../lib/categories";
 import { cleanDisplayText } from "../../lib/display-text";
 import { handleArticleCardActivation } from "../../lib/open-article";
+import { getProfileIdentity } from "../../lib/profile-identities";
 import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { formatRelativeTimestamp } from "../../lib/relative-time";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
@@ -46,6 +48,7 @@ type UserProfileSearchResult = {
   username: string | null;
   avatar_url: string | null;
   bio: string | null;
+  display_name?: string | null;
 };
 
 type BlockedUserRow = {
@@ -80,6 +83,44 @@ const fallbackTrendingTerms = [
   "Sports headlines",
   "Breaking news",
 ];
+
+const TRUSTED_SEARCH_SOURCES = [
+  "AP News",
+  "Reuters",
+  "BBC",
+  "CNN",
+  "NBC News",
+  "ABC News",
+  "CBS News",
+  "NPR",
+  "PBS",
+  "The Guardian",
+  "New York Times",
+  "Washington Post",
+  "Wall Street Journal",
+  "Bloomberg",
+  "CNBC",
+  "Forbes",
+  "USA Today",
+  "Axios",
+  "Politico",
+  "The Hill",
+  "ESPN",
+  "Yahoo Sports",
+  "CBS Sports",
+  "NBC Sports",
+  "Variety",
+  "Billboard",
+  "Hollywood Reporter",
+  "People",
+  "The Weather Channel",
+  "AccuWeather",
+  "Scientific American",
+  "Nature",
+  "Space.com",
+] as const;
+
+type SearchTab = "articles" | "users";
 
 const TITLE_STOP_WORDS = new Set([
   "after",
@@ -168,6 +209,24 @@ function getSourceAliasTerms(sourceName: string | null | undefined) {
         .filter(Boolean)
     )
   );
+}
+
+function isTrustedSearchSource(sourceName: string | null | undefined) {
+  const normalizedSource = cleanDisplayText(sourceName ?? "").trim().toLowerCase();
+
+  if (!normalizedSource) {
+    return false;
+  }
+
+  return TRUSTED_SEARCH_SOURCES.some((trustedSource) => {
+    const normalizedTrustedSource = trustedSource.toLowerCase();
+
+    return (
+      normalizedSource === normalizedTrustedSource ||
+      normalizedSource.includes(normalizedTrustedSource) ||
+      normalizedTrustedSource.includes(normalizedSource)
+    );
+  });
 }
 
 function formatSearchDate(publishedAt?: string | null, fallback?: string) {
@@ -498,6 +557,7 @@ function normalizeSearchPayload(payload: NewsArticle[] | SearchNewsResponse) {
 export default function Search() {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<SearchTab>("articles");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [searchArticles, setSearchArticles] = useState<NewsArticle[]>([]);
   const [sourceFallbackArticles, setSourceFallbackArticles] = useState<NewsArticle[]>([]);
@@ -514,6 +574,7 @@ export default function Search() {
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const [failedSearchImages, setFailedSearchImages] = useState<Record<string, boolean>>({});
+  const [blockingUserId, setBlockingUserId] = useState<string | null>(null);
   const loadMoreSearchSentinelRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextSearchPageRef = useRef(false);
 
@@ -667,6 +728,12 @@ export default function Search() {
   }, [normalizedQuery]);
 
   useEffect(() => {
+    if (!normalizedQuery) {
+      setActiveTab("articles");
+    }
+  }, [normalizedQuery]);
+
+  useEffect(() => {
     const sentinel = loadMoreSearchSentinelRef.current;
 
     if (
@@ -752,12 +819,25 @@ export default function Search() {
         return;
       }
 
-      const { data, error } = await supabase
+      const initialResult = await supabase
         .from("profiles")
-        .select("id, username, avatar_url, bio")
-        .ilike("username", `%${normalizedQuery}%`)
+        .select("id, user_id, username, avatar_url, bio, display_name")
+        .or(`username.ilike.%${normalizedQuery}%,display_name.ilike.%${normalizedQuery}%`)
         .not("username", "is", null)
         .limit(8);
+
+      const fallbackResult =
+        initialResult.error?.code === "42703"
+          ? await supabase
+              .from("profiles")
+              .select("id, user_id, username, avatar_url, bio")
+              .ilike("username", `%${normalizedQuery}%`)
+              .not("username", "is", null)
+              .limit(8)
+          : null;
+
+      const data = (fallbackResult?.data ?? initialResult.data) as UserProfileSearchResult[] | null;
+      const error = fallbackResult?.error ?? initialResult.error;
 
       if (error) {
         console.error("Error loading user search results:", error);
@@ -806,11 +886,13 @@ export default function Search() {
           console.log("HIDDEN USER IDS", Array.from(hiddenUserIds));
 
           filteredUsers = users.filter((profile) => {
-            if (!profile.id) {
+            const profileIdentity = getProfileIdentity(profile);
+
+            if (!profileIdentity) {
               return true;
             }
 
-            return !hiddenUserIds.has(profile.id);
+            return !hiddenUserIds.has(profileIdentity);
           });
         }
       }
@@ -1133,9 +1215,9 @@ export default function Search() {
     const recentArticles = rankedArticles.filter(({ article }) => isArticleWithinDays(article, 30));
     const olderArticles = rankedArticles.filter(({ article }) => !isArticleWithinDays(article, 30));
 
-    return (recentArticles.length >= 5 ? recentArticles : [...recentArticles, ...olderArticles]).map(
-      ({ article }) => article
-    );
+    return (recentArticles.length >= 5 ? recentArticles : [...recentArticles, ...olderArticles])
+      .map(({ article }) => article)
+      .filter((article) => isTrustedSearchSource(article.source));
   }, [articles, matchedSourceName, normalizedQuery, searchArticles, sourceFallbackArticles]);
 
   const displayableSearchResultCount = useMemo(
@@ -1154,6 +1236,46 @@ export default function Search() {
     });
   }, [displayableSearchResultCount]);
 
+  const handleBlockUser = async (user: UserProfileSearchResult) => {
+    const targetUserId = getProfileIdentity(user);
+
+    if (!currentUserId) {
+      alert("Log in to block users.");
+      return;
+    }
+
+    if (!targetUserId) {
+      alert("Could not block this user.");
+      return;
+    }
+
+    if (targetUserId === currentUserId) {
+      alert("You cannot block yourself.");
+      return;
+    }
+
+    setBlockingUserId(targetUserId);
+
+    const result = await createBlockedUser(
+      supabase,
+      currentUserId,
+      targetUserId,
+      user.username ?? null
+    );
+
+    if (result.error) {
+      console.error("Error blocking user from search:", result.error);
+      alert(result.error.message ?? "Could not block this user.");
+      setBlockingUserId(null);
+      return;
+    }
+
+    setUserResults((prev) =>
+      prev.filter((profile) => getProfileIdentity(profile) !== targetUserId)
+    );
+    setBlockingUserId(null);
+  };
+
   return (
     <section className="page-shell search-shell">
       <section className="search-bar-shell">
@@ -1168,6 +1290,29 @@ export default function Search() {
           />
         </label>
       </section>
+
+      <div className="trending-tabs-wrap search-tabs-wrap" role="tablist" aria-label="Search tabs">
+        <div className="toolbar toolbar-centered">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "articles"}
+            className={`toolbar-pill ${activeTab === "articles" ? "toolbar-pill-active" : ""}`}
+            onClick={() => setActiveTab("articles")}
+          >
+            Articles
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "users"}
+            className={`toolbar-pill ${activeTab === "users" ? "toolbar-pill-active" : ""}`}
+            onClick={() => setActiveTab("users")}
+          >
+            Users
+          </button>
+        </div>
+      </div>
 
       {!query.trim() ? (
         <section className="section-card stack">
@@ -1210,7 +1355,7 @@ export default function Search() {
         </section>
       ) : (
         <section className="stack search-results-shell">
-          {matchedSourceName ? (
+          {activeTab === "articles" && matchedSourceName ? (
             <div className="search-results-section search-results-section-sources">
               <p className="search-results-section-heading">Sources</p>
               <Link
@@ -1276,19 +1421,14 @@ export default function Search() {
             </div>
           ) : null}
 
-          {userResults.length > 0 ? (
+          {activeTab === "users" && userResults.length > 0 ? (
             <div className="search-results-section search-results-section-users">
               <p className="search-results-section-heading">Users</p>
               <div className="search-results-list">
                 {userResults.map((user) => (
-                  <Link
+                  <div
                     key={user.id}
-                    href={`/user/${encodeURIComponent(user.username ?? user.id)}/`}
                     className="section-card search-user-card"
-                    onClick={() => {
-                      console.log("CLICKED USER", user);
-                      console.log("NAVIGATING TO USERNAME", user.username);
-                    }}
                   >
                     <div className="search-user-card-row">
                       <div className="search-user-brand">
@@ -1310,6 +1450,9 @@ export default function Search() {
                         </span>
                         <div className="stack" style={{ gap: "4px" }}>
                           <strong className="search-source-name">@{user.username}</strong>
+                          {user.display_name ? (
+                            <span className="search-user-display-name">{user.display_name}</span>
+                          ) : null}
                           {user.bio ? (
                             <span className="search-user-bio">{user.bio}</span>
                           ) : (
@@ -1317,21 +1460,47 @@ export default function Search() {
                           )}
                         </div>
                       </div>
-                      <span className="search-trending-icon" aria-hidden="true">
-                        ↗
-                      </span>
+                      <div className="search-user-actions">
+                        <Link
+                          href={`/user/${encodeURIComponent(user.username ?? user.id)}/`}
+                          className="comment-action"
+                        >
+                          View Profile
+                        </Link>
+                        <button
+                          type="button"
+                          className="comment-action"
+                          disabled={
+                            !currentUserId ||
+                            getProfileIdentity(user) === currentUserId ||
+                            blockingUserId === getProfileIdentity(user)
+                          }
+                          onClick={() => {
+                            void handleBlockUser(user);
+                          }}
+                        >
+                          {blockingUserId === getProfileIdentity(user) ? "Blocking..." : "Block"}
+                        </button>
+                      </div>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             </div>
           ) : null}
 
-          {isSearchLoading ? (
+          {activeTab === "users" ? (
+            normalizedQuery && userResults.length === 0 ? (
+              <div className="empty-state">
+                <strong>No users found</strong>
+                <span>Try another username search.</span>
+              </div>
+            ) : null
+          ) : isSearchLoading ? (
             <div className="search-inline-loading" role="status" aria-live="polite">
               Searching recent articles...
             </div>
-          ) : filteredResults.length === 0 ? (
+          ) : activeTab === "articles" && filteredResults.length === 0 ? (
             <div className="empty-state">
               <strong>No results found</strong>
               <span>
@@ -1339,7 +1508,7 @@ export default function Search() {
                 articles across title, source, category, and story text.
               </span>
             </div>
-          ) : (
+          ) : activeTab === "articles" ? (
             <div className="search-results-section">
               <p className="search-results-section-heading">Articles</p>
               <div className="search-results-list">
@@ -1474,7 +1643,7 @@ export default function Search() {
                 ) : null}
               </div>
             </div>
-          )}
+          ) : null}
         </section>
       )}
     </section>
