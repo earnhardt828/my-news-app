@@ -223,6 +223,27 @@ function matchesPodcastSearch(candidate: DiscoveryCandidate, query: string) {
     .some((value) => normalizePodcastText(value).includes(normalizedQuery));
 }
 
+function createFallbackShowFromCandidate(candidate: DiscoveryCandidate): PodcastShow {
+  return {
+    id: candidate.id,
+    slug: candidate.slug || slugifyValue(candidate.title),
+    title: candidate.title,
+    description: candidate.description,
+    publisher: candidate.publisher,
+    image: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
+    coverArt: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
+    category: candidate.category,
+    feedUrl: candidate.feedUrl,
+    episodeCount: candidate.episodeCount,
+    provider: candidate.sourceProvider,
+    sourceProvider: candidate.sourceProvider,
+    featured: candidate.featured,
+    latestEpisode: null,
+    episodes: [],
+    lastPublishedAt: candidate.lastPublishedAt,
+  };
+}
+
 async function fetchPodcastShow(candidate: DiscoveryCandidate): Promise<PodcastShow> {
   const response = await fetch(candidate.feedUrl, {
     next: { revalidate: 1800 },
@@ -378,6 +399,9 @@ async function fetchPodcastIndexPodcasts(
   const apiKey = process.env.PODCASTINDEX_API_KEY?.trim();
   const apiSecret = process.env.PODCASTINDEX_API_SECRET?.trim();
 
+  console.log("PODCASTINDEX API KEY PRESENT", Boolean(apiKey));
+  console.log("PODCASTINDEX API SECRET PRESENT", Boolean(apiSecret));
+
   if (!apiKey || !apiSecret) {
     return [];
   }
@@ -389,6 +413,7 @@ async function fetchPodcastIndexPodcasts(
   const requestUrl = new URL("https://api.podcastindex.org/api/1.0/search/byterm");
   requestUrl.searchParams.set("q", term);
   requestUrl.searchParams.set("max", "8");
+  console.log("PODCASTINDEX REQUEST URL", requestUrl.toString());
 
   const response = await fetch(requestUrl.toString(), {
     headers: {
@@ -399,6 +424,8 @@ async function fetchPodcastIndexPodcasts(
     },
     next: { revalidate: 1800 },
   });
+
+  console.log("PODCASTINDEX RESPONSE STATUS", response.status);
 
   if (!response.ok) {
     throw new Error(`podcast-index search failed (${response.status})`);
@@ -417,7 +444,8 @@ async function fetchPodcastIndexPodcasts(
     }>;
   };
 
-  return (payload.feeds ?? [])
+  console.log("PODCASTINDEX RAW COUNT", (payload.feeds ?? []).length);
+  const normalized = (payload.feeds ?? [])
     .map((feed) => {
       const title = feed.title?.trim();
       const feedUrl = feed.url?.trim();
@@ -451,6 +479,10 @@ async function fetchPodcastIndexPodcasts(
       return candidate;
     })
     .filter((candidate): candidate is DiscoveryCandidate => candidate !== null);
+
+  console.log("PODCASTINDEX NORMALIZED COUNT", normalized.length);
+
+  return normalized;
 }
 
 async function fetchListenNotesPodcasts(
@@ -660,17 +692,47 @@ export async function fetchPodcastDirectory(searchQuery?: string): Promise<Podca
     mergedCandidates.slice(0, searchQuery ? 36 : 48).map((candidate) => fetchPodcastShow(candidate))
   );
 
-  const shows = hydratedShows
+  const playableShows = hydratedShows
     .flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))
-    .filter((show) => Boolean(show.image) && Boolean(show.latestEpisode?.audioUrl));
+    .filter((show) => Boolean(show.latestEpisode?.audioUrl));
+
+  const hydratedSlugs = new Set(playableShows.map((show) => show.slug));
+  const fallbackShows = mergedCandidates
+    .filter((candidate) => candidate.sourceProvider === "rss" && !hydratedSlugs.has(candidate.slug))
+    .map(createFallbackShowFromCandidate);
+
+  const allShows = [...playableShows, ...fallbackShows];
+
+  const sections = buildPodcastSections(allShows);
+
+  if (!searchQuery) {
+    (
+      [
+        ["featured", sections.featured],
+        ["science", sections.science],
+        ["trueCrime", sections.trueCrime],
+        ["arts", sections.arts],
+        ["business", sections.business],
+        ["sports", sections.sports],
+        ["politics", sections.politics],
+      ] as const
+    ).forEach(([category, shows]) => {
+      if (shows.some((show) => show.latestEpisode === null)) {
+        console.log("PODCAST FALLBACK USED", {
+          category,
+          count: shows.filter((show) => show.latestEpisode === null).length,
+        });
+      }
+    });
+  }
 
   if (searchQuery) {
-    console.log("PODCAST_SEARCH_COUNT", shows.length);
+    console.log("PODCAST_SEARCH_COUNT", allShows.length);
   }
 
   return {
-    shows,
-    sections: buildPodcastSections(shows),
+    shows: allShows,
+    sections,
   };
 }
 

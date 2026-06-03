@@ -65,18 +65,8 @@ function PodcastSectionRow({
       <div className="podcast-scroll-row" role="list" aria-label={title}>
         {shows.map((show) => {
           const latestEpisode = show.latestEpisode;
-
-          if (!latestEpisode) {
-            return null;
-          }
-
-          return (
-            <Link
-              key={`${title}-${show.slug}`}
-              href={`/podcasts/${show.slug}/${latestEpisode.slug}/`}
-              className="podcast-card"
-              role="listitem"
-            >
+          const cardContent = (
+            <>
               <div className="podcast-card-art-shell" aria-hidden="true">
                 {show.image || show.coverArt ? (
                   <img
@@ -95,12 +85,36 @@ function PodcastSectionRow({
               <div className="podcast-card-copy">
                 <strong className="podcast-card-title">{show.title}</strong>
                 <span className="podcast-card-publisher">{show.publisher}</span>
-                <p className="podcast-card-episode-title">{latestEpisode.title}</p>
+                <p className="podcast-card-episode-title">
+                  {latestEpisode?.title || show.description || "Feed details are refreshing."}
+                </p>
                 <span className="podcast-card-date">
-                  {formatRelativeTimestamp(latestEpisode.publishedAt)}
+                  {latestEpisode?.publishedAt
+                    ? formatRelativeTimestamp(latestEpisode.publishedAt)
+                    : `${show.episodeCount || "Recent"} episodes`}
                 </span>
               </div>
+            </>
+          );
+
+          return latestEpisode ? (
+            <Link
+              key={`${title}-${show.slug}`}
+              href={`/podcasts/${show.slug}/${latestEpisode.slug}/`}
+              className="podcast-card"
+              role="listitem"
+            >
+              {cardContent}
             </Link>
+          ) : (
+            <div
+              key={`${title}-${show.slug}`}
+              className="podcast-card"
+              role="listitem"
+              aria-label={`${show.title} podcast`}
+            >
+              {cardContent}
+            </div>
           );
         })}
       </div>
