@@ -547,7 +547,9 @@ const MLS_VIDEOS_DISABLED = true;
 const COLLEGE_BASKETBALL_VIDEOS_DISABLED = true;
 const NASCAR_VIDEOS_DISABLED = true;
 const SPORTS_SCORE_CARDS_DISABLED = true;
-const TRENDING_SCORE_CARDS_DISABLED = false;
+const TRENDING_SCORE_CARDS_DISABLED = true;
+const TRENDING_AUTO_DISABLED = true;
+const TRENDING_SPORTS_DISABLED = true;
 const FEATURED_SPORTS_DISABLED = true;
 const BUSINESS_STOCK_TICKER_DISABLED = false;
 const MY_NEWS_CATEGORY_CACHE_VERSION = "mlb-dedicated-v3";
@@ -737,6 +739,8 @@ const SCIENCE_FEED_QUERY =
   "science news | NASA news | space news | astronomy news | climate science | physics news | biology research | medical research | Scientific American | Nature | Science Magazine | Live Science | Space.com | National Geographic science | AP Science | Reuters Science";
 const OPINION_FEED_QUERY =
   "Wall Street Journal Opinion | New York Times Opinion | Washington Post Opinions | Bloomberg Opinion | The Atlantic | National Review | The Hill Opinion | USA Today Opinion | Reuters Analysis | AP Analysis | Financial Times Opinion";
+const CRIME_FEED_QUERY =
+  "crime news | breaking crime news | public safety news | court case news | police investigation news | AP crime | Reuters crime | CNN crime | NBC News crime | ABC News crime | CBS News crime | USA Today crime | local crime";
 const TOPIC_IMAGE_FILENAMES = [
   "africa.png",
   "africas.png",
@@ -5285,6 +5289,49 @@ function getOpinionLargeCardSelection(articles: Article[]) {
     .find((candidate) => candidate.isStrictOpinion && candidate.image);
 }
 
+function isStrictCrimeArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasCrimeTerms =
+    /\b(crime|police|investigation|arrest|court|trial|charges|public safety|shooting|suspect|homicide|fraud|theft|lawsuit|federal prosecutors?)\b/.test(
+      haystack
+    );
+  const hasCrimeSourceTerms =
+    /\b(ap crime|reuters crime|cnn crime|nbc news crime|abc news crime|cbs news crime|usa today crime)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(sports discipline|suspended for|celebrity gossip|opinion|editorial|commentary|column)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms) {
+    return false;
+  }
+
+  return hasCrimeTerms || hasCrimeSourceTerms;
+}
+
+function getCrimeLargeCardSelection(articles: Article[]) {
+  return articles
+    .map((article) => ({
+      article,
+      isStrictCrime: isStrictCrimeArticle(article),
+      image: getLargeImageCardImageCandidate(article),
+    }))
+    .find((candidate) => candidate.isStrictCrime && candidate.image);
+}
+
 function getTechLargeCardSelection(articles: Article[]) {
   const candidates = articles.map((article) => ({
     article,
@@ -6683,6 +6730,8 @@ export default function Home() {
   const [isCarsPreviewLoading, setIsCarsPreviewLoading] = useState(false);
   const [opinionPreviewArticles, setOpinionPreviewArticles] = useState<Article[]>([]);
   const [isOpinionPreviewLoading, setIsOpinionPreviewLoading] = useState(false);
+  const [crimePreviewArticles, setCrimePreviewArticles] = useState<Article[]>([]);
+  const [isCrimePreviewLoading, setIsCrimePreviewLoading] = useState(false);
   const [foodPreviewArticles, setFoodPreviewArticles] = useState<Article[]>([]);
   const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
   const [sciencePreviewArticles, setSciencePreviewArticles] = useState<Article[]>([]);
@@ -6909,6 +6958,18 @@ export default function Home() {
   useEffect(() => {
     if (MY_NEWS_DISABLED) {
       console.log("MY_NEWS_DISABLED_ACTIVE", true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (TRENDING_AUTO_DISABLED) {
+      console.log("TRENDING_AUTO_DISABLED_ACTIVE", true);
+    }
+    if (TRENDING_SPORTS_DISABLED) {
+      console.log("TRENDING_SPORTS_DISABLED_ACTIVE", true);
+    }
+    if (TRENDING_SCORE_CARDS_DISABLED) {
+      console.log("TRENDING_SCORE_CARDS_DISABLED_ACTIVE", true);
     }
   }, []);
 
@@ -8423,6 +8484,7 @@ export default function Home() {
         setBusinessPreviewArticles([]);
         setCarsPreviewArticles([]);
         setOpinionPreviewArticles([]);
+        setCrimePreviewArticles([]);
         setFoodPreviewArticles([]);
         setSciencePreviewArticles([]);
         setIsBreakingPreviewLoading(false);
@@ -8432,6 +8494,7 @@ export default function Home() {
         setIsBusinessPreviewLoading(false);
         setIsCarsPreviewLoading(false);
         setIsOpinionPreviewLoading(false);
+        setIsCrimePreviewLoading(false);
         setIsFoodPreviewLoading(false);
         setIsSciencePreviewLoading(false);
         return;
@@ -8445,6 +8508,7 @@ export default function Home() {
         setIsBusinessPreviewLoading(true);
         setIsCarsPreviewLoading(true);
         setIsOpinionPreviewLoading(true);
+        setIsCrimePreviewLoading(true);
         setIsFoodPreviewLoading(true);
         setIsSciencePreviewLoading(true);
       }
@@ -8458,6 +8522,7 @@ export default function Home() {
           businessResponse,
           carsResponse,
           opinionResponse,
+          crimeResponse,
           foodResponse,
           scienceResponse,
         ] = await Promise.all([
@@ -8513,6 +8578,15 @@ export default function Home() {
               )
             : Promise.resolve(null),
           sortMode === "trending"
+            ? fetch(
+                `/api/news?mode=search&query=${encodeURIComponent(CRIME_FEED_QUERY)}&pageSize=25`,
+                {
+                  cache: "no-store",
+                  headers: { Accept: "application/json" },
+                }
+              )
+            : Promise.resolve(null),
+          sortMode === "trending"
             ? fetch("/api/news?mode=food&pageSize=25", {
               cache: "no-store",
               headers: { Accept: "application/json" },
@@ -8537,6 +8611,7 @@ export default function Home() {
           businessPayload,
           carsPayload,
           opinionPayload,
+          crimePayload,
           foodPayload,
           sciencePayload,
         ] = await Promise.all([
@@ -8560,6 +8635,9 @@ export default function Home() {
             : Promise.resolve(null),
           opinionResponse && "ok" in opinionResponse && opinionResponse.ok
             ? opinionResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          crimeResponse && "ok" in crimeResponse && crimeResponse.ok
+            ? crimeResponse.json().catch(() => null)
             : Promise.resolve(null),
           foodResponse && "ok" in foodResponse && foodResponse.ok
             ? foodResponse.json().catch(() => null)
@@ -8624,6 +8702,15 @@ export default function Home() {
               (article) => isStrictOpinionArticle(article) && !isLowInformationLiveStreamArticle(article)
             )
           : [];
+        const nextCrimeArticles = crimePayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                crimePayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            ).filter(
+              (article) => isStrictCrimeArticle(article) && !isLowInformationLiveStreamArticle(article)
+            )
+          : [];
         const nextFoodArticles = foodPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
@@ -8652,6 +8739,7 @@ export default function Home() {
           setBusinessPreviewArticles(nextBusinessArticles);
           setCarsPreviewArticles(nextCarsArticles);
           setOpinionPreviewArticles((prev) => (nextOpinionArticles.length > 0 ? nextOpinionArticles : prev));
+          setCrimePreviewArticles((prev) => (nextCrimeArticles.length > 0 ? nextCrimeArticles : prev));
           setFoodPreviewArticles(nextFoodArticles);
           setSciencePreviewArticles((prev) => (nextScienceArticles.length > 0 ? nextScienceArticles : prev));
         }
@@ -8673,6 +8761,7 @@ export default function Home() {
           setIsBusinessPreviewLoading(false);
           setIsCarsPreviewLoading(false);
           setIsOpinionPreviewLoading(false);
+          setIsCrimePreviewLoading(false);
           setIsFoodPreviewLoading(false);
           setIsSciencePreviewLoading(false);
           }
@@ -10930,6 +11019,16 @@ export default function Home() {
       (article) => isStrictOpinionArticle(article) && !isLowInformationLiveStreamArticle(article)
     );
   }, [opinionPreviewArticles, sortMode]);
+
+  const crimeTabArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(crimePreviewArticles.slice(0, 40), 12).filter(
+      (article) => isStrictCrimeArticle(article) && !isLowInformationLiveStreamArticle(article)
+    );
+  }, [crimePreviewArticles, sortMode]);
 
   const travelTabArticles = useMemo(() => {
     if (sortMode !== "travel") {
@@ -17238,6 +17337,20 @@ export default function Home() {
     return selectedArticle;
   }, [opinionTabArticles]);
 
+  const trendingCrimeLeadArticle = useMemo(() => {
+    const selectedArticle = getCrimeLargeCardSelection(crimeTabArticles)?.article ?? null;
+    console.log(
+      "TRENDING_CRIME_LARGE_CARD_SELECTED",
+      selectedArticle
+        ? {
+            title: selectedArticle.title,
+            source: selectedArticle.source,
+          }
+        : null
+    );
+    return selectedArticle;
+  }, [crimeTabArticles]);
+
   useEffect(() => {
     if (sortMode !== "trending") {
       return;
@@ -17245,6 +17358,14 @@ export default function Home() {
 
     console.log("OPINION ARTICLE COUNT", opinionTabArticles.length);
   }, [opinionTabArticles.length, sortMode]);
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      return;
+    }
+
+    console.log("TRENDING_CRIME_ARTICLE_COUNT", crimeTabArticles.length);
+  }, [crimeTabArticles.length, sortMode]);
 
   useEffect(() => {
     const realLargeCardCount = sportsTabArticles.filter(
@@ -19000,68 +19121,70 @@ export default function Home() {
           "featured-sources-quickwatch"
         )}
 
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Sports</strong>
+        {!TRENDING_SPORTS_DISABLED ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Sports</strong>
+              </div>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => setSortMode("sports")}
+              >
+                More
+              </button>
             </div>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => setSortMode("sports")}
-            >
-              More
-            </button>
-          </div>
 
-          {!TRENDING_SCORE_CARDS_DISABLED
-            ? isSportsScoresLoading
-              ? <div className="muted">Loading score cards...</div>
-              : topSportsGames.length > 0
-                ? renderSportsScoreRow(
-                    topSportsGames,
-                    "Trending sports scores",
-                    "Scores unavailable right now."
-                  )
-                : null
-            : null}
+            {!TRENDING_SCORE_CARDS_DISABLED
+              ? isSportsScoresLoading
+                ? <div className="muted">Loading score cards...</div>
+                : topSportsGames.length > 0
+                  ? renderSportsScoreRow(
+                      topSportsGames,
+                      "Trending sports scores",
+                      "Scores unavailable right now."
+                    )
+                  : null
+              : null}
 
-          {sportsTabArticles.length === 0 ? (
-            isSportsPreviewLoading ? (
-              <div className="muted">Loading sports stories...</div>
+            {sportsTabArticles.length === 0 ? (
+              isSportsPreviewLoading ? (
+                <div className="muted">Loading sports stories...</div>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <strong>No sports stories yet</strong>
+                  <span>Check back shortly for fresh sports coverage.</span>
+                </div>
+              )
             ) : (
-              <div className="empty-state compact-empty-state">
-                <strong>No sports stories yet</strong>
-                <span>Check back shortly for fresh sports coverage.</span>
-              </div>
-            )
-          ) : (
-            renderGroupedSportsArticleSections(groupedSportsArticleSections) ?? (
-              <div className="stack home-section-list top-trending-card-rail">
-                {trendingSportsLeadArticle ? renderLargeImageArticleCard(trendingSportsLeadArticle) : null}
-                {sportsTabArticles
-                  .filter((article) =>
-                    trendingSportsLeadArticle
-                      ? getArticleDeduplicationKey(article) !==
-                        getArticleDeduplicationKey(trendingSportsLeadArticle)
-                      : true
-                  )
-                  .filter((article) => isBroadSportsArticle(article) && !isSportsBettingAd(article))
-                  .slice(0, 5)
-                  .map((article, index) => (
-                    <div
-                      key={`trending-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                    >
-                      {renderCompactSideImageArticle(article, {
-                        imageFallbackLabel: "Sports",
-                        showRank: index + 1,
-                      })}
-                    </div>
-                  ))}
-              </div>
-            )
-          )}
-        </section>
+              renderGroupedSportsArticleSections(groupedSportsArticleSections) ?? (
+                <div className="stack home-section-list top-trending-card-rail">
+                  {trendingSportsLeadArticle ? renderLargeImageArticleCard(trendingSportsLeadArticle) : null}
+                  {sportsTabArticles
+                    .filter((article) =>
+                      trendingSportsLeadArticle
+                        ? getArticleDeduplicationKey(article) !==
+                          getArticleDeduplicationKey(trendingSportsLeadArticle)
+                        : true
+                    )
+                    .filter((article) => isBroadSportsArticle(article) && !isSportsBettingAd(article))
+                    .slice(0, 5)
+                    .map((article, index) => (
+                      <div
+                        key={`trending-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                      >
+                        {renderCompactSideImageArticle(article, {
+                          imageFallbackLabel: "Sports",
+                          showRank: index + 1,
+                        })}
+                      </div>
+                    ))}
+                </div>
+              )
+            )}
+          </section>
+        ) : null}
 
         {!MY_NEWS_DISABLED ? (
           <>
@@ -19222,30 +19345,34 @@ export default function Home() {
           )}
         </section>
 
-        <section ref={carsSectionRef} className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Auto</strong>
-            </div>
-          </div>
-
-          {carsTabArticles.length === 0 ? (
-            isCarsPreviewLoading ? (
-              <div className="muted">Loading auto stories...</div>
-            ) : (
-              <div className="empty-state compact-empty-state">
-                <strong>No auto stories yet</strong>
-                <span>Check back shortly for fresh auto and EV coverage.</span>
+        {!TRENDING_AUTO_DISABLED ? (
+          <>
+            <section ref={carsSectionRef} className="home-section-block home-section-plain">
+              <div className="home-section-header">
+                <div className="stack" style={{ gap: "4px" }}>
+                  <strong className="profile-section-title home-section-title">Auto</strong>
+                </div>
               </div>
-            )
-          ) : (
-            renderArticleSectionWithLargeLead(carsTabArticles, { limit: 6 })
-          )}
-        </section>
 
-        {autoTrendingVideos.length > 0
-          ? renderTallTrendingQuickWatchRow("Auto Videos", autoTrendingVideos, "auto-trending-videos")
-          : null}
+              {carsTabArticles.length === 0 ? (
+                isCarsPreviewLoading ? (
+                  <div className="muted">Loading auto stories...</div>
+                ) : (
+                  <div className="empty-state compact-empty-state">
+                    <strong>No auto stories yet</strong>
+                    <span>Check back shortly for fresh auto and EV coverage.</span>
+                  </div>
+                )
+              ) : (
+                renderArticleSectionWithLargeLead(carsTabArticles, { limit: 6 })
+              )}
+            </section>
+
+            {autoTrendingVideos.length > 0
+              ? renderTallTrendingQuickWatchRow("Auto Videos", autoTrendingVideos, "auto-trending-videos")
+              : null}
+          </>
+        ) : null}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
@@ -19280,6 +19407,47 @@ export default function Home() {
                   >
                     {renderCompactSideImageArticle(article, {
                       imageFallbackLabel: "Opinion",
+                      showRank: index + 1,
+                    })}
+                  </div>
+                ))}
+            </div>
+          )}
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Crime</strong>
+            </div>
+          </div>
+
+          {crimeTabArticles.length === 0 ? (
+            isCrimePreviewLoading ? (
+              <div className="muted">Loading crime stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No crime stories yet</strong>
+                <span>Check back shortly for fresh crime and public safety coverage.</span>
+              </div>
+            )
+          ) : (
+            <div className="stack home-section-list top-trending-card-rail">
+              {trendingCrimeLeadArticle ? renderLargeImageArticleCard(trendingCrimeLeadArticle) : null}
+              {crimeTabArticles
+                .filter((article) =>
+                  trendingCrimeLeadArticle
+                    ? getArticleDeduplicationKey(article) !==
+                      getArticleDeduplicationKey(trendingCrimeLeadArticle)
+                    : true
+                )
+                .slice(0, 5)
+                .map((article, index) => (
+                  <div
+                    key={`trending-crime-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                  >
+                    {renderCompactSideImageArticle(article, {
+                      imageFallbackLabel: "Crime",
                       showRank: index + 1,
                     })}
                   </div>
