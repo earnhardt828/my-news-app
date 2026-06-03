@@ -17439,6 +17439,10 @@ export default function Home() {
     keyPrefix: string,
     playerTab: "news" | "sports" = "news"
   ) => {
+    if (title === todayLabel) {
+      console.log("TRENDING_DATE_LABEL_RENDERED", title);
+    }
+
     if (videosForRow.length === 0) {
       return (
         <section className="home-section-block home-section-plain quick-watch-row">

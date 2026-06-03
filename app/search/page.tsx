@@ -122,7 +122,7 @@ const TRUSTED_SEARCH_SOURCES = [
   "Space.com",
 ] as const;
 
-type SearchTab = "articles" | "users" | "trending";
+type SearchTab = "articles" | "users";
 
 const TITLE_STOP_WORDS = new Set([
   "after",
@@ -577,7 +577,7 @@ function normalizeSearchPayload(payload: NewsArticle[] | SearchNewsResponse) {
 export default function Search() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<SearchTab>("trending");
+  const [activeTab, setActiveTab] = useState<SearchTab>("articles");
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [searchArticles, setSearchArticles] = useState<NewsArticle[]>([]);
   const [sourceFallbackArticles, setSourceFallbackArticles] = useState<NewsArticle[]>([]);
@@ -598,6 +598,11 @@ export default function Search() {
   const loadMoreSearchSentinelRef = useRef<HTMLDivElement | null>(null);
   const resultsAreaRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextSearchPageRef = useRef(false);
+
+  useEffect(() => {
+    console.log("SEARCH_TRENDING_TAB_REMOVED", true);
+    console.log("SEARCH_TABS_MOVED_UP", true);
+  }, []);
 
   useEffect(() => {
     const pendingReturnState = consumePendingArticleReturnState();
@@ -1339,11 +1344,7 @@ export default function Search() {
             placeholder="Search news, sources, or topics"
             value={query}
             onChange={(event) => {
-              const nextQuery = event.target.value;
-              setQuery(nextQuery);
-              if (nextQuery.trim() && activeTab === "trending") {
-                setActiveTab("articles");
-              }
+              setQuery(event.target.value);
             }}
           />
         </label>
@@ -1369,19 +1370,10 @@ export default function Search() {
           >
             Users
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "trending"}
-            className={`toolbar-pill ${activeTab === "trending" ? "toolbar-pill-active" : ""}`}
-            onClick={() => setActiveTab("trending")}
-          >
-            Trending
-          </button>
         </div>
       </div>
 
-      {activeTab === "trending" || !query.trim() ? (
+      {!query.trim() ? (
         <section className="section-card stack">
           <div className="search-section-header">
             <strong className="search-section-title">Trending Now</strong>

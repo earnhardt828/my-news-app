@@ -37,19 +37,26 @@ function normalizePodcastArtworkUrl(value: string | null | undefined) {
   return trimmed;
 }
 
+function buildLocalPodcastCoverCandidates(slug: string) {
+  return [
+    `/podcast-covers/${slug}.png`,
+    `/podcast-covers/${slug}.jpg`,
+    `/podcast-covers/${slug}.webp`,
+  ];
+}
+
 function getPodcastCardImageCandidates(show: PodcastShow) {
   const unique = new Set<string>();
-  const localCover = `/podcast-covers/${show.slug}.png`;
   const candidates = [
-    show.image,
+    ...buildLocalPodcastCoverCandidates(show.slug),
     show.artworkUrl600,
     show.artworkUrl100,
+    show.image,
     show.artwork,
     show.podcastImage,
     show.feedImage,
     show.itunesImage,
     show.coverArt,
-    localCover,
   ]
     .map((value) => normalizePodcastArtworkUrl(value))
     .filter((value): value is string => Boolean(value))
@@ -109,10 +116,24 @@ function PodcastSectionRow({
               slug: show.slug,
               imageUrl,
             });
+            if (imageUrl.startsWith("/podcast-covers/")) {
+              console.log("PODCAST_LOCAL_COVER_USED", {
+                slug: show.slug,
+                imageUrl,
+              });
+            } else {
+              console.log("PODCAST_REMOTE_COVER_USED", {
+                slug: show.slug,
+                imageUrl,
+              });
+            }
           } else {
             console.log("PODCAST CARD IMAGE_MISSING", {
               slug: show.slug,
               imageUrl,
+            });
+            console.log("PODCAST_COVER_MISSING", {
+              slug: show.slug,
             });
           }
 
@@ -200,6 +221,7 @@ export default function PodcastsPage() {
       fallbackCount: directory.shows.length,
       podcastIndexBackgroundOnly: PODCAST_INDEX_BACKGROUND_ONLY,
     });
+    console.log("PODCAST_COVERS_SYNCED", true);
   }, []);
 
   useEffect(() => {

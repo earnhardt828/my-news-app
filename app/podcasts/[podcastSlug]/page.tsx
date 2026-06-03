@@ -27,19 +27,27 @@ function normalizePodcastArtworkUrl(value: string | null | undefined) {
   return trimmed;
 }
 
+function buildLocalPodcastCoverCandidates(slug: string) {
+  return [
+    `/podcast-covers/${slug}.png`,
+    `/podcast-covers/${slug}.jpg`,
+    `/podcast-covers/${slug}.webp`,
+  ];
+}
+
 function getPodcastImageCandidates(show: PodcastShow) {
   const unique = new Set<string>();
 
   return [
-    show.image,
+    ...buildLocalPodcastCoverCandidates(show.slug),
     show.artworkUrl600,
     show.artworkUrl100,
+    show.image,
     show.artwork,
     show.podcastImage,
     show.feedImage,
     show.itunesImage,
     show.coverArt,
-    `/podcast-covers/${show.slug}.png`,
   ]
     .map((value) => normalizePodcastArtworkUrl(value))
     .filter((value): value is string => Boolean(value))
@@ -149,6 +157,22 @@ export default function PodcastShowPage() {
   const imageCandidates = getPodcastImageCandidates(show);
   const imageUrl =
     imageCandidates.find((candidate) => !failedImages[`${show.slug}:${candidate}`]) ?? null;
+
+  if (imageUrl?.startsWith("/podcast-covers/")) {
+    console.log("PODCAST_LOCAL_COVER_USED", {
+      slug: show.slug,
+      imageUrl,
+    });
+  } else if (imageUrl) {
+    console.log("PODCAST_REMOTE_COVER_USED", {
+      slug: show.slug,
+      imageUrl,
+    });
+  } else {
+    console.log("PODCAST_COVER_MISSING", {
+      slug: show.slug,
+    });
+  }
 
   return (
     <section className="page-shell home-sections-shell">
