@@ -16412,8 +16412,13 @@ export default function Home() {
   const renderQuickWatchRow = (
     compact = false,
     useUniformTallFrame = false,
-    useUniformWideFrame = false
+    useUniformWideFrame = false,
+    title = "Quick Watch"
   ) => {
+    if (title === todayLabel) {
+      console.log("TRENDING_DATE_LABEL_RENDERED", title);
+    }
+
     if (myNewsQuickWatchVideos.length === 0) {
       return (
         <section
@@ -16423,7 +16428,7 @@ export default function Home() {
         >
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Quick Watch</strong>
+              <strong className="profile-section-title home-section-title">{title}</strong>
             </div>
           </div>
           <div className="empty-state compact-empty-state">
@@ -16441,10 +16446,10 @@ export default function Home() {
       >
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
-            <strong className="profile-section-title home-section-title">Quick Watch</strong>
+            <strong className="profile-section-title home-section-title">{title}</strong>
           </div>
         </div>
-        <div className="quick-watch-scroll" role="list" aria-label="Quick watch videos">
+        <div className="quick-watch-scroll" role="list" aria-label={title}>
           {myNewsQuickWatchVideos.map((video) => (
             <div
               key={video.id}
@@ -16466,7 +16471,7 @@ export default function Home() {
                 }}
                 autoplayKey={`quickwatch:${video.id}`}
                 previewDurationMs={compact ? null : 4000}
-                label="Quick Watch"
+                label={title}
                 hideActions
                 useRelativeTime
                 className={`video-card-inline quick-watch-video-card ${
@@ -18759,7 +18764,7 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        {renderQuickWatchRow(false, false, true)}
+        {renderQuickWatchRow(false, false, true, todayLabel)}
 
         {renderBreakingNewsRow()}
 

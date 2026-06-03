@@ -5827,8 +5827,8 @@ input {
 }
 
 .profile-content-stack {
-  gap: 12px;
-  margin-top: -8px;
+  gap: 8px;
+  margin-top: -18px;
 }
 
 .profile-bio-button {

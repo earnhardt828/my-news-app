@@ -169,9 +169,8 @@ export default function AppHeader() {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="m14.7 6.3 3 3" />
-          <path d="m4.9 19.1 6.9-6.9 3 3-6.9 6.9H4.9v-3Z" />
-          <path d="m13.6 7.4 1.9-1.9a2.1 2.1 0 0 1 3 0l.9.9a2.1 2.1 0 0 1 0 3l-1.9 1.9" />
+          <path d="M12 20h9" />
+          <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5Z" />
         </svg>
       </span>
     </Link>
@@ -573,6 +572,25 @@ export default function AppHeader() {
         </button>
         <div className="app-header-detail-center">
           <span className="app-header-detail-title">Following</span>
+        </div>
+        <div className="app-header-detail-spacer" />
+      </header>
+    );
+  }
+
+  if (pathname === "/notifications") {
+    return (
+      <header className="app-header app-header-detail">
+        <button
+          type="button"
+          className="app-header-icon-button"
+          aria-label="Close notifications"
+          onClick={() => closeTo("/")}
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+        <div className="app-header-detail-center">
+          <span className="app-header-detail-title">Notifications</span>
         </div>
         <div className="app-header-detail-spacer" />
       </header>
