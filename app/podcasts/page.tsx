@@ -20,15 +20,57 @@ type PodcastEpisode = {
   duration: string | null;
 };
 
-function getPodcastCardImage(show: PodcastShow) {
+function normalizePodcastArtworkUrl(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("http://")) {
+    return `https://${trimmed.slice("http://".length)}`;
+  }
+
+  return trimmed;
+}
+
+function getPodcastCardImageCandidates(show: PodcastShow) {
+  const unique = new Set<string>();
+  const localCover = `/podcast-covers/${show.slug}.png`;
+  const candidates = [
+    show.image,
+    show.artworkUrl600,
+    show.artworkUrl100,
+    show.artwork,
+    show.podcastImage,
+    show.feedImage,
+    show.itunesImage,
+    show.coverArt,
+    localCover,
+  ]
+    .map((value) => normalizePodcastArtworkUrl(value))
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => {
+      if (unique.has(value)) {
+        return false;
+      }
+      unique.add(value);
+      return true;
+    });
+
+  return candidates;
+}
+
+function getPodcastCardDescription(show: PodcastShow) {
   return (
-    show.image ||
-    show.artworkUrl600 ||
-    show.artworkUrl100 ||
-    show.artwork ||
-    show.podcastImage ||
-    show.coverArt ||
-    null
+    show.description ||
+    show.summary ||
+    show.artistName ||
+    show.publisher ||
+    "Latest episodes and updates from this podcast."
   );
 }
 
@@ -56,9 +98,11 @@ function PodcastSectionRow({
       <div className="podcast-scroll-row" role="list" aria-label={title}>
         {shows.map((show) => {
           const latestEpisode = show.latestEpisode;
-          const imageUrl = getPodcastCardImage(show);
+          const imageCandidates = getPodcastCardImageCandidates(show);
+          const imageUrl =
+            imageCandidates.find((candidate) => !failedImages[`${show.slug}:${candidate}`]) ?? null;
           const imageKey = `${show.slug}:${imageUrl ?? "none"}`;
-          const showImage = Boolean(imageUrl) && !failedImages[imageKey];
+          const showImage = Boolean(imageUrl);
 
           if (showImage && imageUrl) {
             console.log("PODCAST CARD IMAGE_USED", {
@@ -105,7 +149,7 @@ function PodcastSectionRow({
                 <strong className="podcast-card-title">{show.title}</strong>
                 <span className="podcast-card-publisher">{show.publisher}</span>
                 <p className="podcast-card-episode-title">
-                  {latestEpisode?.title || show.description || "Feed details are refreshing."}
+                  {getPodcastCardDescription(show)}
                 </p>
                 <span className="podcast-card-date">
                   {latestEpisode?.publishedAt

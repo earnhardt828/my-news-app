@@ -29,12 +29,16 @@ export type PodcastShow = {
   slug: string;
   title: string;
   description: string | null;
+  summary?: string | null;
   publisher: string;
+  artistName?: string | null;
   image: string | null;
   artworkUrl600?: string | null;
   artworkUrl100?: string | null;
   artwork?: string | null;
   podcastImage?: string | null;
+  feedImage?: string | null;
+  itunesImage?: string | null;
   coverArt: string | null;
   category: PodcastFeedCategory;
   feedUrl: string;
@@ -66,12 +70,16 @@ type DiscoveryCandidate = {
   slug: string;
   title: string;
   description: string | null;
+  summary?: string | null;
   publisher: string;
+  artistName?: string | null;
   image: string | null;
   artworkUrl600?: string | null;
   artworkUrl100?: string | null;
   artwork?: string | null;
   podcastImage?: string | null;
+  feedImage?: string | null;
+  itunesImage?: string | null;
   category: PodcastFeedCategory;
   feedUrl: string;
   episodeCount: number;
@@ -239,12 +247,16 @@ function createFallbackShowFromCandidate(candidate: DiscoveryCandidate): Podcast
     slug: candidate.slug || slugifyValue(candidate.title),
     title: candidate.title,
     description: candidate.description,
+    summary: candidate.summary ?? candidate.description,
     publisher: candidate.publisher,
+    artistName: candidate.artistName ?? candidate.publisher,
     image: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
     artworkUrl600: looksLikeUsablePodcastImage(candidate.artworkUrl600) ? candidate.artworkUrl600 : null,
     artworkUrl100: looksLikeUsablePodcastImage(candidate.artworkUrl100) ? candidate.artworkUrl100 : null,
     artwork: looksLikeUsablePodcastImage(candidate.artwork) ? candidate.artwork : null,
     podcastImage: looksLikeUsablePodcastImage(candidate.podcastImage) ? candidate.podcastImage : null,
+    feedImage: looksLikeUsablePodcastImage(candidate.feedImage) ? candidate.feedImage : null,
+    itunesImage: looksLikeUsablePodcastImage(candidate.itunesImage) ? candidate.itunesImage : null,
     coverArt: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
     category: candidate.category,
     feedUrl: candidate.feedUrl,
@@ -324,12 +336,16 @@ async function fetchPodcastShow(candidate: DiscoveryCandidate): Promise<PodcastS
     slug: candidate.slug || slugifyValue(showTitle),
     title: showTitle,
     description,
+    summary: description,
     publisher,
+    artistName: publisher,
     image: looksLikeUsablePodcastImage(coverArt) ? coverArt : null,
     artworkUrl600: null,
     artworkUrl100: null,
     artwork: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
     podcastImage: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
+    feedImage: looksLikeUsablePodcastImage(coverArt) ? coverArt : null,
+    itunesImage: looksLikeUsablePodcastImage(candidate.image) ? candidate.image : null,
     coverArt: looksLikeUsablePodcastImage(coverArt) ? coverArt : null,
     category: candidate.category,
     feedUrl: candidate.feedUrl,
@@ -393,12 +409,16 @@ async function fetchItunesPodcasts(
         slug,
         title,
         description: result.primaryGenreName?.trim() || null,
+        summary: result.primaryGenreName?.trim() || null,
         publisher,
+        artistName: publisher,
         image,
         artworkUrl600: result.artworkUrl600?.trim() || null,
         artworkUrl100: result.artworkUrl100?.trim() || null,
         artwork: image,
         podcastImage: image,
+        feedImage: null,
+        itunesImage: image,
         category,
         feedUrl,
         episodeCount: Number(result.trackCount ?? 0),
@@ -483,8 +503,16 @@ async function fetchPodcastIndexPodcasts(
         slug: slugifyValue(`${title}-${publisher}`),
         title,
         description: stripHtml(feed.description ?? null),
+        summary: stripHtml(feed.description ?? null),
         publisher,
+        artistName: publisher,
         image,
+        artworkUrl600: image,
+        artworkUrl100: image,
+        artwork: image,
+        podcastImage: image,
+        feedImage: null,
+        itunesImage: null,
         category,
         feedUrl,
         episodeCount: Number(feed.episodeCount ?? 0),
@@ -564,8 +592,16 @@ async function fetchListenNotesPodcasts(
         slug: slugifyValue(`${title}-${publisher}`),
         title,
         description: stripHtml(result.description_original ?? null),
+        summary: stripHtml(result.description_original ?? null),
         publisher,
+        artistName: publisher,
         image,
+        artworkUrl600: image,
+        artworkUrl100: image,
+        artwork: image,
+        podcastImage: image,
+        feedImage: null,
+        itunesImage: null,
         category,
         feedUrl,
         episodeCount: Number(result.total_episodes ?? 0),
@@ -619,11 +655,15 @@ function dedupeDiscoveryCandidates(candidates: DiscoveryCandidate[]) {
       const merged: DiscoveryCandidate = {
         ...existing,
         ...candidate,
+        summary: existing.summary || candidate.summary || existing.description || candidate.description,
+        artistName: existing.artistName || candidate.artistName || existing.publisher || candidate.publisher,
         image: existing.image || candidate.image,
         artworkUrl600: existing.artworkUrl600 || candidate.artworkUrl600 || existing.image || candidate.image,
         artworkUrl100: existing.artworkUrl100 || candidate.artworkUrl100 || candidate.image,
         artwork: existing.artwork || candidate.artwork || existing.image || candidate.image,
         podcastImage: existing.podcastImage || candidate.podcastImage || existing.image || candidate.image,
+        feedImage: existing.feedImage || candidate.feedImage || null,
+        itunesImage: existing.itunesImage || candidate.itunesImage || candidate.image || null,
         feedUrl: existing.feedUrl || candidate.feedUrl,
         searchTerms: Array.from(new Set([...(existing.searchTerms ?? []), ...(candidate.searchTerms ?? [])])),
         score: Math.max(existing.score, candidate.score),

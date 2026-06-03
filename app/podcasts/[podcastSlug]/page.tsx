@@ -9,7 +9,65 @@ import {
   type PodcastEpisode,
   type PodcastShow,
 } from "../../../lib/podcasts";
-import { formatRelativeTimestamp } from "../../../lib/relative-time";
+
+function normalizePodcastArtworkUrl(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("http://")) {
+    return `https://${trimmed.slice("http://".length)}`;
+  }
+
+  return trimmed;
+}
+
+function getPodcastImageCandidates(show: PodcastShow) {
+  const unique = new Set<string>();
+
+  return [
+    show.image,
+    show.artworkUrl600,
+    show.artworkUrl100,
+    show.artwork,
+    show.podcastImage,
+    show.feedImage,
+    show.itunesImage,
+    show.coverArt,
+    `/podcast-covers/${show.slug}.png`,
+  ]
+    .map((value) => normalizePodcastArtworkUrl(value))
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => {
+      if (unique.has(value)) {
+        return false;
+      }
+      unique.add(value);
+      return true;
+    });
+}
+
+function formatPodcastDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(timestamp));
+}
 
 type PodcastShowResponse = {
   podcast: {
@@ -24,6 +82,7 @@ export default function PodcastShowPage() {
     buildStaticFallbackPodcastDirectory().shows.find((entry) => entry.slug === params.podcastSlug) ?? null;
   const [show, setShow] = useState<PodcastShow | null>(fallbackShow);
   const [isLoadingEpisodes, setIsLoadingEpisodes] = useState(true);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     console.log("PODCAST DETAIL OPENED", { podcastSlug: params.podcastSlug });
@@ -87,19 +146,29 @@ export default function PodcastShowPage() {
     );
   }
 
+  const imageCandidates = getPodcastImageCandidates(show);
+  const imageUrl =
+    imageCandidates.find((candidate) => !failedImages[`${show.slug}:${candidate}`]) ?? null;
+
   return (
     <section className="page-shell home-sections-shell">
       <section className="home-section-block home-section-plain home-top-trending-block">
         <div className="podcast-player-shell">
           <div className="podcast-player-hero">
             <div className="podcast-player-art-shell" aria-hidden="true">
-              {show.image || show.coverArt ? (
+              {imageUrl ? (
                 <img
-                  src={show.image || show.coverArt || ""}
+                  src={imageUrl}
                   alt={show.title}
                   className="podcast-player-art"
                   loading="lazy"
                   decoding="async"
+                  onError={() => {
+                    setFailedImages((prev) => ({
+                      ...prev,
+                      [`${show.slug}:${imageUrl}`]: true,
+                    }));
+                  }}
                 />
               ) : (
                 <div className="podcast-player-art podcast-card-art-fallback">
@@ -113,9 +182,13 @@ export default function PodcastShowPage() {
               <span className="podcast-card-date">
                 {show.episodeCount > 0 ? `${show.episodeCount} episodes` : "Podcast"}
               </span>
-              {show.description ? (
-                <p className="podcast-episode-description">{show.description}</p>
-              ) : null}
+              <p className="podcast-episode-description">
+                {show.description ||
+                  show.summary ||
+                  show.artistName ||
+                  show.publisher ||
+                  "Latest episodes and updates from this podcast."}
+              </p>
             </div>
           </div>
 
@@ -136,10 +209,13 @@ export default function PodcastShowPage() {
                   className="section-card stack"
                 >
                   <strong className="profile-section-title-sm">{episode.title}</strong>
-                  <span className="muted">
-                    {formatRelativeTimestamp(episode.publishedAt)}
-                    {episode.duration ? ` · ${episode.duration}` : ""}
-                  </span>
+                  {formatPodcastDate(episode.publishedAt) || episode.duration ? (
+                    <span className="muted">
+                      {[formatPodcastDate(episode.publishedAt), episode.duration]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  ) : null}
                 </Link>
               ))}
             </div>
