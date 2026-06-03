@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../lib/api-base";
+import {
+  buildStaticFallbackPodcastDirectory,
+  type PodcastDirectory,
+  type PodcastShow,
+} from "../../lib/podcasts";
 import { formatRelativeTimestamp } from "../../lib/relative-time";
 
 type PodcastEpisode = {
@@ -12,35 +17,6 @@ type PodcastEpisode = {
   description: string | null;
   audioUrl: string | null;
   duration: string | null;
-};
-
-type PodcastShow = {
-  id: string;
-  slug: string;
-  title: string;
-  description: string | null;
-  publisher: string;
-  category: "Science" | "True Crime" | "Arts" | "Business" | "Sports" | "Politics";
-  image: string | null;
-  coverArt: string | null;
-  featured: boolean;
-  feedUrl: string;
-  episodeCount: number;
-  sourceProvider: string;
-  latestEpisode: PodcastEpisode | null;
-};
-
-type PodcastDirectoryResponse = {
-  shows: PodcastShow[];
-  sections: {
-    featured: PodcastShow[];
-    science: PodcastShow[];
-    trueCrime: PodcastShow[];
-    arts: PodcastShow[];
-    business: PodcastShow[];
-    sports: PodcastShow[];
-    politics: PodcastShow[];
-  };
 };
 
 function PodcastSectionRow({
@@ -123,14 +99,31 @@ function PodcastSectionRow({
 }
 
 export default function PodcastsPage() {
-  const [directory, setDirectory] = useState<PodcastDirectoryResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [directory, setDirectory] = useState<PodcastDirectory>(
+    buildStaticFallbackPodcastDirectory()
+  );
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadPodcasts() {
+      const filteredFallbackDirectory = buildStaticFallbackPodcastDirectory(searchQuery.trim() || undefined);
+      const baseDirectory =
+        filteredFallbackDirectory.shows.length > 0
+          ? filteredFallbackDirectory
+          : buildStaticFallbackPodcastDirectory();
+      if (isMounted) {
+        setDirectory(baseDirectory);
+        if (baseDirectory.shows.length > 0) {
+          console.log("PODCAST EMPTY_STATE_BLOCKED", {
+            searchQuery,
+            count: baseDirectory.shows.length,
+          });
+        }
+      }
+
       setIsLoading(true);
 
       try {
@@ -140,28 +133,29 @@ export default function PodcastsPage() {
         }
 
         const response = await apiFetch(`/api/podcasts${params.toString() ? `?${params.toString()}` : ""}`);
-        const payload = (await response.json()) as PodcastDirectoryResponse;
+        const payload = (await response.json()) as PodcastDirectory;
 
         if (!isMounted) {
           return;
         }
 
-        setDirectory(payload);
+        if (payload.shows.length > 0) {
+          setDirectory(payload);
+        } else {
+          setDirectory(baseDirectory);
+          console.log("PODCAST EMPTY_STATE_BLOCKED", {
+            searchQuery,
+            count: baseDirectory.shows.length,
+          });
+        }
       } catch (error) {
         console.error("PODCAST DIRECTORY LOAD FAILED", error);
 
         if (isMounted) {
-          setDirectory({
-            shows: [],
-            sections: {
-              featured: [],
-              science: [],
-              trueCrime: [],
-              arts: [],
-              business: [],
-              sports: [],
-              politics: [],
-            },
+          setDirectory(baseDirectory);
+          console.log("PODCAST EMPTY_STATE_BLOCKED", {
+            searchQuery,
+            count: baseDirectory.shows.length,
           });
         }
       } finally {

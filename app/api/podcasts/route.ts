@@ -1,4 +1,8 @@
-import { fetchPodcastDirectory, fetchPodcastEpisodeBySlug } from "../../../lib/podcasts";
+import {
+  buildStaticFallbackPodcastDirectory,
+  fetchPodcastDirectory,
+  fetchPodcastEpisodeBySlug,
+} from "../../../lib/podcasts";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -21,19 +25,9 @@ export async function GET(request: Request) {
     return Response.json(directory);
   } catch (error) {
     console.error("PODCAST API ERROR", error);
+    const filteredFallback = buildStaticFallbackPodcastDirectory(query || undefined);
     return Response.json(
-      {
-        shows: [],
-        sections: {
-          featured: [],
-          science: [],
-          trueCrime: [],
-          arts: [],
-          business: [],
-          sports: [],
-          politics: [],
-        },
-      },
+      filteredFallback.shows.length > 0 ? filteredFallback : buildStaticFallbackPodcastDirectory(),
       { status: 200 }
     );
   }

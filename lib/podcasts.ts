@@ -43,7 +43,7 @@ export type PodcastShow = {
   lastPublishedAt: string | null;
 };
 
-type PodcastDirectory = {
+export type PodcastDirectory = {
   shows: PodcastShow[];
   sections: Record<
     | "featured"
@@ -587,6 +587,28 @@ function dedupeDiscoveryCandidates(candidates: DiscoveryCandidate[]) {
   return deduped;
 }
 
+export function buildStaticFallbackPodcastDirectory(searchQuery?: string): PodcastDirectory {
+  const fallbackShows = PODCAST_FEEDS.map((feed) =>
+    createFallbackShowFromCandidate({
+      ...createCandidateFromFeed(feed),
+      score: scoreDiscoveryCandidate(createCandidateFromFeed(feed)),
+    })
+  ).filter((show) =>
+    !searchQuery
+      ? true
+      : [show.title, show.publisher, show.category, show.description]
+          .filter(Boolean)
+          .some((value) => normalizePodcastText(value).includes(normalizePodcastText(searchQuery)))
+  );
+
+  console.log("PODCAST FALLBACK BASE COUNT", fallbackShows.length);
+
+  return {
+    shows: fallbackShows,
+    sections: buildPodcastSections(fallbackShows),
+  };
+}
+
 async function fetchDiscoveryCandidates(searchQuery?: string) {
   const baseCandidates = PODCAST_FEEDS.map(createCandidateFromFeed);
   const queriesByCategory = Object.entries(PODCAST_CATEGORY_SEARCH_TERMS) as Array<
@@ -607,6 +629,17 @@ async function fetchDiscoveryCandidates(searchQuery?: string) {
   const settledResults = await Promise.allSettled(discoveryPromises);
   const discoveredCandidates = settledResults.flatMap((result) =>
     result.status === "fulfilled" ? result.value : []
+  );
+
+  console.log(
+    "ITUNES PODCAST RESULT COUNT",
+    discoveredCandidates.filter(
+      (candidate) => candidate.sourceProvider === "itunes" || candidate.sourceProvider === "apple"
+    ).length
+  );
+  console.log(
+    "PODCASTINDEX RESULT COUNT",
+    discoveredCandidates.filter((candidate) => candidate.sourceProvider === "podcast-index").length
   );
 
   const providerCounts = discoveredCandidates.reduce<Record<string, number>>((accumulator, candidate) => {
@@ -729,6 +762,8 @@ export async function fetchPodcastDirectory(searchQuery?: string): Promise<Podca
   if (searchQuery) {
     console.log("PODCAST_SEARCH_COUNT", allShows.length);
   }
+
+  console.log("PODCAST FINAL RENDER COUNT", allShows.length);
 
   return {
     shows: allShows,
