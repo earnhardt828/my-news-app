@@ -707,6 +707,20 @@ function isDedicatedMlbCategory(category: string) {
   const slug = normalized.toLowerCase().replace(/\s+/g, "-");
   return normalized === "MLB" || slug === "baseball" || slug === "major-league-baseball";
 }
+
+function getArticleProviderLabel(provider: string | null | undefined) {
+  const normalizedProvider = cleanDisplayText(provider ?? "").trim().toLowerCase();
+
+  if (normalizedProvider === "guardian") {
+    return "guardian";
+  }
+
+  if (normalizedProvider === "nyt") {
+    return "nyt";
+  }
+
+  return "current";
+}
 const CELEBRITY_FEED_QUERY =
   "entertainment news | celebrity news | celebrity gossip | Hollywood news | music celebrity news | TMZ | People | Entertainment Tonight | Access Hollywood | Extra | Deadline | Entertainment Weekly | E! News | Variety | The Hollywood Reporter | Page Six | Us Weekly | Billboard | Rolling Stone | Vulture | IndieWire | Screen Rant | Collider | TheWrap | Hollywood Life | Pitchfork | Complex | NME | TVLine | Deadline TV | Variety TV | Billboard Music | Rolling Stone Music";
 const TECHNOLOGY_FEED_QUERY =
@@ -2743,6 +2757,7 @@ type Article = {
   likedByCurrentUser: boolean;
   comments: Comment[];
   saved: boolean;
+  provider?: string | null;
 };
 
 type LikeUser = {
@@ -15713,6 +15728,12 @@ export default function Home() {
                   <span className="trending-source-category-inline">
                     {displayCategoryLabel}
                   </span>
+                  <span className="trending-source-category-separator" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="trending-source-category-inline">
+                    {getArticleProviderLabel(article.provider)}
+                  </span>
                 </div>
               ) : (
                 <Link
@@ -15733,6 +15754,12 @@ export default function Home() {
                     </span>
                     <span className="trending-source-category-inline">
                       {displayCategoryLabel}
+                    </span>
+                    <span className="trending-source-category-separator" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="trending-source-category-inline">
+                      {getArticleProviderLabel(article.provider)}
                     </span>
                   </div>
                 </Link>
@@ -18075,6 +18102,12 @@ export default function Home() {
                 className="top-trending-list-source-mark"
                 fallbackMode="text"
               />
+              <span className="top-trending-list-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="top-trending-list-date">
+                {getArticleProviderLabel(article.provider)}
+              </span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>

@@ -48,7 +48,22 @@ type FeedArticle = {
   publishedAt?: string | null;
   content?: string | null;
   saved: boolean;
+  provider?: string | null;
 };
+
+function getFeedProviderLabel(provider: string | null | undefined) {
+  const normalizedProvider = cleanDisplayText(provider ?? "").trim().toLowerCase();
+
+  if (normalizedProvider === "guardian") {
+    return "guardian";
+  }
+
+  if (normalizedProvider === "nyt") {
+    return "nyt";
+  }
+
+  return "current";
+}
 
 export default function MyFeed() {
   const [articles, setArticles] = useState<FeedArticle[]>([]);
@@ -429,6 +444,12 @@ export default function MyFeed() {
                       <div className="trending-source-brand">
                         <SourceBadge sourceName={article.source} />
                         <span className="trending-source-name">{article.source}</span>
+                        <span className="trending-source-category-separator" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="trending-source-name">
+                          {getFeedProviderLabel(article.provider)}
+                        </span>
                       </div>
                     </Link>
                       <Link

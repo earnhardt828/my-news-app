@@ -40,6 +40,7 @@ type NewsArticle = {
   url?: string | null;
   publishedAt?: string | null;
   content?: string | null;
+  provider?: string | null;
 };
 
 type UserProfileSearchResult = {
@@ -227,6 +228,20 @@ function isTrustedSearchSource(sourceName: string | null | undefined) {
       normalizedTrustedSource.includes(normalizedSource)
     );
   });
+}
+
+function getSearchProviderLabel(provider: string | null | undefined) {
+  const normalizedProvider = cleanDisplayText(provider ?? "").trim().toLowerCase();
+
+  if (normalizedProvider === "guardian") {
+    return "guardian";
+  }
+
+  if (normalizedProvider === "nyt") {
+    return "nyt";
+  }
+
+  return "current";
 }
 
 function formatSearchDate(publishedAt?: string | null, fallback?: string) {
@@ -1611,6 +1626,9 @@ export default function Search() {
                                   <span className="trending-source-name">{safeSourceName}</span>
                                 </div>
                               </button>
+                              <span className="chip chip-accent">
+                                {getSearchProviderLabel(article.provider)}
+                              </span>
                               <span className="chip chip-accent">
                                 {getCategoryLabel(safeCategoryName)}
                               </span>

@@ -3099,6 +3099,7 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
   url.searchParams.set("page", String(params.page));
   url.searchParams.set("show-fields", "headline,trailText,thumbnail,bodyText");
   url.searchParams.set("q", effectiveQuery);
+  console.log("GUARDIAN REQUEST URL", url.toString().replace(GUARDIAN_API_KEY, "[REDACTED]"));
 
   logProviderRequest("The Guardian", {
     mode: params.mode,
@@ -3109,6 +3110,7 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
   const response = await fetch(url.toString(), {
     next: { revalidate: 600 },
   });
+  console.log("GUARDIAN RESPONSE STATUS", response.status);
 
   if (!response.ok) {
     console.error("The Guardian provider error:", response.status, response.statusText);
@@ -3116,6 +3118,7 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
   }
 
   const data = (await response.json()) as GuardianApiResponse;
+  console.log("GUARDIAN RAW COUNT", data.response?.results?.length ?? 0);
   const normalizedArticles = (data.response?.results ?? [])
     .map((article, index) =>
       buildNormalizedArticle(
@@ -3142,7 +3145,7 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
 
   console.log("GUARDIAN ARTICLE COUNT", normalizedArticles.length);
   console.log(
-    "GUARDIAN IMAGE_ARTICLE_COUNT",
+    "GUARDIAN IMAGE COUNT",
     normalizedArticles.filter((article) => hasRealArticleImage(article)).length
   );
   logProviderArticleStats("The Guardian", normalizedArticles);
@@ -3153,6 +3156,8 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
 }
 
 async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  console.log("NYT API KEY PRESENT", Boolean(NYT_API_KEY));
+
   if (!NYT_API_KEY) {
     logProviderSkip("New York Times", "NYT_API_KEY is missing");
     return { articles: [], hasMore: false };
@@ -3171,16 +3176,19 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
     sections.map(async (section) => {
       const url = new URL(`https://api.nytimes.com/svc/topstories/v2/${section}.json`);
       url.searchParams.set("api-key", NYT_API_KEY);
+      console.log("NYT REQUEST URL", url.toString().replace(NYT_API_KEY, "[REDACTED]"));
 
       const response = await fetch(url.toString(), {
         next: { revalidate: 600 },
       });
+      console.log("NYT RESPONSE STATUS", response.status);
 
       if (!response.ok) {
         throw new Error(`New York Times ${section} failed (${response.status})`);
       }
 
       const payload = (await response.json()) as NytTopStoriesResponse;
+      console.log("NYT RAW COUNT", payload.results?.length ?? 0);
       return { section, results: payload.results ?? [] };
     })
   );
@@ -3213,6 +3221,8 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
       );
     })
     .filter((article) => Boolean(article && hasRealArticleImage(article))) as NormalizedArticle[];
+
+  console.log("NYT IMAGE COUNT", normalizedArticles.length);
 
   logProviderArticleStats("New York Times", normalizedArticles);
   return {

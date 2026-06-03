@@ -32,6 +32,23 @@ function normalizeImageValue(value: string | null | undefined) {
 export function looksLikeLowQualityImageUrl(url: string) {
   const normalizedUrl = url.toLowerCase();
 
+  try {
+    const parsed = new URL(url);
+    const trustedProviderImageHost =
+      parsed.hostname.includes("media.guim.co.uk") ||
+      parsed.hostname.includes("static01.nyt.com") ||
+      parsed.hostname.includes("static.nytimes.com");
+
+    if (
+      trustedProviderImageHost &&
+      !/(placeholder|default|blank|logo|favicon)/.test(`${parsed.pathname}${parsed.search}`.toLowerCase())
+    ) {
+      return false;
+    }
+  } catch {
+    // fall through to the generic heuristics below
+  }
+
   if (
     /(^|[/?_.=-])(thumb|thumbnail|tiny|small)([/?_.=-]|$)/.test(normalizedUrl) ||
     /(80x80|120x|150x|300x)/.test(normalizedUrl)
