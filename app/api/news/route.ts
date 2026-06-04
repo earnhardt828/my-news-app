@@ -149,6 +149,19 @@ type MediaStackApiResponse = {
   }>;
 };
 
+type CurrentsApiResponse = {
+  news?: Array<{
+    id?: string | null;
+    title?: string | null;
+    description?: string | null;
+    url?: string | null;
+    image?: string | null;
+    published?: string | null;
+    author?: string | null;
+    category?: string[] | null;
+  }>;
+};
+
 type GuardianApiResponse = {
   response?: {
     results?: Array<{
@@ -669,6 +682,7 @@ const NEWS_API_KEY =
   process.env.NEXT_PUBLIC_NEWS_API_KEY ??
   "";
 const GNEWS_API_KEY = process.env.GNEWS_API_KEY ?? "";
+const CURRENTS_API_KEY = process.env.CURRENTS_API_KEY ?? "";
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
 const NYT_API_KEY = process.env.NYT_API_KEY ?? "";
 const GUARDIAN_API_KEY = process.env.GUARDIAN_API_KEY ?? "";
@@ -2905,6 +2919,78 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
   };
 }
 
+async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  console.log("CURRENTS_API_KEY_PRESENT", Boolean(CURRENTS_API_KEY));
+
+  if (!CURRENTS_API_KEY) {
+    logProviderSkip("Currents", "CURRENTS_API_KEY is missing");
+    return { articles: [], hasMore: false };
+  }
+
+  const categories = getModeCategories(params.mode, params.categories);
+  const effectiveQuery = getEffectiveQuery(params);
+  const searchTerms = effectiveQuery?.trim() || categories.join(" OR ") || "latest news";
+
+  const url = new URL("https://api.currentsapi.services/v1/search");
+  url.searchParams.set("keywords", searchTerms);
+  url.searchParams.set("language", "en");
+  url.searchParams.set("page_number", String(params.page));
+  url.searchParams.set("page_size", String(Math.min(params.pageSize, 50)));
+  url.searchParams.set("apiKey", CURRENTS_API_KEY);
+
+  logProviderRequest("Currents", {
+    mode: params.mode,
+    page: params.page,
+    query: searchTerms,
+  });
+
+  const response = await fetch(url.toString(), {
+    next: { revalidate: 600 },
+  });
+
+  if (!response.ok) {
+    console.error("Currents provider error:", response.status, response.statusText);
+    return { articles: [], hasMore: false };
+  }
+
+  const data = (await response.json()) as CurrentsApiResponse;
+  const normalizedArticles = (data.news ?? [])
+    .map((article, index) =>
+      buildNormalizedArticle(
+        {
+          title: article.title ?? null,
+          description: article.description ?? null,
+          url: article.url ?? null,
+          imageUrl: article.image ?? null,
+          publishedAt: article.published ?? null,
+          source_name: article.author?.trim() || "Currents",
+          category: article.category?.[0] ?? categories[0] ?? "News",
+        },
+        {
+          source: article.author?.trim() || "Currents",
+          category: article.category?.[0] ?? categories[0] ?? "News",
+          uniqueSeed: `currents-${params.page}-${index}-${article.id ?? article.url ?? "item"}`,
+          fallbackPublishedOffsetHours: index,
+          provider: "currents",
+        }
+      )
+    )
+    .filter((article): article is NormalizedArticle => Boolean(article))
+    .filter((article) => hasUsablePrimaryImageUrl(article.imageUrl));
+
+  console.log("CURRENTS_ARTICLE_COUNT", normalizedArticles.length);
+  console.log(
+    "CURRENTS_IMAGE_ARTICLE_COUNT",
+    normalizedArticles.filter((article) => hasUsablePrimaryImageUrl(article.imageUrl)).length
+  );
+  logProviderArticleStats("Currents", normalizedArticles);
+
+  return {
+    articles: normalizedArticles,
+    hasMore: normalizedArticles.length >= params.pageSize,
+  };
+}
+
 async function resolveNewsDataToken(baseKey: string, page: number, url: URL) {
   if (page <= 1) {
     return "";
@@ -4070,6 +4156,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const providerFetchers = [
     { name: "NewsAPI", run: () => fetchNewsApiArticles(params) },
     { name: "GNews", run: () => fetchGNewsArticles(params) },
+    { name: "Currents", run: () => fetchCurrentsArticles(params) },
     { name: "MediaStack", run: () => fetchMediaStackArticles(params) },
     { name: "The Guardian", run: () => fetchGuardianArticles(params) },
     { name: "New York Times", run: () => fetchNytArticles(params) },
@@ -4122,6 +4209,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     configuredProviders: {
       newsApi: Boolean(NEWS_API_KEY),
       gnews: Boolean(GNEWS_API_KEY),
+      currents: Boolean(CURRENTS_API_KEY),
       mediaStack: Boolean(MEDIASTACK_API_KEY),
       nyt: Boolean(NYT_API_KEY),
       guardian: Boolean(GUARDIAN_API_KEY),
