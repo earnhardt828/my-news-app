@@ -246,6 +246,10 @@ function getSearchProviderLabel(provider: string | null | undefined) {
     return "NYT";
   }
 
+  if (normalizedProvider === "currents") {
+    return "CURRENTS";
+  }
+
   return "CURRENT";
 }
 

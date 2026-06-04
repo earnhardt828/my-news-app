@@ -1736,12 +1736,20 @@ function hasUsablePrimaryImageUrl(imageUrl: string | null | undefined) {
 function getPipelineProviderBucket(provider: string | null | undefined) {
   const normalizedProvider = (provider ?? "").trim().toLowerCase();
 
+  if (normalizedProvider === "gnews") {
+    return "gnews";
+  }
+
   if (normalizedProvider === "guardian") {
     return "guardian";
   }
 
   if (normalizedProvider === "nyt") {
     return "nyt";
+  }
+
+  if (normalizedProvider === "currents") {
+    return "currents";
   }
 
   return "current";
@@ -1756,10 +1764,26 @@ function getPipelineProviderCounts(articles: NormalizedArticle[]) {
     },
     {
       current: 0,
+      gnews: 0,
       guardian: 0,
       nyt: 0,
+      currents: 0,
     }
   );
+}
+
+function getProviderVisibilityScore(provider: string | null | undefined) {
+  const bucket = getPipelineProviderBucket(provider);
+
+  if (bucket === "guardian" || bucket === "nyt") {
+    return 1;
+  }
+
+  if (bucket === "gnews" || bucket === "currents") {
+    return 0.94;
+  }
+
+  return 0.7;
 }
 
 function logProviderArticleStats(providerName: string, articles: NormalizedArticle[]) {
@@ -2268,6 +2292,8 @@ function dedupeArticles(articles: NormalizedArticle[]) {
     const currentTime = getPublishedTime(current);
     const candidateImageScore = getImageScore(candidate);
     const currentImageScore = getImageScore(current);
+    const candidateProviderScore = getProviderVisibilityScore(candidate.provider);
+    const currentProviderScore = getProviderVisibilityScore(current.provider);
 
     if (candidateTime !== currentTime) {
       return candidateTime > currentTime;
@@ -2275,6 +2301,10 @@ function dedupeArticles(articles: NormalizedArticle[]) {
 
     if (candidateImageScore !== currentImageScore) {
       return candidateImageScore > currentImageScore;
+    }
+
+    if (candidateProviderScore !== currentProviderScore) {
+      return candidateProviderScore > currentProviderScore;
     }
 
     return candidate.title.length > current.title.length;
@@ -2323,6 +2353,13 @@ function sortImageFirstArticles(articles: NormalizedArticle[]) {
 
     if (imageDiff !== 0) {
       return imageDiff;
+    }
+
+    const providerDiff =
+      getProviderVisibilityScore(right.provider) - getProviderVisibilityScore(left.provider);
+
+    if (providerDiff !== 0) {
+      return providerDiff;
     }
 
     const qualityDiff =
@@ -2498,11 +2535,13 @@ function sortArticlesForMode(
         getMatchScore(right, params.query) * 3 +
         getSourceQualityScore(right.source, right.url) * 8 +
         getLaunchRecencyScore(right) * 6 +
+        getProviderVisibilityScore(right.provider) * 1.5 +
         getImageBoost(right);
       const leftCompositeScore =
         getMatchScore(left, params.query) * 3 +
         getSourceQualityScore(left.source, left.url) * 8 +
         getLaunchRecencyScore(left) * 6 +
+        getProviderVisibilityScore(left.provider) * 1.5 +
         getImageBoost(left);
       const scoreDiff = rightCompositeScore - leftCompositeScore;
 
@@ -2522,11 +2561,13 @@ function sortArticlesForMode(
         getLocalMatchScore(right, params.location || params.query, params.cityKey) +
         getSourceQualityScore(right.source, right.url) * 22 +
         getLaunchRecencyScore(right) * 18 +
+        getProviderVisibilityScore(right.provider) * 2 +
         getImageBoost(right) * 2;
       const leftCompositeScore =
         getLocalMatchScore(left, params.location || params.query, params.cityKey) +
         getSourceQualityScore(left.source, left.url) * 22 +
         getLaunchRecencyScore(left) * 18 +
+        getProviderVisibilityScore(left.provider) * 2 +
         getImageBoost(left) * 2;
       const scoreDiff = rightCompositeScore - leftCompositeScore;
 
@@ -2556,11 +2597,13 @@ function sortArticlesForMode(
         getMatchScore(right, effectiveQuery) * 3 +
         getSourceQualityScore(right.source, right.url) * 8 +
         getLaunchRecencyScore(right) * 6 +
+        getProviderVisibilityScore(right.provider) * 1.5 +
         getImageBoost(right);
       const leftCompositeScore =
         getMatchScore(left, effectiveQuery) * 3 +
         getSourceQualityScore(left.source, left.url) * 8 +
         getLaunchRecencyScore(left) * 6 +
+        getProviderVisibilityScore(left.provider) * 1.5 +
         getImageBoost(left);
       const scoreDiff = rightCompositeScore - leftCompositeScore;
 
@@ -2579,11 +2622,16 @@ function sortArticlesForMode(
       const qualityDiff =
         getSourceQualityScore(right.source, right.url) -
         getSourceQualityScore(left.source, left.url);
+      const providerDiff =
+        getProviderVisibilityScore(right.provider) - getProviderVisibilityScore(left.provider);
       const imageDiff = getImageBoost(right) - getImageBoost(left);
       const leftTime = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
       const rightTime = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
       if (imageDiff !== 0) {
         return imageDiff;
+      }
+      if (providerDiff !== 0) {
+        return providerDiff;
       }
       if (rightTime !== leftTime) {
         return rightTime - leftTime;
@@ -2598,10 +2646,12 @@ function sortArticlesForMode(
         const rightCompositeScore =
           getPublishedTime(right) +
           getSourceQualityScore(right.source, right.url) * 1000 +
+          getProviderVisibilityScore(right.provider) * 500 +
           getImageBoost(right) * 1000;
         const leftCompositeScore =
           getPublishedTime(left) +
           getSourceQualityScore(left.source, left.url) * 1000 +
+          getProviderVisibilityScore(left.provider) * 500 +
           getImageBoost(left) * 1000;
         return rightCompositeScore - leftCompositeScore;
       })
@@ -4230,9 +4280,14 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   );
   const combinedProviderCounts = getPipelineProviderCounts(combined);
   console.log("MAIN PIPELINE CURRENT COUNT", combinedProviderCounts.current);
+  console.log("GNEWS_VISIBLE_PIPELINE_COUNT", combinedProviderCounts.gnews);
   console.log("MAIN PIPELINE GUARDIAN COUNT", combinedProviderCounts.guardian);
+  console.log("GUARDIAN_VISIBLE_PIPELINE_COUNT", combinedProviderCounts.guardian);
   console.log("MAIN PIPELINE NYT COUNT", combinedProviderCounts.nyt);
+  console.log("NYT_VISIBLE_PIPELINE_COUNT", combinedProviderCounts.nyt);
+  console.log("CURRENTS_VISIBLE_PIPELINE_COUNT", combinedProviderCounts.currents);
   console.log("MAIN PIPELINE MERGED COUNT", combined.length);
+  console.log("MERGED_VISIBLE_PIPELINE_COUNT", combined.length);
   console.log("NEWS MERGED COUNT", combined.length);
   console.log(
     "NEWS MERGED IMAGE_ONLY COUNT",
@@ -4260,6 +4315,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const finalRealArticles =
     params.mode === "trending" ? balanceTrendingArticles(enrichedRealArticles) : enrichedRealArticles;
   console.log("MAIN PIPELINE FINAL RENDER COUNT", finalRealArticles.length);
+  console.log("FINAL_VISIBLE_PROVIDER_COUNTS", getPipelineProviderCounts(finalRealArticles));
   const realSliced = finalRealArticles.slice(0, params.pageSize);
   const hasMore = providerResponses.some(
     (result) => result.status === "fulfilled" && result.value.hasMore

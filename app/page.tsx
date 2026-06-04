@@ -726,6 +726,10 @@ function getArticleProviderLabel(provider: string | null | undefined) {
     return "NYT";
   }
 
+  if (normalizedProvider === "currents") {
+    return "CURRENTS";
+  }
+
   return "CURRENT";
 }
 const CELEBRITY_FEED_QUERY =

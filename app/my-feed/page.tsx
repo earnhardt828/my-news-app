@@ -66,6 +66,10 @@ function getFeedProviderLabel(provider: string | null | undefined) {
     return "NYT";
   }
 
+  if (normalizedProvider === "currents") {
+    return "CURRENTS";
+  }
+
   return "CURRENT";
 }
 
