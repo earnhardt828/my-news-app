@@ -667,6 +667,14 @@ input {
   letter-spacing: 0.01em;
 }
 
+.provider-debug-raw-grid {
+  display: grid;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .top-trending-list-source-wrap {
   display: inline-flex;
   align-items: center;

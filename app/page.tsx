@@ -2830,6 +2830,13 @@ type StockTickerItem = {
   source: string;
 };
 
+type VisibleProviderDebug = {
+  gnews: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+  guardian: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+  nyt: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+  currents: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+};
+
 const BUSINESS_STOCK_TICKER_ORDER = [
   "AAPL",
   "MSFT",
@@ -2868,6 +2875,13 @@ const TEST_PROVIDER_ARTICLE: Article = {
   comments: [],
   saved: false,
   provider: "gnews",
+};
+
+const EMPTY_VISIBLE_PROVIDER_DEBUG: VisibleProviderDebug = {
+  gnews: { keyPresent: false, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+  guardian: { keyPresent: false, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+  nyt: { keyPresent: false, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+  currents: { keyPresent: false, rawCount: 0, imageCount: 0, rejectedCount: 0 },
 };
 
 type TopicFallbackGroup = {
@@ -2962,6 +2976,12 @@ type PaginatedNewsResponse = {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  providerDebug?: {
+    gnews: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+    guardian: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+    nyt: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+    currents: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+  };
 };
 
 type TrendingFeedItem =
@@ -6550,6 +6570,8 @@ export default function Home() {
   const topTabsRef = useRef<HTMLDivElement | null>(null);
   const cityOptions = SUPPORTED_LOCAL_CITIES;
   const [articles, setArticles] = useState<Article[]>([]);
+  const [visibleProviderDebug, setVisibleProviderDebug] =
+    useState<VisibleProviderDebug>(EMPTY_VISIBLE_PROVIDER_DEBUG);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
     | "trending"
@@ -7529,9 +7551,13 @@ export default function Home() {
           throw new Error(`Home feed request failed with status ${newsRes.status}`);
         }
 
-        newsPayload = normalizeNewsPayload(
-          (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse
-        );
+        const rawNewsPayload = (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse;
+        newsPayload = normalizeNewsPayload(rawNewsPayload);
+        if (!Array.isArray(rawNewsPayload) && rawNewsPayload.providerDebug) {
+          setVisibleProviderDebug(rawNewsPayload.providerDebug);
+        } else if (replace && feedMode === "trending") {
+          setVisibleProviderDebug(EMPTY_VISIBLE_PROVIDER_DEBUG);
+        }
       }
 
       console.log("NEWS API DATA", newsPayload);
@@ -19184,6 +19210,23 @@ export default function Home() {
               <span>GUARDIAN: {visibleProviderCounts.GUARDIAN}</span>
               <span>NYT: {visibleProviderCounts.NYT}</span>
               <span>CURRENTS: {visibleProviderCounts.CURRENTS}</span>
+            </div>
+            <div className="provider-debug-raw-grid">
+              <span>
+                Guardian raw/image/rejected: {visibleProviderDebug.guardian.rawCount}/
+                {visibleProviderDebug.guardian.imageCount}/
+                {visibleProviderDebug.guardian.rejectedCount}
+              </span>
+              <span>
+                NYT raw/image/rejected: {visibleProviderDebug.nyt.rawCount}/
+                {visibleProviderDebug.nyt.imageCount}/
+                {visibleProviderDebug.nyt.rejectedCount}
+              </span>
+              <span>
+                Currents raw/image/rejected: {visibleProviderDebug.currents.rawCount}/
+                {visibleProviderDebug.currents.imageCount}/
+                {visibleProviderDebug.currents.rejectedCount}
+              </span>
             </div>
           </div>
           <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
