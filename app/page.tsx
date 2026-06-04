@@ -56,6 +56,7 @@ import {
   type FavoriteLeagueKey,
   type FavoriteTeamOption,
 } from "../lib/favorite-teams";
+import { PODCAST_FEEDS, type PodcastFeedCategory } from "../lib/podcast-feeds";
 import {
   applyPollVoteUpdate,
   getPollFeedScore,
@@ -741,6 +742,8 @@ const OPINION_FEED_QUERY =
   "Wall Street Journal Opinion | New York Times Opinion | Washington Post Opinions | Bloomberg Opinion | The Atlantic | National Review | The Hill Opinion | USA Today Opinion | Reuters Analysis | AP Analysis | Financial Times Opinion";
 const CRIME_FEED_QUERY =
   "crime news | breaking crime news | public safety news | court case news | police investigation news | AP crime | Reuters crime | CNN crime | NBC News crime | ABC News crime | CBS News crime | USA Today crime | local crime";
+const ART_FEED_QUERY =
+  "art news | museum news | gallery news | public art | art exhibition | contemporary art | arts culture | ArtNews | Hyperallergic | The Art Newspaper | Smithsonian arts | Guardian art | NYT arts";
 const TOPIC_IMAGE_FILENAMES = [
   "africa.png",
   "africas.png",
@@ -2777,6 +2780,20 @@ type LikeUser = {
 };
 
 type EntertainmentSectionKey = "gossip" | "music" | "tv" | "celebrity" | "movies";
+type TrendingPodcastCard = {
+  id: string;
+  slug: string;
+  title: string;
+  publisher: string;
+  category: PodcastFeedCategory;
+  image?: string | null;
+  artworkUrl600?: string | null;
+  artworkUrl100?: string | null;
+  artwork?: string | null;
+  podcastImage?: string | null;
+  feedImage?: string | null;
+  itunesImage?: string | null;
+};
 
 type PopularMusicAlbum = {
   id: string;
@@ -3760,6 +3777,54 @@ function formatFreshnessTime(
   fallback?: string | null
 ) {
   return formatRelativeTimestamp(timestamp, fallback);
+}
+
+function normalizePodcastArtworkUrl(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("http://")) {
+    return `https://${trimmed.slice("http://".length)}`;
+  }
+
+  return trimmed;
+}
+
+function buildLocalPodcastCoverCandidates(slug: string) {
+  return [
+    `/podcast-covers/${slug}.png`,
+    `/podcast-covers/${slug}.jpg`,
+    `/podcast-covers/${slug}.webp`,
+  ];
+}
+
+function getTrendingPodcastImageCandidates(show: TrendingPodcastCard) {
+  const unique = new Set<string>();
+  return [
+    ...buildLocalPodcastCoverCandidates(show.slug),
+    show.image,
+    show.artworkUrl600,
+    show.artworkUrl100,
+    show.artwork,
+    show.podcastImage,
+    show.feedImage,
+    show.itunesImage,
+  ]
+    .map((value) => normalizePodcastArtworkUrl(value))
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => {
+      if (unique.has(value)) {
+        return false;
+      }
+      unique.add(value);
+      return true;
+    });
 }
 
 function getArticleDeduplicationKey(article: Pick<Article, "id" | "url" | "title" | "source">) {
@@ -5364,6 +5429,49 @@ function getCrimeLargeCardSelection(articles: Article[]) {
     .find((candidate) => candidate.isStrictCrime && candidate.image);
 }
 
+function isStrictArtArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasArtTerms =
+    /\b(art|museum|gallery|public art|art exhibition|contemporary art|arts culture|artist|artists|painting|sculpture|curator|retrospective)\b/.test(
+      haystack
+    );
+  const hasArtSourceTerms =
+    /\b(artnews|hyperallergic|the art newspaper|smithsonian arts|guardian art|nyt arts|new york times arts)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(crime|police|sports|weather|business|earnings|stock market|opinion|editorial|commentary)\b/.test(
+      haystack
+    );
+
+  if (hasRejectedTerms) {
+    return false;
+  }
+
+  return hasArtTerms || hasArtSourceTerms;
+}
+
+function getArtLargeCardSelection(articles: Article[]) {
+  return articles
+    .map((article) => ({
+      article,
+      isStrictArt: isStrictArtArticle(article),
+      image: getLargeImageCardImageCandidate(article),
+    }))
+    .find((candidate) => candidate.isStrictArt && candidate.image);
+}
+
 function getTechLargeCardSelection(articles: Article[]) {
   const candidates = articles.map((article) => ({
     article,
@@ -6739,6 +6847,19 @@ export default function Home() {
   const [theaterMovies, setTheaterMovies] = useState<TheaterMovieItem[]>([]);
   const [businessTickerItems, setBusinessTickerItems] = useState<StockTickerItem[]>([]);
   const [businessTickerSource, setBusinessTickerSource] = useState<string>("loading");
+  const [featuredTrendingPodcasts, setFeaturedTrendingPodcasts] = useState<TrendingPodcastCard[]>(
+    PODCAST_FEEDS.filter((show) => show.featured)
+      .slice(0, 10)
+      .map((show) => ({
+        id: show.slug,
+        slug: show.slug,
+        title: show.title,
+        publisher: show.publisher,
+        category: show.category,
+        image: null,
+      }))
+  );
+  const [failedTrendingPodcastImages, setFailedTrendingPodcastImages] = useState<Record<string, boolean>>({});
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
   const [isTechnologyPreviewLoading, setIsTechnologyPreviewLoading] = useState(false);
@@ -6750,6 +6871,8 @@ export default function Home() {
   const [isOpinionPreviewLoading, setIsOpinionPreviewLoading] = useState(false);
   const [crimePreviewArticles, setCrimePreviewArticles] = useState<Article[]>([]);
   const [isCrimePreviewLoading, setIsCrimePreviewLoading] = useState(false);
+  const [artPreviewArticles, setArtPreviewArticles] = useState<Article[]>([]);
+  const [isArtPreviewLoading, setIsArtPreviewLoading] = useState(false);
   const [foodPreviewArticles, setFoodPreviewArticles] = useState<Article[]>([]);
   const [isFoodPreviewLoading, setIsFoodPreviewLoading] = useState(false);
   const [sciencePreviewArticles, setSciencePreviewArticles] = useState<Article[]>([]);
@@ -6763,6 +6886,63 @@ export default function Home() {
   const [myNewsCategoryArticleStatus, setMyNewsCategoryArticleStatus] = useState<
     Record<string, { loading: boolean; error: boolean }>
   >({});
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      return;
+    }
+
+    console.log("TRENDING_FEATURED_PODCASTS_RENDERED", featuredTrendingPodcasts.length);
+
+    let isCancelled = false;
+
+    async function loadTrendingPodcasts() {
+      try {
+        const response = await apiFetch("/api/podcasts");
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          sections?: { featured?: TrendingPodcastCard[] };
+        };
+
+        if (isCancelled) {
+          return;
+        }
+
+        const nextFeatured = (payload.sections?.featured ?? [])
+          .slice(0, 10)
+          .map((show) => ({
+            id: show.id,
+            slug: show.slug,
+            title: show.title,
+            publisher: show.publisher,
+            category: show.category,
+            image: show.image ?? null,
+            artworkUrl600: show.artworkUrl600 ?? null,
+            artworkUrl100: show.artworkUrl100 ?? null,
+            artwork: show.artwork ?? null,
+            podcastImage: show.podcastImage ?? null,
+            feedImage: show.feedImage ?? null,
+            itunesImage: show.itunesImage ?? null,
+          }));
+
+        if (nextFeatured.length > 0) {
+          setFeaturedTrendingPodcasts(nextFeatured);
+        }
+      } catch (error) {
+        console.error("Trending featured podcasts enrichment failed", error);
+      }
+    }
+
+    void loadTrendingPodcasts();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [featuredTrendingPodcasts.length, sortMode]);
   const [myNewsCategoryVideoStatus, setMyNewsCategoryVideoStatus] = useState<
     Record<string, { loading: boolean; error: boolean }>
   >({});
@@ -8527,6 +8707,7 @@ export default function Home() {
         setIsCarsPreviewLoading(true);
         setIsOpinionPreviewLoading(true);
         setIsCrimePreviewLoading(true);
+        setIsArtPreviewLoading(true);
         setIsFoodPreviewLoading(true);
         setIsSciencePreviewLoading(true);
       }
@@ -8541,6 +8722,7 @@ export default function Home() {
           carsResponse,
           opinionResponse,
           crimeResponse,
+          artResponse,
           foodResponse,
           scienceResponse,
         ] = await Promise.all([
@@ -8605,6 +8787,15 @@ export default function Home() {
               )
             : Promise.resolve(null),
           sortMode === "trending"
+            ? fetch(
+                `/api/news?mode=search&query=${encodeURIComponent(ART_FEED_QUERY)}&pageSize=25`,
+                {
+                  cache: "no-store",
+                  headers: { Accept: "application/json" },
+                }
+              )
+            : Promise.resolve(null),
+          sortMode === "trending"
             ? fetch("/api/news?mode=food&pageSize=25", {
               cache: "no-store",
               headers: { Accept: "application/json" },
@@ -8630,6 +8821,7 @@ export default function Home() {
           carsPayload,
           opinionPayload,
           crimePayload,
+          artPayload,
           foodPayload,
           sciencePayload,
         ] = await Promise.all([
@@ -8656,6 +8848,9 @@ export default function Home() {
             : Promise.resolve(null),
           crimeResponse && "ok" in crimeResponse && crimeResponse.ok
             ? crimeResponse.json().catch(() => null)
+            : Promise.resolve(null),
+          artResponse && "ok" in artResponse && artResponse.ok
+            ? artResponse.json().catch(() => null)
             : Promise.resolve(null),
           foodResponse && "ok" in foodResponse && foodResponse.ok
             ? foodResponse.json().catch(() => null)
@@ -8729,6 +8924,15 @@ export default function Home() {
               (article) => isStrictCrimeArticle(article) && !isLowInformationLiveStreamArticle(article)
             )
           : [];
+        const nextArtArticles = artPayload
+          ? hydrateFeedArticles(
+              normalizeNewsPayload(
+                artPayload as FeedArticlePayload[] | PaginatedNewsResponse
+              ).articles
+            ).filter(
+              (article) => isStrictArtArticle(article) && !isLowInformationLiveStreamArticle(article)
+            )
+          : [];
         const nextFoodArticles = foodPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
@@ -8758,6 +8962,7 @@ export default function Home() {
           setCarsPreviewArticles(nextCarsArticles);
           setOpinionPreviewArticles((prev) => (nextOpinionArticles.length > 0 ? nextOpinionArticles : prev));
           setCrimePreviewArticles((prev) => (nextCrimeArticles.length > 0 ? nextCrimeArticles : prev));
+          setArtPreviewArticles((prev) => (nextArtArticles.length > 0 ? nextArtArticles : prev));
           setFoodPreviewArticles(nextFoodArticles);
           setSciencePreviewArticles((prev) => (nextScienceArticles.length > 0 ? nextScienceArticles : prev));
         }
@@ -8780,6 +8985,7 @@ export default function Home() {
           setIsCarsPreviewLoading(false);
           setIsOpinionPreviewLoading(false);
           setIsCrimePreviewLoading(false);
+          setIsArtPreviewLoading(false);
           setIsFoodPreviewLoading(false);
           setIsSciencePreviewLoading(false);
           }
@@ -10990,18 +11196,18 @@ export default function Home() {
     };
   }, [localLocationLabel, selectedLocalCity, sortMode, weatherTabArticles]);
 
-  const weatherPageVideos = useMemo(
+  const sportsVideosForWeatherSection = useMemo(
     () =>
       selectSourceBalancedVideos(
         ensureMinimumVideoCount(
-          weatherVideos.filter((video) => !video.fallback),
-          weatherVideos.filter((video) => video.fallback),
+          sportsVideos.filter((video) => isSportsVideo(video) && !video.fallback),
+          sportsVideos.filter((video) => isSportsVideo(video) && video.fallback),
           3
         ),
         8,
         2
       ),
-    [weatherVideos]
+    [sportsVideos]
   );
 
   const technologyTabArticles = useMemo(() => {
@@ -11047,6 +11253,16 @@ export default function Home() {
       (article) => isStrictCrimeArticle(article) && !isLowInformationLiveStreamArticle(article)
     );
   }, [crimePreviewArticles, sortMode]);
+
+  const artTabArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(artPreviewArticles.slice(0, 40), 12).filter(
+      (article) => isStrictArtArticle(article) && !isLowInformationLiveStreamArticle(article)
+    );
+  }, [artPreviewArticles, sortMode]);
 
   const travelTabArticles = useMemo(() => {
     if (sortMode !== "travel") {
@@ -17176,6 +17392,81 @@ export default function Home() {
     );
   };
 
+  const renderFeaturedPodcastsSlider = (shows: TrendingPodcastCard[]) => {
+    if (shows.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Featured Podcasts</strong>
+          </div>
+        </div>
+        <div className="popular-music-scroll" role="list" aria-label="Featured podcasts">
+          {shows.map((show) => {
+            const imageCandidates = getTrendingPodcastImageCandidates(show);
+            const imageUrl =
+              imageCandidates.find(
+                (candidate) => !failedTrendingPodcastImages[`${show.slug}:${candidate}`]
+              ) ?? null;
+
+            if (imageUrl?.startsWith("/podcast-covers/")) {
+              console.log("PODCAST_LOCAL_COVER_USED", {
+                slug: show.slug,
+                imageUrl,
+              });
+            } else if (imageUrl) {
+              console.log("PODCAST_REMOTE_COVER_USED", {
+                slug: show.slug,
+                imageUrl,
+              });
+            } else {
+              console.log("PODCAST_COVER_MISSING", { slug: show.slug });
+            }
+
+            return (
+              <Link
+                key={`trending-podcast-${show.slug}`}
+                href={`/podcasts/${show.slug}/`}
+                className="popular-music-card"
+                role="listitem"
+              >
+                <div className="popular-music-card-art-shell">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={show.title}
+                      className="popular-music-card-art"
+                      loading="lazy"
+                      decoding="async"
+                      onError={() => {
+                        setFailedTrendingPodcastImages((prev) => ({
+                          ...prev,
+                          [`${show.slug}:${imageUrl}`]: true,
+                        }));
+                      }}
+                    />
+                  ) : (
+                    <div className="podcast-card-art podcast-card-art-fallback popular-music-card-art">
+                      <span>{show.title.slice(0, 1).toUpperCase()}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="popular-music-card-copy">
+                  <strong className="popular-music-card-title">{show.title}</strong>
+                  <span className="popular-music-card-artist">{show.publisher}</span>
+                  <span className="popular-music-card-artist">{show.category}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
   const renderBusinessStockTicker = () => {
     if (BUSINESS_STOCK_TICKER_DISABLED) {
       return null;
@@ -17408,6 +17699,21 @@ export default function Home() {
     );
     return selectedArticle;
   }, [crimeTabArticles]);
+
+  const trendingArtLeadArticle = useMemo(() => {
+    const selectedArticle = getArtLargeCardSelection(artTabArticles)?.article ?? null;
+    console.log(
+      "TRENDING_ART_SECTION_RENDERED",
+      selectedArticle
+        ? {
+            title: selectedArticle.title,
+            source: selectedArticle.source,
+            count: artTabArticles.length,
+          }
+        : { title: null, source: null, count: artTabArticles.length }
+    );
+    return selectedArticle;
+  }, [artTabArticles]);
 
   useEffect(() => {
     if (sortMode !== "trending") {
@@ -19444,6 +19750,8 @@ export default function Home() {
           </>
         ) : null}
 
+        {renderFeaturedPodcastsSlider(featuredTrendingPodcasts)}
+
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
@@ -19518,6 +19826,47 @@ export default function Home() {
                   >
                     {renderCompactSideImageArticle(article, {
                       imageFallbackLabel: "Crime",
+                      showRank: index + 1,
+                    })}
+                  </div>
+                ))}
+            </div>
+          )}
+        </section>
+
+        <section className="home-section-block home-section-plain">
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">Art</strong>
+            </div>
+          </div>
+
+          {artTabArticles.length === 0 ? (
+            isArtPreviewLoading ? (
+              <div className="muted">Loading art stories...</div>
+            ) : (
+              <div className="empty-state compact-empty-state">
+                <strong>No art stories yet</strong>
+                <span>Check back shortly for fresh arts and culture coverage.</span>
+              </div>
+            )
+          ) : (
+            <div className="stack home-section-list top-trending-card-rail">
+              {trendingArtLeadArticle ? renderLargeImageArticleCard(trendingArtLeadArticle) : null}
+              {artTabArticles
+                .filter((article) =>
+                  trendingArtLeadArticle
+                    ? getArticleDeduplicationKey(article) !==
+                      getArticleDeduplicationKey(trendingArtLeadArticle)
+                    : true
+                )
+                .slice(0, 5)
+                .map((article, index) => (
+                  <div
+                    key={`trending-art-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                  >
+                    {renderCompactSideImageArticle(article, {
+                      imageFallbackLabel: "Art",
                       showRank: index + 1,
                     })}
                   </div>
@@ -19933,6 +20282,7 @@ export default function Home() {
             </div>
           )}
         </section>
+
       </section>
     );
   }
@@ -20712,31 +21062,38 @@ export default function Home() {
                 </section>
               ) : null}
 
-              <section className="home-section-block home-section-plain quick-watch-row">
-                <div className="home-section-header">
-                  <div className="stack" style={{ gap: "4px" }}>
-                    <strong className="profile-section-title home-section-title">Weather Videos</strong>
+              {(() => {
+                console.log(
+                  "WEATHER_VIDEO_SECTION_REPLACED_WITH_SPORTS",
+                  sportsVideosForWeatherSection.length > 0
+                );
+                return null;
+              })()}
+              {sportsVideosForWeatherSection.length > 0 ? (
+                <section className="home-section-block home-section-plain quick-watch-row">
+                  <div className="home-section-header">
+                    <div className="stack" style={{ gap: "4px" }}>
+                      <strong className="profile-section-title home-section-title">Sports Videos</strong>
+                    </div>
                   </div>
-                </div>
-                {weatherPageVideos.length > 0 ? (
-                  <div className="quick-watch-scroll" role="list" aria-label="Weather videos">
-                    {weatherPageVideos.map((video) => (
-                      <div key={`weather-video-${video.id}`} className="quick-watch-item" role="listitem">
+                  <div className="quick-watch-scroll" role="list" aria-label="Sports videos">
+                    {sportsVideosForWeatherSection.map((video) => (
+                      <div key={`weather-sports-video-${video.id}`} className="quick-watch-item" role="listitem">
                         <VideoFeedCard
                           video={video}
                           isAutoplaying={
-                            autoplayTrendingVideoKeys.includes(`weather-videos:${video.id}`) && !video.fallback
+                            autoplayTrendingVideoKeys.includes(`weather-sports-videos:${video.id}`) && !video.fallback
                           }
                           onToggleLike={handleToggleVideoLike}
                           onToggleSave={handleToggleVideoSave}
                           onOpenComments={(videoId) => router.push(`/video/${videoId}/#comments`)}
-                          onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "news")}
+                          onOpenPlayer={(videoId) => handleOpenFeedVideo(videoId, "sports")}
                           frameRef={(node) => {
-                            trendingVideoFrameRefs.current[`weather-videos:${video.id}`] = node;
+                            trendingVideoFrameRefs.current[`weather-sports-videos:${video.id}`] = node;
                           }}
-                          autoplayKey={`weather-videos:${video.id}`}
+                          autoplayKey={`weather-sports-videos:${video.id}`}
                           previewDurationMs={null}
-                          label="Weather Video"
+                          label="Sports Video"
                           hideActions
                           useRelativeTime
                           className="video-card-inline quick-watch-video-card quick-watch-video-card-unified"
@@ -20746,12 +21103,8 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="empty-state compact-empty-state">
-                    <strong>Videos loading…</strong>
-                  </div>
-                )}
-              </section>
+                </section>
+              ) : null}
             </div>
           )}
         </section>
