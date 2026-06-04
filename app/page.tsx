@@ -2850,6 +2850,26 @@ const BUSINESS_STOCK_TICKER_ORDER = [
   "IWM",
 ] as const;
 
+const TEST_PROVIDER_ARTICLE_ACTIVE = true;
+const TEST_PROVIDER_ARTICLE: Article = {
+  id: 9990001,
+  title: "TEST GNEWS ARTICLE",
+  source: "Test Provider Wire",
+  category: "Breaking News",
+  time: "Just now",
+  description: "Temporary provider pipeline test article for verifying the visible Trending UI array.",
+  url: "https://example.com/test-gnews-article",
+  imageUrl: "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=80",
+  publishedAt: "2026-06-03T12:00:00.000Z",
+  content: "Temporary provider pipeline test article for verifying the visible Trending UI array.",
+  likes: 0,
+  likeUsers: [],
+  likedByCurrentUser: false,
+  comments: [],
+  saved: false,
+  provider: "gnews",
+};
+
 type TopicFallbackGroup = {
   keyword: string;
   pattern: RegExp;
@@ -7738,6 +7758,11 @@ export default function Home() {
         };
       });
 
+      const mergedArticlesWithProviderTest =
+        TEST_PROVIDER_ARTICLE_ACTIVE && feedMode === "trending" && replace && pageToLoad === 1
+          ? mergeArticlesByIdentity([TEST_PROVIDER_ARTICLE], mergedArticles)
+          : mergedArticles;
+
       setBlockedUserIds(
         ownBlockedUsersData.map((blockedUser) => blockedUser.blocked_id)
       );
@@ -7753,9 +7778,9 @@ export default function Home() {
           receivedFallbackFeed && replace
             ? cachedFeed?.articles ?? prev
             : replace
-              ? mergedArticles
-              : mergeArticlesByIdentity(prev, mergedArticles);
-        if (feedMode === "sports" && replace && mergedArticles.length === 0 && prev.length > 0) {
+              ? mergedArticlesWithProviderTest
+              : mergeArticlesByIdentity(prev, mergedArticlesWithProviderTest);
+        if (feedMode === "sports" && replace && mergedArticlesWithProviderTest.length === 0 && prev.length > 0) {
           console.log("SPORTS STATE UPDATE SOURCE", "live-feed-empty-ignored");
           console.log("SPORTS STATE UPDATE COUNT", prev.length);
           return prev;
@@ -10883,6 +10908,23 @@ export default function Home() {
   }, [displayedArticles, localLocationLabel, localQuery, selectedLocalCity, sortMode]);
 
   const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
+
+  const visibleProviderCounts = useMemo(() => {
+    return visibleArticles.reduce(
+      (counts, article) => {
+        const providerLabel = getArticleProviderLabel(article.provider);
+        counts[providerLabel] = (counts[providerLabel] ?? 0) + 1;
+        return counts;
+      },
+      {
+        CURRENT: 0,
+        GNEWS: 0,
+        GUARDIAN: 0,
+        NYT: 0,
+        CURRENTS: 0,
+      } as Record<"CURRENT" | "GNEWS" | "GUARDIAN" | "NYT" | "CURRENTS", number>
+    );
+  }, [visibleArticles]);
 
   const sportsTabArticles = useMemo(() => {
     const rawSportsArticles =
@@ -19132,6 +19174,16 @@ export default function Home() {
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Trending Top 5</strong>
+            </div>
+          </div>
+          <div className="provider-debug-panel">
+            <strong className="provider-debug-title">Visible provider counts</strong>
+            <div className="provider-debug-counts">
+              <span>CURRENT: {visibleProviderCounts.CURRENT}</span>
+              <span>GNEWS: {visibleProviderCounts.GNEWS}</span>
+              <span>GUARDIAN: {visibleProviderCounts.GUARDIAN}</span>
+              <span>NYT: {visibleProviderCounts.NYT}</span>
+              <span>CURRENTS: {visibleProviderCounts.CURRENTS}</span>
             </div>
           </div>
           <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
