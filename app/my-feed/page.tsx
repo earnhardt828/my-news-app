@@ -448,10 +448,7 @@ export default function MyFeed() {
                       <div className="trending-source-brand">
                         <SourceBadge sourceName={article.source} />
                         <span className="trending-source-name">{article.source}</span>
-                        <span className="trending-source-category-separator" aria-hidden="true">
-                          ·
-                        </span>
-                        <span className="trending-source-name">
+                        <span className="chip chip-accent">
                           {getFeedProviderLabel(article.provider)}
                         </span>
                       </div>

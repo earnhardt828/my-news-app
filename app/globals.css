@@ -631,6 +631,17 @@ input {
   text-transform: uppercase;
 }
 
+.top-trending-provider-badge,
+.article-provider-badge,
+.large-image-article-card-provider-badge {
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .top-trending-list-source-wrap {
   display: inline-flex;
   align-items: center;
@@ -1627,7 +1638,9 @@ input {
 .large-image-article-card-source {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .large-image-article-card-source-link {

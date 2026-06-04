@@ -16193,6 +16193,7 @@ export default function Home() {
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
+      const providerLabel = getArticleProviderLabel(article.provider);
 
       if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
         console.log("SPORTS CARD IMAGE SRC", {
@@ -16258,12 +16259,6 @@ export default function Home() {
                   <span className="trending-source-category-inline">
                     {displayCategoryLabel}
                   </span>
-                  <span className="trending-source-category-separator" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="trending-source-category-inline">
-                    {getArticleProviderLabel(article.provider)}
-                  </span>
                 </div>
               ) : (
                 <Link
@@ -16285,17 +16280,14 @@ export default function Home() {
                     <span className="trending-source-category-inline">
                       {displayCategoryLabel}
                     </span>
-                    <span className="trending-source-category-separator" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="trending-source-category-inline">
-                      {getArticleProviderLabel(article.provider)}
-                    </span>
                   </div>
                 </Link>
               )}
             </div>
             <div className="trending-card-top-meta">
+              <span className="chip chip-accent article-provider-badge">
+                {providerLabel}
+              </span>
               {options?.rankLabel ? (
                 <span className="chip trending-rank-badge news-card-rank-badge">
                   {options.rankLabel}
@@ -16480,6 +16472,7 @@ export default function Home() {
             <SourceHeaderMark sourceName={safeSourceName} fallbackMode="text" />
           </Link>
         }
+        providerBadge={getArticleProviderLabel(article.provider)}
         publishedLabel={formatFreshnessTime(article.publishedAt, article.time)}
         title={cleanDisplayText(article.title)}
         summary={summaryText}
@@ -18822,6 +18815,7 @@ export default function Home() {
 
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
+    const providerLabel = getArticleProviderLabel(article.provider);
     const displayImage = getArticleDisplayImage(article);
     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
@@ -18899,6 +18893,7 @@ export default function Home() {
                 className="top-trending-list-source-mark"
                 fallbackMode="text"
               />
+              <span className="chip chip-accent top-trending-provider-badge">{providerLabel}</span>
               <span className="top-trending-list-separator" aria-hidden="true">
                 ·
               </span>
