@@ -1,5 +1,3 @@
-const NYT_API_KEY = process.env.NYT_API_KEY ?? "";
-
 type NytDebugResponse = {
   results?: Array<{
     title?: string | null;
@@ -13,11 +11,12 @@ type NytDebugResponse = {
 };
 
 export async function GET() {
+  const nytApiKey = process.env.NYT_API_KEY ?? "";
   const section = "home";
   const url = new URL(`https://api.nytimes.com/svc/topstories/v2/${section}.json`);
-  url.searchParams.set("api-key", NYT_API_KEY);
+  url.searchParams.set("api-key", nytApiKey);
 
-  if (!NYT_API_KEY) {
+  if (!nytApiKey) {
     return Response.json({
       provider: "nyt",
       keyPresent: false,
@@ -64,7 +63,7 @@ export async function GET() {
   return Response.json({
     provider: "nyt",
     keyPresent: true,
-    requestUrl: url.toString().replace(NYT_API_KEY, "[REDACTED]"),
+    requestUrl: url.toString().replace(nytApiKey, "[REDACTED]"),
     status: response.status,
     rawCount: payload.results?.length ?? 0,
     imageCount: items.filter((item) => item.hasImage).length,

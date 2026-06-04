@@ -1,5 +1,3 @@
-const CURRENTS_API_KEY = process.env.CURRENTS_API_KEY ?? "";
-
 type CurrentsDebugResponse = {
   news?: Array<{
     title?: string | null;
@@ -11,14 +9,15 @@ type CurrentsDebugResponse = {
 };
 
 export async function GET() {
+  const currentsApiKey = process.env.CURRENTS_API_KEY ?? "";
   const url = new URL("https://api.currentsapi.services/v1/search");
   url.searchParams.set("keywords", "breaking news");
   url.searchParams.set("language", "en");
   url.searchParams.set("page_number", "1");
   url.searchParams.set("page_size", "10");
-  url.searchParams.set("apiKey", CURRENTS_API_KEY);
+  url.searchParams.set("apiKey", currentsApiKey);
 
-  if (!CURRENTS_API_KEY) {
+  if (!currentsApiKey) {
     return Response.json({
       provider: "currents",
       keyPresent: false,
@@ -49,7 +48,7 @@ export async function GET() {
   return Response.json({
     provider: "currents",
     keyPresent: true,
-    requestUrl: url.toString().replace(CURRENTS_API_KEY, "[REDACTED]"),
+    requestUrl: url.toString().replace(currentsApiKey, "[REDACTED]"),
     status: response.status,
     rawCount: payload.news?.length ?? 0,
     imageCount: items.filter((item) => item.hasImage).length,

@@ -1,5 +1,3 @@
-const GUARDIAN_API_KEY = process.env.GUARDIAN_API_KEY ?? "";
-
 type GuardianDebugResponse = {
   response?: {
     results?: Array<{
@@ -13,15 +11,16 @@ type GuardianDebugResponse = {
 };
 
 export async function GET() {
+  const guardianApiKey = process.env.GUARDIAN_API_KEY ?? "";
   const query = "news";
   const url = new URL("https://content.guardianapis.com/search");
-  url.searchParams.set("api-key", GUARDIAN_API_KEY);
+  url.searchParams.set("api-key", guardianApiKey);
   url.searchParams.set("page-size", "10");
   url.searchParams.set("page", "1");
   url.searchParams.set("show-fields", "headline,trailText,thumbnail");
   url.searchParams.set("q", query);
 
-  if (!GUARDIAN_API_KEY) {
+  if (!guardianApiKey) {
     return Response.json({
       provider: "guardian",
       keyPresent: false,
@@ -50,7 +49,7 @@ export async function GET() {
   return Response.json({
     provider: "guardian",
     keyPresent: true,
-    requestUrl: url.toString().replace(GUARDIAN_API_KEY, "[REDACTED]"),
+    requestUrl: url.toString().replace(guardianApiKey, "[REDACTED]"),
     status: response.status,
     rawCount: payload.response?.results?.length ?? 0,
     imageCount: items.filter((item) => item.hasImage).length,
