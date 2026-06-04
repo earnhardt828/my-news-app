@@ -1797,6 +1797,32 @@ function logProviderArticleStats(providerName: string, articles: NormalizedArtic
   });
 }
 
+function logProviderRawCount(providerName: string, count: number) {
+  console.log("PROVIDER_RAW_COUNT", {
+    provider: providerName,
+    count,
+  });
+}
+
+function logProviderImageCount(providerName: string, count: number) {
+  console.log("PROVIDER_IMAGE_COUNT", {
+    provider: providerName,
+    count,
+  });
+}
+
+function logProviderRejectedReason(
+  providerName: string,
+  reason: string,
+  details: Record<string, unknown>
+) {
+  console.log("PROVIDER_REJECTED_REASON", {
+    provider: providerName,
+    reason,
+    ...details,
+  });
+}
+
 function getModeCategories(mode: NewsMode, categories: string[]) {
   if (mode === "sports") {
     return ["Sports"];
@@ -1869,14 +1895,14 @@ function getNytTopStoriesSections(mode: NewsMode, categories: string[]) {
   );
 
   if (mode === "search") {
-    derivedSections.unshift("home");
+    derivedSections.unshift("home", "world", "us", "politics", "business", "technology", "science", "arts");
   }
 
   return Array.from(
     new Set(
-      (derivedSections.length > 0 ? derivedSections : ["home", "world", "us"])
+      (derivedSections.length > 0 ? derivedSections : ["home", "world", "us", "politics", "business", "technology", "science", "arts"])
         .filter(Boolean)
-        .slice(0, 4)
+        .slice(0, mode === "search" ? 8 : 6)
     )
   );
 }
@@ -2898,6 +2924,13 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
   } else {
     const perCategoryPageSize = Math.max(4, Math.ceil(params.pageSize / Math.max(categories.length, 1)));
     categories.forEach((category) => {
+      const categoryQuery = getCategoryQuery(category);
+      requests.push({
+        url: `https://gnews.io/api/v4/search?q=${encodeURIComponent(
+          categoryQuery
+        )}&lang=en&country=us&max=${perCategoryPageSize}&page=${params.page}&expand=content&token=${GNEWS_API_KEY}`,
+        category,
+      });
       requests.push({
         url: `https://gnews.io/api/v4/top-headlines?category=${encodeURIComponent(
           category === "Breaking News" ? "general" : category.toLowerCase()
@@ -2925,6 +2958,7 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
       }
 
       const data = (await response.json()) as GNewsApiResponse;
+      logProviderRawCount("GNews", (data.articles ?? []).length);
 
       return (data.articles ?? [])
         .map((article, index) =>
@@ -2956,6 +2990,11 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
     return [];
   });
 
+  logProviderRawCount("GNews", normalizedArticles.length);
+  logProviderImageCount(
+    "GNews",
+    normalizedArticles.filter((article) => hasUsablePrimaryImageUrl(article.imageUrl)).length
+  );
   console.log("GNEWS ARTICLE COUNT", normalizedArticles.length);
   console.log(
     "GNEWS IMAGE ARTICLE COUNT",
@@ -2970,7 +3009,7 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
 }
 
 async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
-  console.log("CURRENTS_API_KEY_PRESENT", Boolean(CURRENTS_API_KEY));
+  console.log("CURRENTS API KEY PRESENT", Boolean(CURRENTS_API_KEY));
 
   if (!CURRENTS_API_KEY) {
     logProviderSkip("Currents", "CURRENTS_API_KEY is missing");
@@ -3004,6 +3043,7 @@ async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<Provi
   }
 
   const data = (await response.json()) as CurrentsApiResponse;
+  logProviderRawCount("Currents", data.news?.length ?? 0);
   const normalizedArticles = (data.news ?? [])
     .map((article, index) =>
       buildNormalizedArticle(
@@ -3028,6 +3068,10 @@ async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<Provi
     .filter((article): article is NormalizedArticle => Boolean(article))
     .filter((article) => hasUsablePrimaryImageUrl(article.imageUrl));
 
+  logProviderImageCount(
+    "Currents",
+    normalizedArticles.filter((article) => hasUsablePrimaryImageUrl(article.imageUrl)).length
+  );
   console.log("CURRENTS_ARTICLE_COUNT", normalizedArticles.length);
   console.log(
     "CURRENTS_IMAGE_ARTICLE_COUNT",
@@ -3284,14 +3328,13 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
 
   const data = (await response.json()) as GuardianApiResponse;
   console.log("GUARDIAN RAW COUNT", data.response?.results?.length ?? 0);
+  logProviderRawCount("The Guardian", data.response?.results?.length ?? 0);
   const normalizedArticles = (data.response?.results ?? [])
     .map((article, index) => {
       const imageUrl = article.fields?.thumbnail ?? null;
 
       if (!imageUrl) {
-        console.log("PROVIDER ARTICLE REJECTED REASON", {
-          provider: "guardian",
-          reason: "missing_thumbnail",
+        logProviderRejectedReason("The Guardian", "missing_thumbnail", {
           title: article.fields?.headline ?? article.webTitle ?? null,
           url: article.webUrl ?? null,
         });
@@ -3299,9 +3342,7 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
       }
 
       if (looksLikeLowQualityImageUrl(imageUrl)) {
-        console.log("PROVIDER ARTICLE REJECTED REASON", {
-          provider: "guardian",
-          reason: "low_quality_thumbnail",
+        logProviderRejectedReason("The Guardian", "low_quality_thumbnail", {
           title: article.fields?.headline ?? article.webTitle ?? null,
           url: article.webUrl ?? null,
           imageUrl,
@@ -3331,6 +3372,10 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
     })
     .filter(Boolean) as NormalizedArticle[];
 
+  logProviderImageCount(
+    "The Guardian",
+    normalizedArticles.filter((article) => hasRealArticleImage(article)).length
+  );
   console.log("GUARDIAN ARTICLE COUNT", normalizedArticles.length);
   console.log(
     "GUARDIAN IMAGE COUNT",
@@ -3377,6 +3422,7 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
 
       const payload = (await response.json()) as NytTopStoriesResponse;
       console.log("NYT RAW COUNT", payload.results?.length ?? 0);
+      logProviderRawCount("New York Times", payload.results?.length ?? 0);
       return { section, results: payload.results ?? [] };
     })
   );
@@ -3396,9 +3442,7 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
         : null;
 
       if (!fullImageUrl) {
-        console.log("PROVIDER ARTICLE REJECTED REASON", {
-          provider: "nyt",
-          reason: "missing_multimedia_image",
+        logProviderRejectedReason("New York Times", "missing_multimedia_image", {
           title: article.title ?? null,
           url: article.url ?? null,
         });
@@ -3406,9 +3450,7 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
       }
 
       if (looksLikeLowQualityImageUrl(fullImageUrl)) {
-        console.log("PROVIDER ARTICLE REJECTED REASON", {
-          provider: "nyt",
-          reason: "low_quality_multimedia_image",
+        logProviderRejectedReason("New York Times", "low_quality_multimedia_image", {
           title: article.title ?? null,
           url: article.url ?? null,
           imageUrl: fullImageUrl,
@@ -3437,6 +3479,7 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
     })
     .filter((article) => Boolean(article && hasRealArticleImage(article))) as NormalizedArticle[];
 
+  logProviderImageCount("New York Times", normalizedArticles.length);
   console.log("NYT IMAGE COUNT", normalizedArticles.length);
 
   logProviderArticleStats("New York Times", normalizedArticles);
