@@ -2831,10 +2831,10 @@ type StockTickerItem = {
 };
 
 type VisibleProviderDebug = {
-  gnews: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
-  guardian: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
-  nyt: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
-  currents: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+  gnews: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
+  guardian: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
+  nyt: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
+  currents: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
 };
 
 const BUSINESS_STOCK_TICKER_ORDER = [
@@ -2878,10 +2878,10 @@ const TEST_PROVIDER_ARTICLE: Article = {
 };
 
 const EMPTY_VISIBLE_PROVIDER_DEBUG: VisibleProviderDebug = {
-  gnews: { keyPresent: false, rawCount: 0, imageCount: 0, rejectedCount: 0 },
-  guardian: { keyPresent: false, rawCount: 0, imageCount: 0, rejectedCount: 0 },
-  nyt: { keyPresent: false, rawCount: 0, imageCount: 0, rejectedCount: 0 },
-  currents: { keyPresent: false, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+  gnews: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+  guardian: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+  nyt: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+  currents: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
 };
 
 type TopicFallbackGroup = {
@@ -2977,10 +2977,10 @@ type PaginatedNewsResponse = {
   pageSize: number;
   hasMore: boolean;
   providerDebug?: {
-    gnews: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
-    guardian: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
-    nyt: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
-    currents: { keyPresent?: boolean; rawCount: number; imageCount: number; rejectedCount: number };
+    gnews: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
+    guardian: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
+    nyt: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
+    currents: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
   };
 };
 
@@ -19212,21 +19212,33 @@ export default function Home() {
               <span>CURRENTS: {visibleProviderCounts.CURRENTS}</span>
             </div>
             <div className="provider-debug-raw-grid">
+              <span>GUARDIAN_KEY_PRESENT: {String(Boolean(visibleProviderDebug.guardian.keyPresent))}</span>
+              <span>NYT_KEY_PRESENT: {String(Boolean(visibleProviderDebug.nyt.keyPresent))}</span>
+              <span>CURRENTS_KEY_PRESENT: {String(Boolean(visibleProviderDebug.currents.keyPresent))}</span>
               <span>
                 Guardian raw/image/rejected: {visibleProviderDebug.guardian.rawCount}/
                 {visibleProviderDebug.guardian.imageCount}/
                 {visibleProviderDebug.guardian.rejectedCount}
               </span>
+              <span>{visibleProviderDebug.guardian.skippedReason ?? "Guardian fetch attempted"}</span>
+              <span>Guardian status: {visibleProviderDebug.guardian.status ?? "n/a"}</span>
+              <span>Guardian URL: {visibleProviderDebug.guardian.requestUrl ?? "n/a"}</span>
               <span>
                 NYT raw/image/rejected: {visibleProviderDebug.nyt.rawCount}/
                 {visibleProviderDebug.nyt.imageCount}/
                 {visibleProviderDebug.nyt.rejectedCount}
               </span>
+              <span>{visibleProviderDebug.nyt.skippedReason ?? "NYT fetch attempted"}</span>
+              <span>NYT status: {visibleProviderDebug.nyt.status ?? "n/a"}</span>
+              <span>NYT URL: {visibleProviderDebug.nyt.requestUrl ?? "n/a"}</span>
               <span>
                 Currents raw/image/rejected: {visibleProviderDebug.currents.rawCount}/
                 {visibleProviderDebug.currents.imageCount}/
                 {visibleProviderDebug.currents.rejectedCount}
               </span>
+              <span>{visibleProviderDebug.currents.skippedReason ?? "Currents fetch attempted"}</span>
+              <span>Currents status: {visibleProviderDebug.currents.status ?? "n/a"}</span>
+              <span>Currents URL: {visibleProviderDebug.currents.requestUrl ?? "n/a"}</span>
             </div>
           </div>
           <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">

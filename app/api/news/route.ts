@@ -93,6 +93,11 @@ type ProviderResponse = {
 
 type ProviderDebugSummary = {
   keyPresent?: boolean;
+  fetchStarted?: boolean;
+  skippedReason?: string | null;
+  requestUrl?: string | null;
+  status?: number | null;
+  bodyPreview?: unknown;
   rawCount: number;
   imageCount: number;
   rejectedCount: number;
@@ -2904,7 +2909,21 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
 
   if (!GNEWS_API_KEY) {
     logProviderSkip("GNews", "GNEWS_API_KEY is missing");
-    return { articles: [], hasMore: false };
+    return {
+      articles: [],
+      hasMore: false,
+      debug: {
+        keyPresent: false,
+        fetchStarted: false,
+        skippedReason: "Provider skipped: missing key",
+        requestUrl: null,
+        status: null,
+        bodyPreview: null,
+        rawCount: 0,
+        imageCount: 0,
+        rejectedCount: 0,
+      },
+    };
   }
 
   const categories = getModeCategories(params.mode, params.categories);
@@ -2957,6 +2976,10 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
   logProviderRequest("GNews", {
     mode: params.mode,
     page: params.page,
+    requestCount: requests.length,
+    query: effectiveQuery,
+  });
+  console.log("GNEWS_FETCH_STARTED", {
     requestCount: requests.length,
     query: effectiveQuery,
   });
@@ -3021,6 +3044,17 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
     hasMore: normalizedArticles.length >= params.pageSize,
     debug: {
       keyPresent: Boolean(GNEWS_API_KEY),
+      fetchStarted: true,
+      skippedReason: null,
+      requestUrl: requests[0]?.url?.replace(GNEWS_API_KEY, "[REDACTED]") ?? null,
+      status: null,
+      bodyPreview: normalizedArticles[0]
+        ? {
+            title: normalizedArticles[0].title,
+            source: normalizedArticles[0].source,
+            imageUrl: normalizedArticles[0].imageUrl,
+          }
+        : null,
       rawCount: normalizedArticles.length,
       imageCount: normalizedArticles.filter((article) => hasUsablePrimaryImageUrl(article.imageUrl)).length,
       rejectedCount: 0,
@@ -3033,7 +3067,21 @@ async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<Provi
 
   if (!CURRENTS_API_KEY) {
     logProviderSkip("Currents", "CURRENTS_API_KEY is missing");
-    return { articles: [], hasMore: false };
+    return {
+      articles: [],
+      hasMore: false,
+      debug: {
+        keyPresent: false,
+        fetchStarted: false,
+        skippedReason: "Provider skipped: missing key",
+        requestUrl: null,
+        status: null,
+        bodyPreview: null,
+        rawCount: 0,
+        imageCount: 0,
+        rejectedCount: 0,
+      },
+    };
   }
 
   const categories = getModeCategories(params.mode, params.categories);
@@ -3052,6 +3100,7 @@ async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<Provi
     page: params.page,
     query: searchTerms,
   });
+  console.log("CURRENTS_FETCH_STARTED", { query: searchTerms });
 
   const response = await fetch(url.toString(), {
     next: { revalidate: 600 },
@@ -3059,7 +3108,21 @@ async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<Provi
 
   if (!response.ok) {
     console.error("Currents provider error:", response.status, response.statusText);
-    return { articles: [], hasMore: false };
+    return {
+      articles: [],
+      hasMore: false,
+      debug: {
+        keyPresent: true,
+        fetchStarted: true,
+        skippedReason: null,
+        requestUrl: url.toString().replace(CURRENTS_API_KEY, "[REDACTED]"),
+        status: response.status,
+        bodyPreview: null,
+        rawCount: 0,
+        imageCount: 0,
+        rejectedCount: 0,
+      },
+    };
   }
 
   const data = (await response.json()) as CurrentsApiResponse;
@@ -3106,6 +3169,11 @@ async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<Provi
     hasMore: normalizedArticles.length >= params.pageSize,
     debug: {
       keyPresent: Boolean(CURRENTS_API_KEY),
+      fetchStarted: true,
+      skippedReason: null,
+      requestUrl: url.toString().replace(CURRENTS_API_KEY, "[REDACTED]"),
+      status: response.status,
+      bodyPreview: (data.news ?? []).slice(0, 1),
       rawCount,
       imageCount,
       rejectedCount: Math.max(0, rawCount - normalizedArticles.length),
@@ -3325,7 +3393,21 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
 
   if (!GUARDIAN_API_KEY) {
     logProviderSkip("The Guardian", "GUARDIAN_API_KEY is missing");
-    return { articles: [], hasMore: false };
+    return {
+      articles: [],
+      hasMore: false,
+      debug: {
+        keyPresent: false,
+        fetchStarted: false,
+        skippedReason: "Provider skipped: missing key",
+        requestUrl: null,
+        status: null,
+        bodyPreview: null,
+        rawCount: 0,
+        imageCount: 0,
+        rejectedCount: 0,
+      },
+    };
   }
 
   const categories = getModeCategories(params.mode, params.categories);
@@ -3343,6 +3425,7 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
     page: params.page,
     query: effectiveQuery,
   });
+  console.log("GUARDIAN_FETCH_STARTED", { query: effectiveQuery });
 
   const response = await fetch(url.toString(), {
     next: { revalidate: 600 },
@@ -3351,7 +3434,21 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
 
   if (!response.ok) {
     console.error("The Guardian provider error:", response.status, response.statusText);
-    return { articles: [], hasMore: false };
+    return {
+      articles: [],
+      hasMore: false,
+      debug: {
+        keyPresent: true,
+        fetchStarted: true,
+        skippedReason: null,
+        requestUrl: url.toString().replace(GUARDIAN_API_KEY, "[REDACTED]"),
+        status: response.status,
+        bodyPreview: null,
+        rawCount: 0,
+        imageCount: 0,
+        rejectedCount: 0,
+      },
+    };
   }
 
   const data = (await response.json()) as GuardianApiResponse;
@@ -3420,6 +3517,11 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
     hasMore: normalizedArticles.length >= params.pageSize,
     debug: {
       keyPresent: Boolean(GUARDIAN_API_KEY),
+      fetchStarted: true,
+      skippedReason: null,
+      requestUrl: url.toString().replace(GUARDIAN_API_KEY, "[REDACTED]"),
+      status: response.status,
+      bodyPreview: (data.response?.results ?? []).slice(0, 1),
       rawCount,
       imageCount,
       rejectedCount,
@@ -3432,7 +3534,21 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
 
   if (!NYT_API_KEY) {
     logProviderSkip("New York Times", "NYT_API_KEY is missing");
-    return { articles: [], hasMore: false };
+    return {
+      articles: [],
+      hasMore: false,
+      debug: {
+        keyPresent: false,
+        fetchStarted: false,
+        skippedReason: "Provider skipped: missing key",
+        requestUrl: null,
+        status: null,
+        bodyPreview: null,
+        rawCount: 0,
+        imageCount: 0,
+        rejectedCount: 0,
+      },
+    };
   }
 
   const categories = getModeCategories(params.mode, params.categories);
@@ -3443,7 +3559,10 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
     page: params.page,
     sections,
   });
+  console.log("NYT_FETCH_STARTED", { sections });
 
+  let lastStatus: number | null = null;
+  let firstBodyPreview: unknown = null;
   const sectionResponses = await Promise.allSettled(
     sections.map(async (section) => {
       const url = new URL(`https://api.nytimes.com/svc/topstories/v2/${section}.json`);
@@ -3454,6 +3573,7 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
         next: { revalidate: 600 },
       });
       console.log("NYT RESPONSE STATUS", response.status);
+      lastStatus = response.status;
 
       if (!response.ok) {
         throw new Error(`New York Times ${section} failed (${response.status})`);
@@ -3462,6 +3582,9 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
       const payload = (await response.json()) as NytTopStoriesResponse;
       console.log("NYT RAW COUNT", payload.results?.length ?? 0);
       logProviderRawCount("New York Times", payload.results?.length ?? 0);
+      if (!firstBodyPreview) {
+        firstBodyPreview = (payload.results ?? []).slice(0, 1);
+      }
       return { section, results: payload.results ?? [] };
     })
   );
@@ -3533,6 +3656,13 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
     hasMore: normalizedArticles.length >= params.pageSize,
     debug: {
       keyPresent: Boolean(NYT_API_KEY),
+      fetchStarted: true,
+      skippedReason: null,
+      requestUrl: sections[0]
+        ? `https://api.nytimes.com/svc/topstories/v2/${sections[0]}.json?api-key=[REDACTED]`
+        : null,
+      status: lastStatus,
+      bodyPreview: firstBodyPreview,
       rawCount,
       imageCount: normalizedArticles.length,
       rejectedCount,
@@ -4344,7 +4474,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     };
   });
 
-  const providerDebug = providerResponses.reduce(
+  const providerDebug = providerResponses.reduce<NonNullable<NewsRouteResponse["providerDebug"]>>(
     (accumulator, result, index) => {
       const providerName = providerFetchers[index].name;
       const debug =
@@ -4358,7 +4488,12 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
       if (providerName === "GNews") {
         accumulator.gnews = {
-          keyPresent: Boolean(GNEWS_API_KEY),
+          keyPresent: debug?.keyPresent ?? Boolean(GNEWS_API_KEY),
+          fetchStarted: debug?.fetchStarted ?? false,
+          skippedReason: debug?.skippedReason ?? null,
+          requestUrl: debug?.requestUrl ?? null,
+          status: debug?.status ?? null,
+          bodyPreview: debug?.bodyPreview ?? null,
           rawCount: debug?.rawCount ?? 0,
           imageCount: debug?.imageCount ?? 0,
           rejectedCount: debug?.rejectedCount ?? 0,
@@ -4367,7 +4502,12 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
       if (providerName === "The Guardian") {
         accumulator.guardian = {
-          keyPresent: Boolean(GUARDIAN_API_KEY),
+          keyPresent: debug?.keyPresent ?? Boolean(GUARDIAN_API_KEY),
+          fetchStarted: debug?.fetchStarted ?? false,
+          skippedReason: debug?.skippedReason ?? null,
+          requestUrl: debug?.requestUrl ?? null,
+          status: debug?.status ?? null,
+          bodyPreview: debug?.bodyPreview ?? null,
           rawCount: debug?.rawCount ?? 0,
           imageCount: debug?.imageCount ?? 0,
           rejectedCount: debug?.rejectedCount ?? 0,
@@ -4376,7 +4516,12 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
       if (providerName === "New York Times") {
         accumulator.nyt = {
-          keyPresent: Boolean(NYT_API_KEY),
+          keyPresent: debug?.keyPresent ?? Boolean(NYT_API_KEY),
+          fetchStarted: debug?.fetchStarted ?? false,
+          skippedReason: debug?.skippedReason ?? null,
+          requestUrl: debug?.requestUrl ?? null,
+          status: debug?.status ?? null,
+          bodyPreview: debug?.bodyPreview ?? null,
           rawCount: debug?.rawCount ?? 0,
           imageCount: debug?.imageCount ?? 0,
           rejectedCount: debug?.rejectedCount ?? 0,
@@ -4385,7 +4530,12 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
       if (providerName === "Currents") {
         accumulator.currents = {
-          keyPresent: Boolean(CURRENTS_API_KEY),
+          keyPresent: debug?.keyPresent ?? Boolean(CURRENTS_API_KEY),
+          fetchStarted: debug?.fetchStarted ?? false,
+          skippedReason: debug?.skippedReason ?? null,
+          requestUrl: debug?.requestUrl ?? null,
+          status: debug?.status ?? null,
+          bodyPreview: debug?.bodyPreview ?? null,
           rawCount: debug?.rawCount ?? 0,
           imageCount: debug?.imageCount ?? 0,
           rejectedCount: debug?.rejectedCount ?? 0,
@@ -4395,11 +4545,11 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
       return accumulator;
     },
     {
-      gnews: { keyPresent: Boolean(GNEWS_API_KEY), rawCount: 0, imageCount: 0, rejectedCount: 0 },
-      guardian: { keyPresent: Boolean(GUARDIAN_API_KEY), rawCount: 0, imageCount: 0, rejectedCount: 0 },
-      nyt: { keyPresent: Boolean(NYT_API_KEY), rawCount: 0, imageCount: 0, rejectedCount: 0 },
-      currents: { keyPresent: Boolean(CURRENTS_API_KEY), rawCount: 0, imageCount: 0, rejectedCount: 0 },
-    }
+      gnews: { keyPresent: Boolean(GNEWS_API_KEY), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+      guardian: { keyPresent: Boolean(GUARDIAN_API_KEY), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+      nyt: { keyPresent: Boolean(NYT_API_KEY), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+      currents: { keyPresent: Boolean(CURRENTS_API_KEY), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+    } as NonNullable<NewsRouteResponse["providerDebug"]>
   );
 
   console.log("[api/news] Provider diagnostics", {

@@ -25,11 +25,13 @@ export async function GET() {
     return Response.json({
       provider: "guardian",
       keyPresent: false,
+      skippedReason: "Provider skipped: missing key",
       requestUrl: url.toString().replace("api-key=", "api-key=[MISSING]"),
       status: null,
       rawCount: 0,
       imageCount: 0,
-      items: [],
+      first: null,
+      bodyPreview: null,
     });
   }
 
@@ -52,6 +54,7 @@ export async function GET() {
     status: response.status,
     rawCount: payload.response?.results?.length ?? 0,
     imageCount: items.filter((item) => item.hasImage).length,
-    items,
+    first: items[0] ?? null,
+    bodyPreview: (payload.response?.results ?? []).slice(0, 1),
   });
 }
