@@ -2854,6 +2854,13 @@ type NytDebugRouteArticle = {
   provider?: string | null;
 };
 
+type NytDirectDebugResponse = {
+  articles?: NytDebugRouteArticle[];
+  articlesLength?: number;
+  firstArticleTitle?: string | null;
+  [key: string]: unknown;
+};
+
 const TRENDING_VISIBLE_DATA_SOURCE_LABEL =
   "/api/news -> normalizeNewsPayload -> newsPayload.articles -> setArticles -> displayedArticles -> visibleArticles";
 
@@ -6644,6 +6651,9 @@ export default function Home() {
     useState<VisibleNewsRouteDebug>(EMPTY_VISIBLE_NEWS_ROUTE_DEBUG);
   const [actualTrendingFetchUrl, setActualTrendingFetchUrl] = useState<string>("uninitialized");
   const [nytDirectTestArticles, setNytDirectTestArticles] = useState<Article[]>([]);
+  const [nytDirectDebugKeys, setNytDirectDebugKeys] = useState<string[]>([]);
+  const [nytDirectDebugLength, setNytDirectDebugLength] = useState<number>(0);
+  const [nytDirectDebugFirstTitle, setNytDirectDebugFirstTitle] = useState<string>("none");
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
     | "trending"
@@ -11069,14 +11079,23 @@ export default function Home() {
 
     const loadNytDirectTest = async () => {
       try {
-        const response = await fetch("/api/debug/nyt", { cache: "no-store" });
+        const response = await fetch(`/api/debug/nyt?ts=${Date.now()}`, { cache: "no-store" });
 
         if (!response.ok) {
           throw new Error(`NYT direct test failed with status ${response.status}`);
         }
 
-        const payload = (await response.json()) as { articles?: NytDebugRouteArticle[] };
-        const mappedArticles = (payload.articles ?? [])
+        const payload = (await response.json()) as NytDirectDebugResponse;
+        const payloadKeys = Object.keys(payload);
+        const rawArticles = payload.articles ?? [];
+
+        if (!cancelled) {
+          setNytDirectDebugKeys(payloadKeys);
+          setNytDirectDebugLength(rawArticles.length);
+          setNytDirectDebugFirstTitle(rawArticles[0]?.title ?? "none");
+        }
+
+        const mappedArticles = rawArticles
           .map((article, index) => mapNytDebugArticleToTrendingArticle(article, index))
           .filter((article): article is Article => Boolean(article))
           .slice(0, 5);
@@ -11087,6 +11106,9 @@ export default function Home() {
       } catch (error) {
         console.error("NYT DIRECT TEST LOAD FAILED", error);
         if (!cancelled) {
+          setNytDirectDebugKeys([]);
+          setNytDirectDebugLength(0);
+          setNytDirectDebugFirstTitle("none");
           setNytDirectTestArticles([]);
         }
       }
@@ -19356,6 +19378,15 @@ export default function Home() {
           </div>
           <div className="provider-debug-counts">
             <span>NYT_DIRECT_FIRST_TITLE: {nytDirectFirstTitle}</span>
+          </div>
+          <div className="provider-debug-counts">
+            <span>NYT_DIRECT_RAW_KEYS: {nytDirectDebugKeys.join(", ") || "none"}</span>
+          </div>
+          <div className="provider-debug-counts">
+            <span>NYT_DIRECT_DATA_ARTICLES_LENGTH: {nytDirectDebugLength}</span>
+          </div>
+          <div className="provider-debug-counts">
+            <span>NYT_DIRECT_DATA_FIRST_TITLE: {nytDirectDebugFirstTitle}</span>
           </div>
         </section>
 
