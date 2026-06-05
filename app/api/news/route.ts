@@ -3581,10 +3581,13 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
 }
 
 async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
-  const nytKey = process.env.NYT_API_KEY ?? "";
-  console.log("NYT API KEY PRESENT", Boolean(nytKey));
+  const categories = getModeCategories(params.mode, params.categories);
+  const sections = getNytTopStoriesSections(params.mode, params.categories);
+  console.log("NYT_FETCH_STARTED", { sections });
+  const nytResult = await fetchNytTopStories(sections);
+  console.log("NYT API KEY PRESENT", nytResult.keyPresent);
 
-  if (!nytKey) {
+  if (!nytResult.keyPresent) {
     logProviderSkip("New York Times", "NYT_API_KEY is missing");
     return {
       articles: [],
@@ -3593,7 +3596,7 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
         keyPresent: false,
         fetchStarted: false,
         skippedReason: "Provider skipped: missing key",
-        requestUrl: null,
+        requestUrl: nytResult.requestUrl,
         status: null,
         bodyPreview: null,
         rawCount: 0,
@@ -3602,109 +3605,43 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
       },
     };
   }
-
-  const categories = getModeCategories(params.mode, params.categories);
-  const sections = getNytTopStoriesSections(params.mode, params.categories);
-
   logProviderRequest("New York Times", {
     mode: params.mode,
     page: params.page,
     sections,
   });
-  console.log("NYT_FETCH_STARTED", { sections });
-
-  let lastStatus: number | null = null;
-  let firstBodyPreview: unknown = null;
-  const sectionResponses = await Promise.allSettled(
-    sections.map(async (section) => {
-      const url = new URL(`https://api.nytimes.com/svc/topstories/v2/${section}.json`);
-      url.searchParams.set("api-key", nytKey);
-      console.log("NYT REQUEST URL", url.toString().replace(nytKey, "[REDACTED]"));
-
-      const response = await fetch(url.toString(), {
-        next: { revalidate: 600 },
-      });
-      console.log("NYT RESPONSE STATUS", response.status);
-      lastStatus = response.status;
-
-      if (!response.ok) {
-        throw new Error(`New York Times ${section} failed (${response.status})`);
-      }
-
-      const payload = (await response.json()) as NytTopStoriesResponse;
-      console.log("NYT RAW COUNT", payload.results?.length ?? 0);
-      logProviderRawCount("New York Times", payload.results?.length ?? 0);
-      if (!firstBodyPreview) {
-        firstBodyPreview = (payload.results ?? []).slice(0, 1);
-      }
-      return { section, results: payload.results ?? [] };
-    })
-  );
-
-  let rawCount = 0;
-  let rejectedCount = 0;
-  const normalizedArticles = sectionResponses
-    .flatMap((result) => (result.status === "fulfilled" ? result.value.results : []))
-    .map((article, index) => {
-      rawCount += 1;
-      const largestImage =
-        [...(article.multimedia ?? [])]
-          .filter((item) => Boolean(item.url))
-          .sort((left, right) => (Number(right.width ?? 0) * Number(right.height ?? 0)) - (Number(left.width ?? 0) * Number(left.height ?? 0)))[0] ?? null;
-      const largestImageUrl = largestImage?.url?.trim() ?? null;
-      const fullImageUrl = largestImageUrl
-        ? largestImageUrl.startsWith("http")
-          ? largestImageUrl
-          : `https://static01.nyt.com/${largestImageUrl.replace(/^\/+/, "")}`
-        : null;
-
-      if (!fullImageUrl) {
-        rejectedCount += 1;
-        logProviderRejectedReason("New York Times", "missing_multimedia_image", {
-          title: article.title ?? null,
-          url: article.url ?? null,
-        });
-        return null;
-      }
-
-      if (looksLikeLowQualityImageUrl(fullImageUrl)) {
-        rejectedCount += 1;
-        logProviderRejectedReason("New York Times", "low_quality_multimedia_image", {
-          title: article.title ?? null,
-          url: article.url ?? null,
-          imageUrl: fullImageUrl,
-        });
-        return null;
-      }
-
-      return buildNormalizedArticle(
+  console.log("NYT REQUEST URL", nytResult.requestUrl);
+  console.log("NYT RESPONSE STATUS", nytResult.status);
+  console.log("NYT RAW COUNT", nytResult.rawCount);
+  logProviderRawCount("New York Times", nytResult.rawCount);
+  logProviderImageCount("New York Times", nytResult.imageCount);
+  console.log("NYT IMAGE COUNT", nytResult.imageCount);
+  const normalizedArticles = nytResult.articles
+    .map((article, index) =>
+      buildNormalizedArticle(
         {
-          title: article.title ?? null,
-          description: article.abstract ?? null,
-          url: article.url ?? null,
-          imageUrl: fullImageUrl,
-          publishedAt: article.published_date ?? null,
-          source_name: "The New York Times",
-          category: article.section ?? article.subsection ?? categories[0] ?? "News",
+          title: article.title,
+          description: article.description,
+          url: article.url,
+          imageUrl: article.imageUrl,
+          publishedAt: article.publishedAt,
+          source_name: article.source,
+          category: article.category,
         },
         {
-          source: "The New York Times",
-          category: article.section ?? article.subsection ?? categories[0] ?? "News",
+          source: article.source,
+          category: article.category ?? categories[0] ?? "News",
           uniqueSeed: `nyt-topstories-${params.page}-${index}`,
           fallbackPublishedOffsetHours: index,
-          provider: "nyt",
+          provider: article.provider,
         }
-      );
-    })
-    .filter((article) => Boolean(article && hasRealArticleImage(article))) as NormalizedArticle[];
-
-  logProviderRawCount("New York Times", rawCount);
-  logProviderImageCount("New York Times", normalizedArticles.length);
-  console.log("NYT IMAGE COUNT", normalizedArticles.length);
+      )
+    )
+    .filter((article): article is NormalizedArticle => Boolean(article && hasRealArticleImage(article)));
   if (normalizedArticles.length > 0) {
     console.log("NYT_DEBUG_WORKING", {
-      rawCount,
-      imageCount: normalizedArticles.length,
+      rawCount: nytResult.rawCount,
+      imageCount: nytResult.imageCount,
       firstTitle: normalizedArticles[0]?.title ?? null,
       firstImage: normalizedArticles[0]?.imageUrl ?? null,
     });
@@ -3715,17 +3652,15 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
     articles: normalizedArticles,
     hasMore: normalizedArticles.length >= params.pageSize,
     debug: {
-      keyPresent: Boolean(nytKey),
+      keyPresent: nytResult.keyPresent,
       fetchStarted: true,
-      skippedReason: null,
-      requestUrl: sections[0]
-        ? `https://api.nytimes.com/svc/topstories/v2/${sections[0]}.json?api-key=[REDACTED]`
-        : null,
-      status: lastStatus,
-      bodyPreview: firstBodyPreview,
-      rawCount,
-      imageCount: normalizedArticles.length,
-      rejectedCount,
+      skippedReason: nytResult.error === "Provider skipped: missing key" ? nytResult.error : null,
+      requestUrl: nytResult.requestUrl,
+      status: nytResult.status,
+      bodyPreview: nytResult.articles[0] ?? null,
+      rawCount: nytResult.rawCount,
+      imageCount: nytResult.imageCount,
+      rejectedCount: Math.max(0, nytResult.rawCount - nytResult.imageCount),
     },
   };
 }
@@ -4858,3 +4793,4 @@ export async function GET(request: Request) {
 
   return jsonResponse(payload);
 }
+import { fetchNytTopStories } from "@/lib/server/nytProvider";
