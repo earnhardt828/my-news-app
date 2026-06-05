@@ -2864,36 +2864,11 @@ type NytDirectDebugResponse = {
 const TRENDING_VISIBLE_DATA_SOURCE_LABEL =
   "/api/news -> normalizeNewsPayload -> newsPayload.articles -> setArticles -> displayedArticles -> visibleArticles";
 
-const TEST_NYT_VISIBLE_ARTICLE: Article = {
-  id: 999000111,
-  title: "TEST NYT ARTICLE DIRECTLY IN TRENDING COMPONENT",
-  source: "The New York Times",
-  category: "World",
-  time: "Visible feed test",
-  image:
-    "https://static01.nyt.com/images/2026/06/04/multimedia/04dc-memo-03-bqzf/04dc-memo-03-bqzf-superJumbo.jpg",
-  imageUrl:
-    "https://static01.nyt.com/images/2026/06/04/multimedia/04dc-memo-03-bqzf/04dc-memo-03-bqzf-superJumbo.jpg",
-  urlToImage:
-    "https://static01.nyt.com/images/2026/06/04/multimedia/04dc-memo-03-bqzf/04dc-memo-03-bqzf-superJumbo.jpg",
-  description:
-    "Temporary hardcoded NYT article inserted directly into the exact Trending component.",
-  url: "https://www.nytimes.com/",
-  publishedAt: new Date().toISOString(),
-  content: "Temporary NYT visibility test article.",
-  likes: 0,
-  likeUsers: [],
-  likedByCurrentUser: false,
-  comments: [],
-  saved: false,
-  provider: "nyt",
-};
-
 function mapNytDebugArticleToTrendingArticle(
   article: NytDebugRouteArticle,
   index: number
 ): Article | null {
-  if (!article.title || !article.url || !article.imageUrl) {
+  if (!article.title || !article.url) {
     return null;
   }
 
@@ -2903,9 +2878,9 @@ function mapNytDebugArticleToTrendingArticle(
     source: article.source || "The New York Times",
     category: article.category || "News",
     time: article.publishedAt || "NYT Direct Test",
-    image: article.imageUrl,
-    imageUrl: article.imageUrl,
-    urlToImage: article.imageUrl,
+    image: article.imageUrl ?? null,
+    imageUrl: article.imageUrl ?? null,
+    urlToImage: article.imageUrl ?? null,
     description: article.description || undefined,
     url: article.url,
     publishedAt: article.publishedAt || null,
@@ -11020,16 +10995,7 @@ export default function Home() {
 
   const visibleArticles = useMemo(() => {
     const baseArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
-
-    if (sortMode !== "trending") {
-      return baseArticles;
-    }
-
-    const withoutTestArticle = baseArticles.filter(
-      (article) => article.id !== TEST_NYT_VISIBLE_ARTICLE.id
-    );
-
-    return [TEST_NYT_VISIBLE_ARTICLE, ...withoutTestArticle];
+    return baseArticles;
   }, [balancedLocalArticles, displayedArticles, sortMode]);
 
   const visibleProviderCounts = useMemo(() => {
@@ -11066,8 +11032,6 @@ export default function Home() {
         .filter(Boolean),
     [visibleArticles]
   );
-
-  const nytDirectFirstTitle = nytDirectTestArticles[0]?.title ?? "none";
 
   useEffect(() => {
     if (sortMode !== "trending") {
@@ -19374,19 +19338,13 @@ export default function Home() {
             </span>
           </div>
           <div className="provider-debug-counts">
-            <span>NYT_DIRECT_ARTICLES_LENGTH: {nytDirectTestArticles.length}</span>
+            <span>NYT_DIRECT_KEYS: {nytDirectDebugKeys.join(",") || "none"}</span>
           </div>
           <div className="provider-debug-counts">
-            <span>NYT_DIRECT_FIRST_TITLE: {nytDirectFirstTitle}</span>
+            <span>NYT_DIRECT_LENGTH: {nytDirectDebugLength}</span>
           </div>
           <div className="provider-debug-counts">
-            <span>NYT_DIRECT_RAW_KEYS: {nytDirectDebugKeys.join(", ") || "none"}</span>
-          </div>
-          <div className="provider-debug-counts">
-            <span>NYT_DIRECT_DATA_ARTICLES_LENGTH: {nytDirectDebugLength}</span>
-          </div>
-          <div className="provider-debug-counts">
-            <span>NYT_DIRECT_DATA_FIRST_TITLE: {nytDirectDebugFirstTitle}</span>
+            <span>NYT_DIRECT_FIRST_TITLE: {nytDirectDebugFirstTitle}</span>
           </div>
         </section>
 
@@ -19397,21 +19355,16 @@ export default function Home() {
             </div>
           </div>
           <div className="stack home-section-list top-trending-card-rail">
-            <div key={`nyt-direct-hardcoded-${TEST_NYT_VISIBLE_ARTICLE.id}`}>
-              {renderCompactSideImageArticle(TEST_NYT_VISIBLE_ARTICLE, {
-                showRank: 1,
-              })}
-            </div>
             {nytDirectTestArticles.map((article, index) => (
               <div key={`nyt-direct-test-${article.id}-${index}`}>
                 {renderCompactSideImageArticle(article, {
-                  showRank: index + 2,
+                  showRank: index + 1,
                 })}
               </div>
             ))}
             {nytDirectTestArticles.length === 0 ? (
               <div className="empty-state compact-empty-state">
-                <strong>Hardcoded NYT test article is visible</strong>
+                <strong>No NYT direct-test articles yet</strong>
                 <span>Waiting for /api/debug/nyt results.</span>
               </div>
             ) : null}
