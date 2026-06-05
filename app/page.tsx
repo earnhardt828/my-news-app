@@ -2866,8 +2866,8 @@ const TRENDING_VISIBLE_DATA_SOURCE_LABEL =
 
 const TEST_NYT_VISIBLE_ARTICLE: Article = {
   id: 999000111,
-  title: "TEST ARTICLE DIRECTLY IN TRENDING COMPONENT",
-  source: "Test Source",
+  title: "TEST NYT ARTICLE DIRECTLY IN TRENDING COMPONENT",
+  source: "The New York Times",
   category: "World",
   time: "Visible feed test",
   image:
@@ -2877,7 +2877,7 @@ const TEST_NYT_VISIBLE_ARTICLE: Article = {
   urlToImage:
     "https://static01.nyt.com/images/2026/06/04/multimedia/04dc-memo-03-bqzf/04dc-memo-03-bqzf-superJumbo.jpg",
   description:
-    "Temporary direct Trending component visibility test inserted into the exact rendered array.",
+    "Temporary hardcoded NYT article inserted directly into the exact Trending component.",
   url: "https://www.nytimes.com/",
   publishedAt: new Date().toISOString(),
   content: "Temporary NYT visibility test article.",
@@ -2886,7 +2886,7 @@ const TEST_NYT_VISIBLE_ARTICLE: Article = {
   likedByCurrentUser: false,
   comments: [],
   saved: false,
-  provider: "test",
+  provider: "nyt",
 };
 
 function mapNytDebugArticleToTrendingArticle(
