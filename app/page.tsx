@@ -11057,6 +11057,8 @@ export default function Home() {
     [visibleArticles]
   );
 
+  const nytDirectFirstTitle = nytDirectTestArticles[0]?.title ?? "none";
+
   useEffect(() => {
     if (sortMode !== "trending") {
       setNytDirectTestArticles([]);
@@ -19348,6 +19350,12 @@ export default function Home() {
             <span>
               FIRST 3 PROVIDERS: {trendingDebugFirstProviders.join(" | ") || "none"}
             </span>
+          </div>
+          <div className="provider-debug-counts">
+            <span>NYT_DIRECT_ARTICLES_LENGTH: {nytDirectTestArticles.length}</span>
+          </div>
+          <div className="provider-debug-counts">
+            <span>NYT_DIRECT_FIRST_TITLE: {nytDirectFirstTitle}</span>
           </div>
         </section>
 
