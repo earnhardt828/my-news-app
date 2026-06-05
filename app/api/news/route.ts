@@ -119,6 +119,11 @@ type NewsRouteResponse = {
   hasMore: boolean;
   page: number;
   pageSize: number;
+  debugEnv?: {
+    guardian: boolean;
+    nyt: boolean;
+    currents: boolean;
+  };
   providerDebug?: {
     gnews: ProviderDebugSummary;
     guardian: ProviderDebugSummary;
@@ -4690,6 +4695,12 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   console.log("REAL ARTICLES COUNT", finalRealArticles.length);
   console.log("FALLBACK USED", fallbackUsed);
+  const debugEnv = {
+    guardian: Boolean(process.env.GUARDIAN_API_KEY),
+    nyt: Boolean(process.env.NYT_API_KEY),
+    currents: Boolean(process.env.CURRENTS_API_KEY),
+  };
+  console.log("SERVER DEBUG ENV", debugEnv);
   console.log(
     "FIRST 5 IMAGE URLS",
     finalRealArticles.slice(0, 5).map((article) => ({
@@ -4708,6 +4719,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           hasMore,
           page: params.page,
           pageSize: params.pageSize,
+          debugEnv,
           providerDebug,
         }
       : {
@@ -4715,6 +4727,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           nextPage: params.page + 1,
           page: params.page,
           pageSize: params.pageSize,
+          debugEnv,
           providerDebug,
         };
 
