@@ -2842,6 +2842,18 @@ type VisibleNewsRouteDebug = {
   nytKeyLengthFromNewsRoute: number;
 };
 
+type NytDebugRouteArticle = {
+  id?: number | string | null;
+  title?: string | null;
+  description?: string | null;
+  url?: string | null;
+  source?: string | null;
+  publishedAt?: string | null;
+  imageUrl?: string | null;
+  category?: string | null;
+  provider?: string | null;
+};
+
 const TRENDING_VISIBLE_DATA_SOURCE_LABEL =
   "/api/news -> normalizeNewsPayload -> newsPayload.articles -> setArticles -> displayedArticles -> visibleArticles";
 
@@ -2869,6 +2881,36 @@ const TEST_NYT_VISIBLE_ARTICLE: Article = {
   saved: false,
   provider: "test",
 };
+
+function mapNytDebugArticleToTrendingArticle(
+  article: NytDebugRouteArticle,
+  index: number
+): Article | null {
+  if (!article.title || !article.url || !article.imageUrl) {
+    return null;
+  }
+
+  return {
+    id: 990000000 + index,
+    title: article.title,
+    source: article.source || "The New York Times",
+    category: article.category || "News",
+    time: article.publishedAt || "NYT Direct Test",
+    image: article.imageUrl,
+    imageUrl: article.imageUrl,
+    urlToImage: article.imageUrl,
+    description: article.description || undefined,
+    url: article.url,
+    publishedAt: article.publishedAt || null,
+    content: article.description || "",
+    likes: 0,
+    likeUsers: [],
+    likedByCurrentUser: false,
+    comments: [],
+    saved: false,
+    provider: "nyt",
+  };
+}
 
 const BUSINESS_STOCK_TICKER_ORDER = [
   "AAPL",
@@ -6601,6 +6643,7 @@ export default function Home() {
   const [visibleNewsRouteDebug, setVisibleNewsRouteDebug] =
     useState<VisibleNewsRouteDebug>(EMPTY_VISIBLE_NEWS_ROUTE_DEBUG);
   const [actualTrendingFetchUrl, setActualTrendingFetchUrl] = useState<string>("uninitialized");
+  const [nytDirectTestArticles, setNytDirectTestArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
     | "trending"
@@ -11013,6 +11056,46 @@ export default function Home() {
         .filter(Boolean),
     [visibleArticles]
   );
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      setNytDirectTestArticles([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadNytDirectTest = async () => {
+      try {
+        const response = await fetch("/api/debug/nyt", { cache: "no-store" });
+
+        if (!response.ok) {
+          throw new Error(`NYT direct test failed with status ${response.status}`);
+        }
+
+        const payload = (await response.json()) as { articles?: NytDebugRouteArticle[] };
+        const mappedArticles = (payload.articles ?? [])
+          .map((article, index) => mapNytDebugArticleToTrendingArticle(article, index))
+          .filter((article): article is Article => Boolean(article))
+          .slice(0, 5);
+
+        if (!cancelled) {
+          setNytDirectTestArticles(mappedArticles);
+        }
+      } catch (error) {
+        console.error("NYT DIRECT TEST LOAD FAILED", error);
+        if (!cancelled) {
+          setNytDirectTestArticles([]);
+        }
+      }
+    };
+
+    void loadNytDirectTest();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sortMode]);
 
   const sportsTabArticles = useMemo(() => {
     const rawSportsArticles =
@@ -19265,6 +19348,29 @@ export default function Home() {
             <span>
               FIRST 3 PROVIDERS: {trendingDebugFirstProviders.join(" | ") || "none"}
             </span>
+          </div>
+        </section>
+
+        <section className="home-section-block home-section-plain" style={{ marginBottom: "12px" }}>
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">NYT DIRECT TEST</strong>
+            </div>
+          </div>
+          <div className="stack home-section-list top-trending-card-rail">
+            {nytDirectTestArticles.map((article, index) => (
+              <div key={`nyt-direct-test-${article.id}-${index}`}>
+                {renderCompactSideImageArticle(article, {
+                  showRank: index + 1,
+                })}
+              </div>
+            ))}
+            {nytDirectTestArticles.length === 0 ? (
+              <div className="empty-state compact-empty-state">
+                <strong>No NYT direct-test articles yet</strong>
+                <span>Waiting for /api/debug/nyt results.</span>
+              </div>
+            ) : null}
           </div>
         </section>
 
