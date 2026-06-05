@@ -19348,23 +19348,18 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="home-section-block home-section-plain" style={{ marginBottom: "12px" }}>
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">NYT DIRECT TEST</strong>
-            </div>
-          </div>
+        <section className="home-section-block home-section-plain">
           <div className="stack home-section-list top-trending-card-rail">
             {nytDirectTestArticles.map((article, index) => (
               <div key={`nyt-direct-test-${article.id}-${index}`}>
-                {renderCompactSideImageArticle(article, {
-                  showRank: index + 1,
+                {renderArticleFeedCard(article, {
+                  rankLabel: `${index + 1}`,
                 })}
               </div>
             ))}
             {nytDirectTestArticles.length === 0 ? (
               <div className="empty-state compact-empty-state">
-                <strong>No NYT direct-test articles yet</strong>
+                <strong>No NYT articles loaded yet</strong>
                 <span>Waiting for /api/debug/nyt results.</span>
               </div>
             ) : null}
