@@ -4470,6 +4470,11 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     return fetchFoodArticles(params);
   }
 
+  const gnewsApiKey = getGnewsApiKey();
+  const currentsApiKey = getCurrentsApiKey();
+  const nytKey = process.env.NYT_API_KEY ?? "";
+  const guardianApiKey = getGuardianApiKey();
+
   const cacheKey = JSON.stringify({
     mode: params.mode,
     cityKey: params.cityKey,
@@ -4480,17 +4485,18 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     categories: params.categories,
     page: params.page,
     pageSize: params.pageSize,
+    env: {
+      gnewsLength: gnewsApiKey.length,
+      currentsLength: currentsApiKey.length,
+      nytLength: nytKey.length,
+      guardianLength: guardianApiKey.length,
+    },
   });
   const cached = responseCache.get(cacheKey);
 
   if (cached && cached.expiresAt > Date.now()) {
     return cached.payload;
   }
-
-  const gnewsApiKey = getGnewsApiKey();
-  const currentsApiKey = getCurrentsApiKey();
-  const nytKey = process.env.NYT_API_KEY ?? "";
-  const guardianApiKey = getGuardianApiKey();
 
   const providerFetchers = [
     { name: "NewsAPI", run: () => fetchNewsApiArticles(params) },
