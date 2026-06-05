@@ -19397,16 +19397,21 @@ export default function Home() {
             </div>
           </div>
           <div className="stack home-section-list top-trending-card-rail">
+            <div key={`nyt-direct-hardcoded-${TEST_NYT_VISIBLE_ARTICLE.id}`}>
+              {renderCompactSideImageArticle(TEST_NYT_VISIBLE_ARTICLE, {
+                showRank: 1,
+              })}
+            </div>
             {nytDirectTestArticles.map((article, index) => (
               <div key={`nyt-direct-test-${article.id}-${index}`}>
                 {renderCompactSideImageArticle(article, {
-                  showRank: index + 1,
+                  showRank: index + 2,
                 })}
               </div>
             ))}
             {nytDirectTestArticles.length === 0 ? (
               <div className="empty-state compact-empty-state">
-                <strong>No NYT direct-test articles yet</strong>
+                <strong>Hardcoded NYT test article is visible</strong>
                 <span>Waiting for /api/debug/nyt results.</span>
               </div>
             ) : null}
