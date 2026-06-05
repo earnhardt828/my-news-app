@@ -2842,6 +2842,33 @@ type VisibleNewsRouteDebug = {
   nytKeyLengthFromNewsRoute: number;
 };
 
+const TRENDING_VISIBLE_DATA_SOURCE_LABEL =
+  "/api/news -> normalizeNewsPayload -> newsPayload.articles -> setArticles -> displayedArticles -> visibleArticles";
+
+const TEST_NYT_VISIBLE_ARTICLE: Article = {
+  id: 999000111,
+  title: "TEST NYT VISIBLE ARTICLE",
+  source: "The New York Times",
+  category: "World",
+  time: "Visible feed test",
+  image: "https://static01.nyt.com/images/2020/03/18/world/18virus-briefing-promo/18virus-briefing-promo-facebookJumbo-v2.jpg",
+  imageUrl:
+    "https://static01.nyt.com/images/2020/03/18/world/18virus-briefing-promo/18virus-briefing-promo-facebookJumbo-v2.jpg",
+  urlToImage:
+    "https://static01.nyt.com/images/2020/03/18/world/18virus-briefing-promo/18virus-briefing-promo-facebookJumbo-v2.jpg",
+  description:
+    "Temporary NYT visibility test inserted directly into the exact Trending article array.",
+  url: "https://www.nytimes.com/",
+  publishedAt: new Date().toISOString(),
+  content: "Temporary NYT visibility test article.",
+  likes: 0,
+  likeUsers: [],
+  likedByCurrentUser: false,
+  comments: [],
+  saved: false,
+  provider: "nyt",
+};
+
 const BUSINESS_STOCK_TICKER_ORDER = [
   "AAPL",
   "MSFT",
@@ -10931,7 +10958,19 @@ export default function Home() {
     });
   }, [displayedArticles, localLocationLabel, localQuery, selectedLocalCity, sortMode]);
 
-  const visibleArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
+  const visibleArticles = useMemo(() => {
+    const baseArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
+
+    if (sortMode !== "trending") {
+      return baseArticles;
+    }
+
+    const withoutTestArticle = baseArticles.filter(
+      (article) => article.id !== TEST_NYT_VISIBLE_ARTICLE.id
+    );
+
+    return [TEST_NYT_VISIBLE_ARTICLE, ...withoutTestArticle];
+  }, [balancedLocalArticles, displayedArticles, sortMode]);
 
   const visibleProviderCounts = useMemo(() => {
     return visibleArticles.reduce(
@@ -19202,6 +19241,9 @@ export default function Home() {
           </div>
           <div className="provider-debug-panel">
             <strong className="provider-debug-title">Visible provider counts</strong>
+            <div className="provider-debug-counts">
+              <span>TRENDING DATA SOURCE: {TRENDING_VISIBLE_DATA_SOURCE_LABEL}</span>
+            </div>
             <div className="provider-debug-counts">
               <span>CURRENT: {visibleProviderCounts.CURRENT}</span>
               <span>GNEWS: {visibleProviderCounts.GNEWS}</span>
