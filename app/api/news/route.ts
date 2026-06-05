@@ -121,6 +121,15 @@ type NewsRouteResponse = {
   pageSize: number;
   nytKeyPresentFromNewsRoute?: boolean;
   nytKeyLengthFromNewsRoute?: number;
+  debug?:
+    | ProviderDebugSummary
+    | {
+        source: string;
+        nytKeyPresent: boolean;
+        nytKeyLength: number;
+        rawCount: number;
+        imageCount: number;
+      };
   debugEnv?: {
     guardian: boolean;
     nyt: boolean;
@@ -4432,6 +4441,62 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   if (cached && cached.expiresAt > Date.now()) {
     return cached.payload;
   }
+
+  const nytOnlyResult = await fetchNytTopStories(
+    getNytTopStoriesSections(params.mode, params.categories)
+  );
+
+  const nytOnlyArticles = nytOnlyResult.articles
+    .map((article, index) =>
+      buildNormalizedArticle(
+        {
+          title: article.title,
+          description: article.description,
+          url: article.url,
+          imageUrl: article.imageUrl,
+          publishedAt: article.publishedAt,
+          source_name: article.source,
+          category: article.category,
+        },
+        {
+          source: article.source,
+          category: article.category ?? "News",
+          uniqueSeed: `nyt-only-${params.page}-${index}`,
+          fallbackPublishedOffsetHours: index,
+          provider: article.provider,
+        }
+      )
+    )
+    .filter((article): article is NormalizedArticle => Boolean(article && hasRealArticleImage(article)));
+
+  const nytOnlyPayload: NewsRouteResponse = {
+    articles: nytOnlyArticles.slice(0, params.pageSize),
+    nextPage: nytOnlyArticles.length > params.pageSize ? params.page + 1 : null,
+    hasMore: nytOnlyArticles.length > params.pageSize,
+    page: params.page,
+    pageSize: params.pageSize,
+    nytKeyPresentFromNewsRoute: nytOnlyResult.keyPresent,
+    nytKeyLengthFromNewsRoute: nytOnlyResult.keyLength,
+    debug: {
+      source: "NYT_ONLY_TEST",
+      nytKeyPresent: nytOnlyResult.keyPresent,
+      nytKeyLength: nytOnlyResult.keyLength,
+      rawCount: nytOnlyResult.rawCount,
+      imageCount: nytOnlyResult.imageCount,
+    },
+    debugEnv: {
+      guardian: Boolean(process.env.GUARDIAN_API_KEY),
+      nyt: nytOnlyResult.keyPresent,
+      currents: Boolean(process.env.CURRENTS_API_KEY),
+    },
+  };
+
+  responseCache.set(cacheKey, {
+    expiresAt: Date.now() + CACHE_TTL_MS,
+    payload: nytOnlyPayload,
+  });
+
+  return nytOnlyPayload;
 
   const providerFetchers = [
     { name: "NewsAPI", run: () => fetchNewsApiArticles(params) },
