@@ -3176,6 +3176,14 @@ async function fetchCurrentsArticles(params: ProviderFetchParams): Promise<Provi
     "CURRENTS_IMAGE_ARTICLE_COUNT",
     normalizedArticles.filter((article) => hasUsablePrimaryImageUrl(article.imageUrl)).length
   );
+  if (normalizedArticles.length > 0) {
+    console.log("CURRENTS_DEBUG_WORKING", {
+      rawCount,
+      imageCount,
+      firstTitle: normalizedArticles[0]?.title ?? null,
+      firstImage: normalizedArticles[0]?.imageUrl ?? null,
+    });
+  }
   logProviderArticleStats("Currents", normalizedArticles);
 
   return {
@@ -3526,6 +3534,14 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
     "GUARDIAN IMAGE COUNT",
     normalizedArticles.filter((article) => hasRealArticleImage(article)).length
   );
+  if (normalizedArticles.length > 0) {
+    console.log("GUARDIAN_DEBUG_WORKING", {
+      rawCount,
+      imageCount,
+      firstTitle: normalizedArticles[0]?.title ?? null,
+      firstImage: normalizedArticles[0]?.imageUrl ?? null,
+    });
+  }
   logProviderArticleStats("The Guardian", normalizedArticles);
   return {
     articles: normalizedArticles,
@@ -3665,6 +3681,14 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
   logProviderRawCount("New York Times", rawCount);
   logProviderImageCount("New York Times", normalizedArticles.length);
   console.log("NYT IMAGE COUNT", normalizedArticles.length);
+  if (normalizedArticles.length > 0) {
+    console.log("NYT_DEBUG_WORKING", {
+      rawCount,
+      imageCount: normalizedArticles.length,
+      firstTitle: normalizedArticles[0]?.title ?? null,
+      firstImage: normalizedArticles[0]?.imageUrl ?? null,
+    });
+  }
 
   logProviderArticleStats("New York Times", normalizedArticles);
   return {
@@ -4601,6 +4625,14 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   const combined = providerResponses.flatMap((result) =>
     result.status === "fulfilled" ? result.value.articles : []
   );
+  providerResponses.forEach((result, index) => {
+    if (result.status === "fulfilled" && result.value.articles.length > 0) {
+      console.log("PROVIDER_MERGED_TO_NEWS", {
+        provider: providerFetchers[index].name,
+        count: result.value.articles.length,
+      });
+    }
+  });
   const combinedProviderCounts = getPipelineProviderCounts(combined);
   console.log("MAIN PIPELINE CURRENT COUNT", combinedProviderCounts.current);
   console.log("GNEWS_VISIBLE_PIPELINE_COUNT", combinedProviderCounts.gnews);
@@ -4639,6 +4671,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     params.mode === "trending" ? balanceTrendingArticles(enrichedRealArticles) : enrichedRealArticles;
   console.log("MAIN PIPELINE FINAL RENDER COUNT", finalRealArticles.length);
   console.log("FINAL_VISIBLE_PROVIDER_COUNTS", getPipelineProviderCounts(finalRealArticles));
+  console.log("FINAL_PROVIDER_COUNTS", getPipelineProviderCounts(finalRealArticles));
   const realSliced = finalRealArticles.slice(0, params.pageSize);
   const hasMore = providerResponses.some(
     (result) => result.status === "fulfilled" && result.value.hasMore
