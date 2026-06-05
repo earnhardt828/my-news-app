@@ -2847,17 +2847,18 @@ const TRENDING_VISIBLE_DATA_SOURCE_LABEL =
 
 const TEST_NYT_VISIBLE_ARTICLE: Article = {
   id: 999000111,
-  title: "TEST NYT VISIBLE ARTICLE",
-  source: "The New York Times",
+  title: "TEST ARTICLE DIRECTLY IN TRENDING COMPONENT",
+  source: "Test Source",
   category: "World",
   time: "Visible feed test",
-  image: "https://static01.nyt.com/images/2020/03/18/world/18virus-briefing-promo/18virus-briefing-promo-facebookJumbo-v2.jpg",
+  image:
+    "https://static01.nyt.com/images/2026/06/04/multimedia/04dc-memo-03-bqzf/04dc-memo-03-bqzf-superJumbo.jpg",
   imageUrl:
-    "https://static01.nyt.com/images/2020/03/18/world/18virus-briefing-promo/18virus-briefing-promo-facebookJumbo-v2.jpg",
+    "https://static01.nyt.com/images/2026/06/04/multimedia/04dc-memo-03-bqzf/04dc-memo-03-bqzf-superJumbo.jpg",
   urlToImage:
-    "https://static01.nyt.com/images/2020/03/18/world/18virus-briefing-promo/18virus-briefing-promo-facebookJumbo-v2.jpg",
+    "https://static01.nyt.com/images/2026/06/04/multimedia/04dc-memo-03-bqzf/04dc-memo-03-bqzf-superJumbo.jpg",
   description:
-    "Temporary NYT visibility test inserted directly into the exact Trending article array.",
+    "Temporary direct Trending component visibility test inserted into the exact rendered array.",
   url: "https://www.nytimes.com/",
   publishedAt: new Date().toISOString(),
   content: "Temporary NYT visibility test article.",
@@ -2866,7 +2867,7 @@ const TEST_NYT_VISIBLE_ARTICLE: Article = {
   likedByCurrentUser: false,
   comments: [],
   saved: false,
-  provider: "nyt",
+  provider: "test",
 };
 
 const BUSINESS_STOCK_TICKER_ORDER = [
@@ -10994,6 +10995,24 @@ export default function Home() {
       } as Record<"CURRENT" | "GNEWS" | "GUARDIAN" | "NYT" | "CURRENTS", number>
     );
   }, [visibleArticles]);
+
+  const trendingDebugFirstTitles = useMemo(
+    () =>
+      visibleArticles
+        .slice(0, 3)
+        .map((article) => article.title)
+        .filter(Boolean),
+    [visibleArticles]
+  );
+
+  const trendingDebugFirstProviders = useMemo(
+    () =>
+      visibleArticles
+        .slice(0, 3)
+        .map((article) => getArticleProviderLabel(article.provider))
+        .filter(Boolean),
+    [visibleArticles]
+  );
 
   const sportsTabArticles = useMemo(() => {
     const rawSportsArticles =
@@ -19231,6 +19250,24 @@ export default function Home() {
   if (sortMode === "trending") {
     return (
       <section className="page-shell home-sections-shell">
+        <section className="provider-debug-panel" style={{ marginBottom: "12px" }}>
+          <strong className="provider-debug-title">TRENDING DEBUG ACTIVE</strong>
+          <div className="provider-debug-counts">
+            <span>FILE: {ACTUAL_TRENDING_SOURCE_FILE}</span>
+          </div>
+          <div className="provider-debug-counts">
+            <span>FETCH URL: {actualTrendingFetchUrl}</span>
+          </div>
+          <div className="provider-debug-counts">
+            <span>FIRST 3 TITLES: {trendingDebugFirstTitles.join(" | ") || "none"}</span>
+          </div>
+          <div className="provider-debug-counts">
+            <span>
+              FIRST 3 PROVIDERS: {trendingDebugFirstProviders.join(" | ") || "none"}
+            </span>
+          </div>
+        </section>
+
         {renderHomeTopNavigation("trending")}
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
