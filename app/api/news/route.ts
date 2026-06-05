@@ -119,6 +119,8 @@ type NewsRouteResponse = {
   hasMore: boolean;
   page: number;
   pageSize: number;
+  nytKeyPresent?: boolean;
+  nytKeyLength?: number;
   debugEnv?: {
     guardian: boolean;
     nyt: boolean;
@@ -1904,6 +1906,19 @@ function getModeCategories(mode: NewsMode, categories: string[]) {
 }
 
 function getNytTopStoriesSections(mode: NewsMode, categories: string[]) {
+  const defaultSections = [
+    "home",
+    "world",
+    "us",
+    "politics",
+    "business",
+    "technology",
+    "science",
+    "arts",
+    "movies",
+    "travel",
+    "food",
+  ];
   const sectionMap: Record<string, string[]> = {
     "Breaking News": ["home", "us", "world"],
     Politics: ["politics", "us"],
@@ -1930,15 +1945,15 @@ function getNytTopStoriesSections(mode: NewsMode, categories: string[]) {
     (category) => sectionMap[category] ?? ["home"]
   );
 
-  if (mode === "search") {
-    derivedSections.unshift("home", "world", "us", "politics", "business", "technology", "science", "arts");
+  if (mode === "search" || mode === "latest") {
+    derivedSections.unshift(...defaultSections);
   }
 
   return Array.from(
     new Set(
-      (derivedSections.length > 0 ? derivedSections : ["home", "world", "us", "politics", "business", "technology", "science", "arts"])
+      (derivedSections.length > 0 ? derivedSections : defaultSections)
         .filter(Boolean)
-        .slice(0, mode === "search" ? 8 : 6)
+        .slice(0, mode === "search" || mode === "latest" ? defaultSections.length : 6)
     )
   );
 }
@@ -3566,10 +3581,10 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
 }
 
 async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
-  const nytApiKey = getNytApiKey();
-  console.log("NYT API KEY PRESENT", Boolean(nytApiKey));
+  const nytKey = process.env.NYT_API_KEY ?? "";
+  console.log("NYT API KEY PRESENT", Boolean(nytKey));
 
-  if (!nytApiKey) {
+  if (!nytKey) {
     logProviderSkip("New York Times", "NYT_API_KEY is missing");
     return {
       articles: [],
@@ -3603,8 +3618,8 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
   const sectionResponses = await Promise.allSettled(
     sections.map(async (section) => {
       const url = new URL(`https://api.nytimes.com/svc/topstories/v2/${section}.json`);
-      url.searchParams.set("api-key", nytApiKey);
-      console.log("NYT REQUEST URL", url.toString().replace(nytApiKey, "[REDACTED]"));
+      url.searchParams.set("api-key", nytKey);
+      console.log("NYT REQUEST URL", url.toString().replace(nytKey, "[REDACTED]"));
 
       const response = await fetch(url.toString(), {
         next: { revalidate: 600 },
@@ -3700,7 +3715,7 @@ async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderRe
     articles: normalizedArticles,
     hasMore: normalizedArticles.length >= params.pageSize,
     debug: {
-      keyPresent: Boolean(nytApiKey),
+      keyPresent: Boolean(nytKey),
       fetchStarted: true,
       skippedReason: null,
       requestUrl: sections[0]
@@ -4474,7 +4489,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
   const gnewsApiKey = getGnewsApiKey();
   const currentsApiKey = getCurrentsApiKey();
-  const nytApiKey = getNytApiKey();
+  const nytKey = process.env.NYT_API_KEY ?? "";
   const guardianApiKey = getGuardianApiKey();
 
   const providerFetchers = [
@@ -4566,7 +4581,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
 
       if (providerName === "New York Times") {
         accumulator.nyt = {
-          keyPresent: debug?.keyPresent ?? Boolean(nytApiKey),
+          keyPresent: debug?.keyPresent ?? Boolean(nytKey),
           fetchStarted: debug?.fetchStarted ?? false,
           skippedReason: debug?.skippedReason ?? null,
           requestUrl: debug?.requestUrl ?? null,
@@ -4597,7 +4612,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     {
       gnews: { keyPresent: Boolean(gnewsApiKey), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
       guardian: { keyPresent: Boolean(guardianApiKey), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
-      nyt: { keyPresent: Boolean(nytApiKey), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+      nyt: { keyPresent: Boolean(nytKey), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
       currents: { keyPresent: Boolean(currentsApiKey), fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
     } as NonNullable<NewsRouteResponse["providerDebug"]>
   );
@@ -4613,7 +4628,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
       gnews: Boolean(gnewsApiKey),
       currents: Boolean(currentsApiKey),
       mediaStack: Boolean(MEDIASTACK_API_KEY),
-      nyt: Boolean(nytApiKey),
+      nyt: Boolean(nytKey),
       guardian: Boolean(guardianApiKey),
       bingNews: Boolean(BING_NEWS_API_KEY),
       googleNewsRss: true,
@@ -4697,10 +4712,12 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   console.log("FALLBACK USED", fallbackUsed);
   const debugEnv = {
     guardian: Boolean(process.env.GUARDIAN_API_KEY),
-    nyt: Boolean(process.env.NYT_API_KEY),
+    nyt: Boolean(nytKey),
     currents: Boolean(process.env.CURRENTS_API_KEY),
   };
-  console.log("SERVER DEBUG ENV", debugEnv);
+  console.log("SERVER ENV CHECK", debugEnv);
+  const nytKeyPresent = Boolean(nytKey);
+  const nytKeyLength = nytKey?.length || 0;
   console.log(
     "FIRST 5 IMAGE URLS",
     finalRealArticles.slice(0, 5).map((article) => ({
@@ -4719,6 +4736,8 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           hasMore,
           page: params.page,
           pageSize: params.pageSize,
+          nytKeyPresent,
+          nytKeyLength,
           debugEnv,
           providerDebug,
         }
@@ -4727,6 +4746,8 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           nextPage: params.page + 1,
           page: params.page,
           pageSize: params.pageSize,
+          nytKeyPresent,
+          nytKeyLength,
           debugEnv,
           providerDebug,
         };

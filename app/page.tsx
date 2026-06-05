@@ -2857,26 +2857,6 @@ const BUSINESS_STOCK_TICKER_ORDER = [
   "IWM",
 ] as const;
 
-const TEST_PROVIDER_ARTICLE_ACTIVE = true;
-const TEST_PROVIDER_ARTICLE: Article = {
-  id: 9990001,
-  title: "TEST GNEWS ARTICLE",
-  source: "Test Provider Wire",
-  category: "Breaking News",
-  time: "Just now",
-  description: "Temporary provider pipeline test article for verifying the visible Trending UI array.",
-  url: "https://example.com/test-gnews-article",
-  imageUrl: "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=80",
-  publishedAt: "2026-06-03T12:00:00.000Z",
-  content: "Temporary provider pipeline test article for verifying the visible Trending UI array.",
-  likes: 0,
-  likeUsers: [],
-  likedByCurrentUser: false,
-  comments: [],
-  saved: false,
-  provider: "gnews",
-};
-
 const EMPTY_VISIBLE_PROVIDER_DEBUG: VisibleProviderDebug = {
   gnews: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
   guardian: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
@@ -7784,11 +7764,6 @@ export default function Home() {
         };
       });
 
-      const mergedArticlesWithProviderTest =
-        TEST_PROVIDER_ARTICLE_ACTIVE && feedMode === "trending" && replace && pageToLoad === 1
-          ? mergeArticlesByIdentity([TEST_PROVIDER_ARTICLE], mergedArticles)
-          : mergedArticles;
-
       setBlockedUserIds(
         ownBlockedUsersData.map((blockedUser) => blockedUser.blocked_id)
       );
@@ -7804,9 +7779,9 @@ export default function Home() {
           receivedFallbackFeed && replace
             ? cachedFeed?.articles ?? prev
             : replace
-              ? mergedArticlesWithProviderTest
-              : mergeArticlesByIdentity(prev, mergedArticlesWithProviderTest);
-        if (feedMode === "sports" && replace && mergedArticlesWithProviderTest.length === 0 && prev.length > 0) {
+              ? mergedArticles
+              : mergeArticlesByIdentity(prev, mergedArticles);
+        if (feedMode === "sports" && replace && mergedArticles.length === 0 && prev.length > 0) {
           console.log("SPORTS STATE UPDATE SOURCE", "live-feed-empty-ignored");
           console.log("SPORTS STATE UPDATE COUNT", prev.length);
           return prev;
