@@ -2901,6 +2901,8 @@ const EMPTY_VISIBLE_NEWS_ROUTE_DEBUG: VisibleNewsRouteDebug = {
   nytKeyLengthFromNewsRoute: 0,
 };
 
+const ACTUAL_TRENDING_SOURCE_FILE = "/Users/erniewilson/my-news-app/app/page.tsx";
+
 type TopicFallbackGroup = {
   keyword: string;
   pattern: RegExp;
@@ -6597,6 +6599,7 @@ export default function Home() {
     useState<VisibleProviderDebug>(EMPTY_VISIBLE_PROVIDER_DEBUG);
   const [visibleNewsRouteDebug, setVisibleNewsRouteDebug] =
     useState<VisibleNewsRouteDebug>(EMPTY_VISIBLE_NEWS_ROUTE_DEBUG);
+  const [actualTrendingFetchUrl, setActualTrendingFetchUrl] = useState<string>("uninitialized");
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
     | "trending"
@@ -7553,6 +7556,9 @@ export default function Home() {
       {
         const newsUrl = buildApiUrl(newsPath);
         console.log("TRENDING FETCH URL", newsUrl);
+        if (feedMode === "trending") {
+          setActualTrendingFetchUrl(newsPath);
+        }
 
         const articleFetchController =
           replace && typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -19241,6 +19247,15 @@ export default function Home() {
           </div>
           <div className="provider-debug-panel">
             <strong className="provider-debug-title">Visible provider counts</strong>
+            <div className="provider-debug-counts">
+              <span>ACTUAL TRENDING SOURCE FILE: {ACTUAL_TRENDING_SOURCE_FILE}</span>
+            </div>
+            <div className="provider-debug-counts">
+              <span>ACTUAL TRENDING FETCH URL: {actualTrendingFetchUrl}</span>
+            </div>
+            <div className="provider-debug-counts">
+              <span>ACTUAL TRENDING ARTICLE COUNT: {visibleArticles.length}</span>
+            </div>
             <div className="provider-debug-counts">
               <span>TRENDING DATA SOURCE: {TRENDING_VISIBLE_DATA_SOURCE_LABEL}</span>
             </div>
