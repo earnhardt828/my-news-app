@@ -2830,70 +2830,6 @@ type StockTickerItem = {
   source: string;
 };
 
-type VisibleProviderDebug = {
-  gnews: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
-  guardian: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
-  nyt: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
-  currents: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
-};
-
-type VisibleNewsRouteDebug = {
-  nytKeyPresentFromNewsRoute: boolean;
-  nytKeyLengthFromNewsRoute: number;
-};
-
-type NytDebugRouteArticle = {
-  id?: number | string | null;
-  title?: string | null;
-  description?: string | null;
-  url?: string | null;
-  source?: string | null;
-  publishedAt?: string | null;
-  imageUrl?: string | null;
-  category?: string | null;
-  provider?: string | null;
-};
-
-type NytDirectDebugResponse = {
-  articles?: NytDebugRouteArticle[];
-  articlesLength?: number;
-  firstArticleTitle?: string | null;
-  [key: string]: unknown;
-};
-
-const TRENDING_VISIBLE_DATA_SOURCE_LABEL =
-  "/api/news -> normalizeNewsPayload -> newsPayload.articles -> setArticles -> displayedArticles -> visibleArticles";
-
-function mapNytDebugArticleToTrendingArticle(
-  article: NytDebugRouteArticle,
-  index: number
-): Article | null {
-  if (!article.title || !article.url) {
-    return null;
-  }
-
-  return {
-    id: 990000000 + index,
-    title: article.title,
-    source: article.source || "The New York Times",
-    category: article.category || "News",
-    time: article.publishedAt || "NYT Direct Test",
-    image: article.imageUrl ?? null,
-    imageUrl: article.imageUrl ?? null,
-    urlToImage: article.imageUrl ?? null,
-    description: article.description || undefined,
-    url: article.url,
-    publishedAt: article.publishedAt || null,
-    content: article.description || "",
-    likes: 0,
-    likeUsers: [],
-    likedByCurrentUser: false,
-    comments: [],
-    saved: false,
-    provider: "nyt",
-  };
-}
-
 const BUSINESS_STOCK_TICKER_ORDER = [
   "AAPL",
   "MSFT",
@@ -2913,20 +2849,6 @@ const BUSINESS_STOCK_TICKER_ORDER = [
   "DIS",
   "IWM",
 ] as const;
-
-const EMPTY_VISIBLE_PROVIDER_DEBUG: VisibleProviderDebug = {
-  gnews: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
-  guardian: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
-  nyt: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
-  currents: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
-};
-
-const EMPTY_VISIBLE_NEWS_ROUTE_DEBUG: VisibleNewsRouteDebug = {
-  nytKeyPresentFromNewsRoute: false,
-  nytKeyLengthFromNewsRoute: 0,
-};
-
-const ACTUAL_TRENDING_SOURCE_FILE = "/Users/erniewilson/my-news-app/app/page.tsx";
 
 type TopicFallbackGroup = {
   keyword: string;
@@ -6620,15 +6542,6 @@ export default function Home() {
   const topTabsRef = useRef<HTMLDivElement | null>(null);
   const cityOptions = SUPPORTED_LOCAL_CITIES;
   const [articles, setArticles] = useState<Article[]>([]);
-  const [visibleProviderDebug, setVisibleProviderDebug] =
-    useState<VisibleProviderDebug>(EMPTY_VISIBLE_PROVIDER_DEBUG);
-  const [visibleNewsRouteDebug, setVisibleNewsRouteDebug] =
-    useState<VisibleNewsRouteDebug>(EMPTY_VISIBLE_NEWS_ROUTE_DEBUG);
-  const [actualTrendingFetchUrl, setActualTrendingFetchUrl] = useState<string>("uninitialized");
-  const [nytDirectTestArticles, setNytDirectTestArticles] = useState<Article[]>([]);
-  const [nytDirectDebugKeys, setNytDirectDebugKeys] = useState<string[]>([]);
-  const [nytDirectDebugLength, setNytDirectDebugLength] = useState<number>(0);
-  const [nytDirectDebugFirstTitle, setNytDirectDebugFirstTitle] = useState<string>("none");
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
     | "trending"
@@ -7585,9 +7498,6 @@ export default function Home() {
       {
         const newsUrl = buildApiUrl(newsPath);
         console.log("TRENDING FETCH URL", newsUrl);
-        if (feedMode === "trending") {
-          setActualTrendingFetchUrl(newsPath);
-        }
 
         const articleFetchController =
           replace && typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -7613,16 +7523,6 @@ export default function Home() {
 
         const rawNewsPayload = (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse;
         newsPayload = normalizeNewsPayload(rawNewsPayload);
-        if (!Array.isArray(rawNewsPayload) && rawNewsPayload.providerDebug) {
-          setVisibleProviderDebug(rawNewsPayload.providerDebug);
-          setVisibleNewsRouteDebug({
-            nytKeyPresentFromNewsRoute: rawNewsPayload.nytKeyPresentFromNewsRoute ?? false,
-            nytKeyLengthFromNewsRoute: rawNewsPayload.nytKeyLengthFromNewsRoute ?? 0,
-          });
-        } else if (replace && feedMode === "trending") {
-          setVisibleProviderDebug(EMPTY_VISIBLE_PROVIDER_DEBUG);
-          setVisibleNewsRouteDebug(EMPTY_VISIBLE_NEWS_ROUTE_DEBUG);
-        }
       }
 
       console.log("NEWS API DATA", newsPayload);
@@ -10997,93 +10897,6 @@ export default function Home() {
     const baseArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
     return baseArticles;
   }, [balancedLocalArticles, displayedArticles, sortMode]);
-
-  const visibleProviderCounts = useMemo(() => {
-    return visibleArticles.reduce(
-      (counts, article) => {
-        const providerLabel = getArticleProviderLabel(article.provider);
-        counts[providerLabel] = (counts[providerLabel] ?? 0) + 1;
-        return counts;
-      },
-      {
-        CURRENT: 0,
-        GNEWS: 0,
-        GUARDIAN: 0,
-        NYT: 0,
-        CURRENTS: 0,
-      } as Record<"CURRENT" | "GNEWS" | "GUARDIAN" | "NYT" | "CURRENTS", number>
-    );
-  }, [visibleArticles]);
-
-  const trendingDebugFirstTitles = useMemo(
-    () =>
-      visibleArticles
-        .slice(0, 3)
-        .map((article) => article.title)
-        .filter(Boolean),
-    [visibleArticles]
-  );
-
-  const trendingDebugFirstProviders = useMemo(
-    () =>
-      visibleArticles
-        .slice(0, 3)
-        .map((article) => getArticleProviderLabel(article.provider))
-        .filter(Boolean),
-    [visibleArticles]
-  );
-
-  useEffect(() => {
-    if (sortMode !== "trending") {
-      setNytDirectTestArticles([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadNytDirectTest = async () => {
-      try {
-        const response = await fetch(`/api/debug/nyt?ts=${Date.now()}`, { cache: "no-store" });
-
-        if (!response.ok) {
-          throw new Error(`NYT direct test failed with status ${response.status}`);
-        }
-
-        const payload = (await response.json()) as NytDirectDebugResponse;
-        const payloadKeys = Object.keys(payload);
-        const rawArticles = payload.articles ?? [];
-
-        if (!cancelled) {
-          setNytDirectDebugKeys(payloadKeys);
-          setNytDirectDebugLength(rawArticles.length);
-          setNytDirectDebugFirstTitle(rawArticles[0]?.title ?? "none");
-        }
-
-        const mappedArticles = rawArticles
-          .map((article, index) => mapNytDebugArticleToTrendingArticle(article, index))
-          .filter((article): article is Article => Boolean(article))
-          .slice(0, 5);
-
-        if (!cancelled) {
-          setNytDirectTestArticles(mappedArticles);
-        }
-      } catch (error) {
-        console.error("NYT DIRECT TEST LOAD FAILED", error);
-        if (!cancelled) {
-          setNytDirectDebugKeys([]);
-          setNytDirectDebugLength(0);
-          setNytDirectDebugFirstTitle("none");
-          setNytDirectTestArticles([]);
-        }
-      }
-    };
-
-    void loadNytDirectTest();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sortMode]);
 
   const sportsTabArticles = useMemo(() => {
     const rawSportsArticles =
@@ -19321,51 +19134,6 @@ export default function Home() {
   if (sortMode === "trending") {
     return (
       <section className="page-shell home-sections-shell">
-        <section className="provider-debug-panel" style={{ marginBottom: "12px" }}>
-          <strong className="provider-debug-title">TRENDING DEBUG ACTIVE</strong>
-          <div className="provider-debug-counts">
-            <span>FILE: {ACTUAL_TRENDING_SOURCE_FILE}</span>
-          </div>
-          <div className="provider-debug-counts">
-            <span>FETCH URL: {actualTrendingFetchUrl}</span>
-          </div>
-          <div className="provider-debug-counts">
-            <span>FIRST 3 TITLES: {trendingDebugFirstTitles.join(" | ") || "none"}</span>
-          </div>
-          <div className="provider-debug-counts">
-            <span>
-              FIRST 3 PROVIDERS: {trendingDebugFirstProviders.join(" | ") || "none"}
-            </span>
-          </div>
-          <div className="provider-debug-counts">
-            <span>NYT_DIRECT_KEYS: {nytDirectDebugKeys.join(",") || "none"}</span>
-          </div>
-          <div className="provider-debug-counts">
-            <span>NYT_DIRECT_LENGTH: {nytDirectDebugLength}</span>
-          </div>
-          <div className="provider-debug-counts">
-            <span>NYT_DIRECT_FIRST_TITLE: {nytDirectDebugFirstTitle}</span>
-          </div>
-        </section>
-
-        <section className="home-section-block home-section-plain">
-          <div className="stack home-section-list top-trending-card-rail">
-            {nytDirectTestArticles.map((article, index) => (
-              <div key={`nyt-direct-test-${article.id}-${index}`}>
-                {renderArticleFeedCard(article, {
-                  rankLabel: `${index + 1}`,
-                })}
-              </div>
-            ))}
-            {nytDirectTestArticles.length === 0 ? (
-              <div className="empty-state compact-empty-state">
-                <strong>No NYT articles loaded yet</strong>
-                <span>Waiting for /api/debug/nyt results.</span>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
         {renderHomeTopNavigation("trending")}
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
@@ -19378,58 +19146,6 @@ export default function Home() {
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
               <strong className="profile-section-title home-section-title">Trending Top 5</strong>
-            </div>
-          </div>
-          <div className="provider-debug-panel">
-            <strong className="provider-debug-title">Visible provider counts</strong>
-            <div className="provider-debug-counts">
-              <span>ACTUAL TRENDING SOURCE FILE: {ACTUAL_TRENDING_SOURCE_FILE}</span>
-            </div>
-            <div className="provider-debug-counts">
-              <span>ACTUAL TRENDING FETCH URL: {actualTrendingFetchUrl}</span>
-            </div>
-            <div className="provider-debug-counts">
-              <span>ACTUAL TRENDING ARTICLE COUNT: {visibleArticles.length}</span>
-            </div>
-            <div className="provider-debug-counts">
-              <span>TRENDING DATA SOURCE: {TRENDING_VISIBLE_DATA_SOURCE_LABEL}</span>
-            </div>
-            <div className="provider-debug-counts">
-              <span>CURRENT: {visibleProviderCounts.CURRENT}</span>
-              <span>GNEWS: {visibleProviderCounts.GNEWS}</span>
-              <span>GUARDIAN: {visibleProviderCounts.GUARDIAN}</span>
-              <span>NYT: {visibleProviderCounts.NYT}</span>
-              <span>CURRENTS: {visibleProviderCounts.CURRENTS}</span>
-            </div>
-            <div className="provider-debug-raw-grid">
-              <span>GUARDIAN_KEY_PRESENT: {String(Boolean(visibleProviderDebug.guardian.keyPresent))}</span>
-              <span>NYT_KEY_PRESENT: {String(visibleNewsRouteDebug.nytKeyPresentFromNewsRoute)}</span>
-              <span>NYT_KEY_LENGTH: {visibleNewsRouteDebug.nytKeyLengthFromNewsRoute}</span>
-              <span>CURRENTS_KEY_PRESENT: {String(Boolean(visibleProviderDebug.currents.keyPresent))}</span>
-              <span>
-                Guardian raw/image/rejected: {visibleProviderDebug.guardian.rawCount}/
-                {visibleProviderDebug.guardian.imageCount}/
-                {visibleProviderDebug.guardian.rejectedCount}
-              </span>
-              <span>{visibleProviderDebug.guardian.skippedReason ?? "Guardian fetch attempted"}</span>
-              <span>Guardian status: {visibleProviderDebug.guardian.status ?? "n/a"}</span>
-              <span>Guardian URL: {visibleProviderDebug.guardian.requestUrl ?? "n/a"}</span>
-              <span>
-                NYT raw/image/rejected: {visibleProviderDebug.nyt.rawCount}/
-                {visibleProviderDebug.nyt.imageCount}/
-                {visibleProviderDebug.nyt.rejectedCount}
-              </span>
-              <span>{visibleProviderDebug.nyt.skippedReason ?? "NYT fetch attempted"}</span>
-              <span>NYT status: {visibleProviderDebug.nyt.status ?? "n/a"}</span>
-              <span>NYT URL: {visibleProviderDebug.nyt.requestUrl ?? "n/a"}</span>
-              <span>
-                Currents raw/image/rejected: {visibleProviderDebug.currents.rawCount}/
-                {visibleProviderDebug.currents.imageCount}/
-                {visibleProviderDebug.currents.rejectedCount}
-              </span>
-              <span>{visibleProviderDebug.currents.skippedReason ?? "Currents fetch attempted"}</span>
-              <span>Currents status: {visibleProviderDebug.currents.status ?? "n/a"}</span>
-              <span>Currents URL: {visibleProviderDebug.currents.requestUrl ?? "n/a"}</span>
             </div>
           </div>
           <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">

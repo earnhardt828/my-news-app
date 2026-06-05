@@ -3013,6 +3013,23 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
         category,
       });
     });
+
+    if (params.mode === "trending" || params.mode === "latest") {
+      [
+        { query: "breaking news", category: "Breaking News" },
+        { query: "crime news", category: "Crime" },
+        { query: "technology news", category: "Technology" },
+        { query: "entertainment news", category: "Entertainment" },
+        { query: "general news", category: "News" },
+      ].forEach(({ query, category }) => {
+        requests.push({
+          url: `https://gnews.io/api/v4/search?q=${encodeURIComponent(
+            query
+          )}&lang=en&country=us&max=${perCategoryPageSize}&page=${params.page}&expand=content&token=${gnewsApiKey}`,
+          category,
+        });
+      });
+    }
   }
 
   logProviderRequest("GNews", {
@@ -3590,6 +3607,25 @@ async function fetchGuardianArticles(params: ProviderFetchParams): Promise<Provi
 }
 
 async function fetchNytArticles(params: ProviderFetchParams): Promise<ProviderResponse> {
+  if (NYT_PROVIDER_DISABLED) {
+    logProviderSkip("New York Times", "NYT_PROVIDER_DISABLED is active");
+    return {
+      articles: [],
+      hasMore: false,
+      debug: {
+        keyPresent: false,
+        fetchStarted: false,
+        skippedReason: "Provider skipped: NYT_PROVIDER_DISABLED",
+        requestUrl: null,
+        status: null,
+        bodyPreview: null,
+        rawCount: 0,
+        imageCount: 0,
+        rejectedCount: 0,
+      },
+    };
+  }
+
   const categories = getModeCategories(params.mode, params.categories);
   const sections = getNytTopStoriesSections(params.mode, params.categories);
   console.log("NYT_FETCH_STARTED", { sections });
@@ -4442,62 +4478,6 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     return cached.payload;
   }
 
-  const nytOnlyResult = await fetchNytTopStories(
-    getNytTopStoriesSections(params.mode, params.categories)
-  );
-
-  const nytOnlyArticles = nytOnlyResult.articles
-    .map((article, index) =>
-      buildNormalizedArticle(
-        {
-          title: article.title,
-          description: article.description,
-          url: article.url,
-          imageUrl: article.imageUrl,
-          publishedAt: article.publishedAt,
-          source_name: article.source,
-          category: article.category,
-        },
-        {
-          source: article.source,
-          category: article.category ?? "News",
-          uniqueSeed: `nyt-only-${params.page}-${index}`,
-          fallbackPublishedOffsetHours: index,
-          provider: article.provider,
-        }
-      )
-    )
-    .filter((article): article is NormalizedArticle => Boolean(article && hasRealArticleImage(article)));
-
-  const nytOnlyPayload: NewsRouteResponse = {
-    articles: nytOnlyArticles.slice(0, params.pageSize),
-    nextPage: nytOnlyArticles.length > params.pageSize ? params.page + 1 : null,
-    hasMore: nytOnlyArticles.length > params.pageSize,
-    page: params.page,
-    pageSize: params.pageSize,
-    nytKeyPresentFromNewsRoute: nytOnlyResult.keyPresent,
-    nytKeyLengthFromNewsRoute: nytOnlyResult.keyLength,
-    debug: {
-      source: "NYT_ONLY_TEST",
-      nytKeyPresent: nytOnlyResult.keyPresent,
-      nytKeyLength: nytOnlyResult.keyLength,
-      rawCount: nytOnlyResult.rawCount,
-      imageCount: nytOnlyResult.imageCount,
-    },
-    debugEnv: {
-      guardian: Boolean(process.env.GUARDIAN_API_KEY),
-      nyt: nytOnlyResult.keyPresent,
-      currents: Boolean(process.env.CURRENTS_API_KEY),
-    },
-  };
-
-  responseCache.set(cacheKey, {
-    expiresAt: Date.now() + CACHE_TTL_MS,
-    payload: nytOnlyPayload,
-  });
-
-  return nytOnlyPayload;
-
   const providerFetchers = [
     { name: "NewsAPI", run: () => fetchNewsApiArticles(params) },
     { name: "GNews", run: () => fetchGNewsArticles(params) },
@@ -4859,3 +4839,4 @@ export async function GET(request: Request) {
   return jsonResponse(payload);
 }
 import { fetchNytTopStories } from "@/lib/server/nytProvider";
+import { NYT_PROVIDER_DISABLED } from "@/lib/feature-flags";

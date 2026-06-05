@@ -1935,8 +1935,12 @@ input {
 }
 
 .article-thumb-shell {
-  width: 92px;
-  height: 92px;
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+  height: 96px;
+  min-height: 96px;
+  max-height: 96px;
   border-radius: 16px;
   overflow: hidden;
   background: rgba(20, 33, 61, 0.08);
@@ -1958,6 +1962,7 @@ input {
 
 .article-card-visual-shell {
   align-self: start;
+  overflow: hidden;
 }
 
 .article-card-visual-image {
@@ -1965,6 +1970,7 @@ input {
   height: 100%;
   object-fit: cover;
   border-radius: 18px;
+  display: block;
 }
 
 .article-card-box-logo-image {
