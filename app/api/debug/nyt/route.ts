@@ -11,14 +11,15 @@ type NytDebugResponse = {
 };
 
 export async function GET() {
-  const nytApiKey = process.env.NYT_API_KEY ?? "";
+  const nytKey = process.env.NYT_API_KEY ?? "";
   const section = "home";
   const url = new URL(`https://api.nytimes.com/svc/topstories/v2/${section}.json`);
-  url.searchParams.set("api-key", nytApiKey);
+  url.searchParams.set("api-key", nytKey);
 
-  if (!nytApiKey) {
+  if (!nytKey) {
     return Response.json({
       keyPresent: false,
+      keyLength: 0,
       requestUrl: url.toString().replace("api-key=", "api-key=[MISSING]"),
       status: null,
       rawCount: 0,
@@ -61,7 +62,8 @@ export async function GET() {
 
     return Response.json({
       keyPresent: true,
-      requestUrl: url.toString().replace(nytApiKey, "[REDACTED]"),
+      keyLength: nytKey?.length || 0,
+      requestUrl: url.toString().replace(nytKey, "[REDACTED]"),
       status: response.status,
       rawCount: payload.results?.length ?? 0,
       imageCount: items.filter((item) => item.hasImage).length,
@@ -72,7 +74,8 @@ export async function GET() {
   } catch (error) {
     return Response.json({
       keyPresent: true,
-      requestUrl: url.toString().replace(nytApiKey, "[REDACTED]"),
+      keyLength: nytKey?.length || 0,
+      requestUrl: url.toString().replace(nytKey, "[REDACTED]"),
       status: null,
       rawCount: 0,
       imageCount: 0,
