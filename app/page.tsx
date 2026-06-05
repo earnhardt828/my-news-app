@@ -2837,6 +2837,11 @@ type VisibleProviderDebug = {
   currents: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
 };
 
+type VisibleNewsRouteDebug = {
+  nytKeyPresentFromNewsRoute: boolean;
+  nytKeyLengthFromNewsRoute: number;
+};
+
 const BUSINESS_STOCK_TICKER_ORDER = [
   "AAPL",
   "MSFT",
@@ -2862,6 +2867,11 @@ const EMPTY_VISIBLE_PROVIDER_DEBUG: VisibleProviderDebug = {
   guardian: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
   nyt: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
   currents: { keyPresent: false, fetchStarted: false, skippedReason: null, requestUrl: null, status: null, bodyPreview: null, rawCount: 0, imageCount: 0, rejectedCount: 0 },
+};
+
+const EMPTY_VISIBLE_NEWS_ROUTE_DEBUG: VisibleNewsRouteDebug = {
+  nytKeyPresentFromNewsRoute: false,
+  nytKeyLengthFromNewsRoute: 0,
 };
 
 type TopicFallbackGroup = {
@@ -2956,6 +2966,8 @@ type PaginatedNewsResponse = {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  nytKeyPresentFromNewsRoute?: boolean;
+  nytKeyLengthFromNewsRoute?: number;
   providerDebug?: {
     gnews: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
     guardian: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
@@ -4566,6 +4578,8 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       hasMore: false,
       page: 1,
       pageSize: renderableArticles.length,
+      nytKeyPresentFromNewsRoute: false,
+      nytKeyLengthFromNewsRoute: 0,
     };
   }
 
@@ -4579,6 +4593,8 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
     page: payload.page ?? 1,
     pageSize: payload.pageSize ?? renderableArticles.length,
     nextPage: payload.nextPage ?? null,
+    nytKeyPresentFromNewsRoute: payload.nytKeyPresentFromNewsRoute ?? false,
+    nytKeyLengthFromNewsRoute: payload.nytKeyLengthFromNewsRoute ?? 0,
   };
 }
 
@@ -6552,6 +6568,8 @@ export default function Home() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [visibleProviderDebug, setVisibleProviderDebug] =
     useState<VisibleProviderDebug>(EMPTY_VISIBLE_PROVIDER_DEBUG);
+  const [visibleNewsRouteDebug, setVisibleNewsRouteDebug] =
+    useState<VisibleNewsRouteDebug>(EMPTY_VISIBLE_NEWS_ROUTE_DEBUG);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [sortMode, setSortMode] = useState<
     | "trending"
@@ -7535,8 +7553,13 @@ export default function Home() {
         newsPayload = normalizeNewsPayload(rawNewsPayload);
         if (!Array.isArray(rawNewsPayload) && rawNewsPayload.providerDebug) {
           setVisibleProviderDebug(rawNewsPayload.providerDebug);
+          setVisibleNewsRouteDebug({
+            nytKeyPresentFromNewsRoute: rawNewsPayload.nytKeyPresentFromNewsRoute ?? false,
+            nytKeyLengthFromNewsRoute: rawNewsPayload.nytKeyLengthFromNewsRoute ?? 0,
+          });
         } else if (replace && feedMode === "trending") {
           setVisibleProviderDebug(EMPTY_VISIBLE_PROVIDER_DEBUG);
+          setVisibleNewsRouteDebug(EMPTY_VISIBLE_NEWS_ROUTE_DEBUG);
         }
       }
 
@@ -19188,7 +19211,8 @@ export default function Home() {
             </div>
             <div className="provider-debug-raw-grid">
               <span>GUARDIAN_KEY_PRESENT: {String(Boolean(visibleProviderDebug.guardian.keyPresent))}</span>
-              <span>NYT_KEY_PRESENT: {String(Boolean(visibleProviderDebug.nyt.keyPresent))}</span>
+              <span>NYT_KEY_PRESENT: {String(visibleNewsRouteDebug.nytKeyPresentFromNewsRoute)}</span>
+              <span>NYT_KEY_LENGTH: {visibleNewsRouteDebug.nytKeyLengthFromNewsRoute}</span>
               <span>CURRENTS_KEY_PRESENT: {String(Boolean(visibleProviderDebug.currents.keyPresent))}</span>
               <span>
                 Guardian raw/image/rejected: {visibleProviderDebug.guardian.rawCount}/

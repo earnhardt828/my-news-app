@@ -119,8 +119,8 @@ type NewsRouteResponse = {
   hasMore: boolean;
   page: number;
   pageSize: number;
-  nytKeyPresent?: boolean;
-  nytKeyLength?: number;
+  nytKeyPresentFromNewsRoute?: boolean;
+  nytKeyLengthFromNewsRoute?: number;
   debugEnv?: {
     guardian: boolean;
     nyt: boolean;
@@ -4722,8 +4722,8 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     currents: Boolean(process.env.CURRENTS_API_KEY),
   };
   console.log("SERVER ENV CHECK", debugEnv);
-  const nytKeyPresent = Boolean(nytKey);
-  const nytKeyLength = nytKey?.length || 0;
+  const nytKeyPresentFromNewsRoute = Boolean(nytKey);
+  const nytKeyLengthFromNewsRoute = nytKey?.length || 0;
   console.log(
     "FIRST 5 IMAGE URLS",
     finalRealArticles.slice(0, 5).map((article) => ({
@@ -4742,8 +4742,8 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           hasMore,
           page: params.page,
           pageSize: params.pageSize,
-          nytKeyPresent,
-          nytKeyLength,
+          nytKeyPresentFromNewsRoute,
+          nytKeyLengthFromNewsRoute,
           debugEnv,
           providerDebug,
         }
@@ -4752,8 +4752,8 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           nextPage: params.page + 1,
           page: params.page,
           pageSize: params.pageSize,
-          nytKeyPresent,
-          nytKeyLength,
+          nytKeyPresentFromNewsRoute,
+          nytKeyLengthFromNewsRoute,
           debugEnv,
           providerDebug,
         };
