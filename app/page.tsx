@@ -7298,7 +7298,8 @@ export default function Home() {
     const replace = options?.replace ?? false;
     const requestId = activeFeedRequestIdRef.current + 1;
     const feedCacheKey = getFeedCacheKey(feedMode);
-    const bypassDirectFeedCache = feedMode === "local" || feedMode === "weather";
+    const bypassDirectFeedCache =
+      feedMode === "local" || feedMode === "weather" || feedMode === "trending";
     const activeFeedTimeoutMs = bypassDirectFeedCache
       ? DIRECT_ROUTE_TIMEOUT_MS
       : INITIAL_FEED_TIMEOUT_MS;
@@ -10653,8 +10654,10 @@ export default function Home() {
     }, 1200);
   };
 
+  const aggregatedArticles = useMemo(() => [...articles], [articles]);
+
   const displayedArticles = useMemo(() => {
-    const copied = [...articles];
+    const copied = [...aggregatedArticles];
 
     if (sortMode === "latest") {
       return rankArticlesWithSourcePreferences(copied, {
@@ -10680,14 +10683,14 @@ export default function Home() {
 
     return copied;
   }, [
-    articles,
+    aggregatedArticles,
     sortMode,
   ]);
 
   const activeCommentsArticle =
     activeCommentsArticleId === null
       ? null
-      : articles.find((article) => article.id === activeCommentsArticleId) ?? null;
+      : aggregatedArticles.find((article) => article.id === activeCommentsArticleId) ?? null;
 
   const displayedBottomSheetComments = useMemo(() => {
     if (!activeCommentsArticle) {
@@ -10910,6 +10913,14 @@ export default function Home() {
     const baseArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
     return baseArticles;
   }, [balancedLocalArticles, displayedArticles, sortMode]);
+
+  const renderedProviderCounts = useMemo(() => {
+    return visibleArticles.reduce<Record<string, number>>((counts, article) => {
+      const provider = getArticleProviderLabel(article.provider);
+      counts[provider] = (counts[provider] ?? 0) + 1;
+      return counts;
+    }, {});
+  }, [visibleArticles]);
 
   const sportsTabArticles = useMemo(() => {
     const rawSportsArticles =
@@ -19151,6 +19162,7 @@ export default function Home() {
 
         <section className="home-section-block home-section-plain" style={{ paddingTop: "8px", paddingBottom: "8px" }}>
           <div className="stack" style={{ gap: "4px" }}>
+            <strong className="muted">RENDERING_SOURCE = aggregatedArticles</strong>
             <strong className="muted">
               CURRENT_SOURCE_FILE: {visiblePipelineDebug?.currentSourceFile ?? "/Users/erniewilson/my-news-app/app/api/news/route.ts"}
             </strong>
@@ -19167,9 +19179,7 @@ export default function Home() {
               TOTAL_AFTER_MERGE: {visiblePipelineDebug?.totalAfterMerge ?? visibleArticles.length}
             </span>
             <span className="muted">
-              VISIBLE_PROVIDER_COUNTS: CURRENT {visiblePipelineDebug?.currentCountBeforeMerge ?? 0} | GNEWS{" "}
-              {visiblePipelineDebug?.gnewsCountBeforeMerge ?? 0} | NYT{" "}
-              {visiblePipelineDebug?.nytCountBeforeMerge ?? 0}
+              CURRENT = {renderedProviderCounts.CURRENT ?? 0} | GNEWS = {renderedProviderCounts.GNEWS ?? 0} | NYT = {renderedProviderCounts.NYT ?? 0}
             </span>
           </div>
         </section>
