@@ -19167,11 +19167,9 @@ export default function Home() {
               TOTAL_AFTER_MERGE: {visiblePipelineDebug?.totalAfterMerge ?? visibleArticles.length}
             </span>
             <span className="muted">
-              REAL_RENDERED_PROVIDERS:{" "}
-              {visibleArticles
-                .slice(0, 8)
-                .map((article) => getArticleProviderLabel(article.provider))
-                .join(" | ")}
+              VISIBLE_PROVIDER_COUNTS: CURRENT {visiblePipelineDebug?.currentCountBeforeMerge ?? 0} | GNEWS{" "}
+              {visiblePipelineDebug?.gnewsCountBeforeMerge ?? 0} | NYT{" "}
+              {visiblePipelineDebug?.nytCountBeforeMerge ?? 0}
             </span>
           </div>
         </section>

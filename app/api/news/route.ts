@@ -1,4 +1,5 @@
 import { looksLikeLowQualityImageUrl } from "../../../lib/article-images";
+import { getArticlesWithDebug } from "../../../lib/news/getArticles";
 import {
   getLocalCityConfigByKey,
   LOCAL_CITY_CONFIGS as SHARED_LOCAL_CITY_CONFIGS,
@@ -4452,17 +4453,55 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     return fetchWeatherArticles(params);
   }
 
-  if (params.mode === "technology") {
-    return fetchTechnologyArticles(params);
-  }
+  const aggregatorCategory =
+    params.query.trim() ||
+    params.categories[0]?.trim() ||
+    (params.mode === "myfeed" || params.mode === "compare" ? "trending" : params.mode);
+  const aggregatorResult = await getArticlesWithDebug(aggregatorCategory);
+  const mappedAggregatorArticles: NormalizedArticle[] = aggregatorResult.articles.map((article) => ({
+    id: article.id,
+    title: article.title,
+    description: article.description,
+    content: article.description,
+    source: article.source,
+    sourceName: article.source,
+    url: article.url,
+    image: article.imageUrl,
+    imageUrl: article.imageUrl,
+    urlToImage: article.imageUrl,
+    mediaContent: null,
+    enclosureUrl: null,
+    ogImage: null,
+    twitterImage: null,
+    thumbnail: null,
+    category: article.category,
+    publishedAt: article.publishedAt,
+    time: "Recent",
+    likes: 0,
+    comments: [],
+    provider: article.provider,
+  }));
+  const startIndex = Math.max(0, (params.page - 1) * params.pageSize);
+  const endIndex = startIndex + params.pageSize;
+  const slicedAggregatorArticles = mappedAggregatorArticles.slice(startIndex, endIndex);
+  const aggregatorHasMore = endIndex < mappedAggregatorArticles.length;
 
-  if (params.mode === "travel") {
-    return fetchTravelArticles(params);
-  }
-
-  if (params.mode === "food") {
-    return fetchFoodArticles(params);
-  }
+  return {
+    articles: slicedAggregatorArticles,
+    nextPage: aggregatorHasMore ? params.page + 1 : null,
+    hasMore: aggregatorHasMore,
+    page: params.page,
+    pageSize: params.pageSize,
+    nytKeyPresentFromNewsRoute: Boolean(process.env.NYT_API_KEY),
+    nytKeyLengthFromNewsRoute: process.env.NYT_API_KEY?.length ?? 0,
+    visiblePipelineDebug: {
+      currentSourceFile: "/Users/erniewilson/my-news-app/lib/news/providers/current.ts",
+      currentCountBeforeMerge: aggregatorResult.counts.current,
+      gnewsCountBeforeMerge: aggregatorResult.counts.gnews,
+      nytCountBeforeMerge: aggregatorResult.counts.nyt,
+      totalAfterMerge: aggregatorResult.counts.totalAfterMerge,
+    },
+  };
 
   const gnewsApiKey = getGnewsApiKey();
   const currentsApiKey = getCurrentsApiKey();
@@ -4486,10 +4525,11 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
       guardianLength: guardianApiKey.length,
     },
   });
-  const cached = responseCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.payload;
+  if (responseCache.has(cacheKey)) {
+    const cachedHit = responseCache.get(cacheKey)!;
+    if (cachedHit.expiresAt > Date.now()) {
+      return cachedHit.payload;
+    }
   }
 
   const providerFetchers = [
