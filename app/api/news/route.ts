@@ -3017,9 +3017,16 @@ async function fetchGNewsArticles(params: ProviderFetchParams): Promise<Provider
     if (params.mode === "trending" || params.mode === "latest") {
       [
         { query: "breaking news", category: "Breaking News" },
+        { query: "politics news", category: "Politics" },
+        { query: "world news", category: "World" },
         { query: "crime news", category: "Crime" },
         { query: "technology news", category: "Technology" },
         { query: "entertainment news", category: "Entertainment" },
+        { query: "business news", category: "Business" },
+        { query: "science news", category: "Science" },
+        { query: "food news", category: "Food" },
+        { query: "travel news", category: "Travel" },
+        { query: "art news", category: "Art" },
         { query: "general news", category: "News" },
       ].forEach(({ query, category }) => {
         requests.push({
