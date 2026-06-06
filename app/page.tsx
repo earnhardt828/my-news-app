@@ -2950,6 +2950,13 @@ type PaginatedNewsResponse = {
     nyt: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
     currents: { keyPresent?: boolean; fetchStarted?: boolean; skippedReason?: string | null; requestUrl?: string | null; status?: number | null; bodyPreview?: unknown; rawCount: number; imageCount: number; rejectedCount: number };
   };
+  visiblePipelineDebug?: {
+    currentSourceFile: string;
+    currentCountBeforeMerge: number;
+    gnewsCountBeforeMerge: number;
+    nytCountBeforeMerge: number;
+    totalAfterMerge: number;
+  };
 };
 
 type TrendingFeedItem =
@@ -4556,6 +4563,7 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       pageSize: renderableArticles.length,
       nytKeyPresentFromNewsRoute: false,
       nytKeyLengthFromNewsRoute: 0,
+      visiblePipelineDebug: undefined,
     };
   }
 
@@ -4571,6 +4579,7 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
     nextPage: payload.nextPage ?? null,
     nytKeyPresentFromNewsRoute: payload.nytKeyPresentFromNewsRoute ?? false,
     nytKeyLengthFromNewsRoute: payload.nytKeyLengthFromNewsRoute ?? 0,
+    visiblePipelineDebug: payload.visiblePipelineDebug,
   };
 }
 
@@ -6568,6 +6577,9 @@ export default function Home() {
   const [selectedLocalCityKey, setSelectedLocalCityKey] = useState<string | null>(null);
   const [preferredSources, setPreferredSources] = useState<string[]>([]);
   const [showLessSources, setShowLessSources] = useState<string[]>([]);
+  const [visiblePipelineDebug, setVisiblePipelineDebug] = useState<
+    PaginatedNewsResponse["visiblePipelineDebug"]
+  >(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialFeedLoading, setIsInitialFeedLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
@@ -7532,6 +7544,7 @@ export default function Home() {
         return;
       }
 
+      setVisiblePipelineDebug(newsPayload?.visiblePipelineDebug);
       const newsData = newsPayload?.articles ?? [];
       hasLiveNewsResponse = true;
       if (feedMode === "sports") {
@@ -19135,6 +19148,33 @@ export default function Home() {
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
+
+        <section className="home-section-block home-section-plain" style={{ paddingTop: "8px", paddingBottom: "8px" }}>
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="muted">
+              CURRENT_SOURCE_FILE: {visiblePipelineDebug?.currentSourceFile ?? "/Users/erniewilson/my-news-app/app/api/news/route.ts"}
+            </strong>
+            <span className="muted">
+              CURRENT_COUNT_BEFORE_MERGE: {visiblePipelineDebug?.currentCountBeforeMerge ?? 0}
+            </span>
+            <span className="muted">
+              GNEWS_COUNT_BEFORE_MERGE: {visiblePipelineDebug?.gnewsCountBeforeMerge ?? 0}
+            </span>
+            <span className="muted">
+              NYT_COUNT_BEFORE_MERGE: {visiblePipelineDebug?.nytCountBeforeMerge ?? 0}
+            </span>
+            <span className="muted">
+              TOTAL_AFTER_MERGE: {visiblePipelineDebug?.totalAfterMerge ?? visibleArticles.length}
+            </span>
+            <span className="muted">
+              REAL_RENDERED_PROVIDERS:{" "}
+              {visibleArticles
+                .slice(0, 8)
+                .map((article) => getArticleProviderLabel(article.provider))
+                .join(" | ")}
+            </span>
+          </div>
+        </section>
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
 

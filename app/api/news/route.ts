@@ -141,6 +141,13 @@ type NewsRouteResponse = {
     nyt: ProviderDebugSummary;
     currents: ProviderDebugSummary;
   };
+  visiblePipelineDebug?: {
+    currentSourceFile: string;
+    currentCountBeforeMerge: number;
+    gnewsCountBeforeMerge: number;
+    nytCountBeforeMerge: number;
+    totalAfterMerge: number;
+  };
 };
 
 type NewsDataApiResponse = {
@@ -4635,9 +4642,33 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     providers: providerDiagnostics,
   });
 
-  const combined = providerResponses.flatMap((result) =>
-    result.status === "fulfilled" ? result.value.articles : []
-  );
+  const currentArticles = providerResponses.flatMap((result, index) => {
+    if (result.status !== "fulfilled") {
+      return [] as NormalizedArticle[];
+    }
+
+    const providerName = providerFetchers[index].name;
+    if (providerName === "GNews" || providerName === "New York Times") {
+      return [] as NormalizedArticle[];
+    }
+
+    return result.value.articles;
+  });
+  const gnewsArticles = providerResponses.flatMap((result, index) => {
+    if (result.status !== "fulfilled") {
+      return [] as NormalizedArticle[];
+    }
+
+    return providerFetchers[index].name === "GNews" ? result.value.articles : [];
+  });
+  const nytArticles = providerResponses.flatMap((result, index) => {
+    if (result.status !== "fulfilled") {
+      return [] as NormalizedArticle[];
+    }
+
+    return providerFetchers[index].name === "New York Times" ? result.value.articles : [];
+  });
+  const combined = [...currentArticles, ...gnewsArticles, ...nytArticles];
   providerResponses.forEach((result, index) => {
     if (result.status === "fulfilled" && result.value.articles.length > 0) {
       console.log("PROVIDER_MERGED_TO_NEWS", {
@@ -4647,6 +4678,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     }
   });
   const combinedProviderCounts = getPipelineProviderCounts(combined);
+  console.log("CURRENT_COUNT", combinedProviderCounts.current);
   console.log("MAIN PIPELINE CURRENT COUNT", combinedProviderCounts.current);
   console.log("GNEWS_VISIBLE_PIPELINE_COUNT", combinedProviderCounts.gnews);
   console.log("MAIN PIPELINE GUARDIAN COUNT", combinedProviderCounts.guardian);
@@ -4657,6 +4689,10 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
   console.log("MAIN PIPELINE MERGED COUNT", combined.length);
   console.log("MERGED_VISIBLE_PIPELINE_COUNT", combined.length);
   console.log("NEWS MERGED COUNT", combined.length);
+  console.log("CURRENT_COUNT_BEFORE_MERGE", currentArticles.length);
+  console.log("GNEWS_COUNT_BEFORE_MERGE", gnewsArticles.length);
+  console.log("NYT_COUNT_BEFORE_MERGE", nytArticles.length);
+  console.log("TOTAL_AFTER_MERGE", combined.length);
   console.log(
     "NEWS MERGED IMAGE_ONLY COUNT",
     combined.filter((article) => hasRealArticleImage(article)).length
@@ -4733,6 +4769,13 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           nytKeyLengthFromNewsRoute,
           debugEnv,
           providerDebug,
+          visiblePipelineDebug: {
+            currentSourceFile: "/Users/erniewilson/my-news-app/app/api/news/route.ts",
+            currentCountBeforeMerge: currentArticles.length,
+            gnewsCountBeforeMerge: gnewsArticles.length,
+            nytCountBeforeMerge: nytArticles.length,
+            totalAfterMerge: combined.length,
+          },
         }
       : {
           ...buildFallbackArticles(params),
@@ -4743,6 +4786,13 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
           nytKeyLengthFromNewsRoute,
           debugEnv,
           providerDebug,
+          visiblePipelineDebug: {
+            currentSourceFile: "/Users/erniewilson/my-news-app/app/api/news/route.ts",
+            currentCountBeforeMerge: currentArticles.length,
+            gnewsCountBeforeMerge: gnewsArticles.length,
+            nytCountBeforeMerge: nytArticles.length,
+            totalAfterMerge: combined.length,
+          },
         };
 
   responseCache.set(cacheKey, {
