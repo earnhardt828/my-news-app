@@ -98,6 +98,39 @@ function countProviders(articles: AggregatedNewsArticle[]) {
   );
 }
 
+function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
+  const currentQueue = articles.filter((article) => article.provider === "current");
+  const nytQueue = articles.filter((article) => article.provider === "nyt");
+  const gnewsQueue = articles.filter((article) => article.provider === "gnews");
+  const interleaved: AggregatedNewsArticle[] = [];
+
+  while (currentQueue.length > 0 || nytQueue.length > 0 || gnewsQueue.length > 0) {
+    if (currentQueue.length > 0) {
+      interleaved.push(currentQueue.shift()!);
+    }
+    if (currentQueue.length > 0) {
+      interleaved.push(currentQueue.shift()!);
+    }
+    if (nytQueue.length > 0) {
+      interleaved.push(nytQueue.shift()!);
+    }
+    if (currentQueue.length > 0) {
+      interleaved.push(currentQueue.shift()!);
+    }
+    if (currentQueue.length > 0) {
+      interleaved.push(currentQueue.shift()!);
+    }
+    if (nytQueue.length > 0) {
+      interleaved.push(nytQueue.shift()!);
+    }
+    if (gnewsQueue.length > 0) {
+      interleaved.push(gnewsQueue.shift()!);
+    }
+  }
+
+  return interleaved;
+}
+
 function hashArticleId(value: string) {
   let hash = 0;
 
@@ -507,10 +540,12 @@ export async function GET(request: Request) {
     ...gnewsArticles,
   ];
   const mappedArticles = dedupeArticles(mergedArticles);
+  const interleavedArticles = interleaveProviderArticles(mappedArticles);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const articles = mappedArticles.slice(startIndex, endIndex);
-  const hasMore = endIndex < mappedArticles.length;
+  const articles = interleavedArticles.slice(startIndex, endIndex);
+  const hasMore = endIndex < interleavedArticles.length;
+  const finalBeforeSliceProviderCounts = countProviders(interleavedArticles);
   const finalProviderCounts = countProviders(articles);
 
   return Response.json({
@@ -534,8 +569,9 @@ export async function GET(request: Request) {
       currentCount: currentMappedArticles.length,
       gnewsCount: gnewsArticles.length,
       nytCount: nytArticles.length,
-      totalBeforeCaps: mappedArticles.length,
+      totalBeforeCaps: interleavedArticles.length,
       totalAfterCaps: articles.length,
+      finalBeforeSliceProviderCounts,
       finalProviderCounts,
     },
   });

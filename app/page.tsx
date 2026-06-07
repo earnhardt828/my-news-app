@@ -2948,6 +2948,11 @@ type PaginatedNewsResponse = {
     nytCount?: number;
     totalBeforeCaps?: number;
     totalAfterCaps?: number;
+    finalBeforeSliceProviderCounts?: {
+      current?: number;
+      gnews?: number;
+      nyt?: number;
+    };
     finalProviderCounts?: {
       current?: number;
       gnews?: number;
@@ -4594,6 +4599,11 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
         nytCount: 0,
         totalBeforeCaps: renderableArticles.length,
         totalAfterCaps: renderableArticles.length,
+        finalBeforeSliceProviderCounts: {
+          current: 0,
+          gnews: 0,
+          nyt: 0,
+        },
         finalProviderCounts: {
           current: 0,
           gnews: 0,
@@ -4628,6 +4638,11 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       nytCount: payload.debug?.nytCount ?? 0,
       totalBeforeCaps: payload.debug?.totalBeforeCaps ?? renderableArticles.length,
       totalAfterCaps: payload.debug?.totalAfterCaps ?? renderableArticles.length,
+      finalBeforeSliceProviderCounts: {
+        current: payload.debug?.finalBeforeSliceProviderCounts?.current ?? 0,
+        gnews: payload.debug?.finalBeforeSliceProviderCounts?.gnews ?? 0,
+        nyt: payload.debug?.finalBeforeSliceProviderCounts?.nyt ?? 0,
+      },
       finalProviderCounts: {
         current: payload.debug?.finalProviderCounts?.current ?? 0,
         gnews: payload.debug?.finalProviderCounts?.gnews ?? 0,
@@ -6720,6 +6735,11 @@ export default function Home() {
     nytCount: number;
     totalBeforeCaps: number;
     totalAfterCaps: number;
+    finalBeforeSliceProviderCounts: {
+      current: number;
+      gnews: number;
+      nyt: number;
+    };
     finalProviderCounts: {
       current: number;
       gnews: number;
@@ -6731,6 +6751,11 @@ export default function Home() {
     nytCount: 0,
     totalBeforeCaps: 0,
     totalAfterCaps: 0,
+    finalBeforeSliceProviderCounts: {
+      current: 0,
+      gnews: 0,
+      nyt: 0,
+    },
     finalProviderCounts: {
       current: 0,
       gnews: 0,
@@ -7634,6 +7659,11 @@ export default function Home() {
         nytCount: newsPayload?.debug?.nytCount ?? 0,
         totalBeforeCaps: newsPayload?.debug?.totalBeforeCaps ?? 0,
         totalAfterCaps: newsPayload?.debug?.totalAfterCaps ?? 0,
+        finalBeforeSliceProviderCounts: {
+          current: newsPayload?.debug?.finalBeforeSliceProviderCounts?.current ?? 0,
+          gnews: newsPayload?.debug?.finalBeforeSliceProviderCounts?.gnews ?? 0,
+          nyt: newsPayload?.debug?.finalBeforeSliceProviderCounts?.nyt ?? 0,
+        },
         finalProviderCounts: {
           current: newsPayload?.debug?.finalProviderCounts?.current ?? 0,
           gnews: newsPayload?.debug?.finalProviderCounts?.gnews ?? 0,
@@ -19263,7 +19293,12 @@ export default function Home() {
             <div>NYT count: {aggregatedFeedDebug.nytCount}</div>
             <div>GNews count: {aggregatedFeedDebug.gnewsCount}</div>
             <div>
-              Final rendered providers: CURRENT {aggregatedFeedDebug.finalProviderCounts.current} ·
+              finalBeforeSliceProviderCounts: CURRENT {aggregatedFeedDebug.finalBeforeSliceProviderCounts.current} ·
+              {" "}NYT {aggregatedFeedDebug.finalBeforeSliceProviderCounts.nyt} · GNEWS{" "}
+              {aggregatedFeedDebug.finalBeforeSliceProviderCounts.gnews}
+            </div>
+            <div>
+              finalAfterSliceProviderCounts: CURRENT {aggregatedFeedDebug.finalProviderCounts.current} ·
               {" "}NYT {aggregatedFeedDebug.finalProviderCounts.nyt} · GNEWS{" "}
               {aggregatedFeedDebug.finalProviderCounts.gnews}
             </div>
