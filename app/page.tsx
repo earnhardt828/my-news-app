@@ -6693,27 +6693,6 @@ export default function Home() {
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
   const [failedArticleBoxImages, setFailedArticleBoxImages] = useState<Record<string, true>>({});
   const [sportsArtworkCache, setSportsArtworkCache] = useState<Record<string, string | null>>({});
-  const [aggregatedFeedDebug, setAggregatedFeedDebug] = useState<{
-    currentCount: number;
-    gnewsCount: number;
-    totalCount: number;
-    gnewsKeyPresent: boolean;
-    gnewsKeyLength: number;
-    gnewsStatus: number | null;
-    gnewsRawCount: number;
-    gnewsImageCount: number;
-    gnewsError: string | null;
-  }>({
-    currentCount: 0,
-    gnewsCount: 0,
-    totalCount: 0,
-    gnewsKeyPresent: false,
-    gnewsKeyLength: 0,
-    gnewsStatus: null,
-    gnewsRawCount: 0,
-    gnewsImageCount: 0,
-    gnewsError: null,
-  });
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
@@ -7604,18 +7583,6 @@ export default function Home() {
       if (!isCurrentRequest()) {
         return;
       }
-
-      setAggregatedFeedDebug({
-        currentCount: newsPayload?.debug?.currentCount ?? 0,
-        gnewsCount: newsPayload?.debug?.gnewsCount ?? 0,
-        totalCount: newsPayload?.debug?.totalCount ?? 0,
-        gnewsKeyPresent: newsPayload?.debug?.gnewsKeyPresent ?? false,
-        gnewsKeyLength: newsPayload?.debug?.gnewsKeyLength ?? 0,
-        gnewsStatus: newsPayload?.debug?.gnewsStatus ?? null,
-        gnewsRawCount: newsPayload?.debug?.gnewsRawCount ?? 0,
-        gnewsImageCount: newsPayload?.debug?.gnewsImageCount ?? 0,
-        gnewsError: newsPayload?.debug?.gnewsError ?? null,
-      });
 
       const newsData = newsPayload?.articles ?? [];
       hasLiveNewsResponse = true;
@@ -14004,11 +13971,6 @@ export default function Home() {
     [balancedTrendingArticles]
   );
 
-  const firstVisibleGnewsArticle = useMemo(
-    () => balancedTrendingArticles.find((article) => article.provider === "gnews") ?? null,
-    [balancedTrendingArticles]
-  );
-
   const breakingNewsPreviewArticles = useMemo(() => {
     if (sortMode !== "trending") {
       return [];
@@ -19231,26 +19193,6 @@ export default function Home() {
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
-
-        <section className="home-section-block home-section-plain">
-          <div className="muted stack" style={{ gap: "4px" }}>
-            <div>
-              Current: {aggregatedFeedDebug.currentCount}{" "}
-              <span aria-hidden="true">·</span> GNews: {aggregatedFeedDebug.gnewsCount}{" "}
-              <span aria-hidden="true">·</span> Total: {aggregatedFeedDebug.totalCount}
-            </div>
-            <div>GNews key present: {aggregatedFeedDebug.gnewsKeyPresent ? "true" : "false"}</div>
-            <div>GNews raw count: {aggregatedFeedDebug.gnewsRawCount}</div>
-            <div>GNews image count: {aggregatedFeedDebug.gnewsImageCount}</div>
-            <div>GNews error: {aggregatedFeedDebug.gnewsError ?? "none"}</div>
-          </div>
-        </section>
-
-        {aggregatedFeedDebug.gnewsImageCount > 0 && firstVisibleGnewsArticle ? (
-          <section className="home-section-block home-section-plain">
-            {renderArticleFeedCard(firstVisibleGnewsArticle)}
-          </section>
-        ) : null}
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
 
