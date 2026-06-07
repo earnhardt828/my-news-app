@@ -228,11 +228,74 @@ export async function GET(request: Request) {
   const page = Math.max(1, Number(searchParams.get("page") || "1"));
   const pageSize = Math.max(1, Math.min(30, Number(searchParams.get("pageSize") || "25")));
   const category = query || mode || "general";
+  const gnewsKey = process.env.GNEWS_API_KEY ?? "";
+  const gnewsRequestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${gnewsKey}`;
+  let gnewsStatus: number | null = null;
+  let gnewsRawCount = 0;
+  let gnewsImageCount = 0;
+  let gnewsError: string | null = null;
+  let gnewsArticles: AggregatedNewsArticle[] = [];
 
-  const [currentArticles, gnewsArticles] = await Promise.all([
+  const [currentArticles] = await Promise.all([
     fetchCurrentProviderArticles(category),
-    fetchGnewsArticles(category),
   ]);
+
+  if (!gnewsKey) {
+    gnewsError = "Missing GNEWS_API_KEY";
+  } else {
+    try {
+      const response = await fetch(gnewsRequestUrl, {
+        next: { revalidate: 0 },
+      });
+
+      gnewsStatus = response.status;
+
+      if (!response.ok) {
+        gnewsError = `GNews request failed with status ${response.status}`;
+      } else {
+        const payload = (await response.json()) as GNewsApiResponse;
+        const rawArticles = payload.articles ?? [];
+        gnewsRawCount = rawArticles.length;
+        gnewsArticles = rawArticles.flatMap((article, index) => {
+          const title = stripHtml(article.title);
+          const url = normalizeUrl(article.url);
+          const imageUrl = article.image?.trim() ?? "";
+
+          if (!title || !url || !hasRealImageUrl(imageUrl)) {
+            return [];
+          }
+
+          return [{
+            id: hashArticleId(`gnews:${url}:${index}`),
+            title,
+            description: stripHtml(article.description) || null,
+            content: stripHtml(article.description) || null,
+            source: article.source?.name?.trim() || "GNews",
+            sourceName: article.source?.name?.trim() || "GNews",
+            url,
+            image: imageUrl,
+            imageUrl,
+            urlToImage: imageUrl,
+            mediaContent: null,
+            enclosureUrl: null,
+            ogImage: null,
+            twitterImage: null,
+            thumbnail: null,
+            category: category.trim() || "general",
+            publishedAt: article.publishedAt ?? null,
+            time: "Recent",
+            likes: 0,
+            comments: [],
+            provider: "gnews",
+          }];
+        });
+        gnewsImageCount = gnewsArticles.length;
+      }
+    } catch (error) {
+      gnewsError = error instanceof Error ? error.message : "Unknown GNews fetch error";
+    }
+  }
+
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
   const mergedArticles = [
     ...currentMappedArticles,
@@ -251,6 +314,12 @@ export async function GET(request: Request) {
     page,
     pageSize,
     debug: {
+      gnewsKeyPresent: Boolean(gnewsKey),
+      gnewsKeyLength: gnewsKey.length,
+      gnewsStatus,
+      gnewsRawCount,
+      gnewsImageCount,
+      gnewsError,
       currentCount: currentMappedArticles.length,
       gnewsCount: gnewsArticles.length,
       totalCount: mappedArticles.length,

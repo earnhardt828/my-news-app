@@ -2946,6 +2946,12 @@ type PaginatedNewsResponse = {
     currentCount?: number;
     gnewsCount?: number;
     totalCount?: number;
+    gnewsKeyPresent?: boolean;
+    gnewsKeyLength?: number;
+    gnewsStatus?: number | null;
+    gnewsRawCount?: number;
+    gnewsImageCount?: number;
+    gnewsError?: string | null;
   };
   nytKeyPresentFromNewsRoute?: boolean;
   nytKeyLengthFromNewsRoute?: number;
@@ -4579,6 +4585,12 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
         currentCount: 0,
         gnewsCount: 0,
         totalCount: renderableArticles.length,
+        gnewsKeyPresent: false,
+        gnewsKeyLength: 0,
+        gnewsStatus: null,
+        gnewsRawCount: 0,
+        gnewsImageCount: 0,
+        gnewsError: null,
       },
       nytKeyPresentFromNewsRoute: false,
       nytKeyLengthFromNewsRoute: 0,
@@ -4600,6 +4612,12 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       currentCount: payload.debug?.currentCount ?? 0,
       gnewsCount: payload.debug?.gnewsCount ?? 0,
       totalCount: payload.debug?.totalCount ?? renderableArticles.length,
+      gnewsKeyPresent: payload.debug?.gnewsKeyPresent ?? false,
+      gnewsKeyLength: payload.debug?.gnewsKeyLength ?? 0,
+      gnewsStatus: payload.debug?.gnewsStatus ?? null,
+      gnewsRawCount: payload.debug?.gnewsRawCount ?? 0,
+      gnewsImageCount: payload.debug?.gnewsImageCount ?? 0,
+      gnewsError: payload.debug?.gnewsError ?? null,
     },
     nytKeyPresentFromNewsRoute: payload.nytKeyPresentFromNewsRoute ?? false,
     nytKeyLengthFromNewsRoute: payload.nytKeyLengthFromNewsRoute ?? 0,
@@ -6679,10 +6697,22 @@ export default function Home() {
     currentCount: number;
     gnewsCount: number;
     totalCount: number;
+    gnewsKeyPresent: boolean;
+    gnewsKeyLength: number;
+    gnewsStatus: number | null;
+    gnewsRawCount: number;
+    gnewsImageCount: number;
+    gnewsError: string | null;
   }>({
     currentCount: 0,
     gnewsCount: 0,
     totalCount: 0,
+    gnewsKeyPresent: false,
+    gnewsKeyLength: 0,
+    gnewsStatus: null,
+    gnewsRawCount: 0,
+    gnewsImageCount: 0,
+    gnewsError: null,
   });
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
@@ -7579,6 +7609,12 @@ export default function Home() {
         currentCount: newsPayload?.debug?.currentCount ?? 0,
         gnewsCount: newsPayload?.debug?.gnewsCount ?? 0,
         totalCount: newsPayload?.debug?.totalCount ?? 0,
+        gnewsKeyPresent: newsPayload?.debug?.gnewsKeyPresent ?? false,
+        gnewsKeyLength: newsPayload?.debug?.gnewsKeyLength ?? 0,
+        gnewsStatus: newsPayload?.debug?.gnewsStatus ?? null,
+        gnewsRawCount: newsPayload?.debug?.gnewsRawCount ?? 0,
+        gnewsImageCount: newsPayload?.debug?.gnewsImageCount ?? 0,
+        gnewsError: newsPayload?.debug?.gnewsError ?? null,
       });
 
       const newsData = newsPayload?.articles ?? [];
@@ -13968,6 +14004,11 @@ export default function Home() {
     [balancedTrendingArticles]
   );
 
+  const firstVisibleGnewsArticle = useMemo(
+    () => balancedTrendingArticles.find((article) => article.provider === "gnews") ?? null,
+    [balancedTrendingArticles]
+  );
+
   const breakingNewsPreviewArticles = useMemo(() => {
     if (sortMode !== "trending") {
       return [];
@@ -19192,12 +19233,24 @@ export default function Home() {
         {renderHomeTopNavigation("trending")}
 
         <section className="home-section-block home-section-plain">
-          <div className="muted">
-            Current: {aggregatedFeedDebug.currentCount}{" "}
-            <span aria-hidden="true">·</span> GNews: {aggregatedFeedDebug.gnewsCount}{" "}
-            <span aria-hidden="true">·</span> Total: {aggregatedFeedDebug.totalCount}
+          <div className="muted stack" style={{ gap: "4px" }}>
+            <div>
+              Current: {aggregatedFeedDebug.currentCount}{" "}
+              <span aria-hidden="true">·</span> GNews: {aggregatedFeedDebug.gnewsCount}{" "}
+              <span aria-hidden="true">·</span> Total: {aggregatedFeedDebug.totalCount}
+            </div>
+            <div>GNews key present: {aggregatedFeedDebug.gnewsKeyPresent ? "true" : "false"}</div>
+            <div>GNews raw count: {aggregatedFeedDebug.gnewsRawCount}</div>
+            <div>GNews image count: {aggregatedFeedDebug.gnewsImageCount}</div>
+            <div>GNews error: {aggregatedFeedDebug.gnewsError ?? "none"}</div>
           </div>
         </section>
+
+        {aggregatedFeedDebug.gnewsImageCount > 0 && firstVisibleGnewsArticle ? (
+          <section className="home-section-block home-section-plain">
+            {renderArticleFeedCard(firstVisibleGnewsArticle)}
+          </section>
+        ) : null}
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
 
