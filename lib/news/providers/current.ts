@@ -27,10 +27,20 @@ const RSS_FEEDS: RssFeedConfig[] = [
   { url: "https://feeds.apnews.com/apnews/topnews", source: "AP News", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
   { url: "https://rss.cnn.com/rss/cnn_topstories.rss", source: "CNN", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
   { url: "https://feeds.bbci.co.uk/news/world/rss.xml", source: "BBC News", category: "World", tags: ["world", "trending"] },
+  { url: "https://feeds.bbci.co.uk/news/business/rss.xml", source: "BBC News", category: "Business", tags: ["business"] },
+  { url: "https://feeds.bbci.co.uk/news/technology/rss.xml", source: "BBC News", category: "Technology", tags: ["technology", "tech"] },
   { url: "https://feeds.npr.org/1001/rss.xml", source: "NPR", category: "Breaking News", tags: ["trending", "politics", "world"] },
+  { url: "https://moxie.foxnews.com/google-publisher/latest.xml", source: "Fox News", category: "Breaking News", tags: ["trending", "breaking", "us", "politics"] },
+  { url: "https://feeds.nbcnews.com/nbcnews/public/news", source: "NBC News", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
+  { url: "https://www.cbsnews.com/latest/rss/main", source: "CBS News", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
+  { url: "https://abcnews.go.com/abcnews/topstories", source: "ABC News", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
   { url: "https://www.cnbc.com/id/100003114/device/rss/rss.html", source: "CNBC", category: "Business", tags: ["business"] },
   { url: "https://www.theverge.com/rss/index.xml", source: "The Verge", category: "Technology", tags: ["technology", "tech"] },
+  { url: "https://techcrunch.com/feed/", source: "TechCrunch", category: "Technology", tags: ["technology", "tech"] },
   { url: "https://www.wired.com/feed/rss", source: "Wired", category: "Technology", tags: ["technology", "tech", "science"] },
+  { url: "https://www.politico.com/rss/politicopicks.xml", source: "Politico", category: "Politics", tags: ["politics"] },
+  { url: "https://thehill.com/feed/", source: "The Hill", category: "Politics", tags: ["politics"] },
+  { url: "https://www.theguardian.com/us-news/rss", source: "The Guardian", category: "World", tags: ["world", "politics"] },
   { url: "https://variety.com/feed/", source: "Variety", category: "Entertainment", tags: ["entertainment", "arts"] },
   { url: "https://www.billboard.com/feed/", source: "Billboard", category: "Entertainment", tags: ["entertainment", "arts"] },
   { url: "https://www.eater.com/rss/index.xml", source: "Eater", category: "Food", tags: ["food"] },
@@ -101,12 +111,22 @@ async function fetchRssArticles(feeds: RssFeedConfig[]) {
     })
   );
 
-  return responses.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+  return responses.flatMap((result, index) => {
+    if (result.status === "fulfilled") {
+      return result.value;
+    }
+
+    console.error("CURRENT_PROVIDER_ERROR", {
+      source: feeds[index]?.source ?? "unknown",
+      error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+    });
+    return [];
+  });
 }
 
 function buildGoogleNewsSearchUrl(category: string) {
   const url = new URL(`${GOOGLE_NEWS_RSS_BASE}/search`);
-  url.searchParams.set("q", getCategoryQuery(category));
+  url.searchParams.set("q", `${getCategoryQuery(category)} when:7d`);
   url.searchParams.set("hl", "en-US");
   url.searchParams.set("gl", "US");
   url.searchParams.set("ceid", "US:en");
@@ -128,14 +148,37 @@ function selectFeedsForCategory(category: string) {
 }
 
 export async function fetchArticles(category: string): Promise<NewsArticle[]> {
-  const feeds = selectFeedsForCategory(category);
-  const googleFeed: RssFeedConfig = {
-    url: buildGoogleNewsSearchUrl(category),
-    source: "Google News RSS",
-    category: category || "News",
-    tags: [category || "news"],
-  };
+  console.log("CURRENT_PROVIDER_FETCH_STARTED", { category });
 
-  const articles = await fetchRssArticles([...feeds, googleFeed]);
-  return sortArticlesByRecent(dedupeArticles(articles));
+  try {
+    const feeds = selectFeedsForCategory(category);
+    const googleFeed: RssFeedConfig = {
+      url: buildGoogleNewsSearchUrl(category),
+      source: "Google News RSS",
+      category: category || "News",
+      tags: [category || "news"],
+    };
+
+    const articles = await fetchRssArticles([...feeds, googleFeed]);
+    const dedupedArticles = dedupeArticles(articles);
+    const sortedArticles = sortArticlesByRecent(dedupedArticles);
+
+    console.log("CURRENT_PROVIDER_RAW_COUNT", articles.length);
+    console.log("CURRENT_PROVIDER_IMAGE_COUNT", sortedArticles.length);
+
+    if (sortedArticles.length === 0) {
+      console.error("CURRENT_PROVIDER_ERROR", {
+        category,
+        message: "Current provider returned zero usable articles",
+      });
+    }
+
+    return sortedArticles;
+  } catch (error) {
+    console.error("CURRENT_PROVIDER_ERROR", {
+      category,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 }
