@@ -2944,6 +2944,8 @@ type PaginatedNewsResponse = {
   hasMore: boolean;
   debug?: {
     currentCount?: number;
+    gnewsCount?: number;
+    totalCount?: number;
   };
   nytKeyPresentFromNewsRoute?: boolean;
   nytKeyLengthFromNewsRoute?: number;
@@ -4573,6 +4575,11 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       hasMore: false,
       page: 1,
       pageSize: renderableArticles.length,
+      debug: {
+        currentCount: 0,
+        gnewsCount: 0,
+        totalCount: renderableArticles.length,
+      },
       nytKeyPresentFromNewsRoute: false,
       nytKeyLengthFromNewsRoute: 0,
       visiblePipelineDebug: undefined,
@@ -4589,6 +4596,11 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
     page: payload.page ?? 1,
     pageSize: payload.pageSize ?? renderableArticles.length,
     nextPage: payload.nextPage ?? null,
+    debug: {
+      currentCount: payload.debug?.currentCount ?? 0,
+      gnewsCount: payload.debug?.gnewsCount ?? 0,
+      totalCount: payload.debug?.totalCount ?? renderableArticles.length,
+    },
     nytKeyPresentFromNewsRoute: payload.nytKeyPresentFromNewsRoute ?? false,
     nytKeyLengthFromNewsRoute: payload.nytKeyLengthFromNewsRoute ?? 0,
     visiblePipelineDebug: payload.visiblePipelineDebug,
@@ -6663,6 +6675,15 @@ export default function Home() {
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
   const [failedArticleBoxImages, setFailedArticleBoxImages] = useState<Record<string, true>>({});
   const [sportsArtworkCache, setSportsArtworkCache] = useState<Record<string, string | null>>({});
+  const [aggregatedFeedDebug, setAggregatedFeedDebug] = useState<{
+    currentCount: number;
+    gnewsCount: number;
+    totalCount: number;
+  }>({
+    currentCount: 0,
+    gnewsCount: 0,
+    totalCount: 0,
+  });
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
@@ -7553,6 +7574,12 @@ export default function Home() {
       if (!isCurrentRequest()) {
         return;
       }
+
+      setAggregatedFeedDebug({
+        currentCount: newsPayload?.debug?.currentCount ?? 0,
+        gnewsCount: newsPayload?.debug?.gnewsCount ?? 0,
+        totalCount: newsPayload?.debug?.totalCount ?? 0,
+      });
 
       const newsData = newsPayload?.articles ?? [];
       hasLiveNewsResponse = true;
@@ -16235,6 +16262,12 @@ export default function Home() {
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
+      const providerBadge =
+        article.provider === "gnews"
+          ? "GNEWS"
+          : article.provider === "current"
+            ? "CURRENT"
+            : null;
       if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
         console.log("SPORTS CARD IMAGE SRC", {
           title: cleanDisplayText(article.title),
@@ -16325,6 +16358,7 @@ export default function Home() {
               )}
             </div>
             <div className="trending-card-top-meta">
+              {providerBadge ? <span className="chip chip-muted">{providerBadge}</span> : null}
               {options?.rankLabel ? (
                 <span className="chip trending-rank-badge news-card-rank-badge">
                   {options.rankLabel}
@@ -16508,6 +16542,13 @@ export default function Home() {
           >
             <SourceHeaderMark sourceName={safeSourceName} fallbackMode="text" />
           </Link>
+        }
+        providerBadge={
+          article.provider === "gnews"
+            ? "GNEWS"
+            : article.provider === "current"
+              ? "CURRENT"
+              : null
         }
         publishedLabel={formatFreshnessTime(article.publishedAt, article.time)}
         title={cleanDisplayText(article.title)}
@@ -18845,6 +18886,12 @@ export default function Home() {
 
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
+    const providerBadge =
+      article.provider === "gnews"
+        ? "GNEWS"
+        : article.provider === "current"
+          ? "CURRENT"
+          : null;
     const displayImage = getArticleDisplayImage(article);
     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
@@ -18922,6 +18969,7 @@ export default function Home() {
                 className="top-trending-list-source-mark"
                 fallbackMode="text"
               />
+              {providerBadge ? <span className="chip chip-muted">{providerBadge}</span> : null}
               <span className="top-trending-list-date">
                 {formatPublishedDate(article.publishedAt, article.time)}
               </span>
@@ -19142,6 +19190,14 @@ export default function Home() {
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
+
+        <section className="home-section-block home-section-plain">
+          <div className="muted">
+            Current: {aggregatedFeedDebug.currentCount}{" "}
+            <span aria-hidden="true">·</span> GNews: {aggregatedFeedDebug.gnewsCount}{" "}
+            <span aria-hidden="true">·</span> Total: {aggregatedFeedDebug.totalCount}
+          </div>
+        </section>
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
 
