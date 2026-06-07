@@ -1,6 +1,6 @@
 import "server-only";
 
-import { buildNewsArticle, dedupeArticles, getCategoryQuery, sortArticlesByRecent } from "../shared";
+import { buildNewsArticle, dedupeArticles, sortArticlesByRecent } from "../shared";
 import type { NewsArticle } from "../types";
 
 type GNewsApiResponse = {
@@ -13,75 +13,67 @@ type GNewsApiResponse = {
     publishedAt?: string | null;
     source?: { name?: string | null } | null;
   }>;
+  errors?: string[] | null;
 };
-
-function getQueries(category: string) {
-  const normalized = category.trim().toLowerCase();
-
-  if (!normalized || normalized === "trending" || normalized === "latest") {
-    return [
-      "breaking news",
-      "politics news",
-      "world news",
-      "crime news",
-      "technology news",
-      "entertainment news",
-      "business news",
-      "science news",
-      "food news",
-      "travel news",
-      "art news",
-      "general news",
-    ];
-  }
-
-  return [getCategoryQuery(category)];
-}
 
 export async function fetchArticles(category: string): Promise<NewsArticle[]> {
   const key = process.env.GNEWS_API_KEY ?? "";
+  console.log("GNEWS_KEY_PRESENT", Boolean(key));
+
   if (!key) {
+    console.error("GNEWS_ERROR", "Missing GNEWS_API_KEY");
     return [];
   }
 
-  const queries = getQueries(category);
-  const responses = await Promise.allSettled(
-    queries.map(async (query) => {
-      const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(
-        query
-      )}&lang=en&country=us&max=10&page=1&expand=content&token=${key}`;
-      const response = await fetch(url, {
-        next: { revalidate: 600 },
-      });
+  const normalizedCategory = category.trim() || "general";
+  const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${key}`;
 
-      if (!response.ok) {
-        throw new Error(`GNews request failed (${response.status})`);
-      }
+  try {
+    const response = await fetch(requestUrl, {
+      next: { revalidate: 600 },
+    });
 
-      const payload = (await response.json()) as GNewsApiResponse;
-      return (payload.articles ?? [])
-        .map((article, index) =>
-          buildNewsArticle(
-            {
-              title: article.title,
-              description: article.description,
-              url: article.url,
-              source: article.source?.name?.trim() || "GNews",
-              publishedAt: article.publishedAt,
-              imageUrl: article.image,
-              category: category || "News",
-            },
-            {
-              category: category || "News",
-              provider: "gnews",
-              uniqueSeed: `gnews-${query}-${index}`,
-            }
-          )
+    console.log("GNEWS_RESPONSE_STATUS", response.status);
+
+    const payload = (await response.json()) as GNewsApiResponse;
+    const rawArticles = payload.articles ?? [];
+    console.log("GNEWS_RAW_COUNT", rawArticles.length);
+
+    const articles = rawArticles
+      .filter((article) => Boolean(article.image))
+      .map((article, index) =>
+        buildNewsArticle(
+          {
+            title: article.title,
+            description: article.description,
+            url: article.url,
+            source: article.source?.name?.trim() || "GNews",
+            publishedAt: article.publishedAt,
+            imageUrl: article.image,
+            category: normalizedCategory,
+          },
+          {
+            category: normalizedCategory,
+            provider: "gnews",
+            uniqueSeed: `gnews-general-${index}`,
+          }
         )
-        .filter((article): article is NewsArticle => Boolean(article));
-    })
-  );
+      )
+      .filter((article): article is NewsArticle => Boolean(article));
 
-  const articles = responses.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
-  return sortArticlesByRecent(dedupeArticles(articles));
+    console.log("GNEWS_IMAGE_COUNT", articles.length);
+
+    if (!response.ok) {
+      console.error(
+        "GNEWS_ERROR",
+        payload.errors?.join(", ") || `GNews request failed (${response.status})`
+      );
+      return [];
+    }
+
+    return sortArticlesByRecent(dedupeArticles(articles));
+  } catch (error) {
+    console.error("GNEWS_ERROR", error);
+    return [];
+  }
 }
