@@ -151,6 +151,7 @@ type NewsRouteResponse = {
     gnewsCountBeforeMerge: number;
     nytCountBeforeMerge: number;
     totalAfterMerge: number;
+    gnewsDroppedReason: string | null;
     gnewsKeyPresent: boolean;
     gnewsKeyLength: number;
     gnewsRequestUrl: string;
@@ -4511,6 +4512,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
       gnewsCountBeforeMerge: aggregatorResult.counts.gnews,
       nytCountBeforeMerge: aggregatorResult.counts.nyt,
       totalAfterMerge: aggregatorResult.counts.totalAfterMerge,
+      gnewsDroppedReason: aggregatorResult.gnewsDroppedReason,
       gnewsKeyPresent: aggregatorResult.gnewsDebug.keyPresent,
       gnewsKeyLength: aggregatorResult.gnewsDebug.keyLength,
       gnewsRequestUrl: aggregatorResult.gnewsDebug.requestUrl,
@@ -4834,6 +4836,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
             gnewsCountBeforeMerge: gnewsArticles.length,
             nytCountBeforeMerge: nytArticles.length,
             totalAfterMerge: combined.length,
+            gnewsDroppedReason: providerDebug.gnews.skippedReason ?? null,
             gnewsKeyPresent: providerDebug.gnews.keyPresent ?? false,
             gnewsKeyLength: 0,
             gnewsRequestUrl: providerDebug.gnews.requestUrl ?? "",
@@ -4864,6 +4867,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
             gnewsCountBeforeMerge: gnewsArticles.length,
             nytCountBeforeMerge: nytArticles.length,
             totalAfterMerge: combined.length,
+            gnewsDroppedReason: providerDebug.gnews.skippedReason ?? null,
             gnewsKeyPresent: providerDebug.gnews.keyPresent ?? false,
             gnewsKeyLength: 0,
             gnewsRequestUrl: providerDebug.gnews.requestUrl ?? "",

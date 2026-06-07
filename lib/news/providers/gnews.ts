@@ -1,6 +1,6 @@
 import "server-only";
 
-import { buildNewsArticle, dedupeArticles, sortArticlesByRecent } from "../shared";
+import { hashArticleId, normalizeUrl, sortArticlesByRecent, stripHtml } from "../shared";
 import type { GnewsProviderDebug, NewsArticle } from "../types";
 
 type GNewsApiResponse = {
@@ -33,6 +33,7 @@ export async function fetchArticlesWithDebug(category: string): Promise<{
   articles: NewsArticle[];
   debug: GnewsProviderDebug;
 }> {
+  console.log("GNEWS_PROVIDER_CALLED", true);
   console.log("GNEWS ENV DEBUG", {
     apiKeyPresent: Boolean(process.env.GNEWS_API_KEY),
     apiKeyLength: process.env.GNEWS_API_KEY?.length || 0,
@@ -71,30 +72,30 @@ export async function fetchArticlesWithDebug(category: string): Promise<{
     debug.rawCount = rawArticles.length;
     console.log("GNEWS_RAW_COUNT", rawArticles.length);
 
-    const articles = rawArticles
-      .filter((article) => Boolean(article.image))
-      .map((article, index) =>
-        buildNewsArticle(
-          {
-            title: article.title,
-            description: article.description,
-            url: article.url,
-            source: article.source?.name?.trim() || "GNews",
-            publishedAt: article.publishedAt,
-            imageUrl: article.image,
-            category: normalizedCategory,
-          },
-          {
-            category: normalizedCategory,
-            provider: "gnews",
-            uniqueSeed: `gnews-general-${index}`,
-          }
-        )
-      )
-      .filter((article): article is NewsArticle => Boolean(article));
+    const articles = rawArticles.flatMap((article, index) => {
+      const title = stripHtml(article.title);
+      const url = normalizeUrl(article.url);
+      const imageUrl = article.image?.trim() ?? "";
 
-    debug.imageCount = articles.length;
-    console.log("GNEWS_IMAGE_COUNT", articles.length);
+      if (!title || !url) {
+        return [];
+      }
+
+      return [{
+        id: hashArticleId(`gnews-general-${index}:${url}`),
+        title,
+        description: stripHtml(article.description) || null,
+        url,
+        source: article.source?.name?.trim() || "GNews",
+        publishedAt: article.publishedAt ?? null,
+        imageUrl,
+        category: normalizedCategory,
+        provider: "gnews" as const,
+      } satisfies NewsArticle];
+    });
+
+    debug.imageCount = rawArticles.filter((article) => Boolean(article.image)).length;
+    console.log("GNEWS_IMAGE_COUNT", debug.imageCount);
 
     if (!response.ok) {
       debug.error = payload.errors?.join(", ") || `GNews request failed (${response.status})`;
@@ -102,13 +103,16 @@ export async function fetchArticlesWithDebug(category: string): Promise<{
       return { articles: [], debug };
     }
 
+    console.log("GNEWS_PROVIDER_RETURN_COUNT", articles.length);
+
     return {
-      articles: sortArticlesByRecent(dedupeArticles(articles)),
+      articles: sortArticlesByRecent(articles),
       debug,
     };
   } catch (error) {
     debug.error = error instanceof Error ? error.message : String(error);
     console.error("GNEWS_ERROR", debug.error);
+    console.log("GNEWS_PROVIDER_RETURN_COUNT", 0);
     return { articles: [], debug };
   }
 }

@@ -15,6 +15,7 @@ export async function getArticlesWithDebug(category: string): Promise<{
   articles: NewsArticle[];
   counts: ProviderDebugCounts;
   gnewsDebug: GnewsProviderDebug;
+  gnewsDroppedReason: string | null;
 }> {
   const [currentArticles, gnewsResult, nytArticles] = await Promise.all([
     fetchCurrentArticles(category),
@@ -23,9 +24,15 @@ export async function getArticlesWithDebug(category: string): Promise<{
   ]);
   const gnewsArticles = gnewsResult.articles;
 
-  const merged = sortArticlesByRecent(
-    dedupeArticles([...currentArticles, ...gnewsArticles, ...nytArticles])
-  );
+  const mergedBase = dedupeArticles([...currentArticles, ...nytArticles]);
+  const merged = sortArticlesByRecent([...mergedBase, ...gnewsArticles]);
+  const mergedGnewsCount = merged.filter((article) => article.provider === "gnews").length;
+  const gnewsDroppedReason =
+    gnewsArticles.length > 0 && mergedGnewsCount === 0
+      ? "Aggregator merge dropped all GNews articles"
+      : gnewsArticles.length === 0
+        ? gnewsResult.debug.error || "GNews provider returned zero articles"
+        : null;
 
   const counts: ProviderDebugCounts = {
     current: currentArticles.length,
@@ -39,10 +46,12 @@ export async function getArticlesWithDebug(category: string): Promise<{
   console.log("GNEWS_COUNT", counts.gnews);
   console.log("NYT_COUNT", counts.nyt);
   console.log("TOTAL_AFTER_MERGE", counts.totalAfterMerge);
+  console.log("GNEWS_DROPPED_REASON", gnewsDroppedReason);
 
   return {
     articles: merged,
     counts,
     gnewsDebug: gnewsResult.debug,
+    gnewsDroppedReason,
   };
 }

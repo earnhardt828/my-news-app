@@ -27,16 +27,15 @@ function hasUsableImage(url: string | null | undefined) {
 export async function GET() {
   const gnewsKey = process.env.GNEWS_API_KEY ?? "";
   const keyPresent = Boolean(gnewsKey);
-  const query = "breaking news";
-  const requestUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(
-    query
-  )}&lang=en&country=us&max=10&expand=content&token=${
+  const keyLength = gnewsKey.length;
+  const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${
     keyPresent ? "[REDACTED]" : "[MISSING]"
   }`;
 
   if (!keyPresent) {
     return Response.json({
       keyPresent: false,
+      keyLength,
       requestUrl,
       status: null,
       rawCount: 0,
@@ -48,9 +47,7 @@ export async function GET() {
   }
 
   try {
-    const liveUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(
-      query
-    )}&lang=en&country=us&max=10&expand=content&token=${gnewsKey}`;
+    const liveUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${gnewsKey}`;
 
     const response = await fetch(liveUrl, {
       next: { revalidate: 0 },
@@ -61,6 +58,7 @@ export async function GET() {
     if (!response.ok) {
       return Response.json({
         keyPresent: true,
+        keyLength,
         requestUrl,
         status,
         rawCount: 0,
@@ -77,6 +75,7 @@ export async function GET() {
 
     return Response.json({
       keyPresent: true,
+      keyLength,
       requestUrl,
       status,
       rawCount: articles.length,
@@ -88,6 +87,7 @@ export async function GET() {
   } catch (error) {
     return Response.json({
       keyPresent: true,
+      keyLength,
       requestUrl,
       status: null,
       rawCount: 0,

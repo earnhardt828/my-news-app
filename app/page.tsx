@@ -2956,6 +2956,7 @@ type PaginatedNewsResponse = {
     gnewsCountBeforeMerge: number;
     nytCountBeforeMerge: number;
     totalAfterMerge: number;
+    gnewsDroppedReason: string | null;
     gnewsKeyPresent: boolean;
     gnewsKeyLength: number;
     gnewsRequestUrl: string;
@@ -19200,6 +19201,9 @@ export default function Home() {
             </span>
             <span className="muted">
               GNEWS_IMAGE_COUNT: {visiblePipelineDebug?.gnewsImageCount ?? 0}
+            </span>
+            <span className="muted">
+              GNEWS_DROPPED_REASON: {visiblePipelineDebug?.gnewsDroppedReason ?? "none"}
             </span>
             <span className="muted">
               GNEWS_ERROR: {visiblePipelineDebug?.gnewsError ?? "none"}
