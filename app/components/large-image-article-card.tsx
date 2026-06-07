@@ -6,7 +6,6 @@ import type { MouseEventHandler, ReactNode, TouchEventHandler } from "react";
 type LargeImageArticleCardProps = {
   href: string;
   sourceContent: ReactNode;
-  providerBadge?: string | null;
   publishedLabel: string;
   title: string;
   summary?: string | null;
@@ -27,7 +26,6 @@ type LargeImageArticleCardProps = {
 export default function LargeImageArticleCard({
   href,
   sourceContent,
-  providerBadge,
   publishedLabel,
   title,
   summary,
@@ -56,11 +54,6 @@ export default function LargeImageArticleCard({
       <div className="large-image-article-card-top">
         <div className="large-image-article-card-source">
           {sourceContent}
-          {providerBadge ? (
-            <span className="chip chip-accent large-image-article-card-provider-badge">
-              {providerBadge}
-            </span>
-          ) : null}
         </div>
         <span className="large-image-article-card-time">{publishedLabel}</span>
       </div>

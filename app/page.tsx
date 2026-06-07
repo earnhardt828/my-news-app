@@ -2942,6 +2942,9 @@ type PaginatedNewsResponse = {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  debug?: {
+    currentCount?: number;
+  };
   nytKeyPresentFromNewsRoute?: boolean;
   nytKeyLengthFromNewsRoute?: number;
   providerDebug?: {
@@ -6586,9 +6589,6 @@ export default function Home() {
   const [selectedLocalCityKey, setSelectedLocalCityKey] = useState<string | null>(null);
   const [preferredSources, setPreferredSources] = useState<string[]>([]);
   const [showLessSources, setShowLessSources] = useState<string[]>([]);
-  const [visiblePipelineDebug, setVisiblePipelineDebug] = useState<
-    PaginatedNewsResponse["visiblePipelineDebug"]
-  >(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialFeedLoading, setIsInitialFeedLoading] = useState(true);
   const [activeCommentAction, setActiveCommentAction] = useState<string | null>(null);
@@ -7513,7 +7513,7 @@ export default function Home() {
           params.set("query", BUSINESS_FEED_QUERY);
         }
         if (!newsPath) {
-          newsPath = `/api/news?${params.toString()}`;
+          newsPath = `/api/aggregated-news?${params.toString()}`;
         }
       }
 
@@ -7554,7 +7554,6 @@ export default function Home() {
         return;
       }
 
-      setVisiblePipelineDebug(newsPayload?.visiblePipelineDebug);
       const newsData = newsPayload?.articles ?? [];
       hasLiveNewsResponse = true;
       if (feedMode === "sports") {
@@ -10922,14 +10921,6 @@ export default function Home() {
     const baseArticles = sortMode === "local" ? balancedLocalArticles : displayedArticles;
     return baseArticles;
   }, [balancedLocalArticles, displayedArticles, sortMode]);
-
-  const renderedProviderCounts = useMemo(() => {
-    return visibleArticles.reduce<Record<string, number>>((counts, article) => {
-      const provider = getArticleProviderLabel(article.provider);
-      counts[provider] = (counts[provider] ?? 0) + 1;
-      return counts;
-    }, {});
-  }, [visibleArticles]);
 
   const sportsTabArticles = useMemo(() => {
     const rawSportsArticles =
@@ -16244,8 +16235,6 @@ export default function Home() {
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
-      const providerLabel = getArticleProviderLabel(article.provider);
-
       if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
         console.log("SPORTS CARD IMAGE SRC", {
           title: cleanDisplayText(article.title),
@@ -16336,9 +16325,6 @@ export default function Home() {
               )}
             </div>
             <div className="trending-card-top-meta">
-              <span className="chip chip-accent article-provider-badge">
-                {providerLabel}
-              </span>
               {options?.rankLabel ? (
                 <span className="chip trending-rank-badge news-card-rank-badge">
                   {options.rankLabel}
@@ -16523,7 +16509,6 @@ export default function Home() {
             <SourceHeaderMark sourceName={safeSourceName} fallbackMode="text" />
           </Link>
         }
-        providerBadge={getArticleProviderLabel(article.provider)}
         publishedLabel={formatFreshnessTime(article.publishedAt, article.time)}
         title={cleanDisplayText(article.title)}
         summary={summaryText}
@@ -18801,12 +18786,6 @@ export default function Home() {
                 ·
               </span>
               <span className="top-trending-list-date">
-                {getArticleProviderLabel(article.provider)}
-              </span>
-              <span className="top-trending-list-separator" aria-hidden="true">
-                ·
-              </span>
-              <span className="top-trending-list-date">
                 {formatPublishedDate(article.publishedAt, article.time)}
               </span>
               <span className="top-trending-list-separator" aria-hidden="true">
@@ -18866,7 +18845,6 @@ export default function Home() {
 
     const safeSourceName = getSafeSourceLabel(article.source);
     const safeCategoryName = getSafeCategoryLabel(article.category, article);
-    const providerLabel = getArticleProviderLabel(article.provider);
     const displayImage = getArticleDisplayImage(article);
     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
 
@@ -18944,10 +18922,6 @@ export default function Home() {
                 className="top-trending-list-source-mark"
                 fallbackMode="text"
               />
-              <span className="chip chip-accent top-trending-provider-badge">{providerLabel}</span>
-              <span className="top-trending-list-separator" aria-hidden="true">
-                ·
-              </span>
               <span className="top-trending-list-date">
                 {formatPublishedDate(article.publishedAt, article.time)}
               </span>
@@ -19168,57 +19142,6 @@ export default function Home() {
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
-
-        <section className="home-section-block home-section-plain" style={{ paddingTop: "8px", paddingBottom: "8px" }}>
-          <div className="stack" style={{ gap: "4px" }}>
-            <strong className="muted">RENDERING_SOURCE = aggregatedArticles</strong>
-            <strong className="muted">
-              CURRENT_SOURCE_FILE: {visiblePipelineDebug?.currentSourceFile ?? "/Users/erniewilson/my-news-app/app/api/news/route.ts"}
-            </strong>
-            <span className="muted">
-              CURRENT_COUNT_BEFORE_MERGE: {visiblePipelineDebug?.currentCountBeforeMerge ?? 0}
-            </span>
-            <span className="muted">
-              GNEWS_COUNT_BEFORE_MERGE: {visiblePipelineDebug?.gnewsCountBeforeMerge ?? 0}
-            </span>
-            <span className="muted">
-              NYT_COUNT_BEFORE_MERGE: {visiblePipelineDebug?.nytCountBeforeMerge ?? 0}
-            </span>
-            <span className="muted">
-              TOTAL_AFTER_MERGE: {visiblePipelineDebug?.totalAfterMerge ?? visibleArticles.length}
-            </span>
-            <span className="muted">
-              GNEWS_KEY_PRESENT: {String(visiblePipelineDebug?.gnewsKeyPresent ?? false)}
-            </span>
-            <span className="muted">
-              GNEWS_KEY_LENGTH: {visiblePipelineDebug?.gnewsKeyLength ?? 0}
-            </span>
-            <span className="muted">
-              GNEWS_STATUS: {visiblePipelineDebug?.gnewsStatus ?? "null"}
-            </span>
-            <span className="muted">
-              GNEWS_RAW_COUNT: {visiblePipelineDebug?.gnewsRawCount ?? 0}
-            </span>
-            <span className="muted">
-              GNEWS_IMAGE_COUNT: {visiblePipelineDebug?.gnewsImageCount ?? 0}
-            </span>
-            <span className="muted">
-              GNEWS_DROPPED_REASON: {visiblePipelineDebug?.gnewsDroppedReason ?? "none"}
-            </span>
-            <span className="muted">
-              GNEWS_ERROR: {visiblePipelineDebug?.gnewsError ?? "none"}
-            </span>
-            <span className="muted">
-              GNEWS_REQUEST_URL: {visiblePipelineDebug?.gnewsRequestUrl ?? "none"}
-            </span>
-            <span className="muted">
-              GNEWS_BODY_PREVIEW: {visiblePipelineDebug?.gnewsBodyPreview == null ? "none" : String(visiblePipelineDebug.gnewsBodyPreview)}
-            </span>
-            <span className="muted">
-              CURRENT = {renderedProviderCounts.CURRENT ?? 0} | GNEWS = {renderedProviderCounts.GNEWS ?? 0} | NYT = {renderedProviderCounts.NYT ?? 0}
-            </span>
-          </div>
-        </section>
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
 
