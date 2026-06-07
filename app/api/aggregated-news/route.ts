@@ -30,6 +30,19 @@ type NytTopStoriesResponse = {
   }>;
 };
 
+type CurrentsApiResponse = {
+  news?: Array<{
+    id?: string | null;
+    title?: string | null;
+    description?: string | null;
+    url?: string | null;
+    image?: string | null;
+    published?: string | null;
+    category?: string[] | null;
+    author?: string | null;
+  }>;
+};
+
 type AggregatedNewsArticle = {
   id: number;
   title: string;
@@ -51,7 +64,7 @@ type AggregatedNewsArticle = {
   time: string;
   likes: number;
   comments: null[];
-  provider: "current" | "gnews" | "nyt";
+  provider: "current" | "gnews" | "nyt" | "currents";
 };
 
 const GNEWS_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -66,6 +79,14 @@ type GnewsFetchResult = {
 };
 
 type NytFetchResult = {
+  articles: AggregatedNewsArticle[];
+  status: number | null;
+  rawCount: number;
+  imageCount: number;
+  error: string | null;
+};
+
+type CurrentsFetchResult = {
   articles: AggregatedNewsArticle[];
   status: number | null;
   rawCount: number;
@@ -90,11 +111,13 @@ function countProviders(articles: AggregatedNewsArticle[]) {
         counts.gnews += 1;
       } else if (article.provider === "nyt") {
         counts.nyt += 1;
+      } else if (article.provider === "currents") {
+        counts.currents += 1;
       }
 
       return counts;
     },
-    { current: 0, gnews: 0, nyt: 0 }
+    { current: 0, gnews: 0, nyt: 0, currents: 0 }
   );
 }
 
@@ -102,6 +125,7 @@ function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
   const currentQueue = articles.filter((article) => article.provider === "current");
   const nytQueue = articles.filter((article) => article.provider === "nyt");
   const gnewsQueue = articles.filter((article) => article.provider === "gnews");
+  const currentsQueue = articles.filter((article) => article.provider === "currents");
   const interleaved: AggregatedNewsArticle[] = [];
 
   while (currentQueue.length > 0 || nytQueue.length > 0 || gnewsQueue.length > 0) {
@@ -125,6 +149,9 @@ function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
     }
     if (gnewsQueue.length > 0) {
       interleaved.push(gnewsQueue.shift()!);
+    }
+    if (currentsQueue.length > 0) {
+      interleaved.push(currentsQueue.shift()!);
     }
   }
 
@@ -401,6 +428,98 @@ async function fetchNytArticles(category: string): Promise<NytFetchResult> {
   }
 }
 
+async function fetchCurrentsArticles(category: string): Promise<CurrentsFetchResult> {
+  const currentsKey = process.env.CURRENTS_API_KEY ?? "";
+
+  if (!currentsKey) {
+    return {
+      articles: [],
+      status: null,
+      rawCount: 0,
+      imageCount: 0,
+      error: "Missing CURRENTS_API_KEY",
+    };
+  }
+
+  try {
+    const requestUrl = "https://api.currentsapi.services/v1/latest-news";
+    const response = await fetch(requestUrl, {
+      headers: {
+        Authorization: currentsKey,
+      },
+      next: { revalidate: 0 },
+    });
+
+    if (!response.ok) {
+      return {
+        articles: [],
+        status: response.status,
+        rawCount: 0,
+        imageCount: 0,
+        error: `Currents request failed with status ${response.status}`,
+      };
+    }
+
+    const payload = (await response.json()) as CurrentsApiResponse;
+    const rawArticles = payload.news ?? [];
+    const articles = rawArticles.flatMap((article, index) => {
+      const title = stripHtml(article.title);
+      const url = normalizeUrl(article.url);
+      const imageUrl = article.image?.trim() ?? "";
+
+      if (!title || !url || !hasRealImageUrl(imageUrl)) {
+        return [];
+      }
+
+      const sourceLabel = stripHtml(article.author) || "Currents";
+      const articleCategory =
+        article.category?.find((value) => (value ?? "").trim())?.trim() ||
+        category.trim() ||
+        "general";
+
+      return [{
+        id: hashArticleId(`currents:${article.id ?? url}:${index}`),
+        title,
+        description: stripHtml(article.description) || null,
+        content: stripHtml(article.description) || null,
+        source: sourceLabel,
+        sourceName: sourceLabel,
+        url,
+        image: imageUrl,
+        imageUrl,
+        urlToImage: imageUrl,
+        mediaContent: null,
+        enclosureUrl: null,
+        ogImage: null,
+        twitterImage: null,
+        thumbnail: null,
+        category: articleCategory,
+        publishedAt: article.published ?? null,
+        time: "Recent",
+        likes: 0,
+        comments: [],
+        provider: "currents",
+      }] satisfies AggregatedNewsArticle[];
+    });
+
+    return {
+      articles: articles.slice(0, 10),
+      status: response.status,
+      rawCount: rawArticles.length,
+      imageCount: articles.length,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      articles: [],
+      status: null,
+      rawCount: 0,
+      imageCount: 0,
+      error: error instanceof Error ? error.message : "Unknown Currents fetch error",
+    };
+  }
+}
+
 async function fetchGnewsWithCache(requestUrl: string, category: string): Promise<GnewsFetchResult> {
   const now = Date.now();
 
@@ -510,6 +629,9 @@ export async function GET(request: Request) {
   let nytImageCount = 0;
   let nytError: string | null = null;
   let nytArticles: AggregatedNewsArticle[] = [];
+  let currentsRawCount = 0;
+  let currentsImageCount = 0;
+  let currentsArticles: AggregatedNewsArticle[] = [];
 
   const [currentArticles] = await Promise.all([
     fetchCurrentProviderArticles(category),
@@ -532,11 +654,16 @@ export async function GET(request: Request) {
   nytImageCount = nytResult.imageCount;
   nytError = nytResult.error;
   nytArticles = nytResult.articles;
+  const currentsResult = await fetchCurrentsArticles(category);
+  currentsRawCount = currentsResult.rawCount;
+  currentsImageCount = currentsResult.imageCount;
+  currentsArticles = currentsResult.articles;
 
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
   const mergedArticles = [
     ...currentMappedArticles,
     ...nytArticles,
+    ...currentsArticles,
     ...gnewsArticles,
   ];
   const mappedArticles = dedupeArticles(mergedArticles);
@@ -569,6 +696,9 @@ export async function GET(request: Request) {
       currentCount: currentMappedArticles.length,
       gnewsCount: gnewsArticles.length,
       nytCount: nytArticles.length,
+      currentsCount: currentsArticles.length,
+      currentsImageCount,
+      currentsRawCount,
       totalBeforeCaps: interleavedArticles.length,
       totalAfterCaps: articles.length,
       finalBeforeSliceProviderCounts,

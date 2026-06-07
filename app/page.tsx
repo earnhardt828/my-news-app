@@ -2946,6 +2946,9 @@ type PaginatedNewsResponse = {
     currentCount?: number;
     gnewsCount?: number;
     nytCount?: number;
+    currentsCount?: number;
+    currentsImageCount?: number;
+    currentsRawCount?: number;
     totalBeforeCaps?: number;
     totalAfterCaps?: number;
     finalBeforeSliceProviderCounts?: {
@@ -4597,6 +4600,9 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
         currentCount: 0,
         gnewsCount: 0,
         nytCount: 0,
+        currentsCount: 0,
+        currentsImageCount: 0,
+        currentsRawCount: 0,
         totalBeforeCaps: renderableArticles.length,
         totalAfterCaps: renderableArticles.length,
         finalBeforeSliceProviderCounts: {
@@ -4636,6 +4642,9 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       currentCount: payload.debug?.currentCount ?? 0,
       gnewsCount: payload.debug?.gnewsCount ?? 0,
       nytCount: payload.debug?.nytCount ?? 0,
+      currentsCount: payload.debug?.currentsCount ?? 0,
+      currentsImageCount: payload.debug?.currentsImageCount ?? 0,
+      currentsRawCount: payload.debug?.currentsRawCount ?? 0,
       totalBeforeCaps: payload.debug?.totalBeforeCaps ?? renderableArticles.length,
       totalAfterCaps: payload.debug?.totalAfterCaps ?? renderableArticles.length,
       finalBeforeSliceProviderCounts: {
@@ -6733,6 +6742,10 @@ export default function Home() {
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
   const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
+  const [aggregatedNewsDebug, setAggregatedNewsDebug] = useState({
+    currentsCount: 0,
+    currentsImageCount: 0,
+  });
   const [localQuery, setLocalQuery] = useState("");
   const [localQueryDraft, setLocalQueryDraft] = useState("");
   const [localLocationLabel, setLocalLocationLabel] = useState("");
@@ -7621,6 +7634,17 @@ export default function Home() {
       }
 
       const newsData = newsPayload?.articles ?? [];
+      if (newsPath.startsWith("/api/aggregated-news")) {
+        setAggregatedNewsDebug({
+          currentsCount: newsPayload?.debug?.currentsCount ?? 0,
+          currentsImageCount: newsPayload?.debug?.currentsImageCount ?? 0,
+        });
+      } else {
+        setAggregatedNewsDebug({
+          currentsCount: 0,
+          currentsImageCount: 0,
+        });
+      }
       hasLiveNewsResponse = true;
       if (feedMode === "sports") {
         console.log("SPORTS LOCAL FETCH COUNT", newsData.length);
@@ -22032,6 +22056,12 @@ export default function Home() {
         </div>
       ) : (
         <div className="stack feed-results-stack">
+          {aggregatedNewsDebug.currentsCount > 0 || aggregatedNewsDebug.currentsImageCount > 0 ? (
+            <div className="muted" style={{ fontSize: "12px" }}>
+              Currents count: {aggregatedNewsDebug.currentsCount} · Currents image count:{" "}
+              {aggregatedNewsDebug.currentsImageCount}
+            </div>
+          ) : null}
           {feedLoadError ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
               <div className="stack" style={{ gap: "10px" }}>
