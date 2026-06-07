@@ -123,6 +123,11 @@ type NewsRouteResponse = {
   hasMore: boolean;
   page: number;
   pageSize: number;
+  gnewsKeyPresent?: boolean;
+  gnewsStatus?: number | null;
+  gnewsRawCount?: number;
+  gnewsImageCount?: number;
+  gnewsFirstTitle?: string | null;
   nytKeyPresentFromNewsRoute?: boolean;
   nytKeyLengthFromNewsRoute?: number;
   debug?:
@@ -190,6 +195,19 @@ type GNewsApiResponse = {
       name?: string | null;
     } | null;
   }>;
+};
+
+type DirectGnewsResult = {
+  keyPresent: boolean;
+  keyLength: number;
+  status: number | null;
+  rawCount: number;
+  imageCount: number;
+  firstTitle: string | null;
+  firstImage: string | null;
+  error: string | null;
+  requestUrl: string;
+  articles: NormalizedArticle[];
 };
 
 type MediaStackApiResponse = {
@@ -738,6 +756,120 @@ const NEWS_API_KEY =
   "";
 const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY ?? "";
 const BING_NEWS_API_KEY = process.env.BING_NEWS_API_KEY ?? "";
+
+async function fetchDirectGnewsArticles(category: string): Promise<DirectGnewsResult> {
+  const gnewsKey = process.env.GNEWS_API_KEY ?? "";
+  const keyPresent = Boolean(gnewsKey);
+  const keyLength = gnewsKey.length;
+  const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${
+    keyPresent ? "[REDACTED]" : "[MISSING]"
+  }`;
+
+  console.log("GNEWS_PROVIDER_CALLED", true);
+
+  if (!keyPresent) {
+    return {
+      keyPresent,
+      keyLength,
+      status: null,
+      rawCount: 0,
+      imageCount: 0,
+      firstTitle: null,
+      firstImage: null,
+      error: "Missing GNEWS_API_KEY",
+      requestUrl,
+      articles: [],
+    };
+  }
+
+  try {
+    const liveUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${gnewsKey}`;
+    const response = await fetch(liveUrl, {
+      next: { revalidate: 0 },
+    });
+    const status = response.status;
+
+    if (!response.ok) {
+      return {
+        keyPresent: true,
+        keyLength,
+        status,
+        rawCount: 0,
+        imageCount: 0,
+        firstTitle: null,
+        firstImage: null,
+        error: `GNews request failed with status ${status}`,
+        requestUrl,
+        articles: [],
+      };
+    }
+
+    const data = (await response.json()) as GNewsApiResponse;
+    const rawArticles = data.articles ?? [];
+    const normalizedCategory = category.trim() || "general";
+    const normalizedArticles = rawArticles.flatMap((article, index) => {
+      const title = stripHtml(article.title);
+      const url = normalizeUrl(article.url);
+      const imageUrl = article.image?.trim() ?? "";
+
+      if (!title || !url || !hasUsablePrimaryImageUrl(imageUrl)) {
+        return [];
+      }
+
+      return [{
+        id: hashArticleId(`gnews-direct-${index}:${url}`),
+        title,
+        description: stripHtml(article.description) || null,
+        content: stripHtml(article.description) || null,
+        source: article.source?.name?.trim() || "GNews",
+        sourceName: article.source?.name?.trim() || "GNews",
+        url,
+        image: imageUrl,
+        imageUrl,
+        urlToImage: imageUrl,
+        mediaContent: null,
+        enclosureUrl: null,
+        ogImage: null,
+        twitterImage: null,
+        thumbnail: null,
+        category: normalizedCategory,
+        publishedAt: article.publishedAt ?? null,
+        time: "Recent",
+        likes: 0,
+        comments: [],
+        provider: "gnews",
+      }];
+    });
+
+    console.log("GNEWS_PROVIDER_RETURN_COUNT", normalizedArticles.length);
+
+    return {
+      keyPresent: true,
+      keyLength,
+      status,
+      rawCount: rawArticles.length,
+      imageCount: normalizedArticles.length,
+      firstTitle: normalizedArticles[0]?.title ?? null,
+      firstImage: normalizedArticles[0]?.imageUrl ?? null,
+      error: null,
+      requestUrl,
+      articles: normalizedArticles,
+    };
+  } catch (error) {
+    return {
+      keyPresent: true,
+      keyLength,
+      status: null,
+      rawCount: 0,
+      imageCount: 0,
+      firstTitle: null,
+      firstImage: null,
+      error: error instanceof Error ? error.message : String(error),
+      requestUrl,
+      articles: [],
+    };
+  }
+}
 
 function getGnewsApiKey() {
   return process.env.GNEWS_API_KEY ?? "";
@@ -4470,7 +4602,10 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     params.categories[0]?.trim() ||
     (params.mode === "myfeed" || params.mode === "compare" ? "trending" : params.mode);
   const aggregatorResult = await getArticlesWithDebug(aggregatorCategory);
-  const mappedAggregatorArticles: NormalizedArticle[] = aggregatorResult.articles.map((article) => ({
+  const directGnewsResult = await fetchDirectGnewsArticles(aggregatorCategory);
+  const mappedAggregatorArticles: NormalizedArticle[] = aggregatorResult.articles
+    .filter((article) => article.provider !== "gnews")
+    .map((article) => ({
     id: article.id,
     title: article.title,
     description: article.description,
@@ -4493,10 +4628,11 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     comments: [],
     provider: article.provider,
   }));
+  const combinedAggregatorArticles = [...directGnewsResult.articles, ...mappedAggregatorArticles];
   const startIndex = Math.max(0, (params.page - 1) * params.pageSize);
   const endIndex = startIndex + params.pageSize;
-  const slicedAggregatorArticles = mappedAggregatorArticles.slice(startIndex, endIndex);
-  const aggregatorHasMore = endIndex < mappedAggregatorArticles.length;
+  const slicedAggregatorArticles = combinedAggregatorArticles.slice(startIndex, endIndex);
+  const aggregatorHasMore = endIndex < combinedAggregatorArticles.length;
 
   return {
     articles: slicedAggregatorArticles,
@@ -4504,23 +4640,29 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     hasMore: aggregatorHasMore,
     page: params.page,
     pageSize: params.pageSize,
+    gnewsKeyPresent: directGnewsResult.keyPresent,
+    gnewsStatus: directGnewsResult.status,
+    gnewsRawCount: directGnewsResult.rawCount,
+    gnewsImageCount: directGnewsResult.imageCount,
+    gnewsFirstTitle: directGnewsResult.firstTitle,
     nytKeyPresentFromNewsRoute: Boolean(process.env.NYT_API_KEY),
     nytKeyLengthFromNewsRoute: process.env.NYT_API_KEY?.length ?? 0,
     visiblePipelineDebug: {
       currentSourceFile: "/Users/erniewilson/my-news-app/lib/news/providers/current.ts",
       currentCountBeforeMerge: aggregatorResult.counts.current,
-      gnewsCountBeforeMerge: aggregatorResult.counts.gnews,
+      gnewsCountBeforeMerge: directGnewsResult.articles.length,
       nytCountBeforeMerge: aggregatorResult.counts.nyt,
-      totalAfterMerge: aggregatorResult.counts.totalAfterMerge,
-      gnewsDroppedReason: aggregatorResult.gnewsDroppedReason,
-      gnewsKeyPresent: aggregatorResult.gnewsDebug.keyPresent,
-      gnewsKeyLength: aggregatorResult.gnewsDebug.keyLength,
-      gnewsRequestUrl: aggregatorResult.gnewsDebug.requestUrl,
-      gnewsStatus: aggregatorResult.gnewsDebug.status,
-      gnewsBodyPreview: aggregatorResult.gnewsDebug.bodyPreview,
-      gnewsRawCount: aggregatorResult.gnewsDebug.rawCount,
-      gnewsImageCount: aggregatorResult.gnewsDebug.imageCount,
-      gnewsError: aggregatorResult.gnewsDebug.error,
+      totalAfterMerge: combinedAggregatorArticles.length,
+      gnewsDroppedReason:
+        directGnewsResult.articles.length > 0 ? null : directGnewsResult.error,
+      gnewsKeyPresent: directGnewsResult.keyPresent,
+      gnewsKeyLength: directGnewsResult.keyLength,
+      gnewsRequestUrl: directGnewsResult.requestUrl,
+      gnewsStatus: directGnewsResult.status,
+      gnewsBodyPreview: null,
+      gnewsRawCount: directGnewsResult.rawCount,
+      gnewsImageCount: directGnewsResult.imageCount,
+      gnewsError: directGnewsResult.error,
     },
   };
 
