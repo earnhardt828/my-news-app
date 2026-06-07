@@ -16,6 +16,20 @@ type GNewsApiResponse = {
   }>;
 };
 
+type NytTopStoriesResponse = {
+  results?: Array<{
+    title?: string | null;
+    abstract?: string | null;
+    url?: string | null;
+    published_date?: string | null;
+    multimedia?: Array<{
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+    }> | null;
+  }>;
+};
+
 type AggregatedNewsArticle = {
   id: number;
   title: string;
@@ -37,16 +51,34 @@ type AggregatedNewsArticle = {
   time: string;
   likes: number;
   comments: null[];
-  provider: "current" | "gnews";
+  provider: "current" | "gnews" | "nyt";
 };
 
-// TODO: addNytProvider()
-
 const GNEWS_CACHE_TTL_MS = 30 * 60 * 1000;
+const NYT_TOP_STORIES_SECTIONS = [
+  "home",
+  "world",
+  "us",
+  "politics",
+  "business",
+  "technology",
+  "science",
+  "arts",
+  "movies",
+  "travel",
+  "food",
+] as const;
 
 type GnewsFetchResult = {
   articles: AggregatedNewsArticle[];
   status: number | null;
+  rawCount: number;
+  imageCount: number;
+  error: string | null;
+};
+
+type NytFetchResult = {
+  articles: AggregatedNewsArticle[];
   rawCount: number;
   imageCount: number;
   error: string | null;
@@ -216,6 +248,117 @@ function mapGnewsArticles(rawArticles: GNewsApiResponse["articles"], category: s
   });
 }
 
+function getLargestNytImageUrl(
+  multimedia:
+    | Array<{
+        url?: string | null;
+        width?: number | null;
+        height?: number | null;
+      }>
+    | null
+    | undefined
+) {
+  const candidates = (multimedia ?? [])
+    .map((item) => ({
+      url: item?.url?.trim() ?? "",
+      area: (item?.width ?? 0) * (item?.height ?? 0),
+    }))
+    .filter((item) => hasRealImageUrl(item.url))
+    .sort((left, right) => right.area - left.area);
+
+  const selected = candidates[0]?.url ?? "";
+
+  if (!selected) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(selected)) {
+    return selected;
+  }
+
+  return `https://static01.nyt.com/${selected.replace(/^\/+/, "")}`;
+}
+
+async function fetchNytArticles(category: string): Promise<NytFetchResult> {
+  const nytKey = process.env.NYT_API_KEY ?? "";
+
+  if (!nytKey) {
+    return {
+      articles: [],
+      rawCount: 0,
+      imageCount: 0,
+      error: "Missing NYT_API_KEY",
+    };
+  }
+
+  try {
+    const responses = await Promise.all(
+      NYT_TOP_STORIES_SECTIONS.map(async (section) => {
+        const requestUrl = `https://api.nytimes.com/svc/topstories/v2/${section}.json?api-key=${nytKey}`;
+        const response = await fetch(requestUrl, {
+          next: { revalidate: 0 },
+        });
+
+        if (!response.ok) {
+          return [] as NonNullable<NytTopStoriesResponse["results"]>;
+        }
+
+        const payload = (await response.json()) as NytTopStoriesResponse;
+        return payload.results ?? [];
+      })
+    );
+
+    const rawArticles = responses.flat();
+    const articles = rawArticles.flatMap((article, index) => {
+      const title = stripHtml(article.title);
+      const url = normalizeUrl(article.url);
+      const imageUrl = getLargestNytImageUrl(article.multimedia);
+
+      if (!title || !url || !hasRealImageUrl(imageUrl)) {
+        return [];
+      }
+
+      return [{
+        id: hashArticleId(`nyt:${url}:${index}`),
+        title,
+        description: stripHtml(article.abstract) || null,
+        content: stripHtml(article.abstract) || null,
+        source: "The New York Times",
+        sourceName: "The New York Times",
+        url,
+        image: imageUrl,
+        imageUrl,
+        urlToImage: imageUrl,
+        mediaContent: null,
+        enclosureUrl: null,
+        ogImage: null,
+        twitterImage: null,
+        thumbnail: null,
+        category: category.trim() || "general",
+        publishedAt: article.published_date ?? null,
+        time: "Recent",
+        likes: 0,
+        comments: [],
+        provider: "nyt",
+      }] satisfies AggregatedNewsArticle[];
+    });
+
+    return {
+      articles,
+      rawCount: rawArticles.length,
+      imageCount: articles.length,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      articles: [],
+      rawCount: 0,
+      imageCount: 0,
+      error: error instanceof Error ? error.message : "Unknown NYT fetch error",
+    };
+  }
+}
+
 async function fetchGnewsWithCache(requestUrl: string, category: string): Promise<GnewsFetchResult> {
   const now = Date.now();
 
@@ -319,6 +462,9 @@ export async function GET(request: Request) {
   let gnewsImageCount = 0;
   let gnewsError: string | null = null;
   let gnewsArticles: AggregatedNewsArticle[] = [];
+  let nytRawCount = 0;
+  let nytImageCount = 0;
+  let nytArticles: AggregatedNewsArticle[] = [];
 
   const [currentArticles] = await Promise.all([
     fetchCurrentProviderArticles(category),
@@ -335,9 +481,15 @@ export async function GET(request: Request) {
     gnewsArticles = gnewsResult.articles;
   }
 
+  const nytResult = await fetchNytArticles(category);
+  nytRawCount = nytResult.rawCount;
+  nytImageCount = nytResult.imageCount;
+  nytArticles = nytResult.articles;
+
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
   const mergedArticles = [
     ...currentMappedArticles,
+    ...nytArticles,
     ...gnewsArticles,
   ];
   const mappedArticles = dedupeArticles(mergedArticles);
@@ -359,8 +511,12 @@ export async function GET(request: Request) {
       gnewsRawCount,
       gnewsImageCount,
       gnewsError,
+      nytKeyPresent: Boolean(process.env.NYT_API_KEY ?? ""),
+      nytRawCount,
+      nytImageCount,
       currentCount: currentMappedArticles.length,
       gnewsCount: gnewsArticles.length,
+      nytCount: nytArticles.length,
       totalCount: mappedArticles.length,
     },
   });
