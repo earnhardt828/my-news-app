@@ -1,7 +1,7 @@
 import "server-only";
 
 import { buildNewsArticle, dedupeArticles, sortArticlesByRecent } from "../shared";
-import type { NewsArticle } from "../types";
+import type { GnewsProviderDebug, NewsArticle } from "../types";
 
 type GNewsApiResponse = {
   articles?: Array<{
@@ -16,27 +16,54 @@ type GNewsApiResponse = {
   errors?: string[] | null;
 };
 
-export async function fetchArticles(category: string): Promise<NewsArticle[]> {
+function createEmptyDebug(key: string, requestUrl: string): GnewsProviderDebug {
+  return {
+    keyPresent: Boolean(key),
+    keyLength: key.length,
+    requestUrl,
+    status: null,
+    bodyPreview: null,
+    rawCount: 0,
+    imageCount: 0,
+    error: null,
+  };
+}
+
+export async function fetchArticlesWithDebug(category: string): Promise<{
+  articles: NewsArticle[];
+  debug: GnewsProviderDebug;
+}> {
   const key = process.env.GNEWS_API_KEY ?? "";
-  console.log("GNEWS_KEY_PRESENT", Boolean(key));
+  const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${key}`;
+  const debug = createEmptyDebug(key, requestUrl);
+
+  console.log("GNEWS_KEY_PRESENT", debug.keyPresent);
+  console.log("GNEWS_KEY_LENGTH", debug.keyLength);
 
   if (!key) {
-    console.error("GNEWS_ERROR", "Missing GNEWS_API_KEY");
-    return [];
+    debug.error = "Missing GNEWS_API_KEY";
+    console.error("GNEWS_ERROR", debug.error);
+    return { articles: [], debug };
   }
 
   const normalizedCategory = category.trim() || "general";
-  const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${key}`;
+  console.log("GNEWS_REQUEST_URL", requestUrl);
 
   try {
     const response = await fetch(requestUrl, {
       next: { revalidate: 600 },
     });
 
+    debug.status = response.status;
     console.log("GNEWS_RESPONSE_STATUS", response.status);
 
-    const payload = (await response.json()) as GNewsApiResponse;
+    const bodyText = await response.text();
+    debug.bodyPreview = bodyText.slice(0, 500);
+    console.log("GNEWS_BODY_PREVIEW", debug.bodyPreview);
+
+    const payload = JSON.parse(bodyText) as GNewsApiResponse;
     const rawArticles = payload.articles ?? [];
+    debug.rawCount = rawArticles.length;
     console.log("GNEWS_RAW_COUNT", rawArticles.length);
 
     const articles = rawArticles
@@ -61,19 +88,27 @@ export async function fetchArticles(category: string): Promise<NewsArticle[]> {
       )
       .filter((article): article is NewsArticle => Boolean(article));
 
+    debug.imageCount = articles.length;
     console.log("GNEWS_IMAGE_COUNT", articles.length);
 
     if (!response.ok) {
-      console.error(
-        "GNEWS_ERROR",
-        payload.errors?.join(", ") || `GNews request failed (${response.status})`
-      );
-      return [];
+      debug.error = payload.errors?.join(", ") || `GNews request failed (${response.status})`;
+      console.error("GNEWS_ERROR", debug.error);
+      return { articles: [], debug };
     }
 
-    return sortArticlesByRecent(dedupeArticles(articles));
+    return {
+      articles: sortArticlesByRecent(dedupeArticles(articles)),
+      debug,
+    };
   } catch (error) {
-    console.error("GNEWS_ERROR", error);
-    return [];
+    debug.error = error instanceof Error ? error.message : String(error);
+    console.error("GNEWS_ERROR", debug.error);
+    return { articles: [], debug };
   }
+}
+
+export async function fetchArticles(category: string): Promise<NewsArticle[]> {
+  const result = await fetchArticlesWithDebug(category);
+  return result.articles;
 }

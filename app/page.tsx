@@ -2956,6 +2956,14 @@ type PaginatedNewsResponse = {
     gnewsCountBeforeMerge: number;
     nytCountBeforeMerge: number;
     totalAfterMerge: number;
+    gnewsKeyPresent: boolean;
+    gnewsKeyLength: number;
+    gnewsRequestUrl: string;
+    gnewsStatus: number | null;
+    gnewsBodyPreview: unknown;
+    gnewsRawCount: number;
+    gnewsImageCount: number;
+    gnewsError: string | null;
   };
 };
 
@@ -19177,6 +19185,30 @@ export default function Home() {
             </span>
             <span className="muted">
               TOTAL_AFTER_MERGE: {visiblePipelineDebug?.totalAfterMerge ?? visibleArticles.length}
+            </span>
+            <span className="muted">
+              GNEWS_KEY_PRESENT: {String(visiblePipelineDebug?.gnewsKeyPresent ?? false)}
+            </span>
+            <span className="muted">
+              GNEWS_KEY_LENGTH: {visiblePipelineDebug?.gnewsKeyLength ?? 0}
+            </span>
+            <span className="muted">
+              GNEWS_STATUS: {visiblePipelineDebug?.gnewsStatus ?? "null"}
+            </span>
+            <span className="muted">
+              GNEWS_RAW_COUNT: {visiblePipelineDebug?.gnewsRawCount ?? 0}
+            </span>
+            <span className="muted">
+              GNEWS_IMAGE_COUNT: {visiblePipelineDebug?.gnewsImageCount ?? 0}
+            </span>
+            <span className="muted">
+              GNEWS_ERROR: {visiblePipelineDebug?.gnewsError ?? "none"}
+            </span>
+            <span className="muted">
+              GNEWS_REQUEST_URL: {visiblePipelineDebug?.gnewsRequestUrl ?? "none"}
+            </span>
+            <span className="muted">
+              GNEWS_BODY_PREVIEW: {visiblePipelineDebug?.gnewsBodyPreview == null ? "none" : String(visiblePipelineDebug.gnewsBodyPreview)}
             </span>
             <span className="muted">
               CURRENT = {renderedProviderCounts.CURRENT ?? 0} | GNEWS = {renderedProviderCounts.GNEWS ?? 0} | NYT = {renderedProviderCounts.NYT ?? 0}

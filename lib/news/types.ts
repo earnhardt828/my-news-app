@@ -18,3 +18,14 @@ export type ProviderDebugCounts = {
   nyt: number;
   totalAfterMerge: number;
 };
+
+export type GnewsProviderDebug = {
+  keyPresent: boolean;
+  keyLength: number;
+  requestUrl: string;
+  status: number | null;
+  bodyPreview: string | null;
+  rawCount: number;
+  imageCount: number;
+  error: string | null;
+};

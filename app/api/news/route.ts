@@ -148,6 +148,14 @@ type NewsRouteResponse = {
     gnewsCountBeforeMerge: number;
     nytCountBeforeMerge: number;
     totalAfterMerge: number;
+    gnewsKeyPresent: boolean;
+    gnewsKeyLength: number;
+    gnewsRequestUrl: string;
+    gnewsStatus: number | null;
+    gnewsBodyPreview: unknown;
+    gnewsRawCount: number;
+    gnewsImageCount: number;
+    gnewsError: string | null;
   };
 };
 
@@ -4500,6 +4508,14 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
       gnewsCountBeforeMerge: aggregatorResult.counts.gnews,
       nytCountBeforeMerge: aggregatorResult.counts.nyt,
       totalAfterMerge: aggregatorResult.counts.totalAfterMerge,
+      gnewsKeyPresent: aggregatorResult.gnewsDebug.keyPresent,
+      gnewsKeyLength: aggregatorResult.gnewsDebug.keyLength,
+      gnewsRequestUrl: aggregatorResult.gnewsDebug.requestUrl,
+      gnewsStatus: aggregatorResult.gnewsDebug.status,
+      gnewsBodyPreview: aggregatorResult.gnewsDebug.bodyPreview,
+      gnewsRawCount: aggregatorResult.gnewsDebug.rawCount,
+      gnewsImageCount: aggregatorResult.gnewsDebug.imageCount,
+      gnewsError: aggregatorResult.gnewsDebug.error,
     },
   };
 
@@ -4815,6 +4831,19 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
             gnewsCountBeforeMerge: gnewsArticles.length,
             nytCountBeforeMerge: nytArticles.length,
             totalAfterMerge: combined.length,
+            gnewsKeyPresent: providerDebug.gnews.keyPresent ?? false,
+            gnewsKeyLength: 0,
+            gnewsRequestUrl: providerDebug.gnews.requestUrl ?? "",
+            gnewsStatus: providerDebug.gnews.status ?? null,
+            gnewsBodyPreview:
+              providerDebug.gnews.bodyPreview == null
+                ? null
+                : typeof providerDebug.gnews.bodyPreview === "string"
+                  ? providerDebug.gnews.bodyPreview
+                  : (JSON.stringify(providerDebug.gnews.bodyPreview) ?? null),
+            gnewsRawCount: providerDebug.gnews.rawCount,
+            gnewsImageCount: providerDebug.gnews.imageCount,
+            gnewsError: providerDebug.gnews.skippedReason ?? null,
           },
         }
       : {
@@ -4832,6 +4861,19 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
             gnewsCountBeforeMerge: gnewsArticles.length,
             nytCountBeforeMerge: nytArticles.length,
             totalAfterMerge: combined.length,
+            gnewsKeyPresent: providerDebug.gnews.keyPresent ?? false,
+            gnewsKeyLength: 0,
+            gnewsRequestUrl: providerDebug.gnews.requestUrl ?? "",
+            gnewsStatus: providerDebug.gnews.status ?? null,
+            gnewsBodyPreview:
+              providerDebug.gnews.bodyPreview == null
+                ? null
+                : typeof providerDebug.gnews.bodyPreview === "string"
+                  ? providerDebug.gnews.bodyPreview
+                  : (JSON.stringify(providerDebug.gnews.bodyPreview) ?? null),
+            gnewsRawCount: providerDebug.gnews.rawCount,
+            gnewsImageCount: providerDebug.gnews.imageCount,
+            gnewsError: providerDebug.gnews.skippedReason ?? null,
           },
         };
 

@@ -1,10 +1,10 @@
 import "server-only";
 
 import { fetchArticles as fetchCurrentArticles } from "./providers/current";
-import { fetchArticles as fetchGnewsArticles } from "./providers/gnews";
+import { fetchArticlesWithDebug as fetchGnewsArticlesWithDebug } from "./providers/gnews";
 import { fetchArticles as fetchNytArticles } from "./providers/nyt";
 import { dedupeArticles, sortArticlesByRecent } from "./shared";
-import type { NewsArticle, ProviderDebugCounts } from "./types";
+import type { GnewsProviderDebug, NewsArticle, ProviderDebugCounts } from "./types";
 
 export async function getArticles(category: string): Promise<NewsArticle[]> {
   const result = await getArticlesWithDebug(category);
@@ -14,12 +14,14 @@ export async function getArticles(category: string): Promise<NewsArticle[]> {
 export async function getArticlesWithDebug(category: string): Promise<{
   articles: NewsArticle[];
   counts: ProviderDebugCounts;
+  gnewsDebug: GnewsProviderDebug;
 }> {
-  const [currentArticles, gnewsArticles, nytArticles] = await Promise.all([
+  const [currentArticles, gnewsResult, nytArticles] = await Promise.all([
     fetchCurrentArticles(category),
-    fetchGnewsArticles(category),
+    fetchGnewsArticlesWithDebug(category),
     fetchNytArticles(category),
   ]);
+  const gnewsArticles = gnewsResult.articles;
 
   const merged = sortArticlesByRecent(
     dedupeArticles([...currentArticles, ...gnewsArticles, ...nytArticles])
@@ -41,5 +43,6 @@ export async function getArticlesWithDebug(category: string): Promise<{
   return {
     articles: merged,
     counts,
+    gnewsDebug: gnewsResult.debug,
   };
 }
