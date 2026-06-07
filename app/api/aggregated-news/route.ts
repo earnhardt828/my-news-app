@@ -3,6 +3,19 @@ export const revalidate = 0;
 
 import { fetchArticles as fetchCurrentProviderArticles } from "../../../lib/news/providers/current";
 
+type GNewsApiResponse = {
+  articles?: Array<{
+    title?: string | null;
+    description?: string | null;
+    url?: string | null;
+    image?: string | null;
+    publishedAt?: string | null;
+    source?: {
+      name?: string | null;
+    } | null;
+  }>;
+};
+
 type AggregatedNewsArticle = {
   id: number;
   title: string;
@@ -24,11 +37,104 @@ type AggregatedNewsArticle = {
   time: string;
   likes: number;
   comments: null[];
-  provider: "current";
+  provider: "current" | "gnews";
 };
 
-// TODO: addGNewsProvider()
 // TODO: addNytProvider()
+
+function hashArticleId(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash === 0 ? 1 : hash;
+}
+
+function normalizeUrl(url: string | null | undefined) {
+  if (!url?.trim()) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(url.trim());
+    parsed.hash = "";
+    [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "fbclid",
+      "gclid",
+    ].forEach((key) => parsed.searchParams.delete(key));
+    return parsed.toString();
+  } catch {
+    return url.trim();
+  }
+}
+
+function normalizeTitle(title: string | null | undefined) {
+  return (title ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function stripHtml(value: string | null | undefined) {
+  return (value ?? "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasRealImageUrl(url: string | null | undefined) {
+  const normalized = url?.trim() ?? "";
+
+  if (!normalized) {
+    return false;
+  }
+
+  if (!/^https?:\/\//i.test(normalized)) {
+    return false;
+  }
+
+  return !/(placeholder|default-image|avatar|logo|icon|blank)\b/i.test(normalized);
+}
+
+function dedupeArticles(articles: AggregatedNewsArticle[]) {
+  const result: AggregatedNewsArticle[] = [];
+  const indexByKey = new Map<string, number>();
+
+  articles.forEach((article) => {
+    const normalizedUrl = normalizeUrl(article.url);
+    const normalizedArticleTitle = normalizeTitle(article.title);
+    const dedupeKey = normalizedUrl
+      ? `url:${normalizedUrl.toLowerCase()}`
+      : `title:${article.source.toLowerCase()}:${normalizedArticleTitle}`;
+    const existingIndex = indexByKey.get(dedupeKey);
+
+    if (existingIndex === undefined) {
+      indexByKey.set(dedupeKey, result.length);
+      result.push(article);
+      return;
+    }
+
+    const existing = result[existingIndex];
+    const existingTime = existing.publishedAt ? new Date(existing.publishedAt).getTime() : 0;
+    const nextTime = article.publishedAt ? new Date(article.publishedAt).getTime() : 0;
+
+    if (nextTime > existingTime) {
+      result[existingIndex] = article;
+    }
+  });
+
+  return result;
+}
 
 function mapCurrentArticle(article: Awaited<ReturnType<typeof fetchCurrentProviderArticles>>[number]): AggregatedNewsArticle {
   return {
@@ -56,6 +162,65 @@ function mapCurrentArticle(article: Awaited<ReturnType<typeof fetchCurrentProvid
   };
 }
 
+async function fetchGnewsArticles(category: string): Promise<AggregatedNewsArticle[]> {
+  const gnewsKey = process.env.GNEWS_API_KEY ?? "";
+
+  if (!gnewsKey) {
+    return [];
+  }
+
+  const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${gnewsKey}`;
+
+  try {
+    const response = await fetch(requestUrl, {
+      next: { revalidate: 0 },
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as GNewsApiResponse;
+    const rawArticles = payload.articles ?? [];
+
+    return rawArticles.flatMap((article, index) => {
+      const title = stripHtml(article.title);
+      const url = normalizeUrl(article.url);
+      const imageUrl = article.image?.trim() ?? "";
+
+      if (!title || !url || !hasRealImageUrl(imageUrl)) {
+        return [];
+      }
+
+      return [{
+        id: hashArticleId(`gnews:${url}:${index}`),
+        title,
+        description: stripHtml(article.description) || null,
+        content: stripHtml(article.description) || null,
+        source: article.source?.name?.trim() || "GNews",
+        sourceName: article.source?.name?.trim() || "GNews",
+        url,
+        image: imageUrl,
+        imageUrl,
+        urlToImage: imageUrl,
+        mediaContent: null,
+        enclosureUrl: null,
+        ogImage: null,
+        twitterImage: null,
+        thumbnail: null,
+        category: category.trim() || "general",
+        publishedAt: article.publishedAt ?? null,
+        time: "Recent",
+        likes: 0,
+        comments: [],
+        provider: "gnews",
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode")?.trim() || "trending";
@@ -64,8 +229,16 @@ export async function GET(request: Request) {
   const pageSize = Math.max(1, Math.min(30, Number(searchParams.get("pageSize") || "25")));
   const category = query || mode || "general";
 
-  const currentArticles = await fetchCurrentProviderArticles(category);
-  const mappedArticles = currentArticles.map(mapCurrentArticle);
+  const [currentArticles, gnewsArticles] = await Promise.all([
+    fetchCurrentProviderArticles(category),
+    fetchGnewsArticles(category),
+  ]);
+  const currentMappedArticles = currentArticles.map(mapCurrentArticle);
+  const mergedArticles = [
+    ...currentMappedArticles,
+    ...gnewsArticles,
+  ];
+  const mappedArticles = dedupeArticles(mergedArticles);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const articles = mappedArticles.slice(startIndex, endIndex);
@@ -78,7 +251,9 @@ export async function GET(request: Request) {
     page,
     pageSize,
     debug: {
-      currentCount: mappedArticles.length,
+      currentCount: currentMappedArticles.length,
+      gnewsCount: gnewsArticles.length,
+      totalCount: mappedArticles.length,
     },
   });
 }
