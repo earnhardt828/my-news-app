@@ -694,6 +694,7 @@ export async function GET(request: Request) {
       currentsCount: currentsArticles.length,
       currentsImageCount,
       currentsRawCount,
+      totalCount: articles.length,
       totalBeforeCaps: interleavedArticles.length,
       totalAfterCaps: articles.length,
       finalBeforeSliceProviderCounts,

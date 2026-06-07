@@ -2949,6 +2949,7 @@ type PaginatedNewsResponse = {
     currentsCount?: number;
     currentsImageCount?: number;
     currentsRawCount?: number;
+    totalCount?: number;
     totalBeforeCaps?: number;
     totalAfterCaps?: number;
     finalBeforeSliceProviderCounts?: {
@@ -4603,6 +4604,7 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
         currentsCount: 0,
         currentsImageCount: 0,
         currentsRawCount: 0,
+        totalCount: renderableArticles.length,
         totalBeforeCaps: renderableArticles.length,
         totalAfterCaps: renderableArticles.length,
         finalBeforeSliceProviderCounts: {
@@ -4645,6 +4647,7 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       currentsCount: payload.debug?.currentsCount ?? 0,
       currentsImageCount: payload.debug?.currentsImageCount ?? 0,
       currentsRawCount: payload.debug?.currentsRawCount ?? 0,
+      totalCount: payload.debug?.totalCount ?? renderableArticles.length,
       totalBeforeCaps: payload.debug?.totalBeforeCaps ?? renderableArticles.length,
       totalAfterCaps: payload.debug?.totalAfterCaps ?? renderableArticles.length,
       finalBeforeSliceProviderCounts: {
@@ -6746,6 +6749,7 @@ export default function Home() {
     currentCount: 0,
     nytCount: 0,
     currentsCount: 0,
+    totalCount: 0,
     currentsImageCount: 0,
   });
   const [localQuery, setLocalQuery] = useState("");
@@ -7641,6 +7645,7 @@ export default function Home() {
           currentCount: newsPayload?.debug?.currentCount ?? 0,
           nytCount: newsPayload?.debug?.nytCount ?? 0,
           currentsCount: newsPayload?.debug?.currentsCount ?? 0,
+          totalCount: newsPayload?.debug?.totalCount ?? 0,
           currentsImageCount: newsPayload?.debug?.currentsImageCount ?? 0,
         });
       } else {
@@ -7648,6 +7653,7 @@ export default function Home() {
           currentCount: 0,
           nytCount: 0,
           currentsCount: 0,
+          totalCount: 0,
           currentsImageCount: 0,
         });
       }
@@ -16331,6 +16337,7 @@ export default function Home() {
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
+      const providerBadge = getArticleProviderLabel(article.provider);
       if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
         console.log("SPORTS CARD IMAGE SRC", {
           title: cleanDisplayText(article.title),
@@ -16426,6 +16433,12 @@ export default function Home() {
                   {options.rankLabel}
                 </span>
               ) : null}
+              <span
+                className="chip chip-muted"
+                style={{ fontSize: "10px", padding: "2px 6px" }}
+              >
+                {providerBadge}
+              </span>
             </div>
           </div>
           <Link
@@ -16606,6 +16619,7 @@ export default function Home() {
           </Link>
         }
         publishedLabel={formatFreshnessTime(article.publishedAt, article.time)}
+        providerBadge={getArticleProviderLabel(article.provider)}
         title={cleanDisplayText(article.title)}
         summary={summaryText}
         imageSrc={realImage.src}
@@ -22067,7 +22081,8 @@ export default function Home() {
           aggregatedNewsDebug.currentsCount > 0 ? (
             <div className="muted" style={{ fontSize: "12px" }}>
               Current count: {aggregatedNewsDebug.currentCount} · NYT count:{" "}
-              {aggregatedNewsDebug.nytCount} · Currents count: {aggregatedNewsDebug.currentsCount}
+              {aggregatedNewsDebug.nytCount} · Currents count: {aggregatedNewsDebug.currentsCount} ·
+              {" "}Total count: {aggregatedNewsDebug.totalCount}
             </div>
           ) : null}
           {feedLoadError ? (
