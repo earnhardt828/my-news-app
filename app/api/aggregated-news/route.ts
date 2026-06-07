@@ -55,19 +55,7 @@ type AggregatedNewsArticle = {
 };
 
 const GNEWS_CACHE_TTL_MS = 30 * 60 * 1000;
-const NYT_TOP_STORIES_SECTIONS = [
-  "home",
-  "world",
-  "us",
-  "politics",
-  "business",
-  "technology",
-  "science",
-  "arts",
-  "movies",
-  "travel",
-  "food",
-] as const;
+const NYT_TOP_STORIES_HOME_SECTION = "home";
 
 type GnewsFetchResult = {
   articles: AggregatedNewsArticle[];
@@ -79,6 +67,7 @@ type GnewsFetchResult = {
 
 type NytFetchResult = {
   articles: AggregatedNewsArticle[];
+  status: number | null;
   rawCount: number;
   imageCount: number;
   error: string | null;
@@ -302,6 +291,7 @@ async function fetchNytArticles(category: string): Promise<NytFetchResult> {
   if (!nytKey) {
     return {
       articles: [],
+      status: null,
       rawCount: 0,
       imageCount: 0,
       error: "Missing NYT_API_KEY",
@@ -309,23 +299,23 @@ async function fetchNytArticles(category: string): Promise<NytFetchResult> {
   }
 
   try {
-    const responses = await Promise.all(
-      NYT_TOP_STORIES_SECTIONS.map(async (section) => {
-        const requestUrl = `https://api.nytimes.com/svc/topstories/v2/${section}.json?api-key=${nytKey}`;
-        const response = await fetch(requestUrl, {
-          next: { revalidate: 0 },
-        });
+    const requestUrl = `https://api.nytimes.com/svc/topstories/v2/${NYT_TOP_STORIES_HOME_SECTION}.json?api-key=${nytKey}`;
+    const response = await fetch(requestUrl, {
+      next: { revalidate: 0 },
+    });
 
-        if (!response.ok) {
-          return [] as NonNullable<NytTopStoriesResponse["results"]>;
-        }
+    if (!response.ok) {
+      return {
+        articles: [],
+        status: response.status,
+        rawCount: 0,
+        imageCount: 0,
+        error: `NYT request failed with status ${response.status}`,
+      };
+    }
 
-        const payload = (await response.json()) as NytTopStoriesResponse;
-        return payload.results ?? [];
-      })
-    );
-
-    const rawArticles = responses.flat();
+    const payload = (await response.json()) as NytTopStoriesResponse;
+    const rawArticles = payload.results ?? [];
     const articles = rawArticles.flatMap((article, index) => {
       const title = stripHtml(article.title);
       const url = normalizeUrl(article.url);
@@ -361,7 +351,8 @@ async function fetchNytArticles(category: string): Promise<NytFetchResult> {
     });
 
     return {
-      articles,
+      articles: articles.slice(0, 5),
+      status: response.status,
       rawCount: rawArticles.length,
       imageCount: articles.length,
       error: null,
@@ -369,6 +360,7 @@ async function fetchNytArticles(category: string): Promise<NytFetchResult> {
   } catch (error) {
     return {
       articles: [],
+      status: null,
       rawCount: 0,
       imageCount: 0,
       error: error instanceof Error ? error.message : "Unknown NYT fetch error",
@@ -479,8 +471,11 @@ export async function GET(request: Request) {
   let gnewsImageCount = 0;
   let gnewsError: string | null = null;
   let gnewsArticles: AggregatedNewsArticle[] = [];
+  const nytKey = process.env.NYT_API_KEY ?? "";
+  let nytStatus: number | null = null;
   let nytRawCount = 0;
   let nytImageCount = 0;
+  let nytError: string | null = null;
   let nytArticles: AggregatedNewsArticle[] = [];
 
   const [currentArticles] = await Promise.all([
@@ -499,8 +494,10 @@ export async function GET(request: Request) {
   }
 
   const nytResult = await fetchNytArticles(category);
+  nytStatus = nytResult.status;
   nytRawCount = nytResult.rawCount;
   nytImageCount = nytResult.imageCount;
+  nytError = nytResult.error;
   nytArticles = nytResult.articles;
 
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
@@ -529,9 +526,11 @@ export async function GET(request: Request) {
       gnewsRawCount,
       gnewsImageCount,
       gnewsError,
-      nytKeyPresent: Boolean(process.env.NYT_API_KEY ?? ""),
+      nytKeyPresent: Boolean(nytKey),
+      nytStatus,
       nytRawCount,
       nytImageCount,
+      nytError,
       currentCount: currentMappedArticles.length,
       gnewsCount: gnewsArticles.length,
       nytCount: nytArticles.length,
