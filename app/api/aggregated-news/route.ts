@@ -42,6 +42,24 @@ type AggregatedNewsArticle = {
 
 // TODO: addNytProvider()
 
+const GNEWS_CACHE_TTL_MS = 30 * 60 * 1000;
+
+type GnewsFetchResult = {
+  articles: AggregatedNewsArticle[];
+  status: number | null;
+  rawCount: number;
+  imageCount: number;
+  error: string | null;
+};
+
+let gnewsCache:
+  | {
+      fetchedAt: number;
+      result: GnewsFetchResult;
+    }
+  | null = null;
+let gnewsInflightRequest: Promise<GnewsFetchResult> | null = null;
+
 function hashArticleId(value: string) {
   let hash = 0;
 
@@ -162,63 +180,129 @@ function mapCurrentArticle(article: Awaited<ReturnType<typeof fetchCurrentProvid
   };
 }
 
-async function fetchGnewsArticles(category: string): Promise<AggregatedNewsArticle[]> {
-  const gnewsKey = process.env.GNEWS_API_KEY ?? "";
+function mapGnewsArticles(rawArticles: GNewsApiResponse["articles"], category: string) {
+  return (rawArticles ?? []).flatMap((article, index) => {
+    const title = stripHtml(article.title);
+    const url = normalizeUrl(article.url);
+    const imageUrl = article.image?.trim() ?? "";
 
-  if (!gnewsKey) {
-    return [];
-  }
-
-  const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${gnewsKey}`;
-
-  try {
-    const response = await fetch(requestUrl, {
-      next: { revalidate: 0 },
-    });
-
-    if (!response.ok) {
+    if (!title || !url || !hasRealImageUrl(imageUrl)) {
       return [];
     }
 
-    const payload = (await response.json()) as GNewsApiResponse;
-    const rawArticles = payload.articles ?? [];
+    return [{
+      id: hashArticleId(`gnews:${url}:${index}`),
+      title,
+      description: stripHtml(article.description) || null,
+      content: stripHtml(article.description) || null,
+      source: article.source?.name?.trim() || "GNews",
+      sourceName: article.source?.name?.trim() || "GNews",
+      url,
+      image: imageUrl,
+      imageUrl,
+      urlToImage: imageUrl,
+      mediaContent: null,
+      enclosureUrl: null,
+      ogImage: null,
+      twitterImage: null,
+      thumbnail: null,
+      category: category.trim() || "general",
+      publishedAt: article.publishedAt ?? null,
+      time: "Recent",
+      likes: 0,
+      comments: [],
+      provider: "gnews",
+    }] satisfies AggregatedNewsArticle[];
+  });
+}
 
-    return rawArticles.flatMap((article, index) => {
-      const title = stripHtml(article.title);
-      const url = normalizeUrl(article.url);
-      const imageUrl = article.image?.trim() ?? "";
+async function fetchGnewsWithCache(requestUrl: string, category: string): Promise<GnewsFetchResult> {
+  const now = Date.now();
 
-      if (!title || !url || !hasRealImageUrl(imageUrl)) {
-        return [];
+  if (gnewsCache && now - gnewsCache.fetchedAt < GNEWS_CACHE_TTL_MS) {
+    console.log("GNEWS_CACHE_HIT", {
+      ageMs: now - gnewsCache.fetchedAt,
+      imageCount: gnewsCache.result.imageCount,
+    });
+    return gnewsCache.result;
+  }
+
+  console.log("GNEWS_CACHE_MISS", {
+    hasCache: Boolean(gnewsCache),
+    requestUrl,
+  });
+
+  if (gnewsInflightRequest) {
+    return gnewsInflightRequest;
+  }
+
+  gnewsInflightRequest = (async () => {
+    try {
+      const response = await fetch(requestUrl, {
+        next: { revalidate: 0 },
+      });
+
+      if (response.status === 429) {
+        console.log("GNEWS_RATE_LIMITED", { requestUrl });
+
+        if (gnewsCache) {
+          return {
+            ...gnewsCache.result,
+            status: 429,
+            error: "GNews rate limited; using cached results",
+          };
+        }
+
+        return {
+          articles: [],
+          status: 429,
+          rawCount: 0,
+          imageCount: 0,
+          error: "GNews rate limited",
+        };
       }
 
-      return [{
-        id: hashArticleId(`gnews:${url}:${index}`),
-        title,
-        description: stripHtml(article.description) || null,
-        content: stripHtml(article.description) || null,
-        source: article.source?.name?.trim() || "GNews",
-        sourceName: article.source?.name?.trim() || "GNews",
-        url,
-        image: imageUrl,
-        imageUrl,
-        urlToImage: imageUrl,
-        mediaContent: null,
-        enclosureUrl: null,
-        ogImage: null,
-        twitterImage: null,
-        thumbnail: null,
-        category: category.trim() || "general",
-        publishedAt: article.publishedAt ?? null,
-        time: "Recent",
-        likes: 0,
-        comments: [],
-        provider: "gnews",
-      }];
-    });
-  } catch {
-    return [];
-  }
+      if (!response.ok) {
+        return {
+          articles: [],
+          status: response.status,
+          rawCount: 0,
+          imageCount: 0,
+          error: `GNews request failed with status ${response.status}`,
+        };
+      }
+
+      const payload = (await response.json()) as GNewsApiResponse;
+      const rawArticles = payload.articles ?? [];
+      const articles = mapGnewsArticles(rawArticles, category);
+      const result = {
+        articles,
+        status: response.status,
+        rawCount: rawArticles.length,
+        imageCount: articles.length,
+        error: null,
+      };
+
+      gnewsCache = {
+        fetchedAt: Date.now(),
+        result,
+      };
+
+      return result;
+    } catch (error) {
+      return {
+        articles: [],
+        status: null,
+        rawCount: 0,
+        imageCount: 0,
+        error: error instanceof Error ? error.message : "Unknown GNews fetch error",
+      };
+    } finally {
+      gnewsInflightRequest = null;
+    }
+  })();
+
+  return gnewsInflightRequest;
 }
 
 export async function GET(request: Request) {
@@ -243,57 +327,12 @@ export async function GET(request: Request) {
   if (!gnewsKey) {
     gnewsError = "Missing GNEWS_API_KEY";
   } else {
-    try {
-      const response = await fetch(gnewsRequestUrl, {
-        next: { revalidate: 0 },
-      });
-
-      gnewsStatus = response.status;
-
-      if (!response.ok) {
-        gnewsError = `GNews request failed with status ${response.status}`;
-      } else {
-        const payload = (await response.json()) as GNewsApiResponse;
-        const rawArticles = payload.articles ?? [];
-        gnewsRawCount = rawArticles.length;
-        gnewsArticles = rawArticles.flatMap((article, index) => {
-          const title = stripHtml(article.title);
-          const url = normalizeUrl(article.url);
-          const imageUrl = article.image?.trim() ?? "";
-
-          if (!title || !url || !hasRealImageUrl(imageUrl)) {
-            return [];
-          }
-
-          return [{
-            id: hashArticleId(`gnews:${url}:${index}`),
-            title,
-            description: stripHtml(article.description) || null,
-            content: stripHtml(article.description) || null,
-            source: article.source?.name?.trim() || "GNews",
-            sourceName: article.source?.name?.trim() || "GNews",
-            url,
-            image: imageUrl,
-            imageUrl,
-            urlToImage: imageUrl,
-            mediaContent: null,
-            enclosureUrl: null,
-            ogImage: null,
-            twitterImage: null,
-            thumbnail: null,
-            category: category.trim() || "general",
-            publishedAt: article.publishedAt ?? null,
-            time: "Recent",
-            likes: 0,
-            comments: [],
-            provider: "gnews",
-          }];
-        });
-        gnewsImageCount = gnewsArticles.length;
-      }
-    } catch (error) {
-      gnewsError = error instanceof Error ? error.message : "Unknown GNews fetch error";
-    }
+    const gnewsResult = await fetchGnewsWithCache(gnewsRequestUrl, category);
+    gnewsStatus = gnewsResult.status;
+    gnewsRawCount = gnewsResult.rawCount;
+    gnewsImageCount = gnewsResult.imageCount;
+    gnewsError = gnewsResult.error;
+    gnewsArticles = gnewsResult.articles;
   }
 
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
