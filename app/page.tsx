@@ -2945,7 +2945,14 @@ type PaginatedNewsResponse = {
   debug?: {
     currentCount?: number;
     gnewsCount?: number;
-    totalCount?: number;
+    nytCount?: number;
+    totalBeforeCaps?: number;
+    totalAfterCaps?: number;
+    finalProviderCounts?: {
+      current?: number;
+      gnews?: number;
+      nyt?: number;
+    };
     gnewsKeyPresent?: boolean;
     gnewsKeyLength?: number;
     gnewsStatus?: number | null;
@@ -4584,7 +4591,14 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       debug: {
         currentCount: 0,
         gnewsCount: 0,
-        totalCount: renderableArticles.length,
+        nytCount: 0,
+        totalBeforeCaps: renderableArticles.length,
+        totalAfterCaps: renderableArticles.length,
+        finalProviderCounts: {
+          current: 0,
+          gnews: 0,
+          nyt: 0,
+        },
         gnewsKeyPresent: false,
         gnewsKeyLength: 0,
         gnewsStatus: null,
@@ -4611,7 +4625,14 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
     debug: {
       currentCount: payload.debug?.currentCount ?? 0,
       gnewsCount: payload.debug?.gnewsCount ?? 0,
-      totalCount: payload.debug?.totalCount ?? renderableArticles.length,
+      nytCount: payload.debug?.nytCount ?? 0,
+      totalBeforeCaps: payload.debug?.totalBeforeCaps ?? renderableArticles.length,
+      totalAfterCaps: payload.debug?.totalAfterCaps ?? renderableArticles.length,
+      finalProviderCounts: {
+        current: payload.debug?.finalProviderCounts?.current ?? 0,
+        gnews: payload.debug?.finalProviderCounts?.gnews ?? 0,
+        nyt: payload.debug?.finalProviderCounts?.nyt ?? 0,
+      },
       gnewsKeyPresent: payload.debug?.gnewsKeyPresent ?? false,
       gnewsKeyLength: payload.debug?.gnewsKeyLength ?? 0,
       gnewsStatus: payload.debug?.gnewsStatus ?? null,
@@ -6693,6 +6714,29 @@ export default function Home() {
   const [failedArticleImages, setFailedArticleImages] = useState<Record<string, true>>({});
   const [failedArticleBoxImages, setFailedArticleBoxImages] = useState<Record<string, true>>({});
   const [sportsArtworkCache, setSportsArtworkCache] = useState<Record<string, string | null>>({});
+  const [aggregatedFeedDebug, setAggregatedFeedDebug] = useState<{
+    currentCount: number;
+    gnewsCount: number;
+    nytCount: number;
+    totalBeforeCaps: number;
+    totalAfterCaps: number;
+    finalProviderCounts: {
+      current: number;
+      gnews: number;
+      nyt: number;
+    };
+  }>({
+    currentCount: 0,
+    gnewsCount: 0,
+    nytCount: 0,
+    totalBeforeCaps: 0,
+    totalAfterCaps: 0,
+    finalProviderCounts: {
+      current: 0,
+      gnews: 0,
+      nyt: 0,
+    },
+  });
   const [feedPage, setFeedPage] = useState(1);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
@@ -7583,6 +7627,19 @@ export default function Home() {
       if (!isCurrentRequest()) {
         return;
       }
+
+      setAggregatedFeedDebug({
+        currentCount: newsPayload?.debug?.currentCount ?? 0,
+        gnewsCount: newsPayload?.debug?.gnewsCount ?? 0,
+        nytCount: newsPayload?.debug?.nytCount ?? 0,
+        totalBeforeCaps: newsPayload?.debug?.totalBeforeCaps ?? 0,
+        totalAfterCaps: newsPayload?.debug?.totalAfterCaps ?? 0,
+        finalProviderCounts: {
+          current: newsPayload?.debug?.finalProviderCounts?.current ?? 0,
+          gnews: newsPayload?.debug?.finalProviderCounts?.gnews ?? 0,
+          nyt: newsPayload?.debug?.finalProviderCounts?.nyt ?? 0,
+        },
+      });
 
       const newsData = newsPayload?.articles ?? [];
       hasLiveNewsResponse = true;
@@ -16268,6 +16325,8 @@ export default function Home() {
       const providerBadge =
         article.provider === "gnews"
           ? "GNEWS"
+          : article.provider === "nyt"
+            ? "NYT"
           : article.provider === "current"
             ? "CURRENT"
             : null;
@@ -16549,6 +16608,8 @@ export default function Home() {
         providerBadge={
           article.provider === "gnews"
             ? "GNEWS"
+            : article.provider === "nyt"
+              ? "NYT"
             : article.provider === "current"
               ? "CURRENT"
               : null
@@ -18892,6 +18953,8 @@ export default function Home() {
     const providerBadge =
       article.provider === "gnews"
         ? "GNEWS"
+        : article.provider === "nyt"
+          ? "NYT"
         : article.provider === "current"
           ? "CURRENT"
           : null;
@@ -19193,6 +19256,19 @@ export default function Home() {
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
+
+        <section className="home-section-block home-section-plain">
+          <div className="muted stack" style={{ gap: "4px" }}>
+            <div>Current count: {aggregatedFeedDebug.currentCount}</div>
+            <div>NYT count: {aggregatedFeedDebug.nytCount}</div>
+            <div>GNews count: {aggregatedFeedDebug.gnewsCount}</div>
+            <div>
+              Final rendered providers: CURRENT {aggregatedFeedDebug.finalProviderCounts.current} ·
+              {" "}NYT {aggregatedFeedDebug.finalProviderCounts.nyt} · GNEWS{" "}
+              {aggregatedFeedDebug.finalProviderCounts.gnews}
+            </div>
+          </div>
+        </section>
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
 

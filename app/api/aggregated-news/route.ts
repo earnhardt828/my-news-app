@@ -92,6 +92,23 @@ let gnewsCache:
   | null = null;
 let gnewsInflightRequest: Promise<GnewsFetchResult> | null = null;
 
+function countProviders(articles: AggregatedNewsArticle[]) {
+  return articles.reduce(
+    (counts, article) => {
+      if (article.provider === "current") {
+        counts.current += 1;
+      } else if (article.provider === "gnews") {
+        counts.gnews += 1;
+      } else if (article.provider === "nyt") {
+        counts.nyt += 1;
+      }
+
+      return counts;
+    },
+    { current: 0, gnews: 0, nyt: 0 }
+  );
+}
+
 function hashArticleId(value: string) {
   let hash = 0;
 
@@ -497,6 +514,7 @@ export async function GET(request: Request) {
   const endIndex = startIndex + pageSize;
   const articles = mappedArticles.slice(startIndex, endIndex);
   const hasMore = endIndex < mappedArticles.length;
+  const finalProviderCounts = countProviders(articles);
 
   return Response.json({
     articles,
@@ -517,7 +535,9 @@ export async function GET(request: Request) {
       currentCount: currentMappedArticles.length,
       gnewsCount: gnewsArticles.length,
       nytCount: nytArticles.length,
-      totalCount: mappedArticles.length,
+      totalBeforeCaps: mappedArticles.length,
+      totalAfterCaps: articles.length,
+      finalProviderCounts,
     },
   });
 }
