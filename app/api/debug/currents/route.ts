@@ -1,27 +1,33 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type CurrentsDebugResponse = {
   news?: Array<{
     title?: string | null;
-    url?: string | null;
     image?: string | null;
-    published?: string | null;
-    author?: string | null;
-    source?: string | { name?: string | null } | null;
   }>;
 };
 
+function hasUsableImage(url: string | null | undefined) {
+  const normalized = url?.trim() ?? "";
+
+  if (!normalized) {
+    return false;
+  }
+
+  return /^https?:\/\//i.test(normalized);
+}
+
 export async function GET() {
   const currentsApiKey = process.env.CURRENTS_API_KEY ?? "";
-  const url = new URL("https://api.currentsapi.services/v1/search");
-  url.searchParams.set("keywords", "breaking news");
-  url.searchParams.set("language", "en");
-  url.searchParams.set("page_number", "1");
-  url.searchParams.set("page_size", "10");
-  url.searchParams.set("apiKey", currentsApiKey);
+  const keyPresent = Boolean(currentsApiKey);
+  const keyLength = currentsApiKey.length;
+  const requestUrl = "https://api.currentsapi.services/v1/latest-news";
 
-  if (!currentsApiKey) {
+  if (!keyPresent) {
     return Response.json({
       keyPresent: false,
-      requestUrl: url.toString().replace("apiKey=", "apiKey=[MISSING]"),
+      keyLength,
       status: null,
       rawCount: 0,
       imageCount: 0,
@@ -32,31 +38,46 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch(url.toString(), {
-      next: { revalidate: 60 },
+    const response = await fetch(requestUrl, {
+      headers: {
+        Authorization: currentsApiKey,
+      },
+      next: { revalidate: 0 },
     });
 
+    const status = response.status;
+
+    if (!response.ok) {
+      return Response.json({
+        keyPresent: true,
+        keyLength,
+        status,
+        rawCount: 0,
+        imageCount: 0,
+        firstTitle: null,
+        firstImage: null,
+        error: `Currents request failed with status ${status}`,
+      });
+    }
+
     const payload = (await response.json()) as CurrentsDebugResponse;
-    const items = (payload.news ?? []).map((article) => ({
-      title: article.title ?? null,
-      imageUrl: article.image ?? null,
-      hasImage: Boolean(article.image),
-    }));
+    const articles = payload.news ?? [];
+    const imageArticles = articles.filter((article) => hasUsableImage(article.image));
 
     return Response.json({
       keyPresent: true,
-      requestUrl: url.toString().replace(currentsApiKey, "[REDACTED]"),
-      status: response.status,
-      rawCount: payload.news?.length ?? 0,
-      imageCount: items.filter((item) => item.hasImage).length,
-      firstTitle: items[0]?.title ?? null,
-      firstImage: items[0]?.imageUrl ?? null,
-      error: response.ok ? null : `Currents request failed (${response.status})`,
+      keyLength,
+      status,
+      rawCount: articles.length,
+      imageCount: imageArticles.length,
+      firstTitle: articles[0]?.title ?? null,
+      firstImage: articles[0]?.image ?? null,
+      error: null,
     });
   } catch (error) {
     return Response.json({
       keyPresent: true,
-      requestUrl: url.toString().replace(currentsApiKey, "[REDACTED]"),
+      keyLength,
       status: null,
       rawCount: 0,
       imageCount: 0,
