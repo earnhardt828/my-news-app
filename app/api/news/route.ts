@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { looksLikeLowQualityImageUrl } from "../../../lib/article-images";
-import { getArticlesWithDebug } from "../../../lib/news/getArticles";
+import { fetchArticles as fetchCurrentProviderArticles } from "../../../lib/news/providers/current";
 import {
   getLocalCityConfigByKey,
   LOCAL_CITY_CONFIGS as SHARED_LOCAL_CITY_CONFIGS,
@@ -123,6 +123,7 @@ type NewsRouteResponse = {
   hasMore: boolean;
   page: number;
   pageSize: number;
+  GNEWS_DIRECT_IN_NEWS_ROUTE?: boolean;
   gnewsKeyPresent?: boolean;
   gnewsStatus?: number | null;
   gnewsRawCount?: number;
@@ -4601,10 +4602,9 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     params.query.trim() ||
     params.categories[0]?.trim() ||
     (params.mode === "myfeed" || params.mode === "compare" ? "trending" : params.mode);
-  const aggregatorResult = await getArticlesWithDebug(aggregatorCategory);
+  const currentProviderArticles = await fetchCurrentProviderArticles(aggregatorCategory);
   const directGnewsResult = await fetchDirectGnewsArticles(aggregatorCategory);
-  const mappedAggregatorArticles: NormalizedArticle[] = aggregatorResult.articles
-    .filter((article) => article.provider !== "gnews")
+  const mappedCurrentArticles: NormalizedArticle[] = currentProviderArticles
     .map((article) => ({
     id: article.id,
     title: article.title,
@@ -4628,7 +4628,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     comments: [],
     provider: article.provider,
   }));
-  const combinedAggregatorArticles = [...directGnewsResult.articles, ...mappedAggregatorArticles];
+  const combinedAggregatorArticles = [...directGnewsResult.articles, ...mappedCurrentArticles];
   const startIndex = Math.max(0, (params.page - 1) * params.pageSize);
   const endIndex = startIndex + params.pageSize;
   const slicedAggregatorArticles = combinedAggregatorArticles.slice(startIndex, endIndex);
@@ -4640,6 +4640,7 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     hasMore: aggregatorHasMore,
     page: params.page,
     pageSize: params.pageSize,
+    GNEWS_DIRECT_IN_NEWS_ROUTE: true,
     gnewsKeyPresent: directGnewsResult.keyPresent,
     gnewsStatus: directGnewsResult.status,
     gnewsRawCount: directGnewsResult.rawCount,
@@ -4647,11 +4648,18 @@ async function collectArticles(params: ProviderFetchParams): Promise<NewsRouteRe
     gnewsFirstTitle: directGnewsResult.firstTitle,
     nytKeyPresentFromNewsRoute: Boolean(process.env.NYT_API_KEY),
     nytKeyLengthFromNewsRoute: process.env.NYT_API_KEY?.length ?? 0,
+    debug: {
+      source: "GNEWS_DIRECT_IN_NEWS_ROUTE",
+      nytKeyPresent: Boolean(process.env.NYT_API_KEY),
+      nytKeyLength: process.env.NYT_API_KEY?.length ?? 0,
+      rawCount: directGnewsResult.rawCount,
+      imageCount: directGnewsResult.imageCount,
+    },
     visiblePipelineDebug: {
       currentSourceFile: "/Users/erniewilson/my-news-app/lib/news/providers/current.ts",
-      currentCountBeforeMerge: aggregatorResult.counts.current,
+      currentCountBeforeMerge: mappedCurrentArticles.length,
       gnewsCountBeforeMerge: directGnewsResult.articles.length,
-      nytCountBeforeMerge: aggregatorResult.counts.nyt,
+      nytCountBeforeMerge: 0,
       totalAfterMerge: combinedAggregatorArticles.length,
       gnewsDroppedReason:
         directGnewsResult.articles.length > 0 ? null : directGnewsResult.error,
