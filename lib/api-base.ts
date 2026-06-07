@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 
 const GRAFFITI_PRODUCTION_ORIGIN = "https://graffiti.news";
+const NEWS_API_BASE_URL = (process.env.NEXT_PUBLIC_NEWS_API_BASE_URL ?? "").trim();
 
 type ApiFetchErrorDetails = {
   url: string;
@@ -70,6 +71,15 @@ export function getApiBaseOrigin() {
 
 export function buildApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  if (normalizedPath.startsWith("/api/aggregated-news")) {
+    if (NEWS_API_BASE_URL) {
+      return `${NEWS_API_BASE_URL.replace(/\/+$/, "")}${normalizedPath}`;
+    }
+
+    return normalizedPath;
+  }
+
   return `${getApiBaseOrigin()}${normalizedPath}`;
 }
 
