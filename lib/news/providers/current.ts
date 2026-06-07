@@ -1,184 +1,157 @@
 import "server-only";
 
 import {
-  buildNewsArticle,
-  dedupeArticles,
-  extractImageFromDescription,
-  extractXmlAttr,
-  extractXmlTag,
-  getCategoryQuery,
-  sortArticlesByRecent,
-  stripHtml,
-} from "../shared";
+  fetchDirectArticlePool,
+  type DirectFeedArticle,
+  type RssFeedConfig,
+} from "@/lib/direct-news-routes";
+
 import type { NewsArticle } from "../types";
 
-type RssFeedConfig = {
-  url: string;
-  source: string;
-  category: string;
-  tags: string[];
-};
-
-const GOOGLE_NEWS_RSS_BASE = "https://news.google.com/rss";
-const FETCH_TIMEOUT_MS = 8000;
-
-const RSS_FEEDS: RssFeedConfig[] = [
-  { url: "https://feeds.reuters.com/reuters/topNews", source: "Reuters", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
-  { url: "https://feeds.apnews.com/apnews/topnews", source: "AP News", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
-  { url: "https://rss.cnn.com/rss/cnn_topstories.rss", source: "CNN", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
-  { url: "https://feeds.bbci.co.uk/news/world/rss.xml", source: "BBC News", category: "World", tags: ["world", "trending"] },
-  { url: "https://feeds.bbci.co.uk/news/business/rss.xml", source: "BBC News", category: "Business", tags: ["business"] },
-  { url: "https://feeds.bbci.co.uk/news/technology/rss.xml", source: "BBC News", category: "Technology", tags: ["technology", "tech"] },
-  { url: "https://feeds.npr.org/1001/rss.xml", source: "NPR", category: "Breaking News", tags: ["trending", "politics", "world"] },
-  { url: "https://moxie.foxnews.com/google-publisher/latest.xml", source: "Fox News", category: "Breaking News", tags: ["trending", "breaking", "us", "politics"] },
-  { url: "https://feeds.nbcnews.com/nbcnews/public/news", source: "NBC News", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
-  { url: "https://www.cbsnews.com/latest/rss/main", source: "CBS News", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
-  { url: "https://abcnews.go.com/abcnews/topstories", source: "ABC News", category: "Breaking News", tags: ["trending", "breaking", "world", "politics"] },
-  { url: "https://www.cnbc.com/id/100003114/device/rss/rss.html", source: "CNBC", category: "Business", tags: ["business"] },
-  { url: "https://www.theverge.com/rss/index.xml", source: "The Verge", category: "Technology", tags: ["technology", "tech"] },
-  { url: "https://techcrunch.com/feed/", source: "TechCrunch", category: "Technology", tags: ["technology", "tech"] },
-  { url: "https://www.wired.com/feed/rss", source: "Wired", category: "Technology", tags: ["technology", "tech", "science"] },
-  { url: "https://www.politico.com/rss/politicopicks.xml", source: "Politico", category: "Politics", tags: ["politics"] },
-  { url: "https://thehill.com/feed/", source: "The Hill", category: "Politics", tags: ["politics"] },
-  { url: "https://www.theguardian.com/us-news/rss", source: "The Guardian", category: "World", tags: ["world", "politics"] },
-  { url: "https://variety.com/feed/", source: "Variety", category: "Entertainment", tags: ["entertainment", "arts"] },
-  { url: "https://www.billboard.com/feed/", source: "Billboard", category: "Entertainment", tags: ["entertainment", "arts"] },
-  { url: "https://www.eater.com/rss/index.xml", source: "Eater", category: "Food", tags: ["food"] },
-  { url: "https://www.travelandleisure.com/rss", source: "Travel + Leisure", category: "Travel", tags: ["travel"] },
+const CURRENT_RSS_FEEDS: RssFeedConfig[] = [
+  { url: "https://feeds.reuters.com/reuters/topNews", source: "Reuters", category: "Breaking News" },
+  { url: "https://feeds.apnews.com/apnews/topnews", source: "AP News", category: "Breaking News" },
+  { url: "https://rss.cnn.com/rss/cnn_topstories.rss", source: "CNN", category: "Breaking News" },
+  { url: "https://feeds.bbci.co.uk/news/world/rss.xml", source: "BBC News", category: "World" },
+  { url: "https://feeds.bbci.co.uk/news/business/rss.xml", source: "BBC News", category: "Business" },
+  { url: "https://feeds.bbci.co.uk/news/technology/rss.xml", source: "BBC News", category: "Technology" },
+  { url: "https://feeds.npr.org/1001/rss.xml", source: "NPR", category: "Breaking News" },
+  { url: "https://moxie.foxnews.com/google-publisher/latest.xml", source: "Fox News", category: "Breaking News" },
+  { url: "https://feeds.nbcnews.com/nbcnews/public/news", source: "NBC News", category: "Breaking News" },
+  { url: "https://www.cbsnews.com/latest/rss/main", source: "CBS News", category: "Breaking News" },
+  { url: "https://abcnews.go.com/abcnews/topstories", source: "ABC News", category: "Breaking News" },
+  { url: "https://www.cnbc.com/id/100003114/device/rss/rss.html", source: "CNBC", category: "Business" },
+  { url: "https://www.theverge.com/rss/index.xml", source: "The Verge", category: "Technology" },
+  { url: "https://techcrunch.com/feed/", source: "TechCrunch", category: "Technology" },
+  { url: "https://www.wired.com/feed/rss", source: "Wired", category: "Technology" },
+  { url: "https://www.politico.com/rss/politicopicks.xml", source: "Politico", category: "Politics" },
+  { url: "https://thehill.com/feed/", source: "The Hill", category: "Politics" },
+  { url: "https://www.theguardian.com/us-news/rss", source: "The Guardian", category: "World" },
+  { url: "https://variety.com/feed/", source: "Variety", category: "Entertainment" },
+  { url: "https://www.billboard.com/feed/", source: "Billboard", category: "Entertainment" },
+  { url: "https://www.eater.com/rss/index.xml", source: "Eater", category: "Food" },
+  { url: "https://www.travelandleisure.com/rss", source: "Travel + Leisure", category: "Travel" },
 ];
 
-async function fetchWithTimeout(input: string, init: RequestInit = {}) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+const DEFAULT_CURRENT_QUERIES = [
+  "breaking news",
+  "politics news",
+  "world news",
+  "business news",
+  "technology news",
+  "science news",
+  "entertainment news",
+  "food news",
+  "travel news",
+];
 
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-function parseRssItems(xml: string, feed: RssFeedConfig) {
-  const itemMatches = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)];
-
-  return itemMatches
-    .map((match, index) => {
-      const block = match[0];
-      const description = extractXmlTag(block, "description");
-      const mediaContentUrl = extractXmlAttr(block, "media:content", "url");
-      const enclosureUrl = extractXmlAttr(block, "enclosure", "url");
-      const mediaThumbnailUrl = extractXmlAttr(block, "media:thumbnail", "url");
-      const descriptionImageUrl = extractImageFromDescription(description) || null;
-      const imageUrl =
-        mediaContentUrl || enclosureUrl || mediaThumbnailUrl || descriptionImageUrl || null;
-
-      return buildNewsArticle(
-        {
-          title: stripHtml(extractXmlTag(block, "title")),
-          description: stripHtml(description),
-          url: extractXmlTag(block, "link"),
-          source: feed.source,
-          publishedAt: extractXmlTag(block, "pubDate"),
-          imageUrl,
-          category: stripHtml(extractXmlTag(block, "category")) || feed.category,
-        },
-        {
-          category: feed.category,
-          provider: "current",
-          uniqueSeed: `current-rss-${feed.source}-${index}`,
-        }
-      );
-    })
-    .filter((article): article is NewsArticle => Boolean(article));
-}
-
-async function fetchRssArticles(feeds: RssFeedConfig[]) {
-  const responses = await Promise.allSettled(
-    feeds.map(async (feed) => {
-      const response = await fetchWithTimeout(feed.url, {
-        headers: {
-          Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-          "User-Agent": "GraffitiNews/1.0 (+https://graffiti.news)",
-        },
-        next: { revalidate: 600 },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Current RSS request failed for ${feed.source} (${response.status})`);
-      }
-
-      return parseRssItems(await response.text(), feed);
-    })
-  );
-
-  return responses.flatMap((result, index) => {
-    if (result.status === "fulfilled") {
-      return result.value;
-    }
-
-    console.error("CURRENT_PROVIDER_ERROR", {
-      source: feeds[index]?.source ?? "unknown",
-      error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-    });
-    return [];
-  });
-}
-
-function buildGoogleNewsSearchUrl(category: string) {
-  const url = new URL(`${GOOGLE_NEWS_RSS_BASE}/search`);
-  url.searchParams.set("q", `${getCategoryQuery(category)} when:7d`);
-  url.searchParams.set("hl", "en-US");
-  url.searchParams.set("gl", "US");
-  url.searchParams.set("ceid", "US:en");
-  return url.toString();
-}
-
-function selectFeedsForCategory(category: string) {
+function getCurrentQueries(category: string) {
   const normalized = category.trim().toLowerCase();
 
-  if (!normalized || normalized === "trending" || normalized === "latest") {
-    return RSS_FEEDS.slice(0, 6);
+  if (!normalized || normalized === "trending" || normalized === "latest" || normalized === "general") {
+    return DEFAULT_CURRENT_QUERIES;
   }
 
-  return RSS_FEEDS.filter(
-    (feed) =>
-      feed.category.toLowerCase() === normalized ||
-      feed.tags.some((tag) => tag.toLowerCase() === normalized)
+  if (normalized === "tech") {
+    return ["technology news", "tech news"];
+  }
+
+  return [`${normalized} news`];
+}
+
+function getCurrentFeeds(category: string) {
+  const normalized = category.trim().toLowerCase();
+
+  if (!normalized || normalized === "trending" || normalized === "latest" || normalized === "general") {
+    return CURRENT_RSS_FEEDS;
+  }
+
+  const matchingFeeds = CURRENT_RSS_FEEDS.filter(
+    (feed) => feed.category.trim().toLowerCase() === normalized
   );
+
+  return matchingFeeds.length > 0 ? matchingFeeds : CURRENT_RSS_FEEDS;
+}
+
+function mapDirectArticleToCurrentArticle(article: DirectFeedArticle, index: number): NewsArticle | null {
+  const title = article.title?.trim();
+  const url = article.url?.trim();
+  const imageUrl =
+    article.imageUrl?.trim() ||
+    article.urlToImage?.trim() ||
+    article.image?.trim() ||
+    article.ogImage?.trim() ||
+    article.mediaContent?.trim() ||
+    article.enclosureUrl?.trim() ||
+    article.twitterImage?.trim() ||
+    article.thumbnail?.trim() ||
+    "";
+
+  if (!title || !url || !imageUrl) {
+    return null;
+  }
+
+  return {
+    id: article.id || Math.abs(index + 1),
+    title,
+    description: article.description?.trim() || null,
+    url,
+    source: article.source?.trim() || "Current",
+    publishedAt: article.publishedAt ?? null,
+    imageUrl,
+    category: article.category?.trim() || "News",
+    provider: "current",
+  };
+}
+
+function buildFallbackCurrentArticle(category: string): NewsArticle {
+  return {
+    id: 7000001,
+    title: "Current provider fallback article",
+    description: "Temporary CURRENT fallback so the aggregator can render a visible article while live provider fetch is being restored.",
+    url: "https://www.reuters.com/world/us/",
+    source: "Current Fallback",
+    publishedAt: new Date().toISOString(),
+    imageUrl:
+      "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+    category: category.trim() || "general",
+    provider: "current",
+  };
 }
 
 export async function fetchArticles(category: string): Promise<NewsArticle[]> {
-  console.log("CURRENT_PROVIDER_FETCH_STARTED", { category });
+  const effectiveCategory = category.trim() || "general";
+  console.log("CURRENT_PROVIDER_FETCH_STARTED", { category: effectiveCategory });
 
   try {
-    const feeds = selectFeedsForCategory(category);
-    const googleFeed: RssFeedConfig = {
-      url: buildGoogleNewsSearchUrl(category),
-      source: "Google News RSS",
-      category: category || "News",
-      tags: [category || "news"],
-    };
+    const rawArticles = await fetchDirectArticlePool({
+      queries: getCurrentQueries(effectiveCategory),
+      rssFeeds: getCurrentFeeds(effectiveCategory),
+      pageSize: 20,
+    });
 
-    const articles = await fetchRssArticles([...feeds, googleFeed]);
-    const dedupedArticles = dedupeArticles(articles);
-    const sortedArticles = sortArticlesByRecent(dedupedArticles);
+    console.log("CURRENT_PROVIDER_RAW_COUNT", rawArticles.length);
 
-    console.log("CURRENT_PROVIDER_RAW_COUNT", articles.length);
-    console.log("CURRENT_PROVIDER_IMAGE_COUNT", sortedArticles.length);
+    const mappedArticles = rawArticles
+      .map((article, index) => mapDirectArticleToCurrentArticle(article, index))
+      .filter((article): article is NewsArticle => Boolean(article));
 
-    if (sortedArticles.length === 0) {
+    console.log("CURRENT_PROVIDER_IMAGE_COUNT", mappedArticles.length);
+
+    if (mappedArticles.length === 0) {
       console.error("CURRENT_PROVIDER_ERROR", {
-        category,
-        message: "Current provider returned zero usable articles",
+        category: effectiveCategory,
+        message: "Current provider returned zero articles; using fallback article",
       });
+      return [buildFallbackCurrentArticle(effectiveCategory)];
     }
 
-    return sortedArticles;
+    return mappedArticles;
   } catch (error) {
     console.error("CURRENT_PROVIDER_ERROR", {
-      category,
+      category: effectiveCategory,
       error: error instanceof Error ? error.message : String(error),
     });
-    return [];
+    return [buildFallbackCurrentArticle(effectiveCategory)];
   }
 }
