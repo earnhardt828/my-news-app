@@ -33,6 +33,11 @@ export async function fetchArticlesWithDebug(category: string): Promise<{
   articles: NewsArticle[];
   debug: GnewsProviderDebug;
 }> {
+  console.log("GNEWS ENV DEBUG", {
+    apiKeyPresent: Boolean(process.env.GNEWS_API_KEY),
+    apiKeyLength: process.env.GNEWS_API_KEY?.length || 0,
+  });
+
   const key = process.env.GNEWS_API_KEY ?? "";
   const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${key}`;
   const debug = createEmptyDebug(key, requestUrl);

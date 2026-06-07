@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { looksLikeLowQualityImageUrl } from "../../../lib/article-images";
 import { getArticlesWithDebug } from "../../../lib/news/getArticles";
 import {
