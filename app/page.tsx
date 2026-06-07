@@ -6743,6 +6743,8 @@ export default function Home() {
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
   const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
   const [aggregatedNewsDebug, setAggregatedNewsDebug] = useState({
+    currentCount: 0,
+    nytCount: 0,
     currentsCount: 0,
     currentsImageCount: 0,
   });
@@ -7636,11 +7638,15 @@ export default function Home() {
       const newsData = newsPayload?.articles ?? [];
       if (newsPath.startsWith("/api/aggregated-news")) {
         setAggregatedNewsDebug({
+          currentCount: newsPayload?.debug?.currentCount ?? 0,
+          nytCount: newsPayload?.debug?.nytCount ?? 0,
           currentsCount: newsPayload?.debug?.currentsCount ?? 0,
           currentsImageCount: newsPayload?.debug?.currentsImageCount ?? 0,
         });
       } else {
         setAggregatedNewsDebug({
+          currentCount: 0,
+          nytCount: 0,
           currentsCount: 0,
           currentsImageCount: 0,
         });
@@ -22056,10 +22062,12 @@ export default function Home() {
         </div>
       ) : (
         <div className="stack feed-results-stack">
-          {aggregatedNewsDebug.currentsCount > 0 || aggregatedNewsDebug.currentsImageCount > 0 ? (
+          {aggregatedNewsDebug.currentCount > 0 ||
+          aggregatedNewsDebug.nytCount > 0 ||
+          aggregatedNewsDebug.currentsCount > 0 ? (
             <div className="muted" style={{ fontSize: "12px" }}>
-              Currents count: {aggregatedNewsDebug.currentsCount} · Currents image count:{" "}
-              {aggregatedNewsDebug.currentsImageCount}
+              Current count: {aggregatedNewsDebug.currentCount} · NYT count:{" "}
+              {aggregatedNewsDebug.nytCount} · Currents count: {aggregatedNewsDebug.currentsCount}
             </div>
           ) : null}
           {feedLoadError ? (

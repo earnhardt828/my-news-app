@@ -124,11 +124,10 @@ function countProviders(articles: AggregatedNewsArticle[]) {
 function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
   const currentQueue = articles.filter((article) => article.provider === "current");
   const nytQueue = articles.filter((article) => article.provider === "nyt");
-  const gnewsQueue = articles.filter((article) => article.provider === "gnews");
   const currentsQueue = articles.filter((article) => article.provider === "currents");
   const interleaved: AggregatedNewsArticle[] = [];
 
-  while (currentQueue.length > 0 || nytQueue.length > 0 || gnewsQueue.length > 0) {
+  while (currentQueue.length > 0 || nytQueue.length > 0 || currentsQueue.length > 0) {
     if (currentQueue.length > 0) {
       interleaved.push(currentQueue.shift()!);
     }
@@ -146,9 +145,6 @@ function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
     }
     if (nytQueue.length > 0) {
       interleaved.push(nytQueue.shift()!);
-    }
-    if (gnewsQueue.length > 0) {
-      interleaved.push(gnewsQueue.shift()!);
     }
     if (currentsQueue.length > 0) {
       interleaved.push(currentsQueue.shift()!);
@@ -664,7 +660,6 @@ export async function GET(request: Request) {
     ...currentMappedArticles,
     ...nytArticles,
     ...currentsArticles,
-    ...gnewsArticles,
   ];
   const mappedArticles = dedupeArticles(mergedArticles);
   const interleavedArticles = interleaveProviderArticles(mappedArticles);
