@@ -104,7 +104,7 @@ import {
   isStrictTechnologyVideo,
   isStrictWorldVideo,
 } from "../lib/video-filters";
-import { MY_NEWS_DISABLED, POLLS_DISABLED } from "../lib/feature-flags";
+import { ART_DISABLED, MY_NEWS_DISABLED, POLLS_DISABLED, SCIENCE_DISABLED } from "../lib/feature-flags";
 
 const FEED_PAGE_SIZE = 100;
 const INITIAL_FEED_WARNING_MS = 4200;
@@ -19651,26 +19651,28 @@ export default function Home() {
 
         {renderNewsClipsRow()}
 
-        <section ref={scienceSectionRef} className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Science</strong>
-            </div>
-          </div>
-
-          {scienceTabArticles.length === 0 ? (
-            isSciencePreviewLoading ? (
-              <div className="muted">Loading science stories...</div>
-            ) : (
-              <div className="empty-state compact-empty-state">
-                <strong>No science stories yet</strong>
-                <span>Check back shortly for fresh science coverage.</span>
+        {!SCIENCE_DISABLED ? (
+          <section ref={scienceSectionRef} className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Science</strong>
               </div>
-            )
-          ) : (
-            renderArticleSectionWithLargeLead(scienceTabArticles, { limit: 6 })
-          )}
-        </section>
+            </div>
+
+            {scienceTabArticles.length === 0 ? (
+              isSciencePreviewLoading ? (
+                <div className="muted">Loading science stories...</div>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <strong>No science stories yet</strong>
+                  <span>Check back shortly for fresh science coverage.</span>
+                </div>
+              )
+            ) : (
+              renderArticleSectionWithLargeLead(scienceTabArticles, { limit: 6 })
+            )}
+          </section>
+        ) : null}
 
         {!TRENDING_AUTO_DISABLED ? (
           <>
@@ -19785,46 +19787,48 @@ export default function Home() {
           )}
         </section>
 
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Art</strong>
-            </div>
-          </div>
-
-          {artTabArticles.length === 0 ? (
-            isArtPreviewLoading ? (
-              <div className="muted">Loading art stories...</div>
-            ) : (
-              <div className="empty-state compact-empty-state">
-                <strong>No art stories yet</strong>
-                <span>Check back shortly for fresh arts and culture coverage.</span>
+        {!ART_DISABLED ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Art</strong>
               </div>
-            )
-          ) : (
-            <div className="stack home-section-list top-trending-card-rail">
-              {trendingArtLeadArticle ? renderLargeImageArticleCard(trendingArtLeadArticle) : null}
-              {artTabArticles
-                .filter((article) =>
-                  trendingArtLeadArticle
-                    ? getArticleDeduplicationKey(article) !==
-                      getArticleDeduplicationKey(trendingArtLeadArticle)
-                    : true
-                )
-                .slice(0, 5)
-                .map((article, index) => (
-                  <div
-                    key={`trending-art-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                  >
-                    {renderCompactSideImageArticle(article, {
-                      imageFallbackLabel: "Art",
-                      showRank: index + 1,
-                    })}
-                  </div>
-                ))}
             </div>
-          )}
-        </section>
+
+            {artTabArticles.length === 0 ? (
+              isArtPreviewLoading ? (
+                <div className="muted">Loading art stories...</div>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <strong>No art stories yet</strong>
+                  <span>Check back shortly for fresh arts and culture coverage.</span>
+                </div>
+              )
+            ) : (
+              <div className="stack home-section-list top-trending-card-rail">
+                {trendingArtLeadArticle ? renderLargeImageArticleCard(trendingArtLeadArticle) : null}
+                {artTabArticles
+                  .filter((article) =>
+                    trendingArtLeadArticle
+                      ? getArticleDeduplicationKey(article) !==
+                        getArticleDeduplicationKey(trendingArtLeadArticle)
+                      : true
+                  )
+                  .slice(0, 5)
+                  .map((article, index) => (
+                    <div
+                      key={`trending-art-${article.id || article.url || getArticleDeduplicationKey(article)}`}
+                    >
+                      {renderCompactSideImageArticle(article, {
+                        imageFallbackLabel: "Art",
+                        showRank: index + 1,
+                      })}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </section>
+        ) : null}
 
         {isCategorySheetOpen ? (
           <div
