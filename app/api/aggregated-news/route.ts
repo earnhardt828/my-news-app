@@ -3,19 +3,6 @@ export const revalidate = 0;
 
 import { fetchArticles as fetchCurrentProviderArticles } from "../../../lib/news/providers/current";
 
-type GNewsApiResponse = {
-  articles?: Array<{
-    title?: string | null;
-    description?: string | null;
-    url?: string | null;
-    image?: string | null;
-    publishedAt?: string | null;
-    source?: {
-      name?: string | null;
-    } | null;
-  }>;
-};
-
 type NytTopStoriesResponse = {
   results?: Array<{
     title?: string | null;
@@ -40,6 +27,7 @@ type CurrentsApiResponse = {
     published?: string | null;
     category?: string[] | null;
     author?: string | null;
+    source?: string | { name?: string | null } | null;
   }>;
 };
 
@@ -64,19 +52,10 @@ type AggregatedNewsArticle = {
   time: string;
   likes: number;
   comments: null[];
-  provider: "current" | "gnews" | "nyt" | "currents";
+  provider: "current" | "nyt" | "currents";
 };
 
-const GNEWS_CACHE_TTL_MS = 30 * 60 * 1000;
 const NYT_TOP_STORIES_HOME_SECTION = "home";
-
-type GnewsFetchResult = {
-  articles: AggregatedNewsArticle[];
-  status: number | null;
-  rawCount: number;
-  imageCount: number;
-  error: string | null;
-};
 
 type NytFetchResult = {
   articles: AggregatedNewsArticle[];
@@ -88,38 +67,8 @@ type NytFetchResult = {
 
 type CurrentsFetchResult = {
   articles: AggregatedNewsArticle[];
-  status: number | null;
   rawCount: number;
-  imageCount: number;
-  error: string | null;
 };
-
-let gnewsCache:
-  | {
-      fetchedAt: number;
-      result: GnewsFetchResult;
-    }
-  | null = null;
-let gnewsInflightRequest: Promise<GnewsFetchResult> | null = null;
-
-function countProviders(articles: AggregatedNewsArticle[]) {
-  return articles.reduce(
-    (counts, article) => {
-      if (article.provider === "current") {
-        counts.current += 1;
-      } else if (article.provider === "gnews") {
-        counts.gnews += 1;
-      } else if (article.provider === "nyt") {
-        counts.nyt += 1;
-      } else if (article.provider === "currents") {
-        counts.currents += 1;
-      }
-
-      return counts;
-    },
-    { current: 0, gnews: 0, nyt: 0, currents: 0 }
-  );
-}
 
 function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
   const currentQueue = articles.filter((article) => article.provider === "current");
@@ -137,14 +86,8 @@ function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
     if (nytQueue.length > 0) {
       interleaved.push(nytQueue.shift()!);
     }
-    if (currentQueue.length > 0) {
-      interleaved.push(currentQueue.shift()!);
-    }
-    if (currentQueue.length > 0) {
-      interleaved.push(currentQueue.shift()!);
-    }
-    if (nytQueue.length > 0) {
-      interleaved.push(nytQueue.shift()!);
+    if (currentsQueue.length > 0) {
+      interleaved.push(currentsQueue.shift()!);
     }
     if (currentsQueue.length > 0) {
       interleaved.push(currentsQueue.shift()!);
@@ -215,7 +158,105 @@ function hasRealImageUrl(url: string | null | undefined) {
     return false;
   }
 
-  return !/(placeholder|default-image|avatar|logo|icon|blank)\b/i.test(normalized);
+  if (/\.(m3u8|mp4|mp3|m4a|mov|avi|webm)(\?|#|$)/i.test(normalized)) {
+    return false;
+  }
+
+  if (/(placeholder|default-image|avatar|logo|icon|blank)\b/i.test(normalized)) {
+    return false;
+  }
+
+  if (/\.(jpg|jpeg|png|webp|avif|gif)(\?|#|$)/i.test(normalized)) {
+    return true;
+  }
+
+  return /(image|images|img|media|photo|thumb|thumbnail|cdn|cloudfront|static|assets)\./i.test(
+    normalized
+  ) || /\/(image|images|img|media|photo|thumb|thumbnail)\//i.test(normalized);
+}
+
+function inferCategoryFromText(...values: Array<string | null | undefined>) {
+  const haystack = values
+    .map((value) => stripHtml(value))
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (!haystack) {
+    return "trending";
+  }
+
+  if (/\b(entertainment|celebrity|movie|movies|tv|music|hollywood|box office|streaming)\b/.test(haystack)) {
+    return "entertainment";
+  }
+
+  if (/\b(crime|police|investigation|arrest|court|trial|charges|shooting|suspect|homicide|fraud|theft)\b/.test(haystack)) {
+    return "crime";
+  }
+
+  if (/\b(technology|tech|ai|artificial intelligence|apple|google|microsoft|cybersecurity|startup)\b/.test(haystack)) {
+    return "tech";
+  }
+
+  if (/\b(business|economy|stock|stocks|market|markets|earnings|company|companies|finance)\b/.test(haystack)) {
+    return "business";
+  }
+
+  if (/\b(politics|election|congress|senate|house|white house|policy|government|president|campaign)\b/.test(haystack)) {
+    return "politics";
+  }
+
+  if (/\b(sports|nfl|nba|mlb|nhl|soccer|golf|tennis|espn|athletic|playoffs|championship)\b/.test(haystack)) {
+    return "sports";
+  }
+
+  if (/\b(health|medical|medicine|disease|covid|hospital|doctor|wellness|mental health)\b/.test(haystack)) {
+    return "health";
+  }
+
+  if (/\b(world|international|global|ukraine|israel|gaza|china|russia|europe|asia|middle east)\b/.test(haystack)) {
+    return "world";
+  }
+
+  return "trending";
+}
+
+function normalizeCategoryValue(
+  rawCategory: string | null | undefined,
+  ...signals: Array<string | null | undefined>
+) {
+  const normalized = stripHtml(rawCategory).trim().toLowerCase();
+
+  if (
+    !normalized ||
+    normalized === "general" ||
+    normalized === "unknown" ||
+    normalized === "news" ||
+    normalized === "null" ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+  ) {
+    return inferCategoryFromText(rawCategory, ...signals);
+  }
+
+  if (["entertainment", "crime", "tech", "business", "politics", "sports", "health", "world", "trending"].includes(normalized)) {
+    return normalized;
+  }
+
+  return inferCategoryFromText(rawCategory, ...signals);
+}
+
+function extractHostnameLabel(url: string) {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+
+    if (hostname === "thestar.com.my") {
+      return "The Star";
+    }
+
+    return hostname;
+  } catch {
+    return "Currents";
+  }
 }
 
 function dedupeArticles(articles: AggregatedNewsArticle[]) {
@@ -265,49 +306,19 @@ function mapCurrentArticle(article: Awaited<ReturnType<typeof fetchCurrentProvid
     ogImage: null,
     twitterImage: null,
     thumbnail: null,
-    category: article.category,
+    category: normalizeCategoryValue(
+      article.category,
+      article.title,
+      article.description,
+      article.source,
+      article.url
+    ),
     publishedAt: article.publishedAt,
     time: "Recent",
     likes: 0,
     comments: [],
     provider: "current",
   };
-}
-
-function mapGnewsArticles(rawArticles: GNewsApiResponse["articles"], category: string) {
-  return (rawArticles ?? []).flatMap((article, index) => {
-    const title = stripHtml(article.title);
-    const url = normalizeUrl(article.url);
-    const imageUrl = article.image?.trim() ?? "";
-
-    if (!title || !url || !hasRealImageUrl(imageUrl)) {
-      return [];
-    }
-
-    return [{
-      id: hashArticleId(`gnews:${url}:${index}`),
-      title,
-      description: stripHtml(article.description) || null,
-      content: stripHtml(article.description) || null,
-      source: article.source?.name?.trim() || "GNews",
-      sourceName: article.source?.name?.trim() || "GNews",
-      url,
-      image: imageUrl,
-      imageUrl,
-      urlToImage: imageUrl,
-      mediaContent: null,
-      enclosureUrl: null,
-      ogImage: null,
-      twitterImage: null,
-      thumbnail: null,
-      category: category.trim() || "general",
-      publishedAt: article.publishedAt ?? null,
-      time: "Recent",
-      likes: 0,
-      comments: [],
-      provider: "gnews",
-    }] satisfies AggregatedNewsArticle[];
-  });
 }
 
 function getLargestNytImageUrl(
@@ -397,7 +408,13 @@ async function fetchNytArticles(category: string): Promise<NytFetchResult> {
         ogImage: null,
         twitterImage: null,
         thumbnail: null,
-        category: category.trim() || "general",
+        category: normalizeCategoryValue(
+          category.trim() || "general",
+          article.title,
+          article.abstract,
+          "The New York Times",
+          article.url
+        ),
         publishedAt: article.published_date ?? null,
         time: "Recent",
         likes: 0,
@@ -430,10 +447,7 @@ async function fetchCurrentsArticles(category: string): Promise<CurrentsFetchRes
   if (!currentsKey) {
     return {
       articles: [],
-      status: null,
       rawCount: 0,
-      imageCount: 0,
-      error: "Missing CURRENTS_API_KEY",
     };
   }
 
@@ -449,10 +463,7 @@ async function fetchCurrentsArticles(category: string): Promise<CurrentsFetchRes
     if (!response.ok) {
       return {
         articles: [],
-        status: response.status,
         rawCount: 0,
-        imageCount: 0,
-        error: `Currents request failed with status ${response.status}`,
       };
     }
 
@@ -467,11 +478,19 @@ async function fetchCurrentsArticles(category: string): Promise<CurrentsFetchRes
         return [];
       }
 
-      const sourceLabel = stripHtml(article.author) || "Currents";
-      const articleCategory =
-        article.category?.find((value) => (value ?? "").trim())?.trim() ||
-        category.trim() ||
-        "general";
+      const sourceLabel =
+        stripHtml(
+          typeof article.source === "string"
+            ? article.source
+            : article.source?.name ?? article.author
+        ) || extractHostnameLabel(url);
+      const articleCategory = normalizeCategoryValue(
+        article.category?.find((value) => (value ?? "").trim())?.trim() || category.trim() || "general",
+        article.title,
+        article.description,
+        sourceLabel,
+        article.url
+      );
 
       return [{
         id: hashArticleId(`currents:${article.id ?? url}:${index}`),
@@ -500,109 +519,14 @@ async function fetchCurrentsArticles(category: string): Promise<CurrentsFetchRes
 
     return {
       articles: articles.slice(0, 10),
-      status: response.status,
       rawCount: rawArticles.length,
-      imageCount: articles.length,
-      error: null,
     };
   } catch (error) {
     return {
       articles: [],
-      status: null,
       rawCount: 0,
-      imageCount: 0,
-      error: error instanceof Error ? error.message : "Unknown Currents fetch error",
     };
   }
-}
-
-async function fetchGnewsWithCache(requestUrl: string, category: string): Promise<GnewsFetchResult> {
-  const now = Date.now();
-
-  if (gnewsCache && now - gnewsCache.fetchedAt < GNEWS_CACHE_TTL_MS) {
-    console.log("GNEWS_CACHE_HIT", {
-      ageMs: now - gnewsCache.fetchedAt,
-      imageCount: gnewsCache.result.imageCount,
-    });
-    return gnewsCache.result;
-  }
-
-  console.log("GNEWS_CACHE_MISS", {
-    hasCache: Boolean(gnewsCache),
-    requestUrl,
-  });
-
-  if (gnewsInflightRequest) {
-    return gnewsInflightRequest;
-  }
-
-  gnewsInflightRequest = (async () => {
-    try {
-      const response = await fetch(requestUrl, {
-        next: { revalidate: 0 },
-      });
-
-      if (response.status === 429) {
-        console.log("GNEWS_RATE_LIMITED", { requestUrl });
-
-        if (gnewsCache) {
-          return {
-            ...gnewsCache.result,
-            status: 429,
-            error: "GNews rate limited; using cached results",
-          };
-        }
-
-        return {
-          articles: [],
-          status: 429,
-          rawCount: 0,
-          imageCount: 0,
-          error: "GNews rate limited",
-        };
-      }
-
-      if (!response.ok) {
-        return {
-          articles: [],
-          status: response.status,
-          rawCount: 0,
-          imageCount: 0,
-          error: `GNews request failed with status ${response.status}`,
-        };
-      }
-
-      const payload = (await response.json()) as GNewsApiResponse;
-      const rawArticles = payload.articles ?? [];
-      const articles = mapGnewsArticles(rawArticles, category);
-      const result = {
-        articles,
-        status: response.status,
-        rawCount: rawArticles.length,
-        imageCount: articles.length,
-        error: null,
-      };
-
-      gnewsCache = {
-        fetchedAt: Date.now(),
-        result,
-      };
-
-      return result;
-    } catch (error) {
-      return {
-        articles: [],
-        status: null,
-        rawCount: 0,
-        imageCount: 0,
-        error: error instanceof Error ? error.message : "Unknown GNews fetch error",
-      };
-    } finally {
-      gnewsInflightRequest = null;
-    }
-  })();
-
-  return gnewsInflightRequest;
 }
 
 export async function GET(request: Request) {
@@ -612,47 +536,16 @@ export async function GET(request: Request) {
   const page = Math.max(1, Number(searchParams.get("page") || "1"));
   const pageSize = Math.max(1, Math.min(30, Number(searchParams.get("pageSize") || "25")));
   const category = query || mode || "general";
-  const gnewsKey = process.env.GNEWS_API_KEY ?? "";
-  const gnewsRequestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${gnewsKey}`;
-  let gnewsStatus: number | null = null;
-  let gnewsRawCount = 0;
-  let gnewsImageCount = 0;
-  let gnewsError: string | null = null;
-  let gnewsArticles: AggregatedNewsArticle[] = [];
-  const nytKey = process.env.NYT_API_KEY ?? "";
-  let nytStatus: number | null = null;
-  let nytRawCount = 0;
-  let nytImageCount = 0;
-  let nytError: string | null = null;
   let nytArticles: AggregatedNewsArticle[] = [];
-  let currentsRawCount = 0;
-  let currentsImageCount = 0;
   let currentsArticles: AggregatedNewsArticle[] = [];
 
   const [currentArticles] = await Promise.all([
     fetchCurrentProviderArticles(category),
   ]);
 
-  if (!gnewsKey) {
-    gnewsError = "Missing GNEWS_API_KEY";
-  } else {
-    const gnewsResult = await fetchGnewsWithCache(gnewsRequestUrl, category);
-    gnewsStatus = gnewsResult.status;
-    gnewsRawCount = gnewsResult.rawCount;
-    gnewsImageCount = gnewsResult.imageCount;
-    gnewsError = gnewsResult.error;
-    gnewsArticles = gnewsResult.articles;
-  }
-
   const nytResult = await fetchNytArticles(category);
-  nytStatus = nytResult.status;
-  nytRawCount = nytResult.rawCount;
-  nytImageCount = nytResult.imageCount;
-  nytError = nytResult.error;
   nytArticles = nytResult.articles;
   const currentsResult = await fetchCurrentsArticles(category);
-  currentsRawCount = currentsResult.rawCount;
-  currentsImageCount = currentsResult.imageCount;
   currentsArticles = currentsResult.articles;
 
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
@@ -667,8 +560,6 @@ export async function GET(request: Request) {
   const endIndex = startIndex + pageSize;
   const articles = interleavedArticles.slice(startIndex, endIndex);
   const hasMore = endIndex < interleavedArticles.length;
-  const finalBeforeSliceProviderCounts = countProviders(interleavedArticles);
-  const finalProviderCounts = countProviders(articles);
 
   return Response.json({
     articles,
@@ -676,29 +567,5 @@ export async function GET(request: Request) {
     hasMore,
     page,
     pageSize,
-    debug: {
-      gnewsKeyPresent: Boolean(gnewsKey),
-      gnewsKeyLength: gnewsKey.length,
-      gnewsStatus,
-      gnewsRawCount,
-      gnewsImageCount,
-      gnewsError,
-      nytKeyPresent: Boolean(nytKey),
-      nytStatus,
-      nytRawCount,
-      nytImageCount,
-      nytError,
-      currentCount: currentMappedArticles.length,
-      gnewsCount: gnewsArticles.length,
-      nytCount: nytArticles.length,
-      currentsCount: currentsArticles.length,
-      currentsImageCount,
-      currentsRawCount,
-      totalCount: articles.length,
-      totalBeforeCaps: interleavedArticles.length,
-      totalAfterCaps: articles.length,
-      finalBeforeSliceProviderCounts,
-      finalProviderCounts,
-    },
   });
 }

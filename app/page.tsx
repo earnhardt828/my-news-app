@@ -2942,33 +2942,6 @@ type PaginatedNewsResponse = {
   page: number;
   pageSize: number;
   hasMore: boolean;
-  debug?: {
-    currentCount?: number;
-    gnewsCount?: number;
-    nytCount?: number;
-    currentsCount?: number;
-    currentsImageCount?: number;
-    currentsRawCount?: number;
-    totalCount?: number;
-    totalBeforeCaps?: number;
-    totalAfterCaps?: number;
-    finalBeforeSliceProviderCounts?: {
-      current?: number;
-      gnews?: number;
-      nyt?: number;
-    };
-    finalProviderCounts?: {
-      current?: number;
-      gnews?: number;
-      nyt?: number;
-    };
-    gnewsKeyPresent?: boolean;
-    gnewsKeyLength?: number;
-    gnewsStatus?: number | null;
-    gnewsRawCount?: number;
-    gnewsImageCount?: number;
-    gnewsError?: string | null;
-  };
   nytKeyPresentFromNewsRoute?: boolean;
   nytKeyLengthFromNewsRoute?: number;
   providerDebug?: {
@@ -4597,33 +4570,6 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
       hasMore: false,
       page: 1,
       pageSize: renderableArticles.length,
-      debug: {
-        currentCount: 0,
-        gnewsCount: 0,
-        nytCount: 0,
-        currentsCount: 0,
-        currentsImageCount: 0,
-        currentsRawCount: 0,
-        totalCount: renderableArticles.length,
-        totalBeforeCaps: renderableArticles.length,
-        totalAfterCaps: renderableArticles.length,
-        finalBeforeSliceProviderCounts: {
-          current: 0,
-          gnews: 0,
-          nyt: 0,
-        },
-        finalProviderCounts: {
-          current: 0,
-          gnews: 0,
-          nyt: 0,
-        },
-        gnewsKeyPresent: false,
-        gnewsKeyLength: 0,
-        gnewsStatus: null,
-        gnewsRawCount: 0,
-        gnewsImageCount: 0,
-        gnewsError: null,
-      },
       nytKeyPresentFromNewsRoute: false,
       nytKeyLengthFromNewsRoute: 0,
       visiblePipelineDebug: undefined,
@@ -4640,33 +4586,6 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
     page: payload.page ?? 1,
     pageSize: payload.pageSize ?? renderableArticles.length,
     nextPage: payload.nextPage ?? null,
-    debug: {
-      currentCount: payload.debug?.currentCount ?? 0,
-      gnewsCount: payload.debug?.gnewsCount ?? 0,
-      nytCount: payload.debug?.nytCount ?? 0,
-      currentsCount: payload.debug?.currentsCount ?? 0,
-      currentsImageCount: payload.debug?.currentsImageCount ?? 0,
-      currentsRawCount: payload.debug?.currentsRawCount ?? 0,
-      totalCount: payload.debug?.totalCount ?? renderableArticles.length,
-      totalBeforeCaps: payload.debug?.totalBeforeCaps ?? renderableArticles.length,
-      totalAfterCaps: payload.debug?.totalAfterCaps ?? renderableArticles.length,
-      finalBeforeSliceProviderCounts: {
-        current: payload.debug?.finalBeforeSliceProviderCounts?.current ?? 0,
-        gnews: payload.debug?.finalBeforeSliceProviderCounts?.gnews ?? 0,
-        nyt: payload.debug?.finalBeforeSliceProviderCounts?.nyt ?? 0,
-      },
-      finalProviderCounts: {
-        current: payload.debug?.finalProviderCounts?.current ?? 0,
-        gnews: payload.debug?.finalProviderCounts?.gnews ?? 0,
-        nyt: payload.debug?.finalProviderCounts?.nyt ?? 0,
-      },
-      gnewsKeyPresent: payload.debug?.gnewsKeyPresent ?? false,
-      gnewsKeyLength: payload.debug?.gnewsKeyLength ?? 0,
-      gnewsStatus: payload.debug?.gnewsStatus ?? null,
-      gnewsRawCount: payload.debug?.gnewsRawCount ?? 0,
-      gnewsImageCount: payload.debug?.gnewsImageCount ?? 0,
-      gnewsError: payload.debug?.gnewsError ?? null,
-    },
     nytKeyPresentFromNewsRoute: payload.nytKeyPresentFromNewsRoute ?? false,
     nytKeyLengthFromNewsRoute: payload.nytKeyLengthFromNewsRoute ?? 0,
     visiblePipelineDebug: payload.visiblePipelineDebug,
@@ -6745,13 +6664,6 @@ export default function Home() {
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
   const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
-  const [aggregatedNewsDebug, setAggregatedNewsDebug] = useState({
-    currentCount: 0,
-    nytCount: 0,
-    currentsCount: 0,
-    totalCount: 0,
-    currentsImageCount: 0,
-  });
   const [localQuery, setLocalQuery] = useState("");
   const [localQueryDraft, setLocalQueryDraft] = useState("");
   const [localLocationLabel, setLocalLocationLabel] = useState("");
@@ -7640,23 +7552,6 @@ export default function Home() {
       }
 
       const newsData = newsPayload?.articles ?? [];
-      if (newsPath.startsWith("/api/aggregated-news")) {
-        setAggregatedNewsDebug({
-          currentCount: newsPayload?.debug?.currentCount ?? 0,
-          nytCount: newsPayload?.debug?.nytCount ?? 0,
-          currentsCount: newsPayload?.debug?.currentsCount ?? 0,
-          totalCount: newsPayload?.debug?.totalCount ?? 0,
-          currentsImageCount: newsPayload?.debug?.currentsImageCount ?? 0,
-        });
-      } else {
-        setAggregatedNewsDebug({
-          currentCount: 0,
-          nytCount: 0,
-          currentsCount: 0,
-          totalCount: 0,
-          currentsImageCount: 0,
-        });
-      }
       hasLiveNewsResponse = true;
       if (feedMode === "sports") {
         console.log("SPORTS LOCAL FETCH COUNT", newsData.length);
@@ -16337,7 +16232,6 @@ export default function Home() {
       const publishedLabel = options?.showFreshnessTime
         ? formatFreshnessTime(article.publishedAt, article.time)
         : formatPublishedDate(article.publishedAt, article.time);
-      const providerBadge = getArticleProviderLabel(article.provider);
       if (isBroadSportsArticle(article) && !isSportsBettingAd(article)) {
         console.log("SPORTS CARD IMAGE SRC", {
           title: cleanDisplayText(article.title),
@@ -16433,12 +16327,6 @@ export default function Home() {
                   {options.rankLabel}
                 </span>
               ) : null}
-              <span
-                className="chip chip-muted"
-                style={{ fontSize: "10px", padding: "2px 6px" }}
-              >
-                {providerBadge}
-              </span>
             </div>
           </div>
           <Link
@@ -16619,7 +16507,6 @@ export default function Home() {
           </Link>
         }
         publishedLabel={formatFreshnessTime(article.publishedAt, article.time)}
-        providerBadge={getArticleProviderLabel(article.provider)}
         title={cleanDisplayText(article.title)}
         summary={summaryText}
         imageSrc={realImage.src}
@@ -22076,15 +21963,6 @@ export default function Home() {
         </div>
       ) : (
         <div className="stack feed-results-stack">
-          {aggregatedNewsDebug.currentCount > 0 ||
-          aggregatedNewsDebug.nytCount > 0 ||
-          aggregatedNewsDebug.currentsCount > 0 ? (
-            <div className="muted" style={{ fontSize: "12px" }}>
-              Current count: {aggregatedNewsDebug.currentCount} · NYT count:{" "}
-              {aggregatedNewsDebug.nytCount} · Currents count: {aggregatedNewsDebug.currentsCount} ·
-              {" "}Total count: {aggregatedNewsDebug.totalCount}
-            </div>
-          ) : null}
           {feedLoadError ? (
             <div className="feed-inline-error" role="status" aria-live="polite">
               <div className="stack" style={{ gap: "10px" }}>
