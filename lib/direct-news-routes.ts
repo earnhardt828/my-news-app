@@ -284,31 +284,36 @@ function parseRssItems(xml: string, fallbackFeed: RssFeedConfig) {
 }
 
 async function fetchRssArticles(feeds: RssFeedConfig[]) {
-  const responses = await Promise.allSettled(
+  const responses = await Promise.all(
     feeds.map(async (feed) => {
-      const response = await fetchWithTimeout(feed.url, {
-        headers: {
-          Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-          "User-Agent": "GraffitiNews/1.0 (+https://graffiti.news)",
-        },
-        next: { revalidate: 600 },
-      });
+      try {
+        const response = await fetchWithTimeout(feed.url, {
+          headers: {
+            Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+            "User-Agent": "GraffitiNews/1.0 (+https://graffiti.news)",
+          },
+          next: { revalidate: 600 },
+        });
 
-      if (!response.ok) {
-        throw new Error(`RSS request failed for ${feed.source} with status ${response.status}`);
+        if (!response.ok) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("DIRECT RSS WARN", feed.source, response.status);
+          }
+          return [] as DirectFeedArticle[];
+        }
+
+        return parseRssItems(await response.text(), feed);
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn("DIRECT RSS WARN", feed.source, message);
+        }
+        return [] as DirectFeedArticle[];
       }
-
-      return parseRssItems(await response.text(), feed);
     })
   );
 
-  return responses.flatMap((result) => {
-    if (result.status === "fulfilled") {
-      return result.value;
-    }
-    console.error("DIRECT RSS ERROR", result.reason);
-    return [];
-  });
+  return responses.flatMap((articles) => articles);
 }
 
 async function fetchNewsApiQuery(query: string, pageSize: number) {

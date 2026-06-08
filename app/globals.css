@@ -1668,6 +1668,14 @@ input {
   gap: 14px;
 }
 
+.large-image-article-card-top-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .large-image-article-card-source {
   display: inline-flex;
   align-items: center;
@@ -1714,7 +1722,7 @@ input {
   overflow: hidden;
   border-radius: 18px;
   background: color-mix(in srgb, var(--muted) 52%, transparent);
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
 }
 
 .large-image-article-card-image {

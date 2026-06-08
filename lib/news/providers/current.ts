@@ -24,13 +24,11 @@ const CURRENT_RSS_FEEDS: RssFeedConfig[] = [
   { url: "https://www.theverge.com/rss/index.xml", source: "The Verge", category: "Technology" },
   { url: "https://techcrunch.com/feed/", source: "TechCrunch", category: "Technology" },
   { url: "https://www.wired.com/feed/rss", source: "Wired", category: "Technology" },
-  { url: "https://www.politico.com/rss/politicopicks.xml", source: "Politico", category: "Politics" },
   { url: "https://thehill.com/feed/", source: "The Hill", category: "Politics" },
   { url: "https://www.theguardian.com/us-news/rss", source: "The Guardian", category: "World" },
   { url: "https://variety.com/feed/", source: "Variety", category: "Entertainment" },
   { url: "https://www.billboard.com/feed/", source: "Billboard", category: "Entertainment" },
   { url: "https://www.eater.com/rss/index.xml", source: "Eater", category: "Food" },
-  { url: "https://www.travelandleisure.com/rss", source: "Travel + Leisure", category: "Travel" },
 ];
 
 const DEFAULT_CURRENT_QUERIES = [

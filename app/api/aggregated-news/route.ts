@@ -70,6 +70,12 @@ type CurrentsFetchResult = {
   rawCount: number;
 };
 
+const NYT_PROVIDER_CAP = 20;
+const CURRENTS_PROVIDER_CAP = 40;
+const FINAL_FEED_PAGE_SIZE_CAP = 100;
+const CURRENTS_PAGE_SIZE = 50;
+const CURRENTS_MAX_PAGES = 3;
+
 function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
   const currentQueue = articles.filter((article) => article.provider === "current");
   const nytQueue = articles.filter((article) => article.provider === "nyt");
@@ -424,7 +430,7 @@ async function fetchNytArticles(category: string): Promise<NytFetchResult> {
     });
 
     return {
-      articles: articles.slice(0, 5),
+      articles: articles.slice(0, NYT_PROVIDER_CAP),
       status: response.status,
       rawCount: rawArticles.length,
       imageCount: articles.length,
@@ -452,74 +458,88 @@ async function fetchCurrentsArticles(category: string): Promise<CurrentsFetchRes
   }
 
   try {
-    const requestUrl = "https://api.currentsapi.services/v1/latest-news";
-    const response = await fetch(requestUrl, {
-      headers: {
-        Authorization: currentsKey,
-      },
-      next: { revalidate: 0 },
-    });
+    const collectedArticles: AggregatedNewsArticle[] = [];
+    let rawCount = 0;
 
-    if (!response.ok) {
-      return {
-        articles: [],
-        rawCount: 0,
-      };
-    }
+    for (let pageNumber = 1; pageNumber <= CURRENTS_MAX_PAGES; pageNumber += 1) {
+      const requestUrl = new URL("https://api.currentsapi.services/v1/latest-news");
+      requestUrl.searchParams.set("page_number", String(pageNumber));
+      requestUrl.searchParams.set("page_size", String(CURRENTS_PAGE_SIZE));
+      requestUrl.searchParams.set("language", "en");
 
-    const payload = (await response.json()) as CurrentsApiResponse;
-    const rawArticles = payload.news ?? [];
-    const articles = rawArticles.flatMap((article, index) => {
-      const title = stripHtml(article.title);
-      const url = normalizeUrl(article.url);
-      const imageUrl = article.image?.trim() ?? "";
+      const response = await fetch(requestUrl.toString(), {
+        headers: {
+          Authorization: currentsKey,
+        },
+        next: { revalidate: 0 },
+      });
 
-      if (!title || !url || !hasRealImageUrl(imageUrl)) {
-        return [];
+      if (!response.ok) {
+        break;
       }
 
-      const sourceLabel =
-        stripHtml(
-          typeof article.source === "string"
-            ? article.source
-            : article.source?.name ?? article.author
-        ) || extractHostnameLabel(url);
-      const articleCategory = normalizeCategoryValue(
-        article.category?.find((value) => (value ?? "").trim())?.trim() || category.trim() || "general",
-        article.title,
-        article.description,
-        sourceLabel,
-        article.url
-      );
+      const payload = (await response.json()) as CurrentsApiResponse;
+      const rawArticles = payload.news ?? [];
+      rawCount += rawArticles.length;
 
-      return [{
-        id: hashArticleId(`currents:${article.id ?? url}:${index}`),
-        title,
-        description: stripHtml(article.description) || null,
-        content: stripHtml(article.description) || null,
-        source: sourceLabel,
-        sourceName: sourceLabel,
-        url,
-        image: imageUrl,
-        imageUrl,
-        urlToImage: imageUrl,
-        mediaContent: null,
-        enclosureUrl: null,
-        ogImage: null,
-        twitterImage: null,
-        thumbnail: null,
-        category: articleCategory,
-        publishedAt: article.published ?? null,
-        time: "Recent",
-        likes: 0,
-        comments: [],
-        provider: "currents",
-      }] satisfies AggregatedNewsArticle[];
-    });
+      const pageArticles = rawArticles.flatMap((article, index) => {
+        const title = stripHtml(article.title);
+        const url = normalizeUrl(article.url);
+        const imageUrl = article.image?.trim() ?? "";
+
+        if (!title || !url || !hasRealImageUrl(imageUrl)) {
+          return [];
+        }
+
+        const sourceLabel =
+          stripHtml(
+            typeof article.source === "string"
+              ? article.source
+              : article.source?.name ?? article.author
+          ) || extractHostnameLabel(url);
+        const articleCategory = normalizeCategoryValue(
+          article.category?.find((value) => (value ?? "").trim())?.trim() || category.trim() || "general",
+          article.title,
+          article.description,
+          sourceLabel,
+          article.url
+        );
+
+        return [{
+          id: hashArticleId(`currents:${pageNumber}:${article.id ?? url}:${index}`),
+          title,
+          description: stripHtml(article.description) || null,
+          content: stripHtml(article.description) || null,
+          source: sourceLabel,
+          sourceName: sourceLabel,
+          url,
+          image: imageUrl,
+          imageUrl,
+          urlToImage: imageUrl,
+          mediaContent: null,
+          enclosureUrl: null,
+          ogImage: null,
+          twitterImage: null,
+          thumbnail: null,
+          category: articleCategory,
+          publishedAt: article.published ?? null,
+          time: "Recent",
+          likes: 0,
+          comments: [],
+          provider: "currents",
+        }] satisfies AggregatedNewsArticle[];
+      });
+
+      collectedArticles.push(...pageArticles);
+
+      if (rawArticles.length < CURRENTS_PAGE_SIZE || collectedArticles.length >= CURRENTS_PROVIDER_CAP) {
+        break;
+      }
+    }
 
     return {
-      articles: articles.slice(0, 10),
-      rawCount: rawArticles.length,
+      articles: dedupeArticles(collectedArticles).slice(0, CURRENTS_PROVIDER_CAP),
+      rawCount,
     };
   } catch (error) {
     return {
@@ -534,7 +554,10 @@ export async function GET(request: Request) {
   const mode = searchParams.get("mode")?.trim() || "trending";
   const query = searchParams.get("query")?.trim() || "";
   const page = Math.max(1, Number(searchParams.get("page") || "1"));
-  const pageSize = Math.max(1, Math.min(30, Number(searchParams.get("pageSize") || "25")));
+  const pageSize = Math.max(
+    1,
+    Math.min(FINAL_FEED_PAGE_SIZE_CAP, Number(searchParams.get("pageSize") || String(FINAL_FEED_PAGE_SIZE_CAP)))
+  );
   const category = query || mode || "general";
   let nytArticles: AggregatedNewsArticle[] = [];
   let currentsArticles: AggregatedNewsArticle[] = [];

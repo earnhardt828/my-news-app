@@ -13,6 +13,7 @@ type LargeImageArticleCardProps = {
   imageAlt: string;
   likes: number;
   commentsCount: number;
+  topRightContent?: ReactNode;
   className?: string;
   onOpen?: MouseEventHandler<HTMLAnchorElement>;
   onImageError?: () => void;
@@ -33,6 +34,7 @@ export default function LargeImageArticleCard({
   imageAlt,
   likes,
   commentsCount,
+  topRightContent,
   className = "",
   onOpen,
   onImageError,
@@ -55,7 +57,10 @@ export default function LargeImageArticleCard({
         <div className="large-image-article-card-source">
           {sourceContent}
         </div>
-        <span className="large-image-article-card-time">{publishedLabel}</span>
+        <div className="large-image-article-card-top-meta">
+          {topRightContent}
+          <span className="large-image-article-card-time">{publishedLabel}</span>
+        </div>
       </div>
       <Link href={href} className="article-link large-image-article-card-link" onClick={onOpen}>
         <div className="large-image-article-card-copy">

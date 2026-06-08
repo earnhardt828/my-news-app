@@ -106,7 +106,7 @@ import {
 } from "../lib/video-filters";
 import { MY_NEWS_DISABLED, POLLS_DISABLED } from "../lib/feature-flags";
 
-const FEED_PAGE_SIZE = 25;
+const FEED_PAGE_SIZE = 100;
 const INITIAL_FEED_WARNING_MS = 4200;
 const INITIAL_FEED_TIMEOUT_MS = 5000;
 const DIRECT_ROUTE_TIMEOUT_MS = 10000;
@@ -16240,33 +16240,81 @@ export default function Home() {
         });
       }
 
-      const visualBoxNode = (
-        <div className="article-thumb-shell article-card-visual-shell" aria-hidden="true">
-          <img
-            src={imageSrc}
-            alt={cleanDisplayText(article.title)}
-            className="article-thumb-image article-card-visual-image"
-            loading="lazy"
-            decoding="async"
-            onError={() => {
-              setFailedArticleImages((prev) => {
-                if (prev[imageFailureKey]) {
-                  return prev;
-                }
-
-                return {
-                  ...prev,
-                  [imageFailureKey]: true,
-                };
-              });
-            }}
-          />
-        </div>
-      );
-
       return (
-        <article
-          className={`news-card ${options?.rankLabel ? "news-card-has-rank" : ""}`}
+        <LargeImageArticleCard
+          href={`/article/${articleRouteId}/`}
+          sourceContent={
+            sortMode === "local" ? (
+              <div className="trending-source-brand trending-source-brand-static">
+                <SourceHeaderMark
+                  sourceName={safeSourceName}
+                  className="trending-source-header-mark"
+                  fallbackMode="text"
+                />
+                <span className="trending-source-category-separator" aria-hidden="true">
+                  ·
+                </span>
+                <span className="trending-source-category-inline">{displayCategoryLabel}</span>
+              </div>
+            ) : (
+              <Link
+                href={`/source/${slugifySourceName(safeSourceName)}/`}
+                className="source-trigger source-trigger-tight large-image-article-card-source-link"
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                <div className="trending-source-brand">
+                  <SourceHeaderMark
+                    sourceName={safeSourceName}
+                    className="trending-source-header-mark"
+                    fallbackMode="text"
+                  />
+                  <span className="trending-source-category-separator" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="trending-source-category-inline">{displayCategoryLabel}</span>
+                </div>
+              </Link>
+            )
+          }
+          publishedLabel={publishedLabel}
+          title={cleanDisplayText(article.title)}
+          summary={
+            article.description
+              ? cleanDisplayText(article.description)
+                  .split(/(?<=[.!?])\s+/)
+                  .slice(0, 2)
+                  .join(" ")
+                  .trim()
+              : null
+          }
+          imageSrc={imageSrc}
+          imageAlt={cleanDisplayText(article.title)}
+          likes={article.likes}
+          commentsCount={article.comments.length}
+          topRightContent={
+            options?.rankLabel ? (
+              <span className="chip trending-rank-badge news-card-rank-badge">
+                {options.rankLabel}
+              </span>
+            ) : null
+          }
+          onOpen={(event) => {
+            void handlePrimaryArticleOpen(event, article);
+          }}
+          onImageError={() => {
+            setFailedArticleImages((prev) => {
+              if (prev[imageFailureKey]) {
+                return prev;
+              }
+
+              return {
+                ...prev,
+                [imageFailureKey]: true,
+              };
+            });
+          }}
           onContextMenu={(event) => {
             event.preventDefault();
             openLongPressMenu(article);
@@ -16280,100 +16328,7 @@ export default function Home() {
           onTouchEnd={clearArticleLongPressTimer}
           onTouchCancel={clearArticleLongPressTimer}
           onTouchMove={clearArticleLongPressTimer}
-        >
-          <div className="news-card-top-row news-card-top-row-brand">
-            <div className="trending-source-stack trending-source-stack-primary">
-              {sortMode === "local" ? (
-                <div className="trending-source-brand trending-source-brand-static">
-                  <SourceHeaderMark
-                    sourceName={safeSourceName}
-                    className="trending-source-header-mark"
-                    fallbackMode="text"
-                  />
-                  <span className="trending-source-category-separator" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="trending-source-category-inline">
-                    {displayCategoryLabel}
-                  </span>
-                </div>
-              ) : (
-                <Link
-                  href={`/source/${slugifySourceName(safeSourceName)}/`}
-                  className="source-trigger source-trigger-tight trending-source-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  <div className="trending-source-brand">
-                    <SourceHeaderMark
-                      sourceName={safeSourceName}
-                      className="trending-source-header-mark"
-                      fallbackMode="text"
-                    />
-                    <span className="trending-source-category-separator" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="trending-source-category-inline">
-                      {displayCategoryLabel}
-                    </span>
-                  </div>
-                </Link>
-              )}
-            </div>
-            <div className="trending-card-top-meta">
-              {options?.rankLabel ? (
-                <span className="chip trending-rank-badge news-card-rank-badge">
-                  {options.rankLabel}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <Link
-            href={`/article/${articleRouteId}/`}
-            className="article-link"
-            onClick={(event) => {
-              void handlePrimaryArticleOpen(event, article);
-            }}
-          >
-            <div className="news-card-body news-card-body-with-thumb news-card-body-compact">
-              <div className="news-card-copy">
-                <div className="trending-title-row">
-                  <h3 className="trending-article-title">
-                    {cleanDisplayText(article.title)}
-                  </h3>
-                </div>
-                {article.description ? (
-                  <p className="article-card-summary">
-                    {cleanDisplayText(article.description)
-                      .split(/(?<=[.!?])\s+/)
-                      .slice(0, 2)
-                      .join(" ")
-                      .trim()}
-                  </p>
-                ) : null}
-              </div>
-              {visualBoxNode}
-            </div>
-          </Link>
-          <div className="news-card-footer">
-            <span className="trending-published-date news-card-footer-date feed-meta-inline">
-              <span>{publishedLabel}</span>
-              <span className="feed-meta-inline-group">
-                <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                  <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
-                </svg>
-                <span>{article.likes}</span>
-              </span>
-              <span className="feed-meta-inline-group">
-                <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                  <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-                </svg>
-                <span>{article.comments.length}</span>
-              </span>
-            </span>
-          </div>
-        </article>
+        />
       );
     } catch (error) {
       console.error("TRENDING CARD RENDER ERROR", error);
@@ -18882,10 +18837,49 @@ export default function Home() {
     }
 
     return (
-      <article
-        className={`top-trending-list-card ${
-          typeof options?.showRank === "number" ? "top-trending-list-card-ranked" : ""
-        } ${options?.className ?? ""}`.trim()}
+      <LargeImageArticleCard
+        href={`/article/${articleRouteId}/`}
+        sourceContent={
+          <div className="trending-source-brand trending-source-brand-static">
+            <SourceHeaderMark
+              sourceName={safeSourceName}
+              className="trending-source-header-mark"
+              fallbackMode="text"
+            />
+            <span className="trending-source-category-separator" aria-hidden="true">
+              ·
+            </span>
+            <span className="trending-source-category-inline">
+              {getCategoryLabel(options?.imageFallbackLabel ?? safeCategoryName)}
+            </span>
+          </div>
+        }
+        publishedLabel={formatPublishedDate(article.publishedAt, article.time)}
+        title={cleanDisplayText(article.title)}
+        summary={
+          article.description
+            ? cleanDisplayText(article.description)
+                .split(/(?<=[.!?])\s+/)
+                .slice(0, 2)
+                .join(" ")
+                .trim()
+            : null
+        }
+        imageSrc={displayImage.src}
+        imageAlt={cleanDisplayText(article.title)}
+        likes={article.likes}
+        commentsCount={article.comments.length}
+        topRightContent={
+          typeof options?.showRank === "number" ? (
+            <span className="chip trending-rank-badge news-card-rank-badge">
+              {options.showRank}
+            </span>
+          ) : null
+        }
+        className={options?.className ?? ""}
+        onOpen={(event) => {
+          void handlePrimaryArticleOpen(event, article);
+        }}
         onContextMenu={(event) => {
           event.preventDefault();
           openLongPressMenu(article);
@@ -18899,97 +18893,37 @@ export default function Home() {
         onTouchEnd={clearArticleLongPressTimer}
         onTouchCancel={clearArticleLongPressTimer}
         onTouchMove={clearArticleLongPressTimer}
-      >
-        <Link
-          href={`/article/${articleRouteId}/`}
-          className="top-trending-list-link"
-          onClick={(event) => {
-            void handlePrimaryArticleOpen(event, article);
-          }}
-        >
-          {typeof options?.showRank === "number" ? (
-            <div className="top-trending-list-rank" aria-hidden="true">
-              {options.showRank}
-            </div>
-          ) : null}
-          <div className="top-trending-list-copy">
-            <div className="top-trending-list-meta">
-              <SourceHeaderMark
-                sourceName={safeSourceName}
-                className="top-trending-list-source-mark"
-                fallbackMode="text"
-              />
-              <span className="top-trending-list-date">
-                {formatPublishedDate(article.publishedAt, article.time)}
-              </span>
-              <span className="top-trending-list-separator" aria-hidden="true">
-                ·
-              </span>
-              <span className="top-trending-list-date">
-                <span className="feed-meta-inline-group">
-                  <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                    <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
-                  </svg>
-                  <span>{article.likes}</span>
-                </span>
-              </span>
-              <span className="top-trending-list-separator" aria-hidden="true">
-                ·
-              </span>
-              <span className="top-trending-list-date">
-                <span className="feed-meta-inline-group">
-                  <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                    <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-                  </svg>
-                  <span>{article.comments.length}</span>
-                </span>
-              </span>
-            </div>
-            <h3 className="top-trending-list-title">{cleanDisplayText(article.title)}</h3>
-          </div>
-          <div className="top-trending-list-media" aria-hidden="true">
-            {displayImage.src ? (
-              <img
-                src={displayImage.src}
-                alt={cleanDisplayText(article.title)}
-                className="top-trending-list-image"
-                loading="lazy"
-                decoding="async"
-                onError={() => {
-                  if (!displayImage.failureKey) {
-                    return;
-                  }
+        onImageError={() => {
+          if (!displayImage.failureKey) {
+            return;
+          }
 
-                  if (displayImage.kind === "real") {
-                    setFailedArticleImages((prev) => {
-                      if (prev[imageFailureKey]) {
-                        return prev;
-                      }
+          if (displayImage.kind === "real") {
+            setFailedArticleImages((prev) => {
+              if (prev[imageFailureKey]) {
+                return prev;
+              }
 
-                      return {
-                        ...prev,
-                        [imageFailureKey]: true,
-                      };
-                    });
-                    return;
-                  }
+              return {
+                ...prev,
+                [imageFailureKey]: true,
+              };
+            });
+            return;
+          }
 
-                  setFailedArticleBoxImages((prev) => {
-                    if (prev[imageFailureKey]) {
-                      return prev;
-                    }
+          setFailedArticleBoxImages((prev) => {
+            if (prev[imageFailureKey]) {
+              return prev;
+            }
 
-                    return {
-                      ...prev,
-                      [imageFailureKey]: true,
-                    };
-                  });
-                }}
-              />
-            ) : null}
-          </div>
-        </Link>
-      </article>
+            return {
+              ...prev,
+              [imageFailureKey]: true,
+            };
+          });
+        }}
+      />
     );
   };
 
