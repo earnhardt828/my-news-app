@@ -229,11 +229,11 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
       haystack
     );
   const entertainmentContentTerms =
-    /\b(entertainment|movie|movies|film|tv|television|series|streaming|music|celebrity|celebrities|awards show|awards|theater|theatre|hollywood|actor|actors|actress|actresses|concert|tour|album|grammys|oscars|tony awards|emmys|pop culture|box office)\b/.test(
+    /\b(entertainment|movie|movies|film|tv|television|series|streaming|music|celebrity|celebrities|awards show|awards|theater|theatre|hollywood|actor|actors|actress|actresses|concert|tour|album|grammys|oscars|tony awards|emmys|pop culture|box office|broadway|show|singer|band|star|red carpet)\b/.test(
       haystack
     );
   const antiEntertainmentTerms =
-    /\b(trump|biden|politics|political|election|campaign|congress|senate|lawsuit|sports|nba|nfl|mlb|nhl|wnba|soccer|football|baseball|basketball|tennis|golf|viral news|breaking news|weather)\b/.test(
+    /\b(fcc|chairman|trump|biden|politics|political|election|campaign|congress|senate|court|lawsuit|government|mayor|charged|police|sports|nba|nfl|mlb|nhl|wnba|soccer|football|baseball|basketball|tennis|golf|viral news|breaking news|weather)\b/.test(
       haystack
     );
 
@@ -261,10 +261,7 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
     return "business";
   }
 
-  if (
-    entertainmentContentTerms &&
-    (entertainmentSourceTerms || !antiEntertainmentTerms)
-  ) {
+  if (entertainmentContentTerms && !antiEntertainmentTerms) {
     return "entertainment";
   }
 
@@ -341,15 +338,19 @@ function isArticleValidForCategory(article: AggregatedNewsArticle, requestedCate
       return hasSportsTerms && !hasRejectedTerms;
     }
     case "entertainment": {
-      const hasEntertainmentTerms =
-        /\b(movie|film|tv|television|streaming|actor|actress|celebrity|music|concert|album|tour|awards|oscars|grammys|tony awards|variety|deadline|hollywood reporter|e! news|people|billboard|rolling stone|page six|tmz|hollywood)\b/.test(
+      const hasEntertainmentContentTerms =
+        /\b(movie|film|tv|television|series|streaming|actor|actress|celebrity|music|concert|album|tour|awards|oscars|grammys|tony awards|broadway|hollywood|theater|theatre|show|singer|band|star|red carpet)\b/.test(
+          haystack
+        );
+      const hasEntertainmentSourceTerms =
+        /\b(variety|deadline|hollywood reporter|e! news|people|billboard|rolling stone|page six|tmz)\b/.test(
           haystack
         );
       const hasRejectedTerms =
-        /\b(political lawsuit|mayor race|general politics|war|crime|finance|election|congress|senate|white house)\b/.test(
+        /\b(fcc|chairman|trump|court|lawsuit|mayor|election|government|campaign|police|war|crime|finance|congress|senate|white house)\b/.test(
           haystack
         );
-      return hasEntertainmentTerms && !hasRejectedTerms;
+      return hasEntertainmentContentTerms && !hasRejectedTerms && (hasEntertainmentSourceTerms || hasEntertainmentContentTerms);
     }
     case "crime":
       return /\b(arrest|charged|murder|shooting|stabbing|police|suspect|court|trial|prison|fraud|theft|fbi|doj|lawsuit)\b/.test(
