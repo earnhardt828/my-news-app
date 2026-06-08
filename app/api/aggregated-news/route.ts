@@ -196,10 +196,30 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
     /\b(trump|biden|election|congress|senate|house|white house|policy|government|president|campaign|mayor|governor|supreme court|politic|political race)\b/.test(
       haystack
     );
-  const sportsTerms =
-    /\b(sports|nba|nfl|mlb|nhl|wnba|soccer|football|baseball|basketball|tennis|golf|college football|college world series|knicks|finals|world cup|coach|player|game|match|team|playoff|playoffs|championship|ufc|mma)\b/.test(
+  const worldConflictTerms =
+    /\b(israel|gaza|hezbollah|lebanon|beirut|hamas|iran|ukraine|russia|war|wars|conflict|military|missile|bomb|bombs|bombing|strike|strikes|airstrike|airstrikes|troops|cease-fire|ceasefire|middle east|world leaders|foreign policy|diplomat|diplomacy)\b/.test(
       haystack
     );
+  const sportsLeagueTerms =
+    /\b(nba|nfl|mlb|nhl|wnba|ncaa|nascar|ufc|mma|world cup|college world series|super bowl|stanley cup|final four)\b/.test(
+      haystack
+    );
+  const sportsGameTerms =
+    /\b(soccer|football|baseball|basketball|tennis|golf|boxing|playoff|playoffs|finals|scores|scoreboard|game|match|coach|player|team)\b/.test(
+      haystack
+    );
+  const sportsTeamTerms =
+    /\b(knicks|cubs|yankees|mets|dodgers|lakers|celtics|heat|cowboys|chiefs|eagles|49ers|rangers|bruins|oilers|panthers|korda)\b/.test(
+      haystack
+    );
+  const sportsSourceTerms =
+    /\b(espn|sportscenter|bleacher report|yahoo sports|cbs sports|nbc sports|fox sports|ap sports|reuters sports|bbc sport|the athletic|sports illustrated)\b/.test(
+      haystack
+    );
+  const sportsTerms =
+    sportsLeagueTerms ||
+    sportsTeamTerms ||
+    ((sportsGameTerms || sportsSourceTerms) && !worldConflictTerms);
   const crimeTerms =
     /\b(crime|police|investigation|arrest|court|trial|charges|shooting|suspect|homicide|fraud|theft|lawsuit|federal prosecutors)\b/.test(
       haystack
@@ -219,6 +239,10 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
 
   if (politicsTerms) {
     return "politics";
+  }
+
+  if (worldConflictTerms) {
+    return "world";
   }
 
   if (sportsTerms) {
@@ -580,13 +604,17 @@ async function fetchCurrentsArticles(category: string): Promise<CurrentsFetchRes
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode")?.trim() || "trending";
+  const requestedCategory = searchParams.get("category")?.trim() || "";
   const query = searchParams.get("query")?.trim() || "";
   const page = Math.max(1, Number(searchParams.get("page") || "1"));
   const pageSize = Math.max(
     1,
     Math.min(FINAL_FEED_PAGE_SIZE_CAP, Number(searchParams.get("pageSize") || String(FINAL_FEED_PAGE_SIZE_CAP)))
   );
-  const category = query || mode || "general";
+  const category = requestedCategory || query || mode || "general";
+  const normalizedRequestedCategory = requestedCategory
+    ? normalizeCategoryValue(requestedCategory, requestedCategory)
+    : "";
   let nytArticles: AggregatedNewsArticle[] = [];
   let currentsArticles: AggregatedNewsArticle[] = [];
 
@@ -605,7 +633,10 @@ export async function GET(request: Request) {
     ...nytArticles,
     ...currentsArticles,
   ];
-  const mappedArticles = dedupeArticles(mergedArticles);
+  const categoryFilteredArticles = normalizedRequestedCategory
+    ? mergedArticles.filter((article) => article.category === normalizedRequestedCategory)
+    : mergedArticles;
+  const mappedArticles = dedupeArticles(categoryFilteredArticles);
   const interleavedArticles = interleaveProviderArticles(mappedArticles);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;

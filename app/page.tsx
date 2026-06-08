@@ -8771,7 +8771,7 @@ export default function Home() {
                 }
               )
             : Promise.resolve(null),
-          fetch("/api/news?mode=sports&pageSize=25", {
+          fetch("/api/aggregated-news?category=sports&pageSize=5", {
             cache: "no-store",
             headers: { Accept: "application/json" },
           }),
@@ -19476,7 +19476,10 @@ export default function Home() {
             ) : (
               renderArticleSectionWithLargeLead(
                 sportsTabArticles.filter(
-                  (article) => isBroadSportsArticle(article) && !isSportsBettingAd(article)
+                  (article) =>
+                    isBroadSportsArticle(article) &&
+                    !isSportsBettingAd(article) &&
+                    hasRenderableSportsVisual(article, { largeCard: true })
                 ),
                 {
                   limit: 5,
