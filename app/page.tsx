@@ -4915,16 +4915,24 @@ function isSportsBettingAd(article: Article) {
 
 function isSportsVideo(video: VideoItem) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
-  const hasSportsTerms =
-    /(sports|espn|sportscenter|nfl|nba|mlb|nhl|mls|soccer|football|basketball|baseball|hockey|golf|tennis|nascar|formula 1|formula1|f1|ufc|mma|highlights?|touchdown|dunk|home run|goals?|save|replay|top plays|bleacher report|fox sports|cbs sports|nbc sports|sports illustrated|pga|masters|grand prix|race winner)/.test(
+  const hasLeagueOrTeamTerms =
+    /\b(nfl|nba|mlb|nhl|wnba|ncaa|mls|soccer|football|baseball|basketball|hockey|golf|tennis|boxing|nascar|formula 1|formula1|f1|ufc|mma|world cup|college world series|super bowl|stanley cup|knicks|cubs|yankees|mets|dodgers|lakers|celtics|cowboys|chiefs|eagles|49ers|rangers|bruins|oilers|panthers|korda)\b/.test(
       haystack
-    ) || video.category === "Sports";
+    );
+  const hasSportsSourceTerms =
+    /\b(espn|sportscenter|bleacher report|fox sports|cbs sports|nbc sports|yahoo sports|sports illustrated|pga|masters|grand prix|f1tv|ufc)\b/.test(
+      haystack
+    );
+  const hasSportsActionTerms =
+    /\b(highlights?|touchdown|dunk|home run|goal|goals|save|replay|top plays|playoff|playoffs|finals|championship|score|scores|match)\b/.test(
+      haystack
+    );
   const hasRejectedTerms =
-    /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress)/.test(
+    /(epa|fed chair|federal reserve|politics|election|economy|tariff|war|crime|weather|climate|white house|congress|israel|gaza|hezbollah|beirut|hamas|ukraine|russia|middle east)/.test(
       haystack
     );
 
-  return hasSportsTerms && !hasRejectedTerms;
+  return !hasRejectedTerms && (hasLeagueOrTeamTerms || (hasSportsSourceTerms && hasSportsActionTerms));
 }
 
 function isStrictNflVideo(video: VideoItem) {
@@ -14984,11 +14992,11 @@ export default function Home() {
     const filteredVideos = sportsVideos.filter((video) => {
       const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
       const hasSportsContext =
-        /\b(sports|espn|nba|nfl|mlb|nhl|mls|college football|college basketball|golf|nascar|playoffs|championship|highlights|game)\b/.test(
+        /\b(espn|nba|nfl|mlb|nhl|mls|wnba|ncaa|college football|college basketball|golf|nascar|ufc|mma|boxing|playoffs|championship|highlights|world cup|super bowl|stanley cup)\b/.test(
           haystack
         );
       const hasRejectedContext =
-        /\b(politics?|celebrity|food|weather|crime|tech|business|world news|local news)\b/.test(
+        /\b(politics?|celebrity|food|weather|crime|tech|business|world news|local news|israel|gaza|hezbollah|beirut|hamas|ukraine|russia|middle east|war)\b/.test(
           haystack
         ) && !/\b(local sports|sports)\b/.test(haystack);
 
@@ -15017,11 +15025,11 @@ export default function Home() {
     const filteredVideos = sportsVideos.filter((video) => {
       const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
       const hasSportsContext =
-        /\b(espn|sports|nba finals|nba playoffs|mlb highlights|nhl playoffs|nfl highlights|mls highlights|ufc highlights|boxing highlights|nascar highlights|college football highlights|college basketball highlights|playoffs|championship|highlights)\b/.test(
+        /\b(espn|sportscenter|nba finals|nba playoffs|mlb highlights|nhl playoffs|nfl highlights|mls highlights|ufc highlights|boxing highlights|nascar highlights|college football highlights|college basketball highlights|playoffs|championship|highlights|world cup highlights|super bowl highlights|stanley cup highlights)\b/.test(
           haystack
         );
       const hasRejectedContext =
-        /\b(politics?|celebrity|tech|business|food|weather|crime|world news|local news)\b/.test(
+        /\b(politics?|celebrity|tech|business|food|weather|crime|world news|local news|israel|gaza|hezbollah|beirut|hamas|ukraine|russia|middle east|war)\b/.test(
           haystack
         ) && !/\b(local sports|sports)\b/.test(haystack);
 
