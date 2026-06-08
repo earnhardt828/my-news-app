@@ -3138,6 +3138,10 @@ function isSportsFeaturedCandidate(article: Pick<Article, "title" | "source" | "
 }
 
 function articleMatchesSelectedCategory(article: Article, selectedCategory: string) {
+  if (isArticleValidForCategory(article, selectedCategory)) {
+    return true;
+  }
+
   const normalizedCategory = normalizeSelectedCategoryName(selectedCategory);
   const displayCategory = getDisplayCategory(article.category, {
     source: article.source,
@@ -3161,6 +3165,53 @@ function articleMatchesSelectedCategory(article: Article, selectedCategory: stri
     ],
     "article"
   );
+}
+
+function isArticleValidForCategory(article: Article, selectedCategory: string) {
+  const normalizedCategory = normalizeSelectedCategoryName(selectedCategory);
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  switch (normalizedCategory) {
+    case "Sports": {
+      const hasSportsTerms =
+        /\b(nba|nfl|mlb|nhl|wnba|ncaa|nascar|mls|fifa|world cup|basketball|football|baseball|soccer|tennis|golf|hockey|racing|boxing|ufc|game|match|finals|playoffs|tournament|score|scores|coach|player|team|knicks|cubs|yankees|dodgers|lakers|celtics|panthers|hornets|braves|college world series|korda)\b/.test(
+          haystack
+        );
+      const hasRejectedTerms =
+        /\b(war|bombing|bomb|israel|iran|hezbollah|gaza|beirut|election|mayor|trump|congress)\b/.test(
+          haystack
+        ) && !/\b(sports lawsuit|league lawsuit|player lawsuit|coach lawsuit|ufc lawsuit|ncaa lawsuit)\b/.test(haystack);
+      return hasSportsTerms && !hasRejectedTerms && !isSportsBettingAd(article);
+    }
+    case "Entertainment":
+      return isEntertainmentRelevantArticle(article);
+    case "Crime":
+      return isStrictCrimeArticle(article);
+    case "Tech":
+      return isStrictTechnologyArticle(article);
+    case "World":
+      return isStrictWorldArticle(article);
+    case "Politics":
+      return isStrictPoliticsArticle(article);
+    case "Business":
+      return isStrictBusinessArticle(article);
+    case "Health":
+      return /\b(medicine|medical|disease|fitness|nutrition|drugs?|hospital|doctor|vaccine|health|wellness)\b/.test(
+        haystack
+      );
+    default:
+      return false;
+  }
 }
 
 function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string) {

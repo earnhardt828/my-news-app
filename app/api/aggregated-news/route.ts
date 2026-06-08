@@ -303,6 +303,85 @@ function normalizeCategoryValue(
   return inferCategoryFromText(rawCategory, ...signals);
 }
 
+function isArticleValidForCategory(article: AggregatedNewsArticle, requestedCategory: string) {
+  const normalizedCategory = normalizeCategoryValue(requestedCategory, requestedCategory);
+
+  if (!normalizedCategory) {
+    return true;
+  }
+
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.sourceName,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .map((value) => stripHtml(value))
+    .join(" ")
+    .toLowerCase();
+
+  if (!haystack) {
+    return false;
+  }
+
+  switch (normalizedCategory) {
+    case "sports": {
+      const hasSportsTerms =
+        /\b(nba|nfl|mlb|nhl|wnba|ncaa|nascar|mls|fifa|world cup|basketball|football|baseball|soccer|tennis|golf|hockey|racing|boxing|ufc|game|match|finals|playoffs|tournament|score|scores|coach|player|team|knicks|cubs|yankees|dodgers|lakers|celtics|panthers|hornets|braves|college world series|korda)\b/.test(
+          haystack
+        );
+      const hasRejectedTerms =
+        /\b(war|bombing|bomb|israel|iran|hezbollah|gaza|beirut|election|mayor|trump|congress)\b/.test(
+          haystack
+        ) && !/\b(sports lawsuit|league lawsuit|player lawsuit|coach lawsuit|ufc lawsuit|ncaa lawsuit)\b/.test(haystack);
+      return hasSportsTerms && !hasRejectedTerms;
+    }
+    case "entertainment": {
+      const hasEntertainmentTerms =
+        /\b(movie|film|tv|television|streaming|actor|actress|celebrity|music|concert|album|tour|awards|oscars|grammys|tony awards|variety|deadline|hollywood reporter|e! news|people|billboard|rolling stone|page six|tmz|hollywood)\b/.test(
+          haystack
+        );
+      const hasRejectedTerms =
+        /\b(political lawsuit|mayor race|general politics|war|crime|finance|election|congress|senate|white house)\b/.test(
+          haystack
+        );
+      return hasEntertainmentTerms && !hasRejectedTerms;
+    }
+    case "crime":
+      return /\b(arrest|charged|murder|shooting|stabbing|police|suspect|court|trial|prison|fraud|theft|fbi|doj|lawsuit)\b/.test(
+        haystack
+      );
+    case "tech":
+      return /\b(ai|software|app|apple|google|microsoft|tesla|chip|semiconductor|cybersecurity|data breach|startup|robot|space technology)\b/.test(
+        haystack
+      );
+    case "world":
+      return /\b(world|international|foreign affairs|global|war|ukraine|russia|china|gaza|israel|europe|asia|middle east|beirut|hezbollah|iran)\b/.test(
+        haystack
+      );
+    case "politics":
+      return /\b(election|government|congress|president|mayor|policy|campaign|senate|house|white house|governor|politics?)\b/.test(
+        haystack
+      );
+    case "business":
+      return /\b(markets?|companies|economy|finance|stocks?|earnings|business|trade|tariff|inflation|jobs report)\b/.test(
+        haystack
+      );
+    case "health":
+      return /\b(medicine|medical|disease|fitness|nutrition|drugs?|hospital|doctor|vaccine|health|wellness)\b/.test(
+        haystack
+      );
+    case "trending":
+      return true;
+    default:
+      return article.category === normalizedCategory;
+  }
+}
+
 function extractHostnameLabel(url: string) {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
@@ -634,7 +713,11 @@ export async function GET(request: Request) {
     ...currentsArticles,
   ];
   const categoryFilteredArticles = normalizedRequestedCategory
-    ? mergedArticles.filter((article) => article.category === normalizedRequestedCategory)
+    ? mergedArticles.filter(
+        (article) =>
+          article.category === normalizedRequestedCategory &&
+          isArticleValidForCategory(article, normalizedRequestedCategory)
+      )
     : mergedArticles;
   const mappedArticles = dedupeArticles(categoryFilteredArticles);
   const interleavedArticles = interleaveProviderArticles(mappedArticles);
