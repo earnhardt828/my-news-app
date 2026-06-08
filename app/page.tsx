@@ -19450,13 +19450,6 @@ export default function Home() {
               <div className="stack" style={{ gap: "4px" }}>
                 <strong className="profile-section-title home-section-title">Sports</strong>
               </div>
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => setSortMode("sports")}
-              >
-                More
-              </button>
             </div>
 
             {!TRENDING_SCORE_CARDS_DISABLED
@@ -19481,29 +19474,14 @@ export default function Home() {
                 </div>
               )
             ) : (
-              renderGroupedSportsArticleSections(groupedSportsArticleSections) ?? (
-                <div className="stack home-section-list top-trending-card-rail">
-                  {trendingSportsLeadArticle ? renderLargeImageArticleCard(trendingSportsLeadArticle) : null}
-                  {sportsTabArticles
-                    .filter((article) =>
-                      trendingSportsLeadArticle
-                        ? getArticleDeduplicationKey(article) !==
-                          getArticleDeduplicationKey(trendingSportsLeadArticle)
-                        : true
-                    )
-                    .filter((article) => isBroadSportsArticle(article) && !isSportsBettingAd(article))
-                    .slice(0, 5)
-                    .map((article, index) => (
-                      <div
-                        key={`trending-sports-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                      >
-                        {renderCompactSideImageArticle(article, {
-                          imageFallbackLabel: "Sports",
-                          showRank: index + 1,
-                        })}
-                      </div>
-                    ))}
-                </div>
+              renderArticleSectionWithLargeLead(
+                sportsTabArticles.filter(
+                  (article) => isBroadSportsArticle(article) && !isSportsBettingAd(article)
+                ),
+                {
+                  limit: 5,
+                  categoryLabelOverride: "Sports",
+                }
               )
             )}
           </section>
