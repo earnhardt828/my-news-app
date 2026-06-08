@@ -192,11 +192,40 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
     return "trending";
   }
 
-  if (/\b(entertainment|celebrity|movie|movies|tv|music|hollywood|box office|streaming)\b/.test(haystack)) {
-    return "entertainment";
+  const politicsTerms =
+    /\b(trump|biden|election|congress|senate|house|white house|policy|government|president|campaign|mayor|governor|supreme court|politic|political race)\b/.test(
+      haystack
+    );
+  const sportsTerms =
+    /\b(sports|nba|nfl|mlb|nhl|wnba|soccer|football|baseball|basketball|tennis|golf|college football|college world series|knicks|finals|world cup|coach|player|game|match|team|playoff|playoffs|championship|ufc|mma)\b/.test(
+      haystack
+    );
+  const crimeTerms =
+    /\b(crime|police|investigation|arrest|court|trial|charges|shooting|suspect|homicide|fraud|theft|lawsuit|federal prosecutors)\b/.test(
+      haystack
+    );
+  const entertainmentSourceTerms =
+    /\b(variety|deadline|hollywood reporter|e! news|e news|page six|billboard|rolling stone|people|tmz|entertainment tonight|access hollywood|extra|vulture|indiewire|collider|thewrap|pitchfork|tvline)\b/.test(
+      haystack
+    );
+  const entertainmentContentTerms =
+    /\b(entertainment|movie|movies|film|tv|television|series|streaming|music|celebrity|celebrities|awards show|awards|theater|theatre|hollywood|actor|actors|actress|actresses|concert|tour|album|grammys|oscars|tony awards|emmys|pop culture|box office)\b/.test(
+      haystack
+    );
+  const antiEntertainmentTerms =
+    /\b(trump|biden|politics|political|election|campaign|congress|senate|lawsuit|sports|nba|nfl|mlb|nhl|wnba|soccer|football|baseball|basketball|tennis|golf|viral news|breaking news|weather)\b/.test(
+      haystack
+    );
+
+  if (politicsTerms) {
+    return "politics";
   }
 
-  if (/\b(crime|police|investigation|arrest|court|trial|charges|shooting|suspect|homicide|fraud|theft)\b/.test(haystack)) {
+  if (sportsTerms) {
+    return "sports";
+  }
+
+  if (crimeTerms) {
     return "crime";
   }
 
@@ -208,12 +237,11 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
     return "business";
   }
 
-  if (/\b(politics|election|congress|senate|house|white house|policy|government|president|campaign)\b/.test(haystack)) {
-    return "politics";
-  }
-
-  if (/\b(sports|nfl|nba|mlb|nhl|soccer|golf|tennis|espn|athletic|playoffs|championship)\b/.test(haystack)) {
-    return "sports";
+  if (
+    entertainmentContentTerms &&
+    (entertainmentSourceTerms || !antiEntertainmentTerms)
+  ) {
+    return "entertainment";
   }
 
   if (/\b(health|medical|medicine|disease|covid|hospital|doctor|wellness|mental health)\b/.test(haystack)) {
