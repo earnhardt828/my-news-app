@@ -1003,6 +1003,18 @@ input {
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
 }
 
+.home-weather-card-interactive {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  box-shadow: 0 14px 30px rgba(20, 33, 61, 0.08);
+}
+
+.home-weather-card-interactive:hover,
+.home-weather-card-interactive:active {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 36px rgba(20, 33, 61, 0.12);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+
 :root[data-theme="dark"] .home-weather-card {
   background:
     radial-gradient(circle at top left, rgba(255, 190, 118, 0.12), transparent 34%),
@@ -1021,12 +1033,29 @@ input {
   font-size: clamp(2rem, 8vw, 2.8rem);
   line-height: 0.95;
   letter-spacing: -0.05em;
+  text-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 
 .home-weather-temp-row {
   display: inline-flex;
   align-items: center;
   gap: 12px;
+}
+
+.home-weather-temp-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-weight: 800;
+}
+
+.home-weather-temp-high {
+  color: #dc2626;
+}
+
+:root[data-theme="dark"] .home-weather-temp-high {
+  color: #ff7b72;
 }
 
 .home-weather-icon-shell {
@@ -1062,9 +1091,60 @@ input {
   color: #ffd166;
 }
 
+.weather-icon-sun-core {
+  fill: #facc15;
+  stroke: #f59e0b;
+}
+
+.weather-icon-sun-rays {
+  stroke: #f59e0b;
+}
+
+.weather-icon-cloud {
+  stroke: #64748b;
+  fill: rgba(148, 163, 184, 0.2);
+}
+
+.weather-icon-rain {
+  stroke: #38bdf8;
+  animation: weather-rain-drift 1.8s ease-in-out infinite;
+}
+
+.weather-icon-snow {
+  stroke: #bfdbfe;
+  fill: #dbeafe;
+}
+
+.weather-icon-lightning {
+  stroke: #facc15;
+}
+
+.weather-icon-sun-pulse {
+  animation: weather-sun-pulse 2.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
 .home-weather-meta {
   align-items: flex-end;
   text-align: right;
+}
+
+@keyframes weather-rain-drift {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(1.2px);
+  }
+}
+
+@keyframes weather-sun-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
 }
 
 .weather-story-list {

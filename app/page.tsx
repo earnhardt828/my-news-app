@@ -2994,6 +2994,7 @@ type WeatherCardData = {
   highTemp?: number | null;
   lowTemp?: number | null;
   humidity?: number | null;
+  precipitationChance?: number | null;
 };
 
 type WeatherForecastDay = {
@@ -3225,6 +3226,52 @@ function videoMatchesSelectedCategory(video: VideoItem, selectedCategory: string
 
 function resolveMyNewsCategoryVideoTab(category: string): SharedVideoTab {
   return resolveVideoCategoryForMyNewsCategory(normalizeSelectedCategoryName(category));
+}
+
+function normalizePrecipitationChance(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  if (value <= 1) {
+    return Math.max(0, Math.min(100, Math.round(value * 100)));
+  }
+
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function getWeatherConditionVisual(condition: string | null | undefined) {
+  const normalized = cleanDisplayText(condition ?? "").toLowerCase();
+
+  if (/(storm|thunder|lightning)/.test(normalized)) {
+    return "storm" as const;
+  }
+
+  if (/(snow|blizzard|sleet|flurries|ice)/.test(normalized)) {
+    return "snow" as const;
+  }
+
+  if (/(rain|showers|drizzle)/.test(normalized)) {
+    return "rain" as const;
+  }
+
+  if (/(partly|mostly sunny|mostly clear|few clouds|sun and clouds)/.test(normalized)) {
+    return "partly-cloudy" as const;
+  }
+
+  if (/(sunny|clear)/.test(normalized)) {
+    return "sunny" as const;
+  }
+
+  if (/(cloud|overcast|fog|mist)/.test(normalized)) {
+    return "cloudy" as const;
+  }
+
+  if (/(wind|breezy|gust)/.test(normalized)) {
+    return "wind" as const;
+  }
+
+  return "cloudy" as const;
 }
 
 function getMyNewsCategoryVideoQueries(category: string) {
@@ -8477,7 +8524,7 @@ export default function Home() {
         }
 
         const forecastResponse = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=10`,
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=10`,
           {
             headers: {
               Accept: "application/json",
@@ -8495,12 +8542,14 @@ export default function Home() {
             weather_code?: number;
             wind_speed_10m?: number;
             relative_humidity_2m?: number;
+            precipitation_probability?: number;
           };
           daily?: {
             time?: string[];
             weather_code?: number[];
             temperature_2m_max?: number[];
             temperature_2m_min?: number[];
+            precipitation_probability_max?: number[];
           };
         };
 
@@ -8512,6 +8561,7 @@ export default function Home() {
         const dailyCodes = forecastPayload.daily?.weather_code ?? [];
         const dailyHighs = forecastPayload.daily?.temperature_2m_max ?? [];
         const dailyLows = forecastPayload.daily?.temperature_2m_min ?? [];
+        const dailyRainChances = forecastPayload.daily?.precipitation_probability_max ?? [];
 
         const nextForecastDays = dailyTimes.slice(0, 10).map((date, index) => ({
           label: formatForecastDayLabel(date, index),
@@ -8528,6 +8578,9 @@ export default function Home() {
           humidity: forecastPayload.current.relative_humidity_2m ?? null,
           highTemp: nextForecastDays[0]?.highTemp ?? null,
           lowTemp: nextForecastDays[0]?.lowTemp ?? null,
+          precipitationChance: normalizePrecipitationChance(
+            forecastPayload.current.precipitation_probability ?? dailyRainChances[0] ?? 0
+          ),
           cityLabel: resolvedLabel,
         };
 
@@ -8777,7 +8830,7 @@ export default function Home() {
 
       try {
         const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph`,
+          `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weather_code,wind_speed_10m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=1`,
           {
             headers: {
               Accept: "application/json",
@@ -8794,6 +8847,12 @@ export default function Home() {
             temperature_2m?: number;
             weather_code?: number;
             wind_speed_10m?: number;
+            precipitation_probability?: number;
+          };
+          daily?: {
+            temperature_2m_max?: number[];
+            temperature_2m_min?: number[];
+            precipitation_probability_max?: number[];
           };
         };
 
@@ -8808,6 +8867,13 @@ export default function Home() {
           temperature: payload.current.temperature_2m,
           weatherLabel: getWeatherLabel(payload.current.weather_code),
           windMph: payload.current.wind_speed_10m ?? null,
+          precipitationChance: normalizePrecipitationChance(
+            payload.current.precipitation_probability ??
+              payload.daily?.precipitation_probability_max?.[0] ??
+              0
+          ),
+          highTemp: payload.daily?.temperature_2m_max?.[0] ?? null,
+          lowTemp: payload.daily?.temperature_2m_min?.[0] ?? null,
           cityLabel: city,
         });
       } catch (error) {
@@ -18235,13 +18301,32 @@ export default function Home() {
   };
 
   const renderWeatherConditionIcon = (condition: string | null | undefined) => {
-    const icon = getWeatherConditionIconLabel(condition);
+    const icon = getWeatherConditionVisual(condition);
 
-    if (icon === "sun") {
+    if (icon === "sunny") {
       return (
         <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
-          <circle cx="12" cy="12" r="4.2" />
-          <path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.55 5.45l-1.7 1.7M7.15 16.85l-1.7 1.7M18.55 18.55l-1.7-1.7M7.15 7.15l-1.7-1.7" />
+          <circle cx="12" cy="12" r="4.2" className="weather-icon-sun-core" />
+          <path
+            d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.55 5.45l-1.7 1.7M7.15 16.85l-1.7 1.7M18.55 18.55l-1.7-1.7M7.15 7.15l-1.7-1.7"
+            className="weather-icon-sun-rays"
+          />
+        </svg>
+      );
+    }
+
+    if (icon === "partly-cloudy") {
+      return (
+        <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
+          <circle cx="9.2" cy="9" r="3.5" className="weather-icon-sun-core weather-icon-sun-pulse" />
+          <path
+            d="M9.2 3.6v1.6M9.2 12.8v1.6M14.4 9H12.8M5.6 9H4M12.65 5.55l-1.1 1.1M6.95 11.25l-1.1 1.1"
+            className="weather-icon-sun-rays"
+          />
+          <path
+            d="M9.2 18.2a3.9 3.9 0 1 1 .62-7.75A5 5 0 0 1 18.2 11.7a3.1 3.1 0 0 1-.22 6.2H9.2Z"
+            className="weather-icon-cloud"
+          />
         </svg>
       );
     }
@@ -18249,8 +18334,11 @@ export default function Home() {
     if (icon === "rain") {
       return (
         <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
-          <path d="M7 18.2a4.2 4.2 0 1 1 .7-8.35A5.7 5.7 0 0 1 18.5 11a3.4 3.4 0 0 1-.3 6.8H7Z" />
-          <path d="M8.5 19.3 7.4 21M12.1 19.3 11 21M15.7 19.3 14.6 21" />
+          <path
+            d="M7 18.2a4.2 4.2 0 1 1 .7-8.35A5.7 5.7 0 0 1 18.5 11a3.4 3.4 0 0 1-.3 6.8H7Z"
+            className="weather-icon-cloud"
+          />
+          <path d="M8.5 19.3 7.4 21M12.1 19.3 11 21M15.7 19.3 14.6 21" className="weather-icon-rain" />
         </svg>
       );
     }
@@ -18258,8 +18346,11 @@ export default function Home() {
     if (icon === "snow") {
       return (
         <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
-          <path d="M7 17.8a4.1 4.1 0 1 1 .65-8.15A5.6 5.6 0 0 1 18.4 10.8a3.3 3.3 0 0 1-.25 6.6H7Z" />
-          <path d="M9 19.2h0M12 20.4h0M15 19.2h0" />
+          <path
+            d="M7 17.8a4.1 4.1 0 1 1 .65-8.15A5.6 5.6 0 0 1 18.4 10.8a3.3 3.3 0 0 1-.25 6.6H7Z"
+            className="weather-icon-cloud"
+          />
+          <path d="M9 19.2h0M12 20.4h0M15 19.2h0" className="weather-icon-snow" />
         </svg>
       );
     }
@@ -18267,8 +18358,12 @@ export default function Home() {
     if (icon === "storm") {
       return (
         <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
-          <path d="M7 17.7a4.1 4.1 0 1 1 .65-8.15A5.6 5.6 0 0 1 18.45 10.7a3.3 3.3 0 0 1-.25 6.6H7Z" />
-          <path d="m11.2 18.1-1.1 2.5 2.15-.2-1.2 2.8 3.1-4.3-2.2.15 1.15-1.95" />
+          <path
+            d="M7 17.7a4.1 4.1 0 1 1 .65-8.15A5.6 5.6 0 0 1 18.45 10.7a3.3 3.3 0 0 1-.25 6.6H7Z"
+            className="weather-icon-cloud"
+          />
+          <path d="M8.2 18.9 7.2 20.4M16 18.9 15 20.4" className="weather-icon-rain" />
+          <path d="m11.2 18.1-1.1 2.5 2.15-.2-1.2 2.8 3.1-4.3-2.2.15 1.15-1.95" className="weather-icon-lightning" />
         </svg>
       );
     }
@@ -18285,8 +18380,44 @@ export default function Home() {
 
     return (
       <svg viewBox="0 0 24 24" className="weather-condition-icon" aria-hidden="true">
-        <path d="M7.2 18.2a4.2 4.2 0 1 1 .7-8.35A5.7 5.7 0 0 1 18.7 11a3.5 3.5 0 0 1-.3 7.1H7.2Z" />
+        <path
+          d="M7.2 18.2a4.2 4.2 0 1 1 .7-8.35A5.7 5.7 0 0 1 18.7 11a3.5 3.5 0 0 1-.3 7.1H7.2Z"
+          className="weather-icon-cloud"
+        />
       </svg>
+    );
+  };
+
+  const renderWeatherTemperatureRange = (card: WeatherCardData | null | undefined) => {
+    if (
+      !card ||
+      card.highTemp === null ||
+      card.highTemp === undefined ||
+      card.lowTemp === null ||
+      card.lowTemp === undefined
+    ) {
+      return null;
+    }
+
+    return (
+      <span className="home-weather-temp-range">
+        <span className="home-weather-temp-high">{`H ${Math.round(card.highTemp)}°`}</span>
+        <span>{`L ${Math.round(card.lowTemp)}°`}</span>
+      </span>
+    );
+  };
+
+  const renderWeatherSupportingMeta = (card: WeatherCardData | null | undefined, fallbackLabel: string) => {
+    const rainChance = normalizePrecipitationChance(card?.precipitationChance ?? 0);
+
+    return (
+      <div className="stack home-weather-meta" style={{ gap: "6px" }}>
+        <span className="muted">
+          {card?.windMph ? `Wind ${Math.round(card.windMph)} mph` : fallbackLabel}
+        </span>
+        <span className="muted">{`Rain: ${rainChance}%`}</span>
+        {renderWeatherTemperatureRange(card)}
+      </div>
     );
   };
 
@@ -19430,7 +19561,7 @@ export default function Home() {
           </div>
 
           <div className="stack local-feed-shell">
-            <div className="home-weather-card">
+            <div className="home-weather-card home-weather-card-interactive">
               <div className="stack" style={{ gap: "4px" }}>
                 <span className="home-weather-city">
                   {weatherPageCard?.cityLabel ?? selectedWeatherLocation ?? selectedLocalCity ?? localLocationLabel}
@@ -19453,13 +19584,7 @@ export default function Home() {
                       : "Forecast unavailable"}
                 </span>
               </div>
-              <div className="stack home-weather-meta" style={{ gap: "6px" }}>
-                <span className="muted">
-                  {(weatherPageCard ?? weatherCard)?.windMph
-                    ? `Wind ${Math.round((weatherPageCard ?? weatherCard)?.windMph ?? 0)} mph`
-                    : "Local outlook"}
-                </span>
-              </div>
+              {renderWeatherSupportingMeta(weatherPageCard ?? weatherCard, "Local outlook")}
             </div>
 
             <div className="local-feed-controls">
@@ -19544,7 +19669,9 @@ export default function Home() {
                           <span className="home-weather-icon-shell weather-forecast-icon">
                             {renderWeatherConditionIcon(day.weatherLabel)}
                           </span>
-                          <strong>{day.highTemp !== null ? `${Math.round(day.highTemp)}°` : "—"}</strong>
+                          <strong className="home-weather-temp-high">
+                            {day.highTemp !== null ? `${Math.round(day.highTemp)}°` : "—"}
+                          </strong>
                           <span className="muted">
                             {day.lowTemp !== null ? `${Math.round(day.lowTemp)}° low` : "Low unavailable"}
                           </span>
@@ -20952,7 +21079,7 @@ export default function Home() {
                 Update
               </button>
             </div>
-            <div className="home-weather-card">
+            <div className="home-weather-card home-weather-card-interactive">
               <div className="stack" style={{ gap: "4px" }}>
                 <span className="home-weather-city">
                   {(weatherPageCard?.cityLabel ?? selectedWeatherLocation) || "Weather"}
@@ -20974,20 +21101,13 @@ export default function Home() {
                 </span>
               </div>
               <div className="stack home-weather-meta" style={{ gap: "6px" }}>
-                <span className="muted">
-                  {weatherPageCard &&
-                  weatherPageCard.highTemp !== null &&
-                  weatherPageCard.highTemp !== undefined &&
-                  weatherPageCard.lowTemp !== null &&
-                  weatherPageCard.lowTemp !== undefined
-                    ? `H ${Math.round(weatherPageCard.highTemp ?? 0)}° / L ${Math.round(
-                        weatherPageCard.lowTemp ?? 0
-                      )}°`
-                    : "Daily outlook"}
-                </span>
+                {renderWeatherTemperatureRange(weatherPageCard) ?? (
+                  <span className="muted">Daily outlook</span>
+                )}
                 <span className="muted">
                   {weatherPageCard?.windMph ? `Wind ${Math.round(weatherPageCard.windMph)} mph` : "Wind unavailable"}
                 </span>
+                <span className="muted">{`Rain: ${normalizePrecipitationChance(weatherPageCard?.precipitationChance ?? 0)}%`}</span>
                 <span className="muted">
                   {weatherPageCard?.humidity !== null && weatherPageCard?.humidity !== undefined
                     ? `Humidity ${Math.round(weatherPageCard.humidity)}%`
@@ -21017,7 +21137,9 @@ export default function Home() {
                           <span className="home-weather-icon-shell weather-forecast-icon">
                             {renderWeatherConditionIcon(day.weatherLabel)}
                           </span>
-                          <strong>{day.highTemp !== null ? `${Math.round(day.highTemp)}°` : "—"}</strong>
+                          <strong className="home-weather-temp-high">
+                            {day.highTemp !== null ? `${Math.round(day.highTemp)}°` : "—"}
+                          </strong>
                           <span className="muted">
                             {day.lowTemp !== null ? `${Math.round(day.lowTemp)}° low` : "Low unavailable"}
                           </span>
@@ -21633,7 +21755,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="home-weather-card">
+          <div className="home-weather-card home-weather-card-interactive">
             <div className="stack" style={{ gap: "4px" }}>
               <span className="home-weather-city">{localCityLabel}</span>
               <div className="home-weather-temp-row">
@@ -21652,11 +21774,7 @@ export default function Home() {
                   : "Forecast unavailable"}
               </span>
             </div>
-            <div className="stack home-weather-meta" style={{ gap: "6px" }}>
-              <span className="muted">
-                {weatherCard?.windMph ? `Wind ${Math.round(weatherCard.windMph)} mph` : "Local outlook"}
-              </span>
-            </div>
+            {renderWeatherSupportingMeta(weatherCard, "Local outlook")}
           </div>
 
           {weatherForecastDays.length > 0 ? (
