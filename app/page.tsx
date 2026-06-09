@@ -4655,6 +4655,20 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
   };
 }
 
+function extractNewsPayloadArticles(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
+  return Array.isArray(payload) ? payload : Array.isArray(payload.articles) ? payload.articles : [];
+}
+
+function isMinimalHomepageArticleRecord(
+  article: Partial<Pick<Article, "title" | "url">> | null | undefined
+) {
+  if (!article) {
+    return false;
+  }
+
+  return Boolean(cleanDisplayText(article.title ?? "")) && hasResolvableArticleUrl(article);
+}
+
 function hydrateFeedArticles(feedArticles: FeedArticlePayload[]) {
   return feedArticles.map((article) => ({
     ...article,
@@ -7464,6 +7478,52 @@ export default function Home() {
     }
 
     try {
+      if (replace && feedMode === "trending") {
+        const params = new URLSearchParams({
+          mode: feedMode,
+          page: String(pageToLoad),
+          pageSize: String(FEED_PAGE_SIZE),
+        });
+        const newsPath = `/api/aggregated-news?${params.toString()}`;
+        const newsRes = await apiFetch(newsPath, {
+          cache: "no-store",
+        });
+
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        if (!newsRes.ok) {
+          throw new Error(`Home feed request failed with status ${newsRes.status}`);
+        }
+
+        const rawNewsPayload = (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse;
+        const simplePayload = normalizeNewsPayload(rawNewsPayload);
+        const rawArticles = extractNewsPayloadArticles(rawNewsPayload);
+        const minimallyValidArticles = rawArticles.filter((article) =>
+          isMinimalHomepageArticleRecord(article)
+        );
+        const simpleArticles = hydrateFeedArticles(
+          (minimallyValidArticles.length > 0 ? minimallyValidArticles : simplePayload.articles ?? []).map(
+            (article, index) => ({
+              ...article,
+              id:
+                typeof article.id === "number" && Number.isFinite(article.id) && article.id > 0
+                  ? article.id
+                  : 900000000 + index,
+            })
+          )
+        );
+
+        setFeedLoadError(null);
+        setHasMoreArticles(simplePayload.hasMore ?? false);
+        setFeedPage(pageToLoad);
+        setArticles(simpleArticles);
+        setIsInitialFeedLoading(false);
+        setIsLoading(false);
+        return;
+      }
+
       let userData: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"] = {
         user: null,
       };
@@ -9453,6 +9513,63 @@ export default function Home() {
     }
 
     lastReplaceFeedRequestKeyRef.current = replaceRequestKey;
+
+    if (sortMode === "trending") {
+      let cancelled = false;
+
+      setIsLoading(true);
+      setIsInitialFeedLoading(true);
+      setFeedLoadError(null);
+
+      void (async () => {
+        try {
+          const response = await fetch("/api/aggregated-news", {
+            cache: "no-store",
+          });
+
+          if (!response.ok) {
+            throw new Error(`Home feed request failed with status ${response.status}`);
+          }
+
+          const data = (await response.json()) as PaginatedNewsResponse | { articles?: FeedArticlePayload[] };
+
+          if (cancelled) {
+            return;
+          }
+
+          const nextArticles = hydrateFeedArticles((data.articles ?? []).filter((article) =>
+            isMinimalHomepageArticleRecord(article)
+          ));
+
+          setArticles(nextArticles);
+          setHasMoreArticles(Boolean("hasMore" in data ? data.hasMore : false));
+          setFeedPage("page" in data && typeof data.page === "number" ? data.page : 1);
+          setFeedLoadError(null);
+        } catch (error) {
+          if (cancelled) {
+            return;
+          }
+
+          console.error("HOME FEED SIMPLE FETCH FAILED", error);
+          setArticles([]);
+          setHasMoreArticles(false);
+          setFeedPage(1);
+          setFeedLoadError("Couldn’t load stories. Tap to retry.");
+        } finally {
+          if (cancelled) {
+            return;
+          }
+
+          setIsLoading(false);
+          setIsInitialFeedLoading(false);
+          setIsLoadingMoreArticles(false);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const timeoutId = window.setTimeout(() => {
       if (sortMode === "local") {
