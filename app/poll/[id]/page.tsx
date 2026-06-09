@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import HeartIcon from "../../components/heart-icon";
 import LoadingScreen from "../../components/loading-screen";
 import PollCard from "../../components/poll-card";
 import { hydratePolls, type PollRecord, type PollWithResults } from "../../../lib/polls";
@@ -378,7 +379,9 @@ export default function PollDetailPage() {
             disabled={isHeartLoading}
             aria-label={poll.userHasHearted ? "Remove heart" : "Heart poll"}
           >
-            <span className="icon-action-glyph" aria-hidden="true">♥</span>
+            <span className="icon-action-glyph" aria-hidden="true">
+              <HeartIcon filled={poll.userHasHearted} size={18} strokeWidth={1.9} />
+            </span>
             <span>{poll.heartCount}</span>
           </button>
         </div>

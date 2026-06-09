@@ -2,6 +2,7 @@
 
 import LoadingScreen from "./components/loading-screen";
 import CategoryVideoRow from "./components/category-video-row";
+import HeartIcon from "./components/heart-icon";
 import LargeImageArticleCard from "./components/large-image-article-card";
 import PollCard from "./components/poll-card";
 import SourceBadge from "./components/source-badge";
@@ -104,7 +105,7 @@ import {
   isStrictTechnologyVideo,
   isStrictWorldVideo,
 } from "../lib/video-filters";
-import { ART_DISABLED, MY_NEWS_DISABLED, POLLS_DISABLED, SCIENCE_DISABLED } from "../lib/feature-flags";
+import { ART_DISABLED, FOOD_DISABLED, MY_NEWS_DISABLED, POLLS_DISABLED, SCIENCE_DISABLED } from "../lib/feature-flags";
 
 const FEED_PAGE_SIZE = 100;
 const INITIAL_FEED_WARNING_MS = 4200;
@@ -16478,9 +16479,7 @@ export default function Home() {
           <span className="trending-published-date news-card-footer-date feed-meta-inline">
             <span>{publishedLabel}</span>
             <span className="feed-meta-inline-group">
-              <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
-              </svg>
+              <HeartIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
               <span>{article.likes}</span>
             </span>
             <span className="feed-meta-inline-group">
@@ -16715,9 +16714,7 @@ export default function Home() {
                   : formatPublishedDate(article.publishedAt, article.time)}
               </span>
               <span className="feed-meta-inline-group">
-                <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                  <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
-                </svg>
+                <HeartIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
                 <span>{article.likes}</span>
               </span>
               <span className="feed-meta-inline-group">
@@ -19163,9 +19160,7 @@ export default function Home() {
               </span>
               <span className="top-trending-list-date">
                 <span className="feed-meta-inline-group">
-                  <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                    <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
-                  </svg>
+                  <HeartIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
                   <span>{article.likes}</span>
                 </span>
               </span>
@@ -19480,18 +19475,11 @@ export default function Home() {
                       onClick={(event) => handlePromptSourceHeart(event, source.sourceName)}
                     >
                       <span className="icon-action-glyph" aria-hidden="true">
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill={source.heartedByCurrentUser ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          strokeWidth="1.9"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
-                        </svg>
+                        <HeartIcon
+                          size={18}
+                          strokeWidth={1.9}
+                          filled={source.heartedByCurrentUser}
+                        />
                       </span>
                     </button>
                     <strong>{source.likes}</strong>
@@ -19903,26 +19891,28 @@ export default function Home() {
           )}
         </section>
 
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Food</strong>
-            </div>
-          </div>
-
-          {foodTabArticles.length === 0 ? (
-            isFoodPreviewLoading ? (
-              <div className="muted">Loading food stories...</div>
-            ) : (
-              <div className="empty-state compact-empty-state">
-                <strong>No food stories yet</strong>
-                <span>Check back shortly for fresh food coverage.</span>
+        {!FOOD_DISABLED ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Food</strong>
               </div>
-            )
-          ) : (
-            renderArticleSectionWithLargeLead(foodTabArticles, { limit: 6 })
-          )}
-        </section>
+            </div>
+
+            {foodTabArticles.length === 0 ? (
+              isFoodPreviewLoading ? (
+                <div className="muted">Loading food stories...</div>
+              ) : (
+                <div className="empty-state compact-empty-state">
+                  <strong>No food stories yet</strong>
+                  <span>Check back shortly for fresh food coverage.</span>
+                </div>
+              )
+            ) : (
+              renderArticleSectionWithLargeLead(foodTabArticles, { limit: 6 })
+            )}
+          </section>
+        ) : null}
 
         {(() => {
           console.log("QUICK_WATCH_MOVED_BETWEEN_FOOD_BUSINESS", true);
@@ -21435,7 +21425,7 @@ export default function Home() {
     );
   }
 
-  if (sortMode === "food") {
+  if (sortMode === "food" && !FOOD_DISABLED) {
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("food")}
@@ -21985,7 +21975,7 @@ export default function Home() {
           </section>
         ) : null}
 
-        {localLifestyleSections.foodDrink.length > 0 ? (
+        {!FOOD_DISABLED && localLifestyleSections.foodDrink.length > 0 ? (
           <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
@@ -22005,7 +21995,7 @@ export default function Home() {
           </section>
         ) : null}
 
-        {localSectionArticles.foodRestaurants.length > 0 ? (
+        {!FOOD_DISABLED && localSectionArticles.foodRestaurants.length > 0 ? (
           <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
@@ -22586,7 +22576,13 @@ export default function Home() {
                           }
                           disabled={activeCommentAction === `reaction-${comment.id}`}
                         >
-                          <span aria-hidden="true">♥</span>
+                          <span className="icon-action-glyph" aria-hidden="true">
+                            <HeartIcon
+                              filled={comment.currentUserReaction === "like"}
+                              size={18}
+                              strokeWidth={1.9}
+                            />
+                          </span>
                           <span>{comment.likes}</span>
                         </button>
                         <button

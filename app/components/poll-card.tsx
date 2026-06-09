@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { getCategoryLabel } from "../../lib/categories";
 import { formatPollTimestamp, type PollWithResults } from "../../lib/polls";
+import HeartIcon from "./heart-icon";
 
 type PollCardProps = {
   poll: PollWithResults;
@@ -145,7 +146,7 @@ export default function PollCard({
                 disabled={isHeartLoading}
                 aria-label={poll.userHasHearted ? "Remove heart" : "Heart poll"}
               >
-                ♥
+                <HeartIcon filled={poll.userHasHearted} size={18} strokeWidth={1.9} />
               </button>
             ) : null}
           </div>

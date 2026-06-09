@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import HeartIcon from "../../components/heart-icon";
 import LoadingScreen from "../../components/loading-screen";
 import { apiFetch } from "../../../lib/api-base";
 import { cleanDisplayText } from "../../../lib/display-text";
@@ -125,19 +126,7 @@ function ReactionSummary({ hearts }: { hearts: number }) {
   return (
     <div className="profile-comment-reaction-summary">
       <span className="profile-comment-reaction-item">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
-        </svg>
+        <HeartIcon size={16} strokeWidth={1.9} />
         <span>{hearts}</span>
       </span>
     </div>

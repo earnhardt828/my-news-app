@@ -20,6 +20,7 @@ import { ensureProfileRow, saveProfilePatch } from "../../lib/profile-store";
 import { formatRelativeTimestamp } from "../../lib/relative-time";
 import { slugifySourceName, sourceLogoMap } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
+import HeartIcon from "../components/heart-icon";
 
 const SEARCH_PAGE_SIZE = 25;
 const ARTICLE_METADATA_STORAGE_KEY = "graffiti-article-metadata-cache";
@@ -1445,18 +1446,7 @@ export default function Search() {
                       }}
                     >
                       <span className="icon-action-glyph" aria-hidden="true">
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill={matchedSourceHearted ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          strokeWidth="1.9"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
-                        </svg>
+                        <HeartIcon size={18} strokeWidth={1.9} filled={matchedSourceHearted} />
                       </span>
                       <span>{matchedSourceHeartCount}</span>
                     </button>

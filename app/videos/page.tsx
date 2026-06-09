@@ -4,6 +4,7 @@ import { type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } fr
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "../../lib/api-base";
+import HeartIcon from "../components/heart-icon";
 import ShareButton from "../components/share-button";
 import SourceBadge from "../components/source-badge";
 import {
@@ -17,7 +18,6 @@ import {
 } from "../../lib/video-navigation";
 import {
   buildVideoEmbedUrl,
-  initialVideos,
   normalizeVideoFeedItems,
   type VideoApiItem,
   type VideoItem,
@@ -43,7 +43,7 @@ export default function VideosPage() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<VideoTab>("news");
   const [videosByTab, setVideosByTab] = useState<Record<VideoTab, VideoItem[]>>({
-    news: initialVideos,
+    news: [],
     world: [],
     politics: [],
     sports: [],
@@ -176,7 +176,7 @@ export default function VideosPage() {
       console.error(`Error loading ${tab} video feed:`, error);
       setVideosByTab((prev) => ({
         ...prev,
-        [tab]: tab === "news" ? initialVideos : [],
+        [tab]: [],
       }));
       setStatusMessages((prev) => ({
         ...prev,
@@ -404,6 +404,7 @@ export default function VideosPage() {
       ) : null}
       {isLoading && !hasLoadedOnce ? (
         <div className="loading-state">
+          <span className="loading-screen-spinner" aria-hidden="true" />
           <strong>Loading videos...</strong>
           <span>{statusMessage || "Fetching the latest channel feed."}</span>
         </div>
@@ -503,12 +504,7 @@ export default function VideosPage() {
                       aria-label={video.liked ? "Unlike video" : "Like video"}
                     >
                       <span className="reel-action-icon icon-action-glyph" aria-hidden="true">
-                        <svg {...actionIconProps}>
-                          <path
-                            d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                            fill={video.liked ? "currentColor" : "none"}
-                          />
-                        </svg>
+                        <HeartIcon filled={video.liked} size={20} strokeWidth={1.9} />
                       </span>
                       <span className="reel-action-value">{video.likes}</span>
                     </button>

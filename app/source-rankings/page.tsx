@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import HeartIcon from "../components/heart-icon";
 import SourceBadge from "../components/source-badge";
 import { slugifySourceName } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
@@ -177,27 +178,18 @@ export default function SourceRankingsPage() {
                   }}
                 >
                   <span className="icon-action-glyph" aria-hidden="true">
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill={
+                    <HeartIcon
+                      size={18}
+                      strokeWidth={1.9}
+                      filled={Boolean(
                         ratings.find(
                           (rating) =>
                             rating.user_id === currentUserId &&
                             rating.source_name === source.sourceName &&
                             rating.rating === "like"
                         )
-                          ? "currentColor"
-                          : "none"
-                      }
-                      stroke="currentColor"
-                      strokeWidth="1.9"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="m12 20.5-1.3-1.2C5.2 14.3 2 11.4 2 7.8 2 5.1 4.2 3 6.9 3c1.5 0 3 .7 4.1 1.9C12.1 3.7 13.6 3 15.1 3 17.8 3 20 5.1 20 7.8c0 3.6-3.2 6.5-8.7 11.5L12 20.5Z" />
-                    </svg>
+                      )}
+                    />
                   </span>
                 </button>
                 <strong>{source.likes}</strong>

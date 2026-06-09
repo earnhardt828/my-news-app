@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
+import HeartIcon from "../../components/heart-icon";
 import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
 import SourceHeaderMark from "../../components/source-header-mark";
@@ -2142,12 +2143,11 @@ export default function ArticleDetailPage() {
                       aria-label={comment.currentUserReaction === "like" ? "Remove heart" : "Heart comment"}
                     >
                       <span className="comment-reaction-glyph" aria-hidden="true">
-                        <svg {...actionIconProps}>
-                          <path
-                            d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                            fill={comment.currentUserReaction === "like" ? "currentColor" : "none"}
-                          />
-                        </svg>
+                        <HeartIcon
+                          filled={comment.currentUserReaction === "like"}
+                          size={20}
+                          strokeWidth={1.9}
+                        />
                       </span>
                       <span>{comment.likes}</span>
                     </button>
@@ -2362,12 +2362,7 @@ export default function ArticleDetailPage() {
             aria-label={likedByCurrentUser ? "Unlike article" : "Like article"}
           >
             <span className="icon-action-glyph" aria-hidden="true">
-              <svg {...actionIconProps}>
-                <path
-                  d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z"
-                  fill={likedByCurrentUser ? "currentColor" : "none"}
-                />
-              </svg>
+              <HeartIcon filled={likedByCurrentUser} size={20} strokeWidth={1.9} />
             </span>
             <span>{likesCount}</span>
           </button>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { MouseEventHandler, ReactNode, TouchEventHandler } from "react";
+import HeartIcon from "./heart-icon";
 
 type LargeImageArticleCardProps = {
   href: string;
@@ -83,19 +84,7 @@ export default function LargeImageArticleCard({
         <span className="trending-published-date news-card-footer-date feed-meta-inline">
           <span>{publishedLabel}</span>
           <span className="feed-meta-inline-group">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="feed-meta-inline-icon"
-              focusable="false"
-              aria-hidden="true"
-            >
-              <path d="m12 20.2-1.1-1C5.2 14 2 11.1 2 7.6 2 4.8 4.2 2.8 7 2.8c1.6 0 3.2.8 4.2 2.1 1-1.3 2.6-2.1 4.2-2.1 2.8 0 5 2 5 4.8 0 3.5-3.2 6.4-8.9 11.6L12 20.2Z" />
-            </svg>
+            <HeartIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
             <span>{likes}</span>
           </span>
           <span className="feed-meta-inline-group">

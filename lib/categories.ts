@@ -16,7 +16,6 @@ export const CATEGORY_OPTIONS = [
   "Celebrity",
   "Weather",
   "Travel",
-  "Food",
 ] as const;
 
 export type NewsCategory = (typeof CATEGORY_OPTIONS)[number];
@@ -39,7 +38,6 @@ export const CATEGORY_LABELS: Record<NewsCategory, string> = {
   Celebrity: "Celebrity",
   Weather: "Weather",
   Travel: "Travel",
-  Food: "Food",
 };
 
 export const CATEGORY_IMAGE_MAP: Partial<Record<NewsCategory, string>> = {
@@ -59,7 +57,6 @@ export const CATEGORY_IMAGE_MAP: Partial<Record<NewsCategory, string>> = {
   NASCAR: "/categories/nascar.png",
   Celebrity: "/categories/celebrity.png",
   Travel: "/categories/travel.png",
-  Food: "/categories/food.png",
 };
 
 export const VIDEO_CATEGORIES = ["Trending", ...CATEGORY_OPTIONS] as const;
@@ -110,7 +107,7 @@ function inferCategoryFromContext(source?: string | null, title?: string | null)
     return "World";
   }
 
-  return "News";
+  return "Trending";
 }
 
 export function getDisplayCategory(
