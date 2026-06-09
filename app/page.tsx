@@ -8831,17 +8831,12 @@ export default function Home() {
 
   useEffect(() => {
     let isCancelled = false;
-    const weatherFetchController =
-      typeof AbortController !== "undefined" ? new AbortController() : null;
     const timeoutId =
-      typeof window !== "undefined" && weatherFetchController
+      typeof window !== "undefined"
         ? window.setTimeout(() => {
-            if (!weatherFetchController.signal.aborted) {
-              try {
-                weatherFetchController.abort();
-              } catch {
-                // Ignore abort cleanup failures so weather cannot block the homepage.
-              }
+            if (!isCancelled) {
+              setIsWeatherNewsLoading(false);
+              setWeatherNewsArticles([]);
             }
           }, DIRECT_ROUTE_TIMEOUT_MS)
         : null;
@@ -8852,7 +8847,6 @@ export default function Home() {
       try {
         const response = await apiFetch("/api/weather-news", {
           cache: "no-store",
-          signal: weatherFetchController?.signal,
         });
 
         if (!response.ok) {
@@ -8894,13 +8888,6 @@ export default function Home() {
       isCancelled = true;
       if (timeoutId) {
         window.clearTimeout(timeoutId);
-      }
-      if (weatherFetchController && !weatherFetchController.signal.aborted) {
-        try {
-          weatherFetchController.abort();
-        } catch {
-          // Ignore cleanup abort failures so weather cannot block the homepage.
-        }
       }
     };
   }, [selectedLocalCity]);
@@ -16680,7 +16667,7 @@ export default function Home() {
     }
   };
 
-  const getLargeImageCardImage = (article: Article) => {
+  function getLargeImageCardImage(article: Article) {
     const displayImage = getArticleDisplayImage(article, { largeCard: true });
 
     if (!displayImage.src || !displayImage.kind) {
@@ -16702,7 +16689,7 @@ export default function Home() {
       failureKey,
       kind: displayImage.kind,
     };
-  };
+  }
 
   const renderLargeImageArticleCard = (
     article: Article,
