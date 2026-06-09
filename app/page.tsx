@@ -7391,7 +7391,6 @@ export default function Home() {
     let liveNewsHasMore = false;
     let initialLoadTimeoutId: number | null = null;
     let initialLoadWarningTimeoutId: number | null = null;
-    let articleFetchTimeoutId: number | null = null;
 
     if (!replace && isFetchingNextPageRef.current) {
       return;
@@ -7593,18 +7592,8 @@ export default function Home() {
         const newsUrl = buildApiUrl(newsPath);
         console.log("TRENDING FETCH URL", newsUrl);
 
-        const articleFetchController =
-          replace && typeof AbortController !== "undefined" ? new AbortController() : null;
-
-        if (replace && typeof window !== "undefined" && articleFetchController) {
-          articleFetchTimeoutId = window.setTimeout(() => {
-            articleFetchController.abort();
-          }, activeFeedTimeoutMs);
-        }
-
         const newsRes = await apiFetch(newsPath, {
           cache: bypassDirectFeedCache ? "no-store" : undefined,
-          signal: articleFetchController?.signal,
         });
 
         if (!isCurrentRequest()) {
@@ -7675,6 +7664,38 @@ export default function Home() {
         }
         setIsInitialFeedLoading(false);
         return;
+      }
+
+      const baseArticles = hydrateFeedArticles(newsData);
+      setFeedLoadError(
+        replace && receivedFallbackFeed && sortMode !== "local"
+          ? "Showing the last loaded stories while we retry."
+          : null
+      );
+      setHasMoreArticles(liveNewsHasMore);
+      setFeedPage(pageToLoad);
+      setArticles((prev) => {
+        const nextArticles =
+          receivedFallbackFeed && replace
+            ? cachedFeed?.articles ?? prev
+            : replace
+              ? baseArticles
+              : mergeArticlesByIdentity(prev, baseArticles);
+
+        if (nextArticles.length > 0 && !bypassDirectFeedCache) {
+          writeCachedFeedPayload(feedCacheKey, {
+            articles: nextArticles,
+            page: pageToLoad,
+            hasMore: liveNewsHasMore,
+            savedAt: new Date().toISOString(),
+          });
+        }
+
+        return nextArticles;
+      });
+
+      if (replace) {
+        setIsInitialFeedLoading(false);
       }
 
       const [
@@ -7848,13 +7869,6 @@ export default function Home() {
       setBlockedUserIds(
         ownBlockedUsersData.map((blockedUser) => blockedUser.blocked_id)
       );
-      setFeedLoadError(
-          replace && receivedFallbackFeed && sortMode !== "local"
-            ? "Showing the last loaded stories while we retry."
-            : null
-        );
-      setHasMoreArticles(liveNewsHasMore);
-      setFeedPage(pageToLoad);
       setArticles((prev) => {
         const nextArticles =
           receivedFallbackFeed && replace
@@ -7895,6 +7909,19 @@ export default function Home() {
         return;
       }
 
+      const isAbortLikeError =
+        error instanceof Error &&
+        (error.name === "AbortError" ||
+          /aborted|signal aborted without a reason/i.test(error.message));
+
+      if (isAbortLikeError) {
+        console.warn("TRENDING FETCH ABORT_IGNORED", {
+          feedMode,
+          pageToLoad,
+          message: error.message,
+        });
+      }
+
       console.log("TRENDING FETCH ERROR", error);
       if (feedMode === "local") {
         console.error("LOCAL FETCH ERROR", error);
@@ -7908,7 +7935,7 @@ export default function Home() {
           setArticles(cachedFeed.articles);
           setHasMoreArticles(cachedFeed.hasMore);
           setFeedPage(cachedFeed.page);
-        } else {
+        } else if (!isAbortLikeError) {
           setFeedLoadError(sortMode === "local" ? null : "Couldn’t load stories. Tap to retry.");
           setArticles([]);
           setHasMoreArticles(false);
@@ -7942,10 +7969,6 @@ export default function Home() {
 
       if (initialLoadTimeoutId) {
         window.clearTimeout(initialLoadTimeoutId);
-      }
-
-      if (articleFetchTimeoutId) {
-        window.clearTimeout(articleFetchTimeoutId);
       }
 
       if (!isCurrentRequest()) {
@@ -13681,6 +13704,26 @@ export default function Home() {
   }, [sortMode]);
 
   useEffect(() => {
+    if (!isInitialFeedLoading) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      console.warn("HOME FEED LOADING WATCHDOG_RELEASED", {
+        sortMode,
+        articleCount: articles.length,
+      });
+      setIsInitialFeedLoading(false);
+      setIsLoading(false);
+      setIsLoadingMoreArticles(false);
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [articles.length, isInitialFeedLoading, sortMode]);
+
+  useEffect(() => {
     if (!SWIPEABLE_SORT_MODES.includes(sortMode as SwipeableSortMode)) {
       return;
     }
@@ -19096,97 +19139,6 @@ export default function Home() {
       </div>
     </div>
   );
-
-  if (
-    (sortMode === "trending" ||
-      sortMode === "mynews" ||
-      sortMode === "local" ||
-      sortMode === "sports" ||
-      sortMode === "celebrity" ||
-      sortMode === "weather" ||
-      sortMode === "technology" ||
-      sortMode === "travel" ||
-      sortMode === "food" ||
-      sortMode === "business") &&
-    isInitialFeedLoading &&
-    visibleArticles.length === 0 &&
-    !feedLoadError
-  ) {
-    console.log(
-      "REMOVED IN-APP LOADING SCREEN FROM:",
-      "/Users/erniewilson/my-news-app/app/page.tsx"
-    );
-    return (
-      <section className="page-shell home-sections-shell">
-        {renderHomeTopNavigation(
-          sortMode === "local"
-            ? "local"
-            : sortMode === "mynews"
-              ? "mynews"
-            : sortMode === "sports"
-              ? "sports"
-              : sortMode === "celebrity"
-                ? "celebrity"
-                : sortMode === "weather"
-                  ? "weather"
-                  : sortMode === "technology"
-                    ? "technology"
-                    : sortMode === "travel"
-                      ? "travel"
-                      : sortMode === "food"
-                        ? "food"
-                        : sortMode === "business"
-                          ? "business"
-                        : "trending"
-        )}
-        <section className="home-section-block home-section-plain home-top-trending-block">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">
-                {sortMode === "local"
-                  ? "Local"
-                  : sortMode === "mynews"
-                    ? "My News"
-                  : sortMode === "sports"
-                    ? "Sports"
-                  : sortMode === "celebrity"
-                      ? "Entertainment"
-                      : sortMode === "weather"
-                        ? "Weather"
-                        : sortMode === "technology"
-                          ? "Technology"
-                          : sortMode === "travel"
-                            ? "Travel"
-                            : sortMode === "food"
-                              ? "Food"
-                              : sortMode === "business"
-                                ? "Business"
-                              : "Top 10 Trending"}
-              </strong>
-              <span className="home-section-date">{todayLabel}</span>
-            </div>
-          </div>
-          <div className="loading-state" role="status" aria-live="polite">
-            <div className="loading-screen-inline">
-              <span className="loading-screen-spinner" aria-hidden="true" />
-              <span className="loading-screen-text">Loading stories...</span>
-            </div>
-            <div className="skeleton-card">
-              <div className="skeleton-line" style={{ height: "190px", borderRadius: "24px" }} />
-              <div className="skeleton-line" style={{ height: "18px", width: "72%" }} />
-              <div className="skeleton-line" style={{ height: "14px", width: "92%" }} />
-              <div className="skeleton-line" style={{ height: "14px", width: "84%" }} />
-            </div>
-            <div className="skeleton-card">
-              <div className="skeleton-line" style={{ height: "18px", width: "68%" }} />
-              <div className="skeleton-line" style={{ height: "14px", width: "90%" }} />
-              <div className="skeleton-line" style={{ height: "14px", width: "80%" }} />
-            </div>
-          </div>
-        </section>
-      </section>
-    );
-  }
 
   if (sortMode === "trending") {
     return (
