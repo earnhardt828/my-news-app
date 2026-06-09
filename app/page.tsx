@@ -8836,7 +8836,13 @@ export default function Home() {
     const timeoutId =
       typeof window !== "undefined" && weatherFetchController
         ? window.setTimeout(() => {
-            weatherFetchController.abort();
+            if (!weatherFetchController.signal.aborted) {
+              try {
+                weatherFetchController.abort();
+              } catch {
+                // Ignore abort cleanup failures so weather cannot block the homepage.
+              }
+            }
           }, DIRECT_ROUTE_TIMEOUT_MS)
         : null;
 
@@ -8862,7 +8868,16 @@ export default function Home() {
           setWeatherNewsArticles(matchingArticles.slice(0, 3));
         }
       } catch (error) {
-        console.error("Error loading weather news:", error);
+        const isAbortLikeError =
+          error instanceof DOMException
+            ? error.name === "AbortError"
+            : error instanceof Error
+              ? error.name === "AbortError" || /aborted|signal is aborted/i.test(error.message)
+              : false;
+
+        if (!isAbortLikeError) {
+          console.error("Error loading weather news:", error);
+        }
         if (!isCancelled) {
           setWeatherNewsArticles([]);
         }
@@ -8880,7 +8895,13 @@ export default function Home() {
       if (timeoutId) {
         window.clearTimeout(timeoutId);
       }
-      weatherFetchController?.abort();
+      if (weatherFetchController && !weatherFetchController.signal.aborted) {
+        try {
+          weatherFetchController.abort();
+        } catch {
+          // Ignore cleanup abort failures so weather cannot block the homepage.
+        }
+      }
     };
   }, [selectedLocalCity]);
 
