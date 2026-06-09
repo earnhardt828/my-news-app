@@ -3933,13 +3933,25 @@ function getArticleDeduplicationKey(article: Pick<Article, "id" | "url" | "title
     return `url:${normalizedUrl}`;
   }
 
-  const normalizedTitle = article.title
-    .trim()
+  const safeSource = typeof article.source === "string" ? article.source.trim().toLowerCase() : "";
+  const safeTitle = typeof article.title === "string" ? article.title.trim() : "";
+
+  const normalizedTitle = safeTitle
     .toLowerCase()
     .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ");
 
-  return `title:${article.source.trim().toLowerCase()}:${normalizedTitle}`;
+  if (normalizedTitle) {
+    return `title:${safeSource}:${normalizedTitle}`;
+  }
+
+  const safeId = article.id == null ? "" : String(article.id).trim();
+
+  if (safeId) {
+    return `id:${safeId}`;
+  }
+
+  return `fallback:${safeSource || "unknown"}:${safeTitle.toLowerCase() || "untitled"}`;
 }
 
 function getSportsArticleDuplicateKeys(article: Pick<Article, "url" | "title" | "source">) {
@@ -7063,6 +7075,7 @@ export default function Home() {
   });
   const isFetchingNextPageRef = useRef(false);
   const activeFeedRequestIdRef = useRef(0);
+  const lastReplaceFeedRequestKeyRef = useRef<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<{
     articleId: number;
     commentId: number;
@@ -7374,6 +7387,8 @@ export default function Home() {
 
     const isCurrentRequest = () => activeFeedRequestIdRef.current === requestId;
     let hasLiveNewsResponse = false;
+    let liveNewsArticles: FeedArticlePayload[] = [];
+    let liveNewsHasMore = false;
     let initialLoadTimeoutId: number | null = null;
     let initialLoadWarningTimeoutId: number | null = null;
     let articleFetchTimeoutId: number | null = null;
@@ -7612,6 +7627,7 @@ export default function Home() {
       }
 
       const newsData = newsPayload?.articles ?? [];
+      liveNewsArticles = newsData;
       hasLiveNewsResponse = true;
       if (feedMode === "sports") {
         console.log("SPORTS LOCAL FETCH COUNT", newsData.length);
@@ -7629,6 +7645,7 @@ export default function Home() {
 
       const receivedFallbackFeed =
         newsData.length > 0 && newsData.every((article) => isFallbackFeedArticle(article));
+      liveNewsHasMore = receivedFallbackFeed ? false : (newsPayload?.hasMore ?? false);
 
       if (replace && newsData.length === 0) {
         const emptyResponseError = new Error("Trending returned zero articles.");
@@ -7836,7 +7853,7 @@ export default function Home() {
             ? "Showing the last loaded stories while we retry."
             : null
         );
-      setHasMoreArticles(receivedFallbackFeed ? false : (newsPayload?.hasMore ?? false));
+      setHasMoreArticles(liveNewsHasMore);
       setFeedPage(pageToLoad);
       setArticles((prev) => {
         const nextArticles =
@@ -7860,7 +7877,7 @@ export default function Home() {
           writeCachedFeedPayload(feedCacheKey, {
             articles: nextArticles,
             page: pageToLoad,
-            hasMore: receivedFallbackFeed ? false : (newsPayload?.hasMore ?? false),
+            hasMore: liveNewsHasMore,
             savedAt: new Date().toISOString(),
           });
         }
@@ -7900,6 +7917,23 @@ export default function Home() {
         setIsInitialFeedLoading(false);
       } else {
         console.error("Home feed enrichment failed after live stories loaded", error);
+        if (replace) {
+          const fallbackArticles: Article[] = liveNewsArticles.map((item) => ({
+            ...item,
+            likes: 0,
+            likeUsers: [],
+            likedByCurrentUser: false,
+            comments: [],
+            saved: false,
+          }));
+
+          if (fallbackArticles.length > 0) {
+            setArticles(fallbackArticles);
+            setHasMoreArticles(liveNewsHasMore);
+            setFeedPage(pageToLoad);
+          }
+          setIsInitialFeedLoading(false);
+        }
       }
     } finally {
       if (initialLoadWarningTimeoutId) {
@@ -7920,6 +7954,9 @@ export default function Home() {
 
       isFetchingNextPageRef.current = false;
       setIsLocalAreaLoading(false);
+      if (replace) {
+        setIsInitialFeedLoading(false);
+      }
       console.log("SETTING LOADING FALSE");
       setIsLoading(false);
       setIsLoadingMoreArticles(false);
@@ -9353,6 +9390,7 @@ export default function Home() {
 
   useEffect(() => {
     if (isMyFeedWithoutCategories) {
+      lastReplaceFeedRequestKeyRef.current = null;
       const timeoutId = window.setTimeout(() => {
         setArticles([]);
         setFeedPage(1);
@@ -9382,6 +9420,17 @@ export default function Home() {
       return;
     }
 
+    const replaceRequestKey =
+      sortMode === "local"
+        ? `local:${selectedLocalCityKey ?? localLocationLabel.trim()}:${savedLocalCity ?? ""}:${savedLocalState ?? ""}`
+        : `${sortMode}:${categoryReloadKey}`;
+
+    if (lastReplaceFeedRequestKeyRef.current === replaceRequestKey) {
+      return;
+    }
+
+    lastReplaceFeedRequestKeyRef.current = replaceRequestKey;
+
     const timeoutId = window.setTimeout(() => {
       if (sortMode === "local") {
         console.log("LOCAL FETCH ON MOUNT", {
@@ -9389,6 +9438,7 @@ export default function Home() {
           city: selectedLocalCity ?? localLocationLabel ?? DEFAULT_LOCAL_CITY,
         });
       }
+      console.log("HOME FEED REPLACE REQUEST", replaceRequestKey);
       void loadFeedPage(1, { replace: true });
     }, 0);
 
@@ -19139,113 +19189,13 @@ export default function Home() {
   }
 
   if (sortMode === "trending") {
-    const usedTrendingArticleKeys = new Set<string>();
-    const claimTrendingSectionArticles = (
-      articles: Article[],
-      limit: number,
-      options?: {
-        allowBreakingOverride?: boolean;
-      }
-    ) => {
-      const selected: Article[] = [];
-
-      for (const article of articles) {
-        const dedupeKey = getArticleDeduplicationKey(article);
-
-        if (usedTrendingArticleKeys.has(dedupeKey)) {
-          continue;
-        }
-
-        const hasRenderableImage =
-          Boolean(getLargeImageCardImage(article)) ||
-          Boolean(options?.allowBreakingOverride && getBreakingLeadCardImageOverride(article));
-
-        if (!hasRenderableImage) {
-          continue;
-        }
-
-        usedTrendingArticleKeys.add(dedupeKey);
-        selected.push(article);
-
-        if (selected.length >= limit) {
-          break;
-        }
-      }
-
-      return selected;
-    };
-
-    const breakingTrendingSectionArticles = claimTrendingSectionArticles(
-      breakingNewsPreviewArticles,
-      5,
-      { allowBreakingOverride: true }
-    );
-    const topFiveTrendingSectionArticles = claimTrendingSectionArticles(topFiveTrendingArticles, 5);
-    const entertainmentTrendingSectionArticles = claimTrendingSectionArticles(
-      trendingEntertainmentArticles,
-      5
-    );
-    const weatherTrendingSectionArticles = claimTrendingSectionArticles(
-      trendingWeatherSections.nationalWeather,
-      7
-    );
-    const sportsTrendingSectionArticles = claimTrendingSectionArticles(
-      sportsTabArticles.filter(
-        (article) =>
-          isBroadSportsArticle(article) &&
-          !isSportsBettingAd(article) &&
-          hasRenderableSportsVisual(article, { largeCard: true })
-      ),
-      5
-    );
-    const technologyTrendingSectionArticles = claimTrendingSectionArticles(technologyTabArticles, 6);
-    const foodTrendingSectionArticles = claimTrendingSectionArticles(foodTabArticles, 6);
-    const businessTrendingSectionArticles = claimTrendingSectionArticles(businessTabArticles, 6);
-    const scienceTrendingSectionArticles = claimTrendingSectionArticles(scienceTabArticles, 6);
-    const autoTrendingSectionArticles = claimTrendingSectionArticles(carsTabArticles, 6);
-    const opinionTrendingSectionArticles = claimTrendingSectionArticles(opinionTabArticles, 6);
-    const crimeTrendingSectionArticles = claimTrendingSectionArticles(crimeTabArticles, 6);
-    const artTrendingSectionArticles = claimTrendingSectionArticles(artTabArticles, 6);
-
-    const breakingTrendingLeadArticle = breakingTrendingSectionArticles[0] ?? null;
-    const breakingTrendingLeadImageOverride =
-      breakingTrendingLeadArticle &&
-      breakingLeadCard &&
-      getArticleDeduplicationKey(breakingTrendingLeadArticle) ===
-        getArticleDeduplicationKey(breakingLeadCard.article)
-        ? breakingLeadCard.imageSrcOverride
-        : null;
-    const topFiveTrendingLeadSectionArticle = topFiveTrendingSectionArticles[0] ?? null;
-    const entertainmentTrendingLeadSectionArticle =
-      trendingEntertainmentLeadArticle &&
-      entertainmentTrendingSectionArticles.some(
-        (article) =>
-          getArticleDeduplicationKey(article) ===
-          getArticleDeduplicationKey(trendingEntertainmentLeadArticle)
-      )
-        ? trendingEntertainmentLeadArticle
-        : entertainmentTrendingSectionArticles[0] ?? null;
-    const weatherTrendingLeadSectionArticle = weatherTrendingSectionArticles[0] ?? null;
-    const sportsTrendingLeadSectionArticle = sportsTrendingSectionArticles[0] ?? null;
-    const opinionTrendingLeadSectionArticle = opinionTrendingSectionArticles[0] ?? null;
-    const crimeTrendingLeadSectionArticle = crimeTrendingSectionArticles[0] ?? null;
-    const artTrendingLeadSectionArticle = artTrendingSectionArticles[0] ?? null;
-
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
         {renderQuickWatchRow(false, false, true, todayLabel)}
 
-        {renderBreakingNewsRow(
-          breakingTrendingSectionArticles,
-          breakingTrendingLeadArticle
-            ? {
-                article: breakingTrendingLeadArticle,
-                imageSrcOverride: breakingTrendingLeadImageOverride,
-              }
-            : null
-        )}
+        {renderBreakingNewsRow()}
 
         {renderBreakingFeaturedVideosRow()}
 
@@ -19260,18 +19210,18 @@ export default function Home() {
               console.log("TRENDING_TOP_5_RENDERED", true);
               return null;
             })()}
-            {topFiveTrendingLeadSectionArticle ? renderLargeImageArticleCard(topFiveTrendingLeadSectionArticle) : null}
-            {(topFiveTrendingLeadSectionArticle
-              ? topFiveTrendingSectionArticles.filter(
+            {topFiveTrendingLeadArticle ? renderLargeImageArticleCard(topFiveTrendingLeadArticle) : null}
+            {(topFiveTrendingLeadArticle
+              ? topFiveTrendingArticles.filter(
                   (article) =>
                     getArticleDeduplicationKey(article) !==
-                    getArticleDeduplicationKey(topFiveTrendingLeadSectionArticle)
+                    getArticleDeduplicationKey(topFiveTrendingLeadArticle)
                 )
-              : topFiveTrendingSectionArticles
+              : topFiveTrendingArticles
             ).map((article, index) => (
               <div key={article.id || article.url || getArticleDeduplicationKey(article)}>
                 {renderCompactSideImageArticle(article, {
-                  showRank: topFiveTrendingLeadSectionArticle ? index + 2 : index + 1,
+                  showRank: topFiveTrendingLeadArticle ? index + 2 : index + 1,
                 })}
               </div>
             ))}
@@ -19356,19 +19306,19 @@ export default function Home() {
               <strong className="profile-section-title home-section-title">Entertainment</strong>
             </div>
           </div>
-          {entertainmentTrendingSectionArticles.length === 0 ? (
+          {trendingEntertainmentArticles.length === 0 ? (
             <div className="empty-state compact-empty-state">
               <strong>No entertainment stories yet</strong>
               <span>Check back shortly for fresh entertainment coverage.</span>
             </div>
           ) : (
             <div className="stack home-section-list top-trending-card-rail">
-              {entertainmentTrendingLeadSectionArticle ? renderLargeImageArticleCard(entertainmentTrendingLeadSectionArticle) : null}
-              {entertainmentTrendingSectionArticles
+              {trendingEntertainmentLeadArticle ? renderLargeImageArticleCard(trendingEntertainmentLeadArticle) : null}
+              {trendingEntertainmentArticles
                 .filter((article) =>
-                  entertainmentTrendingLeadSectionArticle
+                  trendingEntertainmentLeadArticle
                     ? getArticleDeduplicationKey(article) !==
-                      getArticleDeduplicationKey(entertainmentTrendingLeadSectionArticle)
+                      getArticleDeduplicationKey(trendingEntertainmentLeadArticle)
                     : true
                 )
                 .slice(0, 4)
@@ -19530,10 +19480,10 @@ export default function Home() {
               </div>
             ) : null}
 
-            {weatherTrendingLeadSectionArticle ? (
+            {trendingWeatherLeadArticle ? (
               <div className="stack" style={{ gap: "10px", marginBottom: "8px" }}>
                 <strong className="profile-section-title home-section-title">Weather Around the World</strong>
-                {renderLargeImageArticleCard(weatherTrendingLeadSectionArticle)}
+                {renderLargeImageArticleCard(trendingWeatherLeadArticle)}
               </div>
             ) : null}
 
@@ -19555,17 +19505,17 @@ export default function Home() {
                     })()
                   : null}
 
-                {weatherTrendingSectionArticles.length > 0 ? (
+                {trendingWeatherSections.nationalWeather.length > 0 ? (
                   <section className="home-section-block home-section-plain">
                     <div className="home-section-header">
                       <div className="stack" style={{ gap: "4px" }}>
                         <strong className="profile-section-title home-section-title">National Weather</strong>
                       </div>
                     </div>
-                    {renderStandardArticleSection(weatherTrendingSectionArticles, {
+                    {renderStandardArticleSection(trendingWeatherSections.nationalWeather, {
                       limit: 6,
-                      excludeArticleKey: weatherTrendingLeadSectionArticle
-                        ? getArticleDeduplicationKey(weatherTrendingLeadSectionArticle)
+                      excludeArticleKey: trendingWeatherLeadArticle
+                        ? getArticleDeduplicationKey(trendingWeatherLeadArticle)
                         : null,
                     })}
                   </section>
@@ -19633,7 +19583,12 @@ export default function Home() {
                   : null
               : null}
 
-            {sportsTrendingSectionArticles.length === 0 ? (
+            {sportsTabArticles.filter(
+              (article) =>
+                isBroadSportsArticle(article) &&
+                !isSportsBettingAd(article) &&
+                hasRenderableSportsVisual(article, { largeCard: true })
+            ).length === 0 ? (
               isSportsPreviewLoading ? (
                 <div className="muted">Loading sports stories...</div>
               ) : (
@@ -19643,10 +19598,18 @@ export default function Home() {
                 </div>
               )
             ) : (
-              renderArticleSectionWithLargeLead(sportsTrendingSectionArticles, {
-                limit: 5,
-                categoryLabelOverride: "Sports",
-              })
+              renderArticleSectionWithLargeLead(
+                sportsTabArticles.filter(
+                  (article) =>
+                    isBroadSportsArticle(article) &&
+                    !isSportsBettingAd(article) &&
+                    hasRenderableSportsVisual(article, { largeCard: true })
+                ),
+                {
+                  limit: 5,
+                  categoryLabelOverride: "Sports",
+                }
+              )
             )}
           </section>
         ) : null}
@@ -19722,7 +19685,7 @@ export default function Home() {
             </div>
           </div>
 
-          {technologyTrendingSectionArticles.length === 0 ? (
+          {technologyTabArticles.length === 0 ? (
             isTechnologyPreviewLoading ? (
               <div className="muted">Loading technology stories...</div>
             ) : (
@@ -19732,7 +19695,7 @@ export default function Home() {
               </div>
             )
           ) : (
-            renderArticleSectionWithLargeLead(technologyTrendingSectionArticles, { limit: 6 })
+            renderArticleSectionWithLargeLead(technologyTabArticles, { limit: 6 })
           )}
         </section>
 
@@ -19743,7 +19706,7 @@ export default function Home() {
             </div>
           </div>
 
-          {foodTrendingSectionArticles.length === 0 ? (
+          {foodTabArticles.length === 0 ? (
             isFoodPreviewLoading ? (
               <div className="muted">Loading food stories...</div>
             ) : (
@@ -19753,7 +19716,7 @@ export default function Home() {
               </div>
             )
           ) : (
-            renderArticleSectionWithLargeLead(foodTrendingSectionArticles, { limit: 6 })
+            renderArticleSectionWithLargeLead(foodTabArticles, { limit: 6 })
           )}
         </section>
 
@@ -19777,7 +19740,7 @@ export default function Home() {
 
           {renderBusinessStockTicker()}
 
-          {businessTrendingSectionArticles.length === 0 ? (
+          {businessTabArticles.length === 0 ? (
             isBusinessPreviewLoading ? (
               <div className="muted">Loading business stories...</div>
             ) : (
@@ -19787,7 +19750,7 @@ export default function Home() {
               </div>
             )
           ) : (
-            renderArticleSectionWithLargeLead(businessTrendingSectionArticles, { limit: 6 })
+            renderArticleSectionWithLargeLead(businessTabArticles, { limit: 6 })
           )}
         </section>
 
@@ -19801,7 +19764,7 @@ export default function Home() {
               </div>
             </div>
 
-            {scienceTrendingSectionArticles.length === 0 ? (
+            {scienceTabArticles.length === 0 ? (
               isSciencePreviewLoading ? (
                 <div className="muted">Loading science stories...</div>
               ) : (
@@ -19811,7 +19774,7 @@ export default function Home() {
                 </div>
               )
             ) : (
-              renderArticleSectionWithLargeLead(scienceTrendingSectionArticles, { limit: 6 })
+              renderArticleSectionWithLargeLead(scienceTabArticles, { limit: 6 })
             )}
           </section>
         ) : null}
@@ -19825,7 +19788,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {autoTrendingSectionArticles.length === 0 ? (
+              {carsTabArticles.length === 0 ? (
                 isCarsPreviewLoading ? (
                   <div className="muted">Loading auto stories...</div>
                 ) : (
@@ -19835,7 +19798,7 @@ export default function Home() {
                   </div>
                 )
               ) : (
-                renderArticleSectionWithLargeLead(autoTrendingSectionArticles, { limit: 6 })
+                renderArticleSectionWithLargeLead(carsTabArticles, { limit: 6 })
               )}
             </section>
 
@@ -19854,7 +19817,7 @@ export default function Home() {
             </div>
           </div>
 
-          {opinionTrendingSectionArticles.length === 0 ? (
+          {opinionTabArticles.length === 0 ? (
             isOpinionPreviewLoading ? (
               <div className="muted">Loading opinion stories...</div>
             ) : (
@@ -19865,12 +19828,12 @@ export default function Home() {
             )
           ) : (
             <div className="stack home-section-list top-trending-card-rail">
-              {opinionTrendingLeadSectionArticle ? renderLargeImageArticleCard(opinionTrendingLeadSectionArticle) : null}
-              {opinionTrendingSectionArticles
+              {trendingOpinionLeadArticle ? renderLargeImageArticleCard(trendingOpinionLeadArticle) : null}
+              {opinionTabArticles
                 .filter((article) =>
-                  opinionTrendingLeadSectionArticle
+                  trendingOpinionLeadArticle
                     ? getArticleDeduplicationKey(article) !==
-                      getArticleDeduplicationKey(opinionTrendingLeadSectionArticle)
+                      getArticleDeduplicationKey(trendingOpinionLeadArticle)
                     : true
                 )
                 .slice(0, 5)
@@ -19895,7 +19858,7 @@ export default function Home() {
             </div>
           </div>
 
-          {crimeTrendingSectionArticles.length === 0 ? (
+          {crimeTabArticles.length === 0 ? (
             isCrimePreviewLoading ? (
               <div className="muted">Loading crime stories...</div>
             ) : (
@@ -19906,12 +19869,12 @@ export default function Home() {
             )
           ) : (
             <div className="stack home-section-list top-trending-card-rail">
-              {crimeTrendingLeadSectionArticle ? renderLargeImageArticleCard(crimeTrendingLeadSectionArticle) : null}
-              {crimeTrendingSectionArticles
+              {trendingCrimeLeadArticle ? renderLargeImageArticleCard(trendingCrimeLeadArticle) : null}
+              {crimeTabArticles
                 .filter((article) =>
-                  crimeTrendingLeadSectionArticle
+                  trendingCrimeLeadArticle
                     ? getArticleDeduplicationKey(article) !==
-                      getArticleDeduplicationKey(crimeTrendingLeadSectionArticle)
+                      getArticleDeduplicationKey(trendingCrimeLeadArticle)
                     : true
                 )
                 .slice(0, 5)
@@ -19937,7 +19900,7 @@ export default function Home() {
               </div>
             </div>
 
-            {artTrendingSectionArticles.length === 0 ? (
+            {artTabArticles.length === 0 ? (
               isArtPreviewLoading ? (
                 <div className="muted">Loading art stories...</div>
               ) : (
@@ -19948,12 +19911,12 @@ export default function Home() {
               )
             ) : (
               <div className="stack home-section-list top-trending-card-rail">
-                {artTrendingLeadSectionArticle ? renderLargeImageArticleCard(artTrendingLeadSectionArticle) : null}
-                {artTrendingSectionArticles
+                {trendingArtLeadArticle ? renderLargeImageArticleCard(trendingArtLeadArticle) : null}
+                {artTabArticles
                   .filter((article) =>
-                    artTrendingLeadSectionArticle
+                    trendingArtLeadArticle
                       ? getArticleDeduplicationKey(article) !==
-                        getArticleDeduplicationKey(artTrendingLeadSectionArticle)
+                        getArticleDeduplicationKey(trendingArtLeadArticle)
                       : true
                   )
                   .slice(0, 5)
