@@ -18218,17 +18218,6 @@ export default function Home() {
       validator: (article) => isEntertainmentRelevantArticle(article),
     });
 
-    const weatherArticles = claimSectionArticles(
-      [
-        ...(trendingWeatherLeadArticle ? [trendingWeatherLeadArticle] : []),
-        ...trendingWeatherSections.nationalWeather,
-      ],
-      {
-        limit: 4,
-        validator: (article) => isStrictWeatherArticle(article),
-      }
-    );
-
     const sports = claimSectionArticles(sportsTabArticles, {
       limit: 5,
       validator: (article) =>
@@ -18257,6 +18246,16 @@ export default function Home() {
       limit: 6,
       validator: (article) => isStrictScienceArticle(article),
     });
+    const weatherArticles = claimSectionArticles(
+      [
+        ...(trendingWeatherLeadArticle ? [trendingWeatherLeadArticle] : []),
+        ...trendingWeatherSections.nationalWeather,
+      ],
+      {
+        limit: 4,
+        validator: (article) => isStrictWeatherArticle(article),
+      }
+    );
 
     return {
       breaking,
@@ -18345,6 +18344,124 @@ export default function Home() {
       </section>
     );
   };
+
+  const orderedTrendingNewsSections = useMemo(
+    () => [
+      {
+        key: "world",
+        title: "World",
+        articles: trendingSectionArticles.world,
+        limit: 5,
+        categoryLabelOverride: "World",
+      },
+      {
+        key: "politics",
+        title: "Politics",
+        articles: trendingSectionArticles.politics,
+        limit: 5,
+        categoryLabelOverride: "Politics",
+      },
+      {
+        key: "entertainment",
+        title: "Entertainment",
+        articles: trendingSectionArticles.entertainment,
+        limit: 5,
+        categoryLabelOverride: "Entertainment",
+      },
+      {
+        key: "sports",
+        title: "Sports",
+        articles: trendingSectionArticles.sports,
+        limit: 5,
+        categoryLabelOverride: "Sports",
+      },
+      {
+        key: "business",
+        title: "Business",
+        articles: trendingSectionArticles.business,
+        limit: 6,
+        categoryLabelOverride: "Business",
+      },
+      {
+        key: "technology",
+        title: "Technology",
+        articles: trendingSectionArticles.technology,
+        limit: 6,
+        categoryLabelOverride: "Technology",
+      },
+      {
+        key: "crime",
+        title: "Crime",
+        articles: trendingSectionArticles.crime,
+        limit: 6,
+        categoryLabelOverride: "Crime",
+      },
+      {
+        key: "health",
+        title: "Health",
+        articles: trendingSectionArticles.health,
+        limit: 6,
+        categoryLabelOverride: "Health",
+      },
+      {
+        key: "science",
+        title: "Science",
+        articles: trendingSectionArticles.science,
+        limit: 6,
+        categoryLabelOverride: "Science",
+      },
+    ] as const,
+    [trendingSectionArticles]
+  );
+
+  const renderTrendingOrderedNewsSection = useCallback(
+    (
+      section: {
+        key: string;
+        title: string;
+        articles: Article[];
+        limit: number;
+        categoryLabelOverride: string;
+      },
+      options?: {
+        includeBusinessTicker?: boolean;
+        includeEntertainmentMusic?: boolean;
+        sectionRef?: React.RefObject<HTMLElement | null>;
+      }
+    ) => {
+      if (section.articles.length < 5) {
+        return null;
+      }
+
+      return (
+        <section
+          key={section.key}
+          ref={options?.sectionRef}
+          className="home-section-block home-section-plain"
+        >
+          <div className="home-section-header">
+            <div className="stack" style={{ gap: "4px" }}>
+              <strong className="profile-section-title home-section-title">{section.title}</strong>
+            </div>
+          </div>
+
+          {options?.includeBusinessTicker ? renderBusinessStockTicker() : null}
+
+          <div className="stack home-section-list top-trending-card-rail">
+            {renderArticleSectionWithLargeLead(section.articles, {
+              limit: section.limit,
+              categoryLabelOverride: section.categoryLabelOverride,
+            })}
+            {options?.includeEntertainmentMusic &&
+            (popularMusicAlbums.length >= 3 || popularMusicSliderArticles.length >= 2)
+              ? renderPopularMusicSlider(popularMusicAlbums, popularMusicSliderArticles)
+              : null}
+          </div>
+        </section>
+      );
+    },
+    [popularMusicAlbums, popularMusicSliderArticles, renderArticleSectionWithLargeLead]
+  );
 
   const renderTallTrendingQuickWatchRow = (
     title: string,
@@ -19647,33 +19764,9 @@ export default function Home() {
           </div>
         </section>
 
-        {trendingSectionArticles.world.length >= 5 ? (
-          <section className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">World</strong>
-              </div>
-            </div>
-            {renderArticleSectionWithLargeLead(trendingSectionArticles.world, {
-              limit: 5,
-              categoryLabelOverride: "World",
-            })}
-          </section>
-        ) : null}
+        {renderTrendingOrderedNewsSection(orderedTrendingNewsSections[0])}
 
-        {trendingSectionArticles.politics.length >= 5 ? (
-          <section className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Politics</strong>
-              </div>
-            </div>
-            {renderArticleSectionWithLargeLead(trendingSectionArticles.politics, {
-              limit: 5,
-              categoryLabelOverride: "Politics",
-            })}
-          </section>
-        ) : null}
+        {renderTrendingOrderedNewsSection(orderedTrendingNewsSections[1])}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
@@ -19742,29 +19835,10 @@ export default function Home() {
           playerTab: "news",
         })}
 
-        {trendingSectionArticles.entertainment.length >= 5 ? (
-          <section ref={trendingEntertainmentSectionRef} className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Entertainment</strong>
-              </div>
-            </div>
-            <div className="stack home-section-list top-trending-card-rail">
-              {renderArticleSectionWithLargeLead(trendingSectionArticles.entertainment, {
-                limit: 5,
-                categoryLabelOverride: "Entertainment",
-              })}
-              {popularMusicAlbums.length >= 3 || popularMusicSliderArticles.length >= 2
-                ? renderPopularMusicSlider(popularMusicAlbums, popularMusicSliderArticles)
-                : null}
-            </div>
-            {(() => {
-              console.log("TRENDING ENTERTAINMENT MUSIC SLIDER COUNT", Math.max(popularMusicAlbums.length, popularMusicSliderArticles.length));
-              console.log("TRENDING ENTERTAINMENT SECTION_RENDERED", true);
-              return null;
-            })()}
-          </section>
-        ) : null}
+        {renderTrendingOrderedNewsSection(orderedTrendingNewsSections[2], {
+          includeEntertainmentMusic: true,
+          sectionRef: trendingEntertainmentSectionRef,
+        })}
 
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
@@ -19981,7 +20055,7 @@ export default function Home() {
           "featured-sources-quickwatch"
         )}
 
-        {!TRENDING_SPORTS_DISABLED && trendingSectionArticles.sports.length >= 5 ? (
+        {!TRENDING_SPORTS_DISABLED && orderedTrendingNewsSections[3].articles.length >= 5 ? (
           <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
@@ -20001,10 +20075,12 @@ export default function Home() {
                   : null
               : null}
 
-            {renderArticleSectionWithLargeLead(trendingSectionArticles.sports, {
-              limit: 5,
-              categoryLabelOverride: "Sports",
-            })}
+            <div className="stack home-section-list top-trending-card-rail">
+              {renderArticleSectionWithLargeLead(orderedTrendingNewsSections[3].articles, {
+                limit: orderedTrendingNewsSections[3].limit,
+                categoryLabelOverride: orderedTrendingNewsSections[3].categoryLabelOverride,
+              })}
+            </div>
           </section>
         ) : null}
 
@@ -20106,70 +20182,21 @@ export default function Home() {
 
         {renderFeaturedVideosBreak()}
 
-        {trendingSectionArticles.business.length >= 5 ? (
-          <section className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Business</strong>
-              </div>
-            </div>
+        {renderTrendingOrderedNewsSection(orderedTrendingNewsSections[4], {
+          includeBusinessTicker: true,
+        })}
 
-            {renderBusinessStockTicker()}
-            {renderArticleSectionWithLargeLead(trendingSectionArticles.business, { limit: 6 })}
-          </section>
-        ) : null}
-
-        {trendingSectionArticles.technology.length >= 5 ? (
-          <section className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Technology</strong>
-              </div>
-            </div>
-            {renderArticleSectionWithLargeLead(trendingSectionArticles.technology, { limit: 6 })}
-          </section>
-        ) : null}
+        {renderTrendingOrderedNewsSection(orderedTrendingNewsSections[5])}
 
         {renderNewsClipsRow()}
 
-        {trendingSectionArticles.crime.length >= 5 ? (
-          <section className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Crime</strong>
-              </div>
-            </div>
-            {renderArticleSectionWithLargeLead(trendingSectionArticles.crime, {
-              limit: 6,
-              categoryLabelOverride: "Crime",
-            })}
-          </section>
-        ) : null}
+        {renderTrendingOrderedNewsSection(orderedTrendingNewsSections[6])}
 
-        {trendingSectionArticles.health.length >= 5 ? (
-          <section className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Health</strong>
-              </div>
-            </div>
-            {renderArticleSectionWithLargeLead(trendingSectionArticles.health, {
-              limit: 6,
-              categoryLabelOverride: "Health",
-            })}
-          </section>
-        ) : null}
+        {renderTrendingOrderedNewsSection(orderedTrendingNewsSections[7])}
 
-        {trendingSectionArticles.science.length >= 5 ? (
-          <section ref={scienceSectionRef} className="home-section-block home-section-plain">
-            <div className="home-section-header">
-              <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">Science</strong>
-              </div>
-            </div>
-            {renderArticleSectionWithLargeLead(trendingSectionArticles.science, { limit: 6 })}
-          </section>
-        ) : null}
+        {renderTrendingOrderedNewsSection(orderedTrendingNewsSections[8], {
+          sectionRef: scienceSectionRef,
+        })}
 
         {!TRENDING_AUTO_DISABLED ? (
           <>
