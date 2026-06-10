@@ -585,8 +585,8 @@ export default function VideosPage() {
             <div className="empty-state">
               <strong>Placeholder discussion</strong>
               <span>
-                This feed uses real YouTube news videos. For now, comments remain
-                a lightweight placeholder instead of syncing YouTube comment threads.
+                This feed uses real news videos. For now, comments remain
+                a lightweight placeholder instead of syncing live comment threads.
               </span>
             </div>
           </div>
@@ -631,7 +631,7 @@ export default function VideosPage() {
                 <strong>Placeholder video</strong>
                 <span>
                   Add `NEXT_PUBLIC_YOUTUBE_API_KEY` to `.env.local` to load real
-                  YouTube embeds.
+                  video embeds.
                 </span>
               </div>
             )}

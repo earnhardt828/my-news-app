@@ -2,6 +2,7 @@
 
 import LoadingScreen from "./components/loading-screen";
 import CategoryVideoRow from "./components/category-video-row";
+import CommentIcon from "./components/comment-icon";
 import HeartIcon from "./components/heart-icon";
 import LargeImageArticleCard from "./components/large-image-article-card";
 import PollCard from "./components/poll-card";
@@ -4703,20 +4704,6 @@ function normalizeNewsPayload(payload: FeedArticlePayload[] | PaginatedNewsRespo
   };
 }
 
-function extractNewsPayloadArticles(payload: FeedArticlePayload[] | PaginatedNewsResponse) {
-  return Array.isArray(payload) ? payload : Array.isArray(payload.articles) ? payload.articles : [];
-}
-
-function isMinimalHomepageArticleRecord(
-  article: Partial<Pick<Article, "title" | "url">> | null | undefined
-) {
-  if (!article) {
-    return false;
-  }
-
-  return Boolean(cleanDisplayText(article.title ?? "")) && hasResolvableArticleUrl(article);
-}
-
 function hydrateFeedArticles(feedArticles: FeedArticlePayload[]) {
   return feedArticles.map((article) => ({
     ...article,
@@ -4726,6 +4713,18 @@ function hydrateFeedArticles(feedArticles: FeedArticlePayload[]) {
     comments: [],
     saved: false,
   })) as Article[];
+}
+
+function normalizeHomepageArticles(feedArticles: FeedArticlePayload[]) {
+  return hydrateFeedArticles(
+    feedArticles.map((article, index) => ({
+      ...article,
+      id:
+        typeof article.id === "number" && Number.isFinite(article.id) && article.id > 0
+          ? article.id
+          : 900000000 + index,
+    }))
+  );
 }
 
 function isFallbackFeedArticle(article: FeedArticlePayload) {
@@ -7547,21 +7546,7 @@ export default function Home() {
 
         const rawNewsPayload = (await newsRes.json()) as FeedArticlePayload[] | PaginatedNewsResponse;
         const simplePayload = normalizeNewsPayload(rawNewsPayload);
-        const rawArticles = extractNewsPayloadArticles(rawNewsPayload);
-        const minimallyValidArticles = rawArticles.filter((article) =>
-          isMinimalHomepageArticleRecord(article)
-        );
-        const simpleArticles = hydrateFeedArticles(
-          (minimallyValidArticles.length > 0 ? minimallyValidArticles : simplePayload.articles ?? []).map(
-            (article, index) => ({
-              ...article,
-              id:
-                typeof article.id === "number" && Number.isFinite(article.id) && article.id > 0
-                  ? article.id
-                  : 900000000 + index,
-            })
-          )
-        );
+        const simpleArticles = normalizeHomepageArticles(simplePayload.articles ?? []);
 
         setFeedLoadError(null);
         setHasMoreArticles(simplePayload.hasMore ?? false);
@@ -9612,14 +9597,12 @@ export default function Home() {
             return;
           }
 
-          const nextArticles = hydrateFeedArticles((data.articles ?? []).filter((article) =>
-            isMinimalHomepageArticleRecord(article)
-          ));
+          const nextArticles = normalizeHomepageArticles(data.articles ?? []);
 
           setArticles(nextArticles);
           setHasMoreArticles(Boolean("hasMore" in data ? data.hasMore : false));
           setFeedPage("page" in data && typeof data.page === "number" ? data.page : 1);
-          setFeedLoadError(null);
+          setFeedLoadError(nextArticles.length === 0 ? "Couldn’t load stories. Tap to retry." : null);
         } catch (error) {
           if (cancelled) {
             return;
@@ -16483,9 +16466,7 @@ export default function Home() {
               <span>{article.likes}</span>
             </span>
             <span className="feed-meta-inline-group">
-              <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-              </svg>
+              <CommentIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
               <span>{article.comments.length}</span>
             </span>
             <span className="feed-meta-inline-group">
@@ -16718,9 +16699,7 @@ export default function Home() {
                 <span>{article.likes}</span>
               </span>
               <span className="feed-meta-inline-group">
-                <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                  <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-                </svg>
+                <CommentIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
                 <span>{article.comments.length}</span>
               </span>
             </span>
@@ -19169,9 +19148,7 @@ export default function Home() {
               </span>
               <span className="top-trending-list-date">
                 <span className="feed-meta-inline-group">
-                  <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
-                    <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-                  </svg>
+                  <CommentIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
                   <span>{article.comments.length}</span>
                 </span>
               </span>

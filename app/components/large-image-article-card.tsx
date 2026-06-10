@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { MouseEventHandler, ReactNode, TouchEventHandler } from "react";
+import CommentIcon from "./comment-icon";
 import HeartIcon from "./heart-icon";
 
 type LargeImageArticleCardProps = {
@@ -88,19 +89,7 @@ export default function LargeImageArticleCard({
             <span>{likes}</span>
           </span>
           <span className="feed-meta-inline-group">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="feed-meta-inline-icon"
-              focusable="false"
-              aria-hidden="true"
-            >
-              <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-            </svg>
+            <CommentIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
             <span>{commentsCount}</span>
           </span>
         </span>
