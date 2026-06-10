@@ -48,6 +48,19 @@ type GuardianContentResponse = {
   };
 };
 
+type GNewsApiResponse = {
+  articles?: Array<{
+    title?: string | null;
+    description?: string | null;
+    url?: string | null;
+    image?: string | null;
+    publishedAt?: string | null;
+    source?: {
+      name?: string | null;
+    } | null;
+  }>;
+};
+
 type AggregatedNewsArticle = {
   id: number;
   title: string;
@@ -69,7 +82,7 @@ type AggregatedNewsArticle = {
   time: string;
   likes: number;
   comments: null[];
-  provider: "current" | "nyt" | "currents" | "guardian";
+  provider: "current" | "nyt" | "currents" | "guardian" | "gnews";
 };
 
 const NYT_TOP_STORIES_HOME_SECTION = "home";
@@ -92,25 +105,40 @@ type GuardianFetchResult = {
   rawCount: number;
 };
 
+type GNewsFetchResult = {
+  articles: AggregatedNewsArticle[];
+  rawCount: number;
+};
+
 const NYT_PROVIDER_CAP = 20;
 const CURRENTS_PROVIDER_CAP = 40;
 const GUARDIAN_PROVIDER_CAP = 20;
+const GNEWS_PROVIDER_CAP = 10;
 const FINAL_FEED_PAGE_SIZE_CAP = 100;
 const CURRENTS_PAGE_SIZE = 50;
 const CURRENTS_MAX_PAGES = 3;
+const GNEWS_CACHE_TTL_MS = 45 * 60 * 1000;
+
+let gnewsCache: {
+  savedAt: number;
+  articles: AggregatedNewsArticle[];
+  rawCount: number;
+} | null = null;
 
 function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
   const currentQueue = articles.filter((article) => article.provider === "current");
   const nytQueue = articles.filter((article) => article.provider === "nyt");
   const currentsQueue = articles.filter((article) => article.provider === "currents");
   const guardianQueue = articles.filter((article) => article.provider === "guardian");
+  const gnewsQueue = articles.filter((article) => article.provider === "gnews");
   const interleaved: AggregatedNewsArticle[] = [];
 
   while (
     currentQueue.length > 0 ||
     nytQueue.length > 0 ||
     currentsQueue.length > 0 ||
-    guardianQueue.length > 0
+    guardianQueue.length > 0 ||
+    gnewsQueue.length > 0
   ) {
     if (currentQueue.length > 0) {
       interleaved.push(currentQueue.shift()!);
@@ -129,6 +157,9 @@ function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
     }
     if (guardianQueue.length > 0) {
       interleaved.push(guardianQueue.shift()!);
+    }
+    if (gnewsQueue.length > 0) {
+      interleaved.push(gnewsQueue.shift()!);
     }
   }
 
@@ -803,6 +834,134 @@ async function fetchGuardianArticles(category: string): Promise<GuardianFetchRes
   }
 }
 
+function getCachedGnewsResult() {
+  if (!gnewsCache) {
+    return null;
+  }
+
+  if (Date.now() - gnewsCache.savedAt > GNEWS_CACHE_TTL_MS) {
+    gnewsCache = null;
+    return null;
+  }
+
+  return gnewsCache;
+}
+
+async function fetchGnewsArticles(category: string): Promise<GNewsFetchResult> {
+  const gnewsKey = process.env.GNEWS_API_KEY ?? "";
+
+  if (!gnewsKey) {
+    return {
+      articles: [],
+      rawCount: 0,
+    };
+  }
+
+  const cached = getCachedGnewsResult();
+  if (cached) {
+    return {
+      articles: cached.articles,
+      rawCount: cached.rawCount,
+    };
+  }
+
+  try {
+    const requestUrl = `https://gnews.io/api/v4/top-headlines?category=general&lang=en&country=us&max=10&apikey=${gnewsKey}`;
+    const response = await fetch(requestUrl, {
+      next: { revalidate: 0 },
+    });
+
+    if (response.status === 429) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("GNEWS RATE LIMITED", 429);
+      }
+      return {
+        articles: [],
+        rawCount: 0,
+      };
+    }
+
+    if (!response.ok) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("GNEWS WARN", response.status);
+      }
+      return {
+        articles: [],
+        rawCount: 0,
+      };
+    }
+
+    const payload = (await response.json()) as GNewsApiResponse;
+    const rawArticles = payload.articles ?? [];
+    const articles = rawArticles.flatMap((article, index) => {
+      const title = stripHtml(article.title);
+      const url = normalizeUrl(article.url);
+      const imageUrl = article.image?.trim() ?? "";
+      const sourceLabel = stripHtml(article.source?.name) || "GNews";
+
+      if (!title || !url || !hasRealImageUrl(imageUrl)) {
+        return [];
+      }
+
+      return [{
+        id: hashArticleId(`gnews:${url}:${index}`),
+        title,
+        description: stripHtml(article.description) || null,
+        content: stripHtml(article.description) || null,
+        source: sourceLabel,
+        sourceName: sourceLabel,
+        url,
+        image: imageUrl,
+        imageUrl,
+        urlToImage: imageUrl,
+        mediaContent: null,
+        enclosureUrl: null,
+        ogImage: null,
+        twitterImage: null,
+        thumbnail: null,
+        category: normalizeCategoryValue(
+          category.trim() || "general",
+          article.title,
+          article.description,
+          sourceLabel,
+          article.url
+        ),
+        publishedAt: article.publishedAt ?? null,
+        time: "Recent",
+        likes: 0,
+        comments: [],
+        provider: "gnews",
+      }] satisfies AggregatedNewsArticle[];
+    });
+
+    const dedupedArticles = dedupeArticles(articles)
+      .filter((article) => isArticleValidForCategory(article, article.category))
+      .slice(0, GNEWS_PROVIDER_CAP);
+
+    gnewsCache = {
+      savedAt: Date.now(),
+      articles: dedupedArticles,
+      rawCount: rawArticles.length,
+    };
+
+    return {
+      articles: dedupedArticles,
+      rawCount: rawArticles.length,
+    };
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        "GNEWS WARN",
+        error instanceof Error ? error.message : "Unknown GNews error"
+      );
+    }
+    return {
+      articles: [],
+      rawCount: 0,
+    };
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode")?.trim() || "trending";
@@ -820,6 +979,7 @@ export async function GET(request: Request) {
   let nytArticles: AggregatedNewsArticle[] = [];
   let currentsArticles: AggregatedNewsArticle[] = [];
   let guardianArticles: AggregatedNewsArticle[] = [];
+  let gnewsArticles: AggregatedNewsArticle[] = [];
 
   const [currentArticles] = await Promise.all([
     fetchCurrentProviderArticles(category),
@@ -831,6 +991,8 @@ export async function GET(request: Request) {
   currentsArticles = currentsResult.articles;
   const guardianResult = await fetchGuardianArticles(category);
   guardianArticles = guardianResult.articles;
+  const gnewsResult = await fetchGnewsArticles(category);
+  gnewsArticles = gnewsResult.articles;
 
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
   const mergedArticles = [
@@ -838,6 +1000,7 @@ export async function GET(request: Request) {
     ...nytArticles,
     ...currentsArticles,
     ...guardianArticles,
+    ...gnewsArticles,
   ];
   const categoryFilteredArticles = normalizedRequestedCategory
     ? mergedArticles.filter(
