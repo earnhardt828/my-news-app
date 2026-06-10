@@ -112,7 +112,7 @@ type GNewsFetchResult = {
 
 const NYT_PROVIDER_CAP = 20;
 const CURRENTS_PROVIDER_CAP = 40;
-const GUARDIAN_PROVIDER_CAP = 20;
+const GUARDIAN_PROVIDER_CAP = 30;
 const GNEWS_PROVIDER_CAP = 10;
 const FINAL_FEED_PAGE_SIZE_CAP = 100;
 const CURRENTS_PAGE_SIZE = 50;
@@ -287,6 +287,10 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
     /\b(crime|police|investigation|arrest|court|trial|charges|shooting|suspect|homicide|fraud|theft|lawsuit|federal prosecutors)\b/.test(
       haystack
     );
+  const scienceTerms =
+    /\b(science|research|study|scientists|discovery|nasa|space|astronomy|biology|physics|chemistry|climate science|medicine research|medical research|nature\b|science journal|science magazine|telescope|galaxy|asteroid|planet)\b/.test(
+      haystack
+    );
   const entertainmentSourceTerms =
     /\b(variety|deadline|hollywood reporter|e! news|e news|page six|billboard|rolling stone|people|tmz|entertainment tonight|access hollywood|extra|vulture|indiewire|collider|thewrap|pitchfork|tvline)\b/.test(
       haystack
@@ -316,7 +320,11 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
     return "crime";
   }
 
-  if (/\b(technology|tech|ai|artificial intelligence|apple|google|microsoft|cybersecurity|startup)\b/.test(haystack)) {
+  if (scienceTerms) {
+    return "science";
+  }
+
+  if (/\b(technology|tech|ai|artificial intelligence|apple|google|microsoft|cybersecurity|startup|software|app|apps|semiconductor|chip|chips|robotics|device|devices)\b/.test(haystack)) {
     return "tech";
   }
 
@@ -356,7 +364,7 @@ function normalizeCategoryValue(
     return inferCategoryFromText(rawCategory, ...signals);
   }
 
-  if (["entertainment", "crime", "tech", "business", "politics", "sports", "health", "world", "trending"].includes(normalized)) {
+  if (["entertainment", "crime", "tech", "science", "business", "politics", "sports", "health", "world", "trending"].includes(normalized)) {
     return normalized;
   }
 
@@ -420,7 +428,16 @@ function isArticleValidForCategory(article: AggregatedNewsArticle, requestedCate
         haystack
       );
     case "tech":
-      return /\b(ai|software|app|apple|google|microsoft|tesla|chip|semiconductor|cybersecurity|data breach|startup|robot|space technology)\b/.test(
+      return (
+        /\b(ai|software|app|apps|apple|google|microsoft|tesla|chip|chips|semiconductor|cybersecurity|data breach|startup|robot|robotics|device|devices|openai|nvidia)\b/.test(
+          haystack
+        ) &&
+        !/\b(nasa|astronomy|biology|physics|chemistry|nature\b|science journal|science magazine|scientists|medical research|researchers|space telescope|study finds|climate science)\b/.test(
+          haystack
+        )
+      );
+    case "science":
+      return /\b(research|study|scientists|discovery|nasa|space|astronomy|climate science|biology|physics|chemistry|medicine research|medical research|nature\b|science journal|science magazine|telescope|galaxy|asteroid|planet)\b/.test(
         haystack
       );
     case "world":

@@ -1,7 +1,7 @@
 const TECH_STRONG_CONTEXT_PATTERN =
   /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device|the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech)\b/i;
 const TECH_REJECTED_CONTEXT_PATTERN =
-  /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|recipe|travel|weather forecast|movie gossip|music video)\b/i;
+  /\b(sports?|nfl|nba|nhl|mlb|mls|celebrity|hollywood|recipe|travel|weather forecast|movie gossip|music video|nasa|astronomy|biology|physics|chemistry|science journal|science magazine|nature\b|scientists|medical research|study finds|climate science)\b/i;
 const TECH_TAB_STRONG_CONTEXT_PATTERN =
   /\b(tech|technology|ai|artificial intelligence|apple|google|microsoft|openai|nvidia|cybersecurity|software|startup|gadgets?|iphone|semiconductor|chip|robot|app|device|the verge|techcrunch|wired|cnet|engadget|ars technica|bloomberg technology|cnbc tech|marques brownlee|mkbhd|linus tech tips|wsj tech)\b/i;
 const TECH_TAB_TRUSTED_SOURCE_PATTERN =
@@ -13,7 +13,7 @@ const TECH_TAB_REJECTED_CONTEXT_PATTERN =
 const TECH_TAB_POLITICS_CONTEXT_PATTERN =
   /\b(politics?|political|trump|biden|white house|congress|senate|supreme court|election|campaign|government|policy|president)\b/i;
 const TECH_TAB_OTHER_REJECTED_CONTEXT_PATTERN =
-  /\b(court|crime|celebrity|weather|local news|world news)\b/i;
+  /\b(court|crime|celebrity|weather|local news|world news|nasa|astronomy|biology|physics|chemistry|nature\b|scientists|study|discovery|research)\b/i;
 const TECH_TAB_COMPANY_TOPIC_OVERRIDE_PATTERN =
   /\b(apple|google|microsoft|openai|nvidia|ai|artificial intelligence|cybersecurity|chip|semiconductor)\b/i;
 
