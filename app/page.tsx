@@ -3184,6 +3184,86 @@ function articleMatchesSelectedCategory(article: Article, selectedCategory: stri
   );
 }
 
+function hasValidCategoryArticleImage(article: Article) {
+  const selectedImage = getBestArticleImage(article);
+  return Boolean(selectedImage.src) && isLikelyHighQualityArticleImage(selectedImage.source, selectedImage.src);
+}
+
+function isStrictSportsCategoryArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasSportsTerms =
+    /\b(nba|nfl|mlb|nhl|wnba|ncaa|nascar|mls|fifa|world cup|basketball|football|baseball|soccer|tennis|golf|hockey|racing|boxing|ufc|game|match|finals|playoffs|tournament|score|scores|coach|player|team|knicks|cubs|yankees|dodgers|lakers|celtics|panthers|hornets|braves|college world series|korda)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(war|bombing|bomb|israel|iran|hezbollah|gaza|beirut|election|mayor|trump|congress)\b/.test(
+      haystack
+    ) &&
+    !/\b(sports lawsuit|league lawsuit|player lawsuit|coach lawsuit|ufc lawsuit|ncaa lawsuit)\b/.test(
+      haystack
+    );
+
+  return hasSportsTerms && !hasRejectedTerms && !isSportsBettingAd(article);
+}
+
+function isArticleValidForTrendingSection(
+  article: Article,
+  section:
+    | "breaking"
+    | "trending"
+    | "world"
+    | "politics"
+    | "entertainment"
+    | "sports"
+    | "business"
+    | "technology"
+    | "crime"
+    | "health"
+    | "science"
+) {
+  if (!hasValidCategoryArticleImage(article) || isLowInformationLiveStreamArticle(article)) {
+    return false;
+  }
+
+  switch (section) {
+    case "breaking":
+      return isBreakingNewsEligible(article) || isHighQualityBreakingRecentArticle(article);
+    case "trending":
+      return true;
+    case "world":
+      return isStrictWorldArticle(article);
+    case "politics":
+      return isStrictPoliticsArticle(article);
+    case "entertainment":
+      return isEntertainmentRelevantArticle(article);
+    case "sports":
+      return isStrictSportsCategoryArticle(article);
+    case "business":
+      return isStrictBusinessArticle(article);
+    case "technology":
+      return isStrictTechnologyArticle(article) && !isStrictScienceArticle(article);
+    case "crime":
+      return isStrictCrimeArticle(article);
+    case "health":
+      return isStrictHealthArticle(article);
+    case "science":
+      return isStrictScienceArticle(article);
+    default:
+      return false;
+  }
+}
+
 function isArticleValidForCategory(article: Article, selectedCategory: string) {
   const normalizedCategory = normalizeSelectedCategoryName(selectedCategory);
   const haystack = [
@@ -3199,16 +3279,12 @@ function isArticleValidForCategory(article: Article, selectedCategory: string) {
     .toLowerCase();
 
   switch (normalizedCategory) {
+    case "Breaking News":
+      return isArticleValidForTrendingSection(article, "breaking");
+    case "Trending":
+      return isArticleValidForTrendingSection(article, "trending");
     case "Sports": {
-      const hasSportsTerms =
-        /\b(nba|nfl|mlb|nhl|wnba|ncaa|nascar|mls|fifa|world cup|basketball|football|baseball|soccer|tennis|golf|hockey|racing|boxing|ufc|game|match|finals|playoffs|tournament|score|scores|coach|player|team|knicks|cubs|yankees|dodgers|lakers|celtics|panthers|hornets|braves|college world series|korda)\b/.test(
-          haystack
-        );
-      const hasRejectedTerms =
-        /\b(war|bombing|bomb|israel|iran|hezbollah|gaza|beirut|election|mayor|trump|congress)\b/.test(
-          haystack
-        ) && !/\b(sports lawsuit|league lawsuit|player lawsuit|coach lawsuit|ufc lawsuit|ncaa lawsuit)\b/.test(haystack);
-      return hasSportsTerms && !hasRejectedTerms && !isSportsBettingAd(article);
+      return isStrictSportsCategoryArticle(article);
     }
     case "Entertainment":
       return isEntertainmentRelevantArticle(article);
@@ -3223,9 +3299,9 @@ function isArticleValidForCategory(article: Article, selectedCategory: string) {
     case "Business":
       return isStrictBusinessArticle(article);
     case "Health":
-      return /\b(medicine|medical|disease|fitness|nutrition|drugs?|hospital|doctor|vaccine|health|wellness)\b/.test(
-        haystack
-      );
+      return isStrictHealthArticle(article);
+    case "Science":
+      return isStrictScienceArticle(article);
     default:
       return false;
   }
@@ -18198,9 +18274,8 @@ export default function Home() {
         dedupeArticlesByContent(candidates)
           .filter((article): article is Article => Boolean(article?.title))
           .filter((article) => !usedKeys.has(getArticleDeduplicationKey(article)))
-          .filter((article) => !isLowInformationLiveStreamArticle(article))
           .filter((article) => (options.validator ? options.validator(article) : true))
-          .filter((article) => Boolean(getLargeImageCardImage(article))),
+          .filter((article) => hasValidCategoryArticleImage(article)),
         options.limit
       );
 
@@ -18213,52 +18288,50 @@ export default function Home() {
 
     const breaking = claimSectionArticles(breakingNewsPreviewArticles, {
       limit: 5,
-      validator: (article) =>
-        isBreakingNewsEligible(article) || isHighQualityBreakingRecentArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "breaking"),
     });
     const topTrending = claimSectionArticles(topFiveTrendingArticles, {
       limit: 5,
+      validator: (article) => isArticleValidForTrendingSection(article, "trending"),
     });
     const world = claimSectionArticles(worldTabArticles, {
       limit: 5,
-      validator: (article) => isStrictWorldArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "world"),
     });
     const politics = claimSectionArticles(politicsTabArticles, {
       limit: 5,
-      validator: (article) => isStrictPoliticsArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "politics"),
     });
     const entertainment = claimSectionArticles(trendingEntertainmentArticles, {
       limit: 5,
-      validator: (article) => isEntertainmentRelevantArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "entertainment"),
     });
 
     const sports = claimSectionArticles(sportsTabArticles, {
       limit: 5,
       validator: (article) =>
-        isBroadSportsArticle(article) &&
-        !isSportsBettingAd(article) &&
+        isArticleValidForTrendingSection(article, "sports") &&
         hasRenderableSportsVisual(article, { largeCard: true }),
     });
     const business = claimSectionArticles(businessTabArticles, {
       limit: 6,
-      validator: (article) => isStrictBusinessArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "business"),
     });
     const technology = claimSectionArticles(technologyTabArticles, {
       limit: 6,
-      validator: (article) =>
-        isStrictTechnologyArticle(article) && !isStrictScienceArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "technology"),
     });
     const crime = claimSectionArticles(crimeTabArticles, {
       limit: 6,
-      validator: (article) => isStrictCrimeArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "crime"),
     });
     const health = claimSectionArticles(healthTabArticles, {
       limit: 6,
-      validator: (article) => isStrictHealthArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "health"),
     });
     const scienceCandidates = claimSectionArticles(scienceTabArticles, {
       limit: 6,
-      validator: (article) => isStrictScienceArticle(article),
+      validator: (article) => isArticleValidForTrendingSection(article, "science"),
     });
     const weatherArticles = claimSectionArticles(
       [

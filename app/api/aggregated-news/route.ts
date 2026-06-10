@@ -118,12 +118,34 @@ const FINAL_FEED_PAGE_SIZE_CAP = 100;
 const CURRENTS_PAGE_SIZE = 50;
 const CURRENTS_MAX_PAGES = 3;
 const GNEWS_CACHE_TTL_MS = 45 * 60 * 1000;
+const PROVIDER_TIMEOUT_MS = 8000;
+const ENABLE_GUARDIAN = false;
+const ENABLE_GNEWS = false;
 
 let gnewsCache: {
   savedAt: number;
   articles: AggregatedNewsArticle[];
   rawCount: number;
 } | null = null;
+
+function createProviderTimeoutError(providerName: string, timeoutMs: number) {
+  return new Error(`${providerName} timed out after ${timeoutMs}ms`);
+}
+
+async function withProviderTimeout<T>(
+  providerName: "current" | "nyt" | "currents" | "guardian" | "gnews",
+  task: Promise<T>,
+  timeoutMs = PROVIDER_TIMEOUT_MS
+) {
+  return await Promise.race<T>([
+    task,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => {
+        reject(createProviderTimeoutError(providerName, timeoutMs));
+      }, timeoutMs);
+    }),
+  ]);
+}
 
 function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
   const currentQueue = articles.filter((article) => article.provider === "current");
@@ -993,23 +1015,64 @@ export async function GET(request: Request) {
   const normalizedRequestedCategory = requestedCategory
     ? normalizeCategoryValue(requestedCategory, requestedCategory)
     : "";
-  let nytArticles: AggregatedNewsArticle[] = [];
-  let currentsArticles: AggregatedNewsArticle[] = [];
-  let guardianArticles: AggregatedNewsArticle[] = [];
-  let gnewsArticles: AggregatedNewsArticle[] = [];
+  console.log("PROVIDER START", "current");
+  console.log("PROVIDER START", "nyt");
+  console.log("PROVIDER START", "currents");
 
-  const [currentArticles] = await Promise.all([
-    fetchCurrentProviderArticles(category),
+  const providerResults = await Promise.allSettled([
+    withProviderTimeout("current", fetchCurrentProviderArticles(category)),
+    withProviderTimeout("nyt", fetchNytArticles(category)),
+    withProviderTimeout("currents", fetchCurrentsArticles(category)),
   ]);
 
-  const nytResult = await fetchNytArticles(category);
-  nytArticles = nytResult.articles;
-  const currentsResult = await fetchCurrentsArticles(category);
-  currentsArticles = currentsResult.articles;
-  const guardianResult = await fetchGuardianArticles(category);
-  guardianArticles = guardianResult.articles;
-  const gnewsResult = await fetchGnewsArticles(category);
-  gnewsArticles = gnewsResult.articles;
+  const currentResult = providerResults[0];
+  const nytResult = providerResults[1];
+  const currentsResult = providerResults[2];
+
+  const currentArticles =
+    currentResult.status === "fulfilled"
+      ? currentResult.value
+      : [];
+  if (currentResult.status === "fulfilled") {
+    console.log("PROVIDER DONE", "current", currentArticles.length);
+  } else {
+    console.warn(
+      "PROVIDER FAILED",
+      "current",
+      currentResult.reason instanceof Error ? currentResult.reason.message : String(currentResult.reason)
+    );
+  }
+
+  const nytArticles =
+    nytResult.status === "fulfilled"
+      ? nytResult.value.articles
+      : [];
+  if (nytResult.status === "fulfilled") {
+    console.log("PROVIDER DONE", "nyt", nytArticles.length);
+  } else {
+    console.warn(
+      "PROVIDER FAILED",
+      "nyt",
+      nytResult.reason instanceof Error ? nytResult.reason.message : String(nytResult.reason)
+    );
+  }
+
+  const currentsArticles =
+    currentsResult.status === "fulfilled"
+      ? currentsResult.value.articles
+      : [];
+  if (currentsResult.status === "fulfilled") {
+    console.log("PROVIDER DONE", "currents", currentsArticles.length);
+  } else {
+    console.warn(
+      "PROVIDER FAILED",
+      "currents",
+      currentsResult.reason instanceof Error ? currentsResult.reason.message : String(currentsResult.reason)
+    );
+  }
+
+  const guardianArticles: AggregatedNewsArticle[] = ENABLE_GUARDIAN ? [] : [];
+  const gnewsArticles: AggregatedNewsArticle[] = ENABLE_GNEWS ? [] : [];
 
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
   const mergedArticles = [
