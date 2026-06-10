@@ -31,6 +31,23 @@ type CurrentsApiResponse = {
   }>;
 };
 
+type GuardianContentResponse = {
+  response?: {
+    results?: Array<{
+      id?: string | null;
+      webTitle?: string | null;
+      webUrl?: string | null;
+      webPublicationDate?: string | null;
+      sectionName?: string | null;
+      fields?: {
+        thumbnail?: string | null;
+        trailText?: string | null;
+        headline?: string | null;
+      } | null;
+    }>;
+  };
+};
+
 type AggregatedNewsArticle = {
   id: number;
   title: string;
@@ -52,7 +69,7 @@ type AggregatedNewsArticle = {
   time: string;
   likes: number;
   comments: null[];
-  provider: "current" | "nyt" | "currents";
+  provider: "current" | "nyt" | "currents" | "guardian";
 };
 
 const NYT_TOP_STORIES_HOME_SECTION = "home";
@@ -70,8 +87,14 @@ type CurrentsFetchResult = {
   rawCount: number;
 };
 
+type GuardianFetchResult = {
+  articles: AggregatedNewsArticle[];
+  rawCount: number;
+};
+
 const NYT_PROVIDER_CAP = 20;
 const CURRENTS_PROVIDER_CAP = 40;
+const GUARDIAN_PROVIDER_CAP = 20;
 const FINAL_FEED_PAGE_SIZE_CAP = 100;
 const CURRENTS_PAGE_SIZE = 50;
 const CURRENTS_MAX_PAGES = 3;
@@ -80,9 +103,15 @@ function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
   const currentQueue = articles.filter((article) => article.provider === "current");
   const nytQueue = articles.filter((article) => article.provider === "nyt");
   const currentsQueue = articles.filter((article) => article.provider === "currents");
+  const guardianQueue = articles.filter((article) => article.provider === "guardian");
   const interleaved: AggregatedNewsArticle[] = [];
 
-  while (currentQueue.length > 0 || nytQueue.length > 0 || currentsQueue.length > 0) {
+  while (
+    currentQueue.length > 0 ||
+    nytQueue.length > 0 ||
+    currentsQueue.length > 0 ||
+    guardianQueue.length > 0
+  ) {
     if (currentQueue.length > 0) {
       interleaved.push(currentQueue.shift()!);
     }
@@ -97,6 +126,9 @@ function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
     }
     if (currentsQueue.length > 0) {
       interleaved.push(currentsQueue.shift()!);
+    }
+    if (guardianQueue.length > 0) {
+      interleaved.push(guardianQueue.shift()!);
     }
   }
 
@@ -681,6 +713,96 @@ async function fetchCurrentsArticles(category: string): Promise<CurrentsFetchRes
   }
 }
 
+async function fetchGuardianArticles(category: string): Promise<GuardianFetchResult> {
+  const guardianKey = process.env.GUARDIAN_API_KEY ?? "";
+
+  if (!guardianKey) {
+    return {
+      articles: [],
+      rawCount: 0,
+    };
+  }
+
+  try {
+    const requestUrl = new URL("https://content.guardianapis.com/search");
+    requestUrl.searchParams.set("api-key", guardianKey);
+    requestUrl.searchParams.set("page-size", "50");
+    requestUrl.searchParams.set("order-by", "newest");
+    requestUrl.searchParams.set("show-fields", "thumbnail,trailText,headline");
+    requestUrl.searchParams.set("lang", "en");
+
+    const normalizedCategory = normalizeCategoryValue(category, category);
+    if (normalizedCategory && normalizedCategory !== "trending") {
+      requestUrl.searchParams.set("q", normalizedCategory);
+    }
+
+    const response = await fetch(requestUrl.toString(), {
+      next: { revalidate: 0 },
+    });
+
+    if (!response.ok) {
+      return {
+        articles: [],
+        rawCount: 0,
+      };
+    }
+
+    const payload = (await response.json()) as GuardianContentResponse;
+    const rawArticles = payload.response?.results ?? [];
+    const articles = rawArticles.flatMap((article, index) => {
+      const title = stripHtml(article.fields?.headline || article.webTitle);
+      const url = normalizeUrl(article.webUrl);
+      const imageUrl = article.fields?.thumbnail?.trim() ?? "";
+
+      if (!title || !url || !hasRealImageUrl(imageUrl)) {
+        return [];
+      }
+
+      const sourceLabel = "The Guardian";
+
+      return [{
+        id: hashArticleId(`guardian:${article.id ?? url}:${index}`),
+        title,
+        description: stripHtml(article.fields?.trailText) || null,
+        content: stripHtml(article.fields?.trailText) || null,
+        source: sourceLabel,
+        sourceName: sourceLabel,
+        url,
+        image: imageUrl,
+        imageUrl,
+        urlToImage: imageUrl,
+        mediaContent: null,
+        enclosureUrl: null,
+        ogImage: null,
+        twitterImage: null,
+        thumbnail: null,
+        category: normalizeCategoryValue(
+          article.sectionName || category || "general",
+          article.webTitle,
+          article.fields?.trailText,
+          sourceLabel,
+          article.webUrl
+        ),
+        publishedAt: article.webPublicationDate ?? null,
+        time: "Recent",
+        likes: 0,
+        comments: [],
+        provider: "guardian",
+      }] satisfies AggregatedNewsArticle[];
+    });
+
+    return {
+      articles: dedupeArticles(articles).slice(0, GUARDIAN_PROVIDER_CAP),
+      rawCount: rawArticles.length,
+    };
+  } catch {
+    return {
+      articles: [],
+      rawCount: 0,
+    };
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode")?.trim() || "trending";
@@ -697,6 +819,7 @@ export async function GET(request: Request) {
     : "";
   let nytArticles: AggregatedNewsArticle[] = [];
   let currentsArticles: AggregatedNewsArticle[] = [];
+  let guardianArticles: AggregatedNewsArticle[] = [];
 
   const [currentArticles] = await Promise.all([
     fetchCurrentProviderArticles(category),
@@ -706,12 +829,15 @@ export async function GET(request: Request) {
   nytArticles = nytResult.articles;
   const currentsResult = await fetchCurrentsArticles(category);
   currentsArticles = currentsResult.articles;
+  const guardianResult = await fetchGuardianArticles(category);
+  guardianArticles = guardianResult.articles;
 
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
   const mergedArticles = [
     ...currentMappedArticles,
     ...nytArticles,
     ...currentsArticles,
+    ...guardianArticles,
   ];
   const categoryFilteredArticles = normalizedRequestedCategory
     ? mergedArticles.filter(
