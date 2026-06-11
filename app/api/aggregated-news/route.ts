@@ -110,11 +110,36 @@ type GNewsFetchResult = {
   rawCount: number;
 };
 
+type ProviderName =
+  | "current"
+  | "nyt"
+  | "currents"
+  | "guardian"
+  | "gnews";
+
 const NYT_PROVIDER_CAP = 20;
 const CURRENTS_PROVIDER_CAP = 40;
 const GUARDIAN_PROVIDER_CAP = 30;
 const GNEWS_PROVIDER_CAP = 10;
 const FINAL_FEED_PAGE_SIZE_CAP = 100;
+const WORLD_SUPPLEMENT_PROVIDER_CAP = 40;
+const WORLD_RESERVED_SLOTS = 10;
+const WORLD_SUPPLEMENT_QUERY_TIMEOUT_MS = 3500;
+const WORLD_SUPPLEMENT_QUERIES = [
+  "israel iran",
+  "ukraine russia",
+  "middle east",
+  "gaza",
+  "europe",
+  "china",
+  "global news",
+  "international news",
+  "asia",
+  "africa",
+  "latin america",
+  "nato",
+  "united nations",
+] as const;
 const CURRENTS_PAGE_SIZE = 50;
 const CURRENTS_MAX_PAGES = 3;
 const GNEWS_CACHE_TTL_MS = 45 * 60 * 1000;
@@ -133,7 +158,7 @@ function createProviderTimeoutError(providerName: string, timeoutMs: number) {
 }
 
 async function withProviderTimeout<T>(
-  providerName: "current" | "nyt" | "currents" | "guardian" | "gnews",
+  providerName: ProviderName,
   task: Promise<T>,
   timeoutMs = PROVIDER_TIMEOUT_MS
 ) {
@@ -186,6 +211,27 @@ function interleaveProviderArticles(articles: AggregatedNewsArticle[]) {
   }
 
   return interleaved;
+}
+
+function reserveCategoryArticles(
+  articles: AggregatedNewsArticle[],
+  category: AggregatedNewsArticle["category"],
+  reservedSlots: number
+) {
+  if (reservedSlots <= 0) {
+    return articles;
+  }
+
+  const reserved = articles.filter((article) => article.category === category).slice(0, reservedSlots);
+  const reservedKeys = new Set(
+    reserved.map((article) => normalizeUrl(article.url) || `title:${normalizeTitle(article.title)}`)
+  );
+  const remainder = articles.filter((article) => {
+    const key = normalizeUrl(article.url) || `title:${normalizeTitle(article.title)}`;
+    return !reservedKeys.has(key);
+  });
+
+  return [...reserved, ...remainder];
 }
 
 function hashArticleId(value: string) {
@@ -266,6 +312,18 @@ function hasRealImageUrl(url: string | null | undefined) {
   ) || /\/(image|images|img|media|photo|thumb|thumbnail)\//i.test(normalized);
 }
 
+function hasExplicitWorldTerms(haystack: string) {
+  return /\b(world|international|global|middle east|europe|asia|africa|latin america|ukraine|russia|israel|iran|china|nato|un|united nations|gaza|lebanon|beirut|hezbollah|foreign|overseas|war|cease-?fire|missile|airstrike)\b/.test(
+    haystack
+  );
+}
+
+function hasUsPoliticsTerms(haystack: string) {
+  return /\b(u\.?s\.?|united states|white house|congress|senate|house|governor|mayor|campaign|election|president|democrat|democrats|republican|republicans|supreme court|policy)\b/.test(
+    haystack
+  );
+}
+
 function inferCategoryFromText(...values: Array<string | null | undefined>) {
   const haystack = values
     .map((value) => stripHtml(value))
@@ -277,8 +335,10 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
     return "trending";
   }
 
+  const explicitWorldTerms = hasExplicitWorldTerms(haystack);
+  const usPoliticsTerms = hasUsPoliticsTerms(haystack);
   const politicsTerms =
-    /\b(trump|biden|election|congress|senate|house|white house|policy|government|president|campaign|mayor|governor|supreme court|politic|political race)\b/.test(
+    /\b(trump|biden|election|congress|senate|house|white house|policy|government|president|campaign|mayor|governor|supreme court|democrat|democrats|republican|republicans|politic|political race)\b/.test(
       haystack
     );
   const worldConflictTerms =
@@ -326,12 +386,12 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
       haystack
     );
 
-  if (politicsTerms) {
-    return "politics";
+  if ((worldConflictTerms || explicitWorldTerms) && !usPoliticsTerms) {
+    return "world";
   }
 
-  if (worldConflictTerms) {
-    return "world";
+  if (politicsTerms) {
+    return "politics";
   }
 
   if (sportsTerms) {
@@ -362,7 +422,7 @@ function inferCategoryFromText(...values: Array<string | null | undefined>) {
     return "health";
   }
 
-  if (/\b(world|international|global|ukraine|israel|gaza|china|russia|europe|asia|middle east)\b/.test(haystack)) {
+  if (explicitWorldTerms && !usPoliticsTerms) {
     return "world";
   }
 
@@ -374,6 +434,13 @@ function normalizeCategoryValue(
   ...signals: Array<string | null | undefined>
 ) {
   const normalized = stripHtml(rawCategory).trim().toLowerCase();
+  const signalHaystack = [rawCategory, ...signals]
+    .map((value) => stripHtml(value))
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const explicitWorldTerms = hasExplicitWorldTerms(signalHaystack);
+  const usPoliticsTerms = hasUsPoliticsTerms(signalHaystack);
 
   if (
     !normalized ||
@@ -386,7 +453,23 @@ function normalizeCategoryValue(
     return inferCategoryFromText(rawCategory, ...signals);
   }
 
-  if (["entertainment", "crime", "tech", "science", "business", "politics", "sports", "health", "world", "trending"].includes(normalized)) {
+  if (normalized === "technology") {
+    return "tech";
+  }
+
+  if (normalized === "real estate") {
+    return "real-estate";
+  }
+
+  if (
+    normalized === "politics" &&
+    explicitWorldTerms &&
+    !usPoliticsTerms
+  ) {
+    return "world";
+  }
+
+  if (["entertainment", "crime", "tech", "science", "business", "politics", "sports", "health", "world", "trending", "ai", "gaming", "real-estate", "auto"].includes(normalized)) {
     return normalized;
   }
 
@@ -463,8 +546,13 @@ function isArticleValidForCategory(article: AggregatedNewsArticle, requestedCate
         haystack
       );
     case "world":
-      return /\b(world|international|foreign affairs|global|war|ukraine|russia|china|gaza|israel|europe|asia|middle east|beirut|hezbollah|iran)\b/.test(
-        haystack
+      return (
+        /\b(foreign affairs|foreign policy|foreign minister|international crisis|international relations|diplomacy|diplomatic|middle east|europe|asia|africa|latin america|ukraine|israel|iran|china|russia|nato|un|united nations|gaza|lebanon|beirut|hezbollah|hamas|cease-?fire|airstrike|airstrikes|missile|missiles|overseas|global affairs|vatican diplomacy)\b/.test(
+          haystack
+        ) &&
+        !/\b(world cup|world series|world record|mlb|nba|nfl|nhl|wnba|ncaa|triple-a|pitcher|homers|finals|game|player|team|coach|uaw|gm|strike|supplier|union|tentative agreement|company|companies|market|markets|earnings|stocks?|business|labor|white house|congress|senate|house|governor|mayor|campaign|election|trump|biden|celebrity|movie|music|church opening)\b/.test(
+          haystack
+        )
       );
     case "politics":
       return /\b(election|government|congress|president|mayor|policy|campaign|senate|house|white house|governor|politics?)\b/.test(
@@ -478,6 +566,22 @@ function isArticleValidForCategory(article: AggregatedNewsArticle, requestedCate
       return /\b(medicine|medical|disease|fitness|nutrition|drugs?|hospital|doctor|vaccine|health|wellness)\b/.test(
         haystack
       );
+    case "ai":
+      return /\b(ai|artificial intelligence|generative ai|openai|chatgpt|anthropic|claude|gemini|copilot|llm|large language model|machine learning)\b/.test(
+        haystack
+      );
+    case "gaming":
+      return /\b(gaming|video game|video games|game studio|xbox|playstation|nintendo|steam|esports|pc gaming|console|game release|game launch)\b/.test(
+        haystack
+      );
+    case "real-estate":
+      return /\b(real estate|housing market|housing|mortgage|mortgages|home sales|home prices|property|properties|rent|renters|landlord|housing affordability|zillow|redfin|realtor)\b/.test(
+        haystack
+      );
+    case "auto":
+      return /\b(auto|automotive|vehicle|vehicles|ev|electric vehicle|hybrid|autonomous driving|self-driving|vehicle safety|new model|new car|auto industry|automotive technology|tesla|ford|gm|toyota|honda|bmw|mercedes|rivian|lucid)\b/.test(
+        haystack
+      ) && !/\b(nascar|formula 1|formula1|indycar|motogp)\b/.test(haystack);
     case "trending":
       return true;
     default:
@@ -530,6 +634,13 @@ function dedupeArticles(articles: AggregatedNewsArticle[]) {
 }
 
 function mapCurrentArticle(article: Awaited<ReturnType<typeof fetchCurrentProviderArticles>>[number]): AggregatedNewsArticle {
+  const normalizedCategory = normalizeCategoryValue(
+    article.category,
+    article.title,
+    article.description,
+    article.source,
+    article.url
+  );
   return {
     id: article.id,
     title: article.title,
@@ -546,19 +657,101 @@ function mapCurrentArticle(article: Awaited<ReturnType<typeof fetchCurrentProvid
     ogImage: null,
     twitterImage: null,
     thumbnail: null,
-    category: normalizeCategoryValue(
-      article.category,
-      article.title,
-      article.description,
-      article.source,
-      article.url
-    ),
+    category: normalizedCategory,
     publishedAt: article.publishedAt,
     time: "Recent",
     likes: 0,
     comments: [],
     provider: "current",
   };
+}
+
+async function fetchWorldSupplementArticles() {
+  const worldQueryResults = await Promise.allSettled(
+    WORLD_SUPPLEMENT_QUERIES.map((query) =>
+      withProviderTimeout(
+        "current",
+        fetchCurrentProviderArticles(query),
+        WORLD_SUPPLEMENT_QUERY_TIMEOUT_MS
+      )
+    )
+  );
+
+  const worldArticles = worldQueryResults.flatMap((result) =>
+    result.status === "fulfilled"
+      ? result.value.map(mapCurrentArticle)
+      : []
+  );
+
+  const imageValidWorldArticles = worldArticles.filter((article) =>
+    hasRealImageUrl(article.imageUrl)
+  );
+  const worldValidationResults = imageValidWorldArticles.map((article) => {
+    const valid = isArticleValidForCategory(article, "world");
+    const haystack = [
+      article.title,
+      article.description,
+      article.source,
+      article.sourceName,
+      article.category,
+      article.url,
+      article.content,
+    ]
+      .filter(Boolean)
+      .map((value) => stripHtml(value))
+      .join(" ")
+      .toLowerCase();
+    const hasWorldTerms =
+      /\b(world|international|foreign affairs|global|middle east|europe|asia|africa|latin america|ukraine|russia|china|gaza|israel|iran|nato|un|united nations|foreign|overseas|beirut|hezbollah|lebanon)\b/.test(
+        haystack
+      );
+    const hasUsPoliticsTerms =
+      /\b(u\.?s\.?|united states|white house|congress|senate|house|governor|mayor|campaign|election|trump|biden)\b/.test(
+        haystack
+      );
+    const rejectionReason = valid
+      ? null
+      : !hasWorldTerms
+        ? "missing-world-terms"
+        : hasUsPoliticsTerms
+          ? "us-politics-overlap"
+          : "failed-world-validator";
+
+    return {
+      article,
+      valid,
+      rejectionReason,
+    };
+  });
+  const strictlyValidWorldArticles = worldValidationResults
+    .filter((result) => result.valid)
+    .map((result) => result.article);
+
+  console.log("WORLD_RAW_COUNT", worldArticles.length);
+  console.log("WORLD_WITH_IMAGES_COUNT", imageValidWorldArticles.length);
+  console.log("WORLD_AFTER_VALIDATION_COUNT", strictlyValidWorldArticles.length);
+  console.log(
+    "WORLD_TARGETED_SAMPLE_TITLES",
+    strictlyValidWorldArticles.slice(0, 3).map((article) => article.title)
+  );
+  console.log(
+    "WORLD_REJECTED_SAMPLE_TITLES",
+    worldValidationResults
+      .filter((result) => !result.valid)
+      .slice(0, 5)
+      .map((result) => ({
+        title: result.article.title,
+        category: result.article.category,
+        reason: result.rejectionReason,
+      }))
+  );
+
+  return dedupeArticles(
+    strictlyValidWorldArticles.map((article) => ({
+      ...article,
+      category: "world",
+    }))
+  ).slice(0, WORLD_SUPPLEMENT_PROVIDER_CAP);
 }
 
 function getLargestNytImageUrl(
@@ -1018,16 +1211,23 @@ export async function GET(request: Request) {
   console.log("PROVIDER START", "current");
   console.log("PROVIDER START", "nyt");
   console.log("PROVIDER START", "currents");
+  const shouldFetchWorldSupplement =
+    !normalizedRequestedCategory || normalizedRequestedCategory === "world";
+  if (shouldFetchWorldSupplement) {
+    console.log("PROVIDER START", "world-supplement");
+  }
 
   const providerResults = await Promise.allSettled([
     withProviderTimeout("current", fetchCurrentProviderArticles(category)),
     withProviderTimeout("nyt", fetchNytArticles(category)),
     withProviderTimeout("currents", fetchCurrentsArticles(category)),
+    shouldFetchWorldSupplement ? fetchWorldSupplementArticles() : Promise.resolve([]),
   ]);
 
   const currentResult = providerResults[0];
   const nytResult = providerResults[1];
   const currentsResult = providerResults[2];
+  const worldSupplementResult = providerResults[3];
 
   const currentArticles =
     currentResult.status === "fulfilled"
@@ -1071,14 +1271,38 @@ export async function GET(request: Request) {
     );
   }
 
+  const worldSupplementArticles =
+    worldSupplementResult?.status === "fulfilled"
+      ? worldSupplementResult.value
+      : [];
+  if (shouldFetchWorldSupplement) {
+    if (worldSupplementResult?.status === "fulfilled") {
+      console.log("PROVIDER DONE", "world-supplement", worldSupplementArticles.length);
+    } else {
+      console.warn(
+        "PROVIDER FAILED",
+        "world-supplement",
+        worldSupplementResult?.reason instanceof Error
+          ? worldSupplementResult.reason.message
+          : String(worldSupplementResult?.reason)
+      );
+    }
+  }
+
   const guardianArticles: AggregatedNewsArticle[] = ENABLE_GUARDIAN ? [] : [];
   const gnewsArticles: AggregatedNewsArticle[] = ENABLE_GNEWS ? [] : [];
 
   const currentMappedArticles = currentArticles.map(mapCurrentArticle);
+  const worldReclassifiedFromPoliticsCount = currentArticles.filter((article, index) => {
+    const rawCategory = stripHtml(article.category).trim().toLowerCase();
+    return rawCategory === "politics" && currentMappedArticles[index]?.category === "world";
+  }).length;
+  console.log("WORLD_RECLASSIFIED_FROM_POLITICS_COUNT", worldReclassifiedFromPoliticsCount);
   const mergedArticles = [
     ...currentMappedArticles,
     ...nytArticles,
     ...currentsArticles,
+    ...worldSupplementArticles,
     ...guardianArticles,
     ...gnewsArticles,
   ];
@@ -1091,10 +1315,14 @@ export async function GET(request: Request) {
     : mergedArticles;
   const mappedArticles = dedupeArticles(categoryFilteredArticles);
   const interleavedArticles = interleaveProviderArticles(mappedArticles);
+  const prioritizedArticles =
+    !normalizedRequestedCategory && worldSupplementArticles.length > 0
+      ? reserveCategoryArticles(interleavedArticles, "world", WORLD_RESERVED_SLOTS)
+      : interleavedArticles;
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const articles = interleavedArticles.slice(startIndex, endIndex);
-  const hasMore = endIndex < interleavedArticles.length;
+  const articles = prioritizedArticles.slice(startIndex, endIndex);
+  const hasMore = endIndex < prioritizedArticles.length;
 
   return Response.json({
     articles,

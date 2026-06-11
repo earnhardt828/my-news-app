@@ -3000,6 +3000,10 @@ const TRENDING_SECTION_ORDER = [
   "crime",
   "health",
   "science",
+  "ai",
+  "gaming",
+  "real-estate",
+  "auto",
 ] as const;
 
 type WeatherCardData = {
@@ -3231,6 +3235,10 @@ function isArticleValidForTrendingSection(
     | "crime"
     | "health"
     | "science"
+    | "ai"
+    | "gaming"
+    | "real-estate"
+    | "auto"
 ) {
   if (!hasValidCategoryArticleImage(article) || isLowInformationLiveStreamArticle(article)) {
     return false;
@@ -3259,6 +3267,14 @@ function isArticleValidForTrendingSection(
       return isStrictHealthArticle(article);
     case "science":
       return isStrictScienceArticle(article);
+    case "ai":
+      return isStrictAiArticle(article);
+    case "gaming":
+      return isStrictGamingArticle(article);
+    case "real-estate":
+      return isStrictRealEstateArticle(article);
+    case "auto":
+      return isStrictAutoArticle(article);
     default:
       return false;
   }
@@ -5231,6 +5247,81 @@ function isStrictHealthArticle(article: Article) {
     );
 
   return hasHealthTerms && !hasRejectedTerms;
+}
+
+function isStrictAiArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasAiTerms =
+    /\b(ai|artificial intelligence|generative ai|openai|chatgpt|anthropic|claude|gemini|copilot|llm|large language model|machine learning)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(war|bombing|election|campaign|celebrity|movie|music|sports|crime|housing market|real estate)\b/.test(
+      haystack
+    );
+
+  return hasAiTerms && !hasRejectedTerms;
+}
+
+function isStrictGamingArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasGamingTerms =
+    /\b(gaming|video game|video games|game studio|xbox|playstation|nintendo|steam|esports|pc gaming|console|game release|game launch)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(olympic games|hunger games|sports|war|bombing|election|campaign|crime|real estate)\b/.test(
+      haystack
+    );
+
+  return hasGamingTerms && !hasRejectedTerms;
+}
+
+function isStrictRealEstateArticle(article: Article) {
+  const haystack = [
+    article.title,
+    article.description,
+    article.source,
+    article.category,
+    article.url,
+    article.content,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hasRealEstateTerms =
+    /\b(real estate|housing market|housing|mortgage|mortgages|home sales|home prices|property|properties|rent|renters|landlord|housing affordability|zillow|redfin|realtor)\b/.test(
+      haystack
+    );
+  const hasRejectedTerms =
+    /\b(sports|movie|music|celebrity|war|bombing|crime scene|campaign|election|travel)\b/.test(
+      haystack
+    );
+
+  return hasRealEstateTerms && !hasRejectedTerms;
 }
 
 function isStrictAutoArticle(article: Article) {
@@ -11845,6 +11936,52 @@ export default function Home() {
     return [] as Article[];
   }, [sciencePreviewArticles, sortMode, visibleArticles]);
 
+  const aiTabArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(
+      dedupeArticlesByContent([
+        ...technologyPreviewArticles.slice(0, 60),
+        ...visibleArticles.slice(0, 120),
+      ]).filter(
+        (article) => isStrictAiArticle(article) && !isLowInformationLiveStreamArticle(article)
+      ),
+      20
+    );
+  }, [sortMode, technologyPreviewArticles, visibleArticles]);
+
+  const gamingTabArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(
+      dedupeArticlesByContent(visibleArticles.slice(0, 120)).filter(
+        (article) => isStrictGamingArticle(article) && !isLowInformationLiveStreamArticle(article)
+      ),
+      20
+    );
+  }, [sortMode, visibleArticles]);
+
+  const realEstateTabArticles = useMemo(() => {
+    if (sortMode !== "trending") {
+      return [] as Article[];
+    }
+
+    return selectSourceBalancedArticles(
+      dedupeArticlesByContent([
+        ...businessPreviewArticles.slice(0, 60),
+        ...visibleArticles.slice(0, 120),
+      ]).filter(
+        (article) =>
+          isStrictRealEstateArticle(article) && !isLowInformationLiveStreamArticle(article)
+      ),
+      20
+    );
+  }, [businessPreviewArticles, sortMode, visibleArticles]);
+
   const carsTabArticles = useMemo(() => {
     if (sortMode === "trending") {
       return selectSourceBalancedArticles(
@@ -17525,7 +17662,7 @@ export default function Home() {
         <div className="home-section-header">
           <div className="stack" style={{ gap: "4px" }}>
             <strong className="profile-section-title home-section-title breaking-news-title">
-              Breaking News
+              {`Breaking News (${sectionArticles.length})`}
             </strong>
           </div>
         </div>
@@ -18258,10 +18395,12 @@ export default function Home() {
         science: [] as Article[],
         crime: [] as Article[],
         health: [] as Article[],
+        ai: [] as Article[],
+        gaming: [] as Article[],
+        realEstate: [] as Article[],
+        auto: [] as Article[],
       };
     }
-
-    const usedKeys = new Set<string>();
 
     const claimSectionArticles = (
       candidates: Article[],
@@ -18273,15 +18412,10 @@ export default function Home() {
       const selected = selectSourceBalancedArticles(
         dedupeArticlesByContent(candidates)
           .filter((article): article is Article => Boolean(article?.title))
-          .filter((article) => !usedKeys.has(getArticleDeduplicationKey(article)))
           .filter((article) => (options.validator ? options.validator(article) : true))
           .filter((article) => hasValidCategoryArticleImage(article)),
         options.limit
       );
-
-      selected.forEach((article) => {
-        usedKeys.add(getArticleDeduplicationKey(article));
-      });
 
       return selected;
     };
@@ -18333,6 +18467,22 @@ export default function Home() {
       limit: 6,
       validator: (article) => isArticleValidForTrendingSection(article, "science"),
     });
+    const ai = claimSectionArticles(aiTabArticles, {
+      limit: 6,
+      validator: (article) => isArticleValidForTrendingSection(article, "ai"),
+    });
+    const gaming = claimSectionArticles(gamingTabArticles, {
+      limit: 6,
+      validator: (article) => isArticleValidForTrendingSection(article, "gaming"),
+    });
+    const realEstate = claimSectionArticles(realEstateTabArticles, {
+      limit: 6,
+      validator: (article) => isArticleValidForTrendingSection(article, "real-estate"),
+    });
+    const auto = claimSectionArticles(carsTabArticles, {
+      limit: 6,
+      validator: (article) => isArticleValidForTrendingSection(article, "auto"),
+    });
     const weatherArticles = claimSectionArticles(
       [
         ...(trendingWeatherLeadArticle ? [trendingWeatherLeadArticle] : []),
@@ -18357,15 +18507,24 @@ export default function Home() {
       technology,
       crime,
       health,
-      science: scienceCandidates.length >= 5 ? scienceCandidates : [],
+      science: scienceCandidates,
+      ai,
+      gaming,
+      realEstate,
+      auto,
     };
   }, [
+    aiTabArticles,
     breakingNewsPreviewArticles,
     businessTabArticles,
+    businessPreviewArticles,
+    carsTabArticles,
     crimeTabArticles,
+    gamingTabArticles,
     hasRenderableSportsVisual,
     healthTabArticles,
     politicsTabArticles,
+    realEstateTabArticles,
     scienceTabArticles,
     sortMode,
     sportsTabArticles,
@@ -18511,9 +18670,46 @@ export default function Home() {
         limit: 6,
         categoryLabelOverride: "Science",
       },
+      ai: {
+        key: "ai",
+        title: "AI",
+        articles: trendingSectionArticles.ai,
+        limit: 6,
+        categoryLabelOverride: "AI",
+      },
+      gaming: {
+        key: "gaming",
+        title: "Gaming",
+        articles: trendingSectionArticles.gaming,
+        limit: 6,
+        categoryLabelOverride: "Gaming",
+      },
+      "real-estate": {
+        key: "real-estate",
+        title: "Real Estate",
+        articles: trendingSectionArticles.realEstate,
+        limit: 6,
+        categoryLabelOverride: "Real Estate",
+      },
+      auto: {
+        key: "auto",
+        title: "Auto",
+        articles: trendingSectionArticles.auto,
+        limit: 6,
+        categoryLabelOverride: "Auto",
+      },
     }),
     [trendingSectionArticles]
   );
+
+  const worldArticles = trendingSectionArticles.world;
+  const politicsArticles = trendingSectionArticles.politics;
+  const healthArticles = trendingSectionArticles.health;
+  const scienceArticles = trendingSectionArticles.science;
+  const aiArticles = trendingSectionArticles.ai;
+  const gamingArticles = trendingSectionArticles.gaming;
+  const realEstateArticles = trendingSectionArticles.realEstate;
+  const autoArticles = trendingSectionArticles.auto;
 
   const renderedTrendingSectionKeys = useMemo(
     () =>
@@ -18522,11 +18718,7 @@ export default function Home() {
           return trendingSectionConfig[key].articles.length > 0;
         }
 
-        if (key === "science") {
-          return trendingSectionConfig[key].articles.length >= 5;
-        }
-
-        return trendingSectionConfig[key].articles.length >= 5;
+        return trendingSectionConfig[key].articles.length > 0;
       }),
     [trendingSectionConfig]
   );
@@ -18556,7 +18748,7 @@ export default function Home() {
           <section className="home-section-block home-section-plain home-top-trending-block">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">{section.title}</strong>
+                <strong className="profile-section-title home-section-title">{`${section.title} (${section.articles.length})`}</strong>
               </div>
             </div>
             <div className="stack home-section-list top-trending-card-rail top-trending-list-rail">
@@ -18580,7 +18772,7 @@ export default function Home() {
         );
       }
 
-      if (section.articles.length < 5) {
+      if (section.articles.length < 1) {
         return null;
       }
 
@@ -18589,7 +18781,7 @@ export default function Home() {
           <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">{section.title}</strong>
+                <strong className="profile-section-title home-section-title">{`${section.title} (${section.articles.length})`}</strong>
               </div>
             </div>
             {!TRENDING_SCORE_CARDS_DISABLED
@@ -18618,7 +18810,7 @@ export default function Home() {
           <section className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">{section.title}</strong>
+                <strong className="profile-section-title home-section-title">{`${section.title} (${section.articles.length})`}</strong>
               </div>
             </div>
             {renderBusinessStockTicker()}
@@ -18637,7 +18829,7 @@ export default function Home() {
           <section ref={trendingEntertainmentSectionRef} className="home-section-block home-section-plain">
             <div className="home-section-header">
               <div className="stack" style={{ gap: "4px" }}>
-                <strong className="profile-section-title home-section-title">{section.title}</strong>
+                <strong className="profile-section-title home-section-title">{`${section.title} (${section.articles.length})`}</strong>
               </div>
             </div>
             <div className="stack home-section-list top-trending-card-rail">
@@ -18660,7 +18852,7 @@ export default function Home() {
         >
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">{section.title}</strong>
+              <strong className="profile-section-title home-section-title">{`${section.title} (${section.articles.length})`}</strong>
             </div>
           </div>
           {renderArticleSectionWithLargeLead(section.articles, {
@@ -19954,10 +20146,6 @@ export default function Home() {
 
         {renderTrendingSectionByKey("top-trending")}
 
-        {renderTrendingSectionByKey("world")}
-
-        {renderTrendingSectionByKey("politics")}
-
         <section className="home-section-block home-section-plain">
           <div className="home-section-header">
             <div className="stack" style={{ gap: "4px" }}>
@@ -20350,33 +20538,37 @@ export default function Home() {
 
         {renderTrendingSectionByKey("crime")}
 
-        {renderTrendingSectionByKey("health")}
+        <section className="home-section-block home-section-plain">
+          <div className="stack" style={{ gap: "6px" }}>
+            <div className="muted">{`World: ${worldArticles.length}`}</div>
+            <div className="muted">{`Politics: ${politicsArticles.length}`}</div>
+            <div className="muted">{`Health: ${healthArticles.length}`}</div>
+            <div className="muted">{`Science: ${scienceArticles.length}`}</div>
+            <div className="muted">{`AI: ${aiArticles.length}`}</div>
+            <div className="muted">{`Gaming: ${gamingArticles.length}`}</div>
+            <div className="muted">{`Real Estate: ${realEstateArticles.length}`}</div>
+            <div className="muted">{`Auto: ${autoArticles.length}`}</div>
+          </div>
+        </section>
 
-        {renderTrendingSectionByKey("science")}
+        {worldArticles.length >= 5 ? renderTrendingSectionByKey("world") : null}
+
+        {politicsArticles.length > 0 ? renderTrendingSectionByKey("politics") : null}
+
+        {healthArticles.length >= 2 ? renderTrendingSectionByKey("health") : null}
+
+        {scienceArticles.length >= 2 ? renderTrendingSectionByKey("science") : null}
+
+        {aiArticles.length > 0 ? renderTrendingSectionByKey("ai") : null}
+
+        {gamingArticles.length > 0 ? renderTrendingSectionByKey("gaming") : null}
+
+        {realEstateArticles.length > 0 ? renderTrendingSectionByKey("real-estate") : null}
+
+        {autoArticles.length > 0 ? renderTrendingSectionByKey("auto") : null}
 
         {!TRENDING_AUTO_DISABLED ? (
           <>
-            <section ref={carsSectionRef} className="home-section-block home-section-plain">
-              <div className="home-section-header">
-                <div className="stack" style={{ gap: "4px" }}>
-                  <strong className="profile-section-title home-section-title">Auto</strong>
-                </div>
-              </div>
-
-              {carsTabArticles.length === 0 ? (
-                isCarsPreviewLoading ? (
-                  <div className="muted">Loading auto stories...</div>
-                ) : (
-                  <div className="empty-state compact-empty-state">
-                    <strong>No auto stories yet</strong>
-                    <span>Check back shortly for fresh auto and EV coverage.</span>
-                  </div>
-                )
-              ) : (
-                renderArticleSectionWithLargeLead(carsTabArticles, { limit: 6 })
-              )}
-            </section>
-
             {autoTrendingVideos.length > 0
               ? renderTallTrendingQuickWatchRow("Auto Videos", autoTrendingVideos, "auto-trending-videos")
               : null}
