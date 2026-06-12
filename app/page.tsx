@@ -18272,12 +18272,9 @@ export default function Home() {
 
   const renderPopularMusicSlider = (
     albumItems: PopularMusicAlbum[],
-    fallbackArticles: Article[]
+    _fallbackArticles: Article[]
   ) => {
-    const useAlbumItems = albumItems.length >= 3;
-    const cards = useAlbumItems ? albumItems : fallbackArticles;
-
-    if (cards.length === 0) {
+    if (albumItems.length === 0) {
       return null;
     }
 
@@ -18289,73 +18286,31 @@ export default function Home() {
           </div>
         </div>
         <div className="popular-music-scroll" role="list" aria-label="Popular music">
-          {useAlbumItems
-            ? albumItems.map((album) => (
-                <a
-                  key={`popular-music-album-${album.id}`}
-                  href={album.url ?? "#"}
-                  className="popular-music-card"
-                  role="listitem"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <div className="popular-music-card-art-shell">
-                    <img
-                      src={album.imageUrl}
-                      alt={album.title}
-                      className="popular-music-card-art"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                    <span className="popular-music-rank">#{album.rank}</span>
-                  </div>
-                  <div className="popular-music-card-copy">
-                    <strong className="popular-music-card-title">{album.title}</strong>
-                    <span className="popular-music-card-artist">{album.artist}</span>
-                  </div>
-                </a>
-              ))
-            : fallbackArticles.map((article, index) => {
-                const articleRouteId = getArticleRouteId(article);
-                const imageSrc = getArticleDisplayImage(article).src;
-                const musicMeta = getEntertainmentPopularMusicCardMeta(article);
-
-                if (!articleRouteId || !imageSrc) {
-                  console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
-                    section: "Popular Music",
-                    title: article.title,
-                    source: article.source,
-                  });
-                  return null;
-                }
-
-                return (
-                  <Link
-                    key={`popular-music-${article.id || article.url || getArticleDeduplicationKey(article)}`}
-                    href={`/article/${articleRouteId}/`}
-                    className="popular-music-card"
-                    role="listitem"
-                    onClick={(event) => {
-                      void handlePrimaryArticleOpen(event, article);
-                    }}
-                  >
-                    <div className="popular-music-card-art-shell">
-                      <img
-                        src={imageSrc}
-                        alt={musicMeta.title}
-                        className="popular-music-card-art"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      <span className="popular-music-rank">#{index + 1}</span>
-                    </div>
-                    <div className="popular-music-card-copy">
-                      <strong className="popular-music-card-title">{musicMeta.title}</strong>
-                      <span className="popular-music-card-artist">{musicMeta.artist}</span>
-                    </div>
-                  </Link>
-                );
-              })}
+          {albumItems.map((album) => (
+            <a
+              key={`popular-music-album-${album.id}`}
+              href={album.url ?? "#"}
+              className="popular-music-card"
+              role="listitem"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <div className="popular-music-card-art-shell">
+                <img
+                  src={album.imageUrl}
+                  alt={album.title}
+                  className="popular-music-card-art"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <span className="popular-music-rank">#{album.rank}</span>
+              </div>
+              <div className="popular-music-card-copy">
+                <strong className="popular-music-card-title">{album.title}</strong>
+                <span className="popular-music-card-artist">{album.artist}</span>
+              </div>
+            </a>
+          ))}
         </div>
       </section>
     );
@@ -18601,21 +18556,7 @@ export default function Home() {
     console.log("STOCK TICKER ITEMS COUNT", tickerItems.length);
 
     if (tickerItems.length === 0) {
-      return (
-        <section className="home-section-block home-section-plain quick-watch-row">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Stock Market</strong>
-            </div>
-          </div>
-          <div className="muted" style={{ fontSize: "0.8rem" }}>
-            API returned zero stock items
-          </div>
-          <div className="muted" style={{ fontSize: "0.74rem", marginTop: "6px" }}>
-            STOCK ITEMS RENDERED: 0
-          </div>
-        </section>
-      );
+      return null;
     }
 
     return (
@@ -18696,9 +18637,6 @@ export default function Home() {
               </div>
             );
           })}
-        </div>
-        <div className="muted" style={{ fontSize: "0.74rem", marginTop: "6px" }}>
-          {`STOCK ITEMS RENDERED: ${tickerItems.length}`}
         </div>
       </section>
     );
@@ -19084,16 +19022,32 @@ export default function Home() {
     };
   }, [hasRenderableSportsVisual, sortMode, trendingRenderArticles]);
 
-  const visibleTrendingNewsSections = useMemo(
-    () => ({
-      breaking:
-        trendingSectionArticles.breaking.length > 0
-          ? trendingSectionArticles.breaking
-          : emergencyTrendingPageSections.breaking,
-      topTrending:
-        trendingSectionArticles.topTrending.length > 0
-          ? trendingSectionArticles.topTrending
-          : emergencyTrendingPageSections.topTrending,
+  const visibleTrendingNewsSections = useMemo(() => {
+    const baseBreaking =
+      trendingSectionArticles.breaking.length > 0
+        ? trendingSectionArticles.breaking
+        : emergencyTrendingPageSections.breaking;
+    const baseTopTrending =
+      trendingSectionArticles.topTrending.length > 0
+        ? trendingSectionArticles.topTrending
+        : emergencyTrendingPageSections.topTrending;
+
+    const breaking =
+      baseBreaking.length > 0
+        ? baseBreaking
+        : dedupeArticlesByContent(baseTopTrending)
+            .filter((article) => !isLowInformationLiveStreamArticle(article))
+            .slice(0, 5);
+    const breakingKeys = new Set(
+      breaking.map((article) => getArticleDeduplicationKey(article))
+    );
+    const topTrending = baseTopTrending.filter(
+      (article) => !breakingKeys.has(getArticleDeduplicationKey(article))
+    );
+
+    return {
+      breaking,
+      topTrending,
       world:
         trendingSectionArticles.world.length > 0
           ? trendingSectionArticles.world
@@ -19122,9 +19076,8 @@ export default function Home() {
         trendingSectionArticles.business.length > 0
           ? trendingSectionArticles.business
           : emergencyTrendingPageSections.business,
-    }),
-    [emergencyTrendingPageSections, trendingSectionArticles]
-  );
+    };
+  }, [emergencyTrendingPageSections, trendingSectionArticles]);
 
   useEffect(() => {
     if (sortMode !== "trending") {
@@ -19146,29 +19099,11 @@ export default function Home() {
 
   const dedupedVisibleTrendingNewsSections = useMemo(() => {
     const usedArticleKeys = new Set<string>();
-    const protectedCategoryKeys = new Set<string>();
-
-    [
-      ...visibleTrendingNewsSections.world,
-      ...visibleTrendingNewsSections.politics,
-      ...visibleTrendingNewsSections.entertainment,
-      ...visibleTrendingNewsSections.sports,
-      ...visibleTrendingNewsSections.technology,
-      ...visibleTrendingNewsSections.crime,
-      ...visibleTrendingNewsSections.business,
-    ].forEach((article) => {
-      protectedCategoryKeys.add(getArticleDeduplicationKey(article));
-    });
-
-    const takeUnusedArticles = (articles: Article[], options?: { allowProtected?: boolean }) => {
+    const takeUnusedArticles = (articles: Article[]) => {
       const uniqueArticles: Article[] = [];
 
       articles.forEach((article) => {
         const articleKey = getArticleDeduplicationKey(article);
-
-        if (!options?.allowProtected && protectedCategoryKeys.has(articleKey)) {
-          return;
-        }
 
         if (usedArticleKeys.has(articleKey)) {
           return;
@@ -19184,17 +19119,13 @@ export default function Home() {
     return {
       breaking: takeUnusedArticles(visibleTrendingNewsSections.breaking),
       topTrending: takeUnusedArticles(visibleTrendingNewsSections.topTrending),
-      world: takeUnusedArticles(visibleTrendingNewsSections.world, { allowProtected: true }),
-      politics: takeUnusedArticles(visibleTrendingNewsSections.politics, { allowProtected: true }),
-      entertainment: takeUnusedArticles(visibleTrendingNewsSections.entertainment, {
-        allowProtected: true,
-      }),
-      sports: takeUnusedArticles(visibleTrendingNewsSections.sports, { allowProtected: true }),
-      technology: takeUnusedArticles(visibleTrendingNewsSections.technology, {
-        allowProtected: true,
-      }),
-      crime: takeUnusedArticles(visibleTrendingNewsSections.crime, { allowProtected: true }),
-      business: takeUnusedArticles(visibleTrendingNewsSections.business, { allowProtected: true }),
+      world: takeUnusedArticles(visibleTrendingNewsSections.world),
+      politics: takeUnusedArticles(visibleTrendingNewsSections.politics),
+      entertainment: takeUnusedArticles(visibleTrendingNewsSections.entertainment),
+      sports: takeUnusedArticles(visibleTrendingNewsSections.sports),
+      technology: takeUnusedArticles(visibleTrendingNewsSections.technology),
+      crime: takeUnusedArticles(visibleTrendingNewsSections.crime),
+      business: takeUnusedArticles(visibleTrendingNewsSections.business),
     };
   }, [visibleTrendingNewsSections]);
 
@@ -20826,10 +20757,6 @@ export default function Home() {
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
 
-        <section className="home-section-block home-section-plain">
-          <div className="muted">Graffiti app loaded</div>
-        </section>
-
         {isInitialFeedLoading && directTrendingArticles.length === 0 && articles.length === 0 ? (
           <section className="home-section-block home-section-plain">
             <div className="muted">Loading stories...</div>
@@ -20922,7 +20849,7 @@ export default function Home() {
           </section>
         ) : null}
 
-        {popularMusicAlbums.length >= 3 || popularMusicSliderArticles.length >= 2
+        {popularMusicAlbums.length > 0
           ? renderPopularMusicSlider(popularMusicAlbums, popularMusicSliderArticles)
           : null}
 
@@ -20988,6 +20915,7 @@ export default function Home() {
                 <strong className="profile-section-title home-section-title">Business</strong>
               </div>
             </div>
+            {renderBusinessStockTicker()}
             {renderArticleSectionWithLargeLead(dedupedVisibleTrendingNewsSections.business, {
               limit: 6,
               categoryLabelOverride: "Business",
