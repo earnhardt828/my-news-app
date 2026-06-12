@@ -7133,6 +7133,7 @@ export default function Home() {
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMoreArticles, setIsLoadingMoreArticles] = useState(false);
   const [feedLoadError, setFeedLoadError] = useState<string | null>(null);
+  const [lastApiRequestUrl, setLastApiRequestUrl] = useState<string>("");
   const [localQuery, setLocalQuery] = useState("");
   const [localQueryDraft, setLocalQueryDraft] = useState("");
   const [localLocationLabel, setLocalLocationLabel] = useState("");
@@ -14374,49 +14375,89 @@ export default function Home() {
     const cachedTrendingFeed = readCachedFeedPayload(trendingCacheKey);
 
     void (async () => {
+      const apiRequestUrl = buildApiUrl("/api/aggregated-news");
+      const apiBaseUrl = apiRequestUrl.replace(/\/api\/aggregated-news\/?$/, "");
+
       try {
+        setLastApiRequestUrl(apiRequestUrl);
+        console.log("API_BASE_URL", apiBaseUrl);
+        console.log("API_REQUEST_URL", apiRequestUrl);
         const response = await apiFetch("/api/aggregated-news", {
           cache: "no-store",
         });
 
-        const payload = (await response.json()) as PaginatedNewsResponse | { articles?: FeedArticlePayload[] };
-        const nextArticles = normalizeHomepageArticles(payload.articles ?? []);
+        console.log("API_RESPONSE_STATUS", response.status);
+        console.log("API_RESPONSE_OK", response.ok);
+        console.log(
+          "API_RESPONSE_CONTENT_TYPE",
+          response.headers.get("content-type") ?? ""
+        );
+
+        const responseText = await response.text();
+        console.log("API_RESPONSE_TEXT_FIRST_200", responseText.slice(0, 200));
+
+        const payload = JSON.parse(responseText) as
+          | PaginatedNewsResponse
+          | { articles?: FeedArticlePayload[] }
+          | FeedArticlePayload[];
+        const payloadArticles = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload.articles)
+            ? payload.articles
+            : [];
+        const nextArticles = normalizeHomepageArticles(payloadArticles);
 
         if (isCancelled) {
           return;
         }
 
         console.log("ARTICLES_FETCH_SUCCESS", true);
+        console.log("API_RESPONSE_ARTICLE_COUNT", payloadArticles.length);
         console.log("ARTICLES_COUNT", nextArticles.length);
         console.log("FETCHED CATEGORY COUNTS", countArticlesByCategory(nextArticles));
         setDirectTrendingArticles(nextArticles);
         setArticles(nextArticles);
         console.log("ARTICLES_SET_STATE", nextArticles.length);
-        setHasMoreArticles(Boolean("hasMore" in payload ? payload.hasMore : false));
-        setFeedPage("page" in payload && typeof payload.page === "number" ? payload.page : 1);
+        setHasMoreArticles(Boolean(!Array.isArray(payload) && "hasMore" in payload ? payload.hasMore : false));
+        setFeedPage(
+          !Array.isArray(payload) && "page" in payload && typeof payload.page === "number"
+            ? payload.page
+            : 1
+        );
         if (nextArticles.length > 0) {
+          console.log("USING_LIVE_API", true);
+          console.log("FALLBACK_ARTICLES_USED", false);
           writeCachedFeedPayload(trendingCacheKey, {
             articles: nextArticles,
-            page: "page" in payload && typeof payload.page === "number" ? payload.page : 1,
-            hasMore: Boolean("hasMore" in payload ? payload.hasMore : false),
+            page:
+              !Array.isArray(payload) && "page" in payload && typeof payload.page === "number"
+                ? payload.page
+                : 1,
+            hasMore: Boolean(
+              !Array.isArray(payload) && "hasMore" in payload ? payload.hasMore : false
+            ),
             savedAt: new Date().toISOString(),
           });
           setFeedLoadError(null);
         } else if (cachedTrendingFeed?.articles?.length) {
           console.warn("ARTICLES_FETCH_EMPTY_USING_CACHE", cachedTrendingFeed.articles.length);
+          console.log("FALLBACK_ARTICLES_USED", {
+            source: "cache",
+            count: cachedTrendingFeed.articles.length,
+          });
           setDirectTrendingArticles(cachedTrendingFeed.articles);
           setArticles(cachedTrendingFeed.articles);
           setHasMoreArticles(cachedTrendingFeed.hasMore);
           setFeedPage(cachedTrendingFeed.page);
           setFeedLoadError("Showing the last loaded stories while we retry.");
         } else {
-          const fallbackArticles = getNativeStoryFallbackArticles();
-          console.warn("ARTICLES_FETCH_EMPTY_USING_FALLBACK", fallbackArticles.length);
-          setDirectTrendingArticles(fallbackArticles);
-          setArticles(fallbackArticles);
+          console.error("API_ERROR", "Live API returned zero articles and no cache was available.");
+          console.log("FALLBACK_ARTICLES_USED", false);
+          setDirectTrendingArticles([]);
+          setArticles([]);
           setHasMoreArticles(false);
           setFeedPage(1);
-          setFeedLoadError("Showing bundled stories while live news reconnects.");
+          setFeedLoadError("Live API returned zero articles.");
         }
       } catch (error) {
         if (isCancelled) {
@@ -14424,22 +14465,31 @@ export default function Home() {
         }
 
         console.error("ARTICLES_FETCH_SUCCESS", false);
+        console.error("ARTICLE_FETCH_ERROR", error);
+        console.error("API_ERROR", error);
         console.error("EMERGENCY_TRENDING_FETCH_ERROR", error);
         if (cachedTrendingFeed?.articles?.length) {
           console.warn("ARTICLES_FETCH_FALLBACK_CACHE", cachedTrendingFeed.articles.length);
+          console.log("FALLBACK_ARTICLES_USED", {
+            source: "cache",
+            count: cachedTrendingFeed.articles.length,
+          });
           setDirectTrendingArticles(cachedTrendingFeed.articles);
           setArticles(cachedTrendingFeed.articles);
           setHasMoreArticles(cachedTrendingFeed.hasMore);
           setFeedPage(cachedTrendingFeed.page);
           setFeedLoadError("Showing the last loaded stories while we retry.");
         } else {
-          const fallbackArticles = getNativeStoryFallbackArticles();
-          console.warn("ARTICLES_FETCH_FALLBACK_DEMO", fallbackArticles.length);
-          setDirectTrendingArticles(fallbackArticles);
-          setArticles(fallbackArticles);
+          console.log("FALLBACK_ARTICLES_USED", false);
+          setDirectTrendingArticles([]);
+          setArticles([]);
           setHasMoreArticles(false);
           setFeedPage(1);
-          setFeedLoadError("Showing bundled stories while live news reconnects.");
+          setFeedLoadError(
+            error instanceof Error
+              ? `${error.name}: ${error.message}`
+              : String(error)
+          );
         }
       } finally {
         if (isCancelled) {
@@ -20791,6 +20841,11 @@ export default function Home() {
             <div className="empty-state compact-empty-state">
               <strong>Couldn’t load stories</strong>
               <span>{feedLoadError}</span>
+              {lastApiRequestUrl ? (
+                <span style={{ fontSize: "12px", wordBreak: "break-word" }}>
+                  API URL: {lastApiRequestUrl}
+                </span>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -23001,6 +23056,11 @@ export default function Home() {
               ? "Create the first one."
               : "Check back in a moment for fresh stories."}
           </span>
+          {feedLoadError && lastApiRequestUrl ? (
+            <span style={{ fontSize: "12px", wordBreak: "break-word" }}>
+              API URL: {lastApiRequestUrl}
+            </span>
+          ) : null}
         </div>
       ) : (
         <div className="stack feed-results-stack">
@@ -23008,6 +23068,11 @@ export default function Home() {
             <div className="feed-inline-error" role="status" aria-live="polite">
               <div className="stack" style={{ gap: "10px" }}>
                 <span>{feedLoadError}</span>
+                {lastApiRequestUrl ? (
+                  <span style={{ fontSize: "12px", wordBreak: "break-word" }}>
+                    API URL: {lastApiRequestUrl}
+                  </span>
+                ) : null}
               </div>
             </div>
           ) : null}

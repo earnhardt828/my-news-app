@@ -147,6 +147,14 @@ const AGGREGATED_NEWS_CACHE_TTL_MS = 10 * 60 * 1000;
 const ENABLE_GUARDIAN = false;
 const ENABLE_GNEWS = false;
 
+const AGGREGATED_NEWS_CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  Vary: "Origin",
+  "Cache-Control": "s-maxage=600, stale-while-revalidate=300",
+} as const;
+
 type AggregatedNewsRouteResponse = {
   articles: AggregatedNewsArticle[];
   nextPage: number | null;
@@ -1210,175 +1218,195 @@ async function fetchGnewsArticles(category: string): Promise<GNewsFetchResult> {
 }
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const mode = searchParams.get("mode")?.trim() || "trending";
-  const requestedCategory = searchParams.get("category")?.trim() || "";
-  const query = searchParams.get("query")?.trim() || "";
-  const page = Math.max(1, Number(searchParams.get("page") || "1"));
-  const pageSize = Math.max(
-    1,
-    Math.min(FINAL_FEED_PAGE_SIZE_CAP, Number(searchParams.get("pageSize") || String(FINAL_FEED_PAGE_SIZE_CAP)))
-  );
-  const category = requestedCategory || query || mode || "general";
-  const normalizedRequestedCategory = requestedCategory
-    ? normalizeCategoryValue(requestedCategory, requestedCategory)
-    : "";
-  const cacheKey = JSON.stringify({
-    mode,
-    requestedCategory,
-    query,
-    page,
-    pageSize,
-  });
-  const cachedEntry = aggregatedNewsRouteCache.get(cacheKey);
-
-  if (cachedEntry && Date.now() - cachedEntry.savedAt < AGGREGATED_NEWS_CACHE_TTL_MS) {
-    return Response.json(cachedEntry.payload, {
-      headers: {
-        "Cache-Control": "s-maxage=600, stale-while-revalidate=300",
-      },
+  try {
+    const { searchParams } = new URL(request.url);
+    const mode = searchParams.get("mode")?.trim() || "trending";
+    const requestedCategory = searchParams.get("category")?.trim() || "";
+    const query = searchParams.get("query")?.trim() || "";
+    const page = Math.max(1, Number(searchParams.get("page") || "1"));
+    const pageSize = Math.max(
+      1,
+      Math.min(FINAL_FEED_PAGE_SIZE_CAP, Number(searchParams.get("pageSize") || String(FINAL_FEED_PAGE_SIZE_CAP)))
+    );
+    const category = requestedCategory || query || mode || "general";
+    const normalizedRequestedCategory = requestedCategory
+      ? normalizeCategoryValue(requestedCategory, requestedCategory)
+      : "";
+    const cacheKey = JSON.stringify({
+      mode,
+      requestedCategory,
+      query,
+      page,
+      pageSize,
     });
-  }
+    const cachedEntry = aggregatedNewsRouteCache.get(cacheKey);
 
-  console.log("PROVIDER START", "current");
-  console.log("PROVIDER START", "nyt");
-  console.log("PROVIDER START", "currents");
-  const shouldFetchWorldSupplement =
-    !normalizedRequestedCategory || normalizedRequestedCategory === "world";
-  if (shouldFetchWorldSupplement) {
-    console.log("PROVIDER START", "world-supplement");
-  }
+    if (cachedEntry && Date.now() - cachedEntry.savedAt < AGGREGATED_NEWS_CACHE_TTL_MS) {
+      return Response.json(cachedEntry.payload, {
+        headers: AGGREGATED_NEWS_CORS_HEADERS,
+      });
+    }
 
-  const providerResults = await Promise.allSettled([
-    withProviderTimeout("current", fetchCurrentProviderArticles(category)),
-    withProviderTimeout("nyt", fetchNytArticles(category)),
-    withProviderTimeout("currents", fetchCurrentsArticles(category)),
-    shouldFetchWorldSupplement ? fetchWorldSupplementArticles() : Promise.resolve([]),
-  ]);
+    console.log("PROVIDER START", "current");
+    console.log("PROVIDER START", "nyt");
+    console.log("PROVIDER START", "currents");
+    const shouldFetchWorldSupplement =
+      !normalizedRequestedCategory || normalizedRequestedCategory === "world";
+    if (shouldFetchWorldSupplement) {
+      console.log("PROVIDER START", "world-supplement");
+    }
 
-  const currentResult = providerResults[0];
-  const nytResult = providerResults[1];
-  const currentsResult = providerResults[2];
-  const worldSupplementResult = providerResults[3];
+    const providerResults = await Promise.allSettled([
+      withProviderTimeout("current", fetchCurrentProviderArticles(category)),
+      withProviderTimeout("nyt", fetchNytArticles(category)),
+      withProviderTimeout("currents", fetchCurrentsArticles(category)),
+      shouldFetchWorldSupplement ? fetchWorldSupplementArticles() : Promise.resolve([]),
+    ]);
 
-  const currentArticles =
-    currentResult.status === "fulfilled"
-      ? currentResult.value
-      : [];
-  if (currentResult.status === "fulfilled") {
-    console.log("PROVIDER DONE", "current", currentArticles.length);
-  } else {
-    console.warn(
-      "PROVIDER FAILED",
-      "current",
-      currentResult.reason instanceof Error ? currentResult.reason.message : String(currentResult.reason)
-    );
-  }
+    const currentResult = providerResults[0];
+    const nytResult = providerResults[1];
+    const currentsResult = providerResults[2];
+    const worldSupplementResult = providerResults[3];
 
-  const nytArticles =
-    nytResult.status === "fulfilled"
-      ? nytResult.value.articles
-      : [];
-  if (nytResult.status === "fulfilled") {
-    console.log("PROVIDER DONE", "nyt", nytArticles.length);
-  } else {
-    console.warn(
-      "PROVIDER FAILED",
-      "nyt",
-      nytResult.reason instanceof Error ? nytResult.reason.message : String(nytResult.reason)
-    );
-  }
-
-  const currentsArticles =
-    currentsResult.status === "fulfilled"
-      ? currentsResult.value.articles
-      : [];
-  if (currentsResult.status === "fulfilled") {
-    console.log("PROVIDER DONE", "currents", currentsArticles.length);
-  } else {
-    console.warn(
-      "PROVIDER FAILED",
-      "currents",
-      currentsResult.reason instanceof Error ? currentsResult.reason.message : String(currentsResult.reason)
-    );
-  }
-
-  const worldSupplementArticles =
-    worldSupplementResult?.status === "fulfilled"
-      ? worldSupplementResult.value
-      : [];
-  if (shouldFetchWorldSupplement) {
-    if (worldSupplementResult?.status === "fulfilled") {
-      console.log("PROVIDER DONE", "world-supplement", worldSupplementArticles.length);
+    const currentArticles =
+      currentResult.status === "fulfilled"
+        ? currentResult.value
+        : [];
+    if (currentResult.status === "fulfilled") {
+      console.log("PROVIDER DONE", "current", currentArticles.length);
     } else {
       console.warn(
         "PROVIDER FAILED",
-        "world-supplement",
-        worldSupplementResult?.reason instanceof Error
-          ? worldSupplementResult.reason.message
-          : String(worldSupplementResult?.reason)
+        "current",
+        currentResult.reason instanceof Error ? currentResult.reason.message : String(currentResult.reason)
       );
     }
-  }
 
-  const guardianArticles: AggregatedNewsArticle[] = ENABLE_GUARDIAN ? [] : [];
-  const gnewsArticles: AggregatedNewsArticle[] = ENABLE_GNEWS ? [] : [];
-
-  const currentMappedArticles = currentArticles.map(mapCurrentArticle);
-  const worldReclassifiedFromPoliticsCount = currentArticles.filter((article, index) => {
-    const rawCategory = stripHtml(article.category).trim().toLowerCase();
-    return rawCategory === "politics" && currentMappedArticles[index]?.category === "world";
-  }).length;
-  console.log("WORLD_RECLASSIFIED_FROM_POLITICS_COUNT", worldReclassifiedFromPoliticsCount);
-  const mergedArticles = [
-    ...currentMappedArticles,
-    ...nytArticles,
-    ...currentsArticles,
-    ...worldSupplementArticles,
-    ...guardianArticles,
-    ...gnewsArticles,
-  ];
-  const categoryFilteredArticles = normalizedRequestedCategory
-    ? mergedArticles.filter(
-        (article) =>
-          article.category === normalizedRequestedCategory &&
-          isArticleValidForCategory(article, normalizedRequestedCategory)
-      )
-    : mergedArticles;
-  const mappedArticles = dedupeArticles(categoryFilteredArticles);
-  const interleavedArticles = interleaveProviderArticles(mappedArticles);
-  const prioritizedArticles =
-    !normalizedRequestedCategory && worldSupplementArticles.length > 0
-      ? reserveCategoryArticles(interleavedArticles, "world", WORLD_RESERVED_SLOTS)
-      : interleavedArticles;
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const articles = prioritizedArticles.slice(startIndex, endIndex);
-  const hasMore = endIndex < prioritizedArticles.length;
-
-  const responsePayload: AggregatedNewsRouteResponse = {
-    articles,
-    nextPage: hasMore ? page + 1 : null,
-    hasMore,
-    page,
-    pageSize,
-  };
-
-  aggregatedNewsRouteCache.set(cacheKey, {
-    savedAt: Date.now(),
-    payload: responsePayload,
-  });
-
-  if (aggregatedNewsRouteCache.size > 30) {
-    const oldestKey = aggregatedNewsRouteCache.keys().next().value;
-    if (oldestKey) {
-      aggregatedNewsRouteCache.delete(oldestKey);
+    const nytArticles =
+      nytResult.status === "fulfilled"
+        ? nytResult.value.articles
+        : [];
+    if (nytResult.status === "fulfilled") {
+      console.log("PROVIDER DONE", "nyt", nytArticles.length);
+    } else {
+      console.warn(
+        "PROVIDER FAILED",
+        "nyt",
+        nytResult.reason instanceof Error ? nytResult.reason.message : String(nytResult.reason)
+      );
     }
-  }
 
-  return Response.json(responsePayload, {
-    headers: {
-      "Cache-Control": "s-maxage=600, stale-while-revalidate=300",
-    },
+    const currentsArticles =
+      currentsResult.status === "fulfilled"
+        ? currentsResult.value.articles
+        : [];
+    if (currentsResult.status === "fulfilled") {
+      console.log("PROVIDER DONE", "currents", currentsArticles.length);
+    } else {
+      console.warn(
+        "PROVIDER FAILED",
+        "currents",
+        currentsResult.reason instanceof Error ? currentsResult.reason.message : String(currentsResult.reason)
+      );
+    }
+
+    const worldSupplementArticles =
+      worldSupplementResult?.status === "fulfilled"
+        ? worldSupplementResult.value
+        : [];
+    if (shouldFetchWorldSupplement) {
+      if (worldSupplementResult?.status === "fulfilled") {
+        console.log("PROVIDER DONE", "world-supplement", worldSupplementArticles.length);
+      } else {
+        console.warn(
+          "PROVIDER FAILED",
+          "world-supplement",
+          worldSupplementResult?.reason instanceof Error
+            ? worldSupplementResult.reason.message
+            : String(worldSupplementResult?.reason)
+        );
+      }
+    }
+
+    const guardianArticles: AggregatedNewsArticle[] = ENABLE_GUARDIAN ? [] : [];
+    const gnewsArticles: AggregatedNewsArticle[] = ENABLE_GNEWS ? [] : [];
+
+    const currentMappedArticles = currentArticles.map(mapCurrentArticle);
+    const worldReclassifiedFromPoliticsCount = currentArticles.filter((article, index) => {
+      const rawCategory = stripHtml(article.category).trim().toLowerCase();
+      return rawCategory === "politics" && currentMappedArticles[index]?.category === "world";
+    }).length;
+    console.log("WORLD_RECLASSIFIED_FROM_POLITICS_COUNT", worldReclassifiedFromPoliticsCount);
+    const mergedArticles = [
+      ...currentMappedArticles,
+      ...nytArticles,
+      ...currentsArticles,
+      ...worldSupplementArticles,
+      ...guardianArticles,
+      ...gnewsArticles,
+    ];
+    const categoryFilteredArticles = normalizedRequestedCategory
+      ? mergedArticles.filter(
+          (article) =>
+            article.category === normalizedRequestedCategory &&
+            isArticleValidForCategory(article, normalizedRequestedCategory)
+        )
+      : mergedArticles;
+    const mappedArticles = dedupeArticles(categoryFilteredArticles);
+    const interleavedArticles = interleaveProviderArticles(mappedArticles);
+    const prioritizedArticles =
+      !normalizedRequestedCategory && worldSupplementArticles.length > 0
+        ? reserveCategoryArticles(interleavedArticles, "world", WORLD_RESERVED_SLOTS)
+        : interleavedArticles;
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const articles = prioritizedArticles.slice(startIndex, endIndex);
+    const hasMore = endIndex < prioritizedArticles.length;
+
+    const responsePayload: AggregatedNewsRouteResponse = {
+      articles,
+      nextPage: hasMore ? page + 1 : null,
+      hasMore,
+      page,
+      pageSize,
+    };
+
+    aggregatedNewsRouteCache.set(cacheKey, {
+      savedAt: Date.now(),
+      payload: responsePayload,
+    });
+
+    if (aggregatedNewsRouteCache.size > 30) {
+      const oldestKey = aggregatedNewsRouteCache.keys().next().value;
+      if (oldestKey) {
+        aggregatedNewsRouteCache.delete(oldestKey);
+      }
+    }
+
+    return Response.json(responsePayload, {
+      headers: AGGREGATED_NEWS_CORS_HEADERS,
+    });
+  } catch (error) {
+    console.error("AGGREGATED_NEWS_ROUTE_ERROR", error);
+    return Response.json(
+      {
+        articles: [],
+        nextPage: null,
+        hasMore: false,
+        page: 1,
+        pageSize: FINAL_FEED_PAGE_SIZE_CAP,
+      } satisfies AggregatedNewsRouteResponse,
+      {
+        status: 500,
+        headers: AGGREGATED_NEWS_CORS_HEADERS,
+      }
+    );
+  }
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: AGGREGATED_NEWS_CORS_HEADERS,
   });
 }

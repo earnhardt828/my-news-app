@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 
-const NEWS_API_BASE_URL = (process.env.NEXT_PUBLIC_NEWS_API_BASE_URL ?? "").trim();
+const DEFAULT_NATIVE_API_BASE_URL =
+  "https://my-news-app-git-main-earnhardt828s-projects.vercel.app";
 
 type ApiFetchErrorDetails = {
   url: string;
@@ -69,15 +70,11 @@ export function getApiBaseOrigin() {
     return "";
   }
 
-  if (NEWS_API_BASE_URL) {
-    return NEWS_API_BASE_URL.replace(/\/+$/, "");
-  }
-
   if (/^https?:/i.test(window.location.origin)) {
     return window.location.origin.replace(/\/+$/, "");
   }
 
-  return "";
+  return DEFAULT_NATIVE_API_BASE_URL;
 }
 
 export function buildApiUrl(path: string) {

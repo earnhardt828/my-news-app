@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 
 export const revalidate = 900;
 
+const MOVIES_CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  Vary: "Origin",
+  "Cache-Control": "s-maxage=900, stale-while-revalidate=300",
+} as const;
+
 type TmdbMovie = {
   id?: number;
   title?: string | null;
@@ -96,14 +104,15 @@ export async function GET() {
   if (moviesRouteCache && Date.now() - moviesRouteCache.savedAt < MOVIES_CACHE_TTL_MS) {
     return NextResponse.json(moviesRouteCache.payload, {
       status: 200,
-      headers: {
-        "Cache-Control": "s-maxage=900, stale-while-revalidate=300",
-      },
+      headers: MOVIES_CORS_HEADERS,
     });
   }
 
   if (!tmdbApiKey) {
-    return NextResponse.json({ movies: [] as MovieSliderItem[], source: "no-tmdb-key" }, { status: 200 });
+    return NextResponse.json(
+      { movies: [] as MovieSliderItem[], source: "no-tmdb-key" },
+      { status: 200, headers: MOVIES_CORS_HEADERS }
+    );
   }
 
   try {
@@ -195,12 +204,20 @@ export async function GET() {
 
     return NextResponse.json(responsePayload, {
       status: 200,
-      headers: {
-        "Cache-Control": "s-maxage=900, stale-while-revalidate=300",
-      },
+      headers: MOVIES_CORS_HEADERS,
     });
   } catch (error) {
     console.error("Movies API load failed", error);
-    return NextResponse.json({ movies: [] as MovieSliderItem[], source: "error" }, { status: 200 });
+    return NextResponse.json(
+      { movies: [] as MovieSliderItem[], source: "error" },
+      { status: 200, headers: MOVIES_CORS_HEADERS }
+    );
   }
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: MOVIES_CORS_HEADERS,
+  });
 }
