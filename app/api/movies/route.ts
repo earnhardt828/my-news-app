@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const revalidate = 900;
+
 type TmdbMovie = {
   id?: number;
   title?: string | null;
@@ -35,6 +37,18 @@ type NormalizedTmdbMovie = MovieSliderItem & {
   popularity: number;
 };
 
+const MOVIES_CACHE_TTL_MS = 15 * 60 * 1000;
+
+let moviesRouteCache:
+  | {
+      savedAt: number;
+      payload: {
+        movies: MovieSliderItem[];
+        source: string;
+      };
+    }
+  | null = null;
+
 function normalizePosterUrl(path: string | null | undefined) {
   if (!path) {
     return null;
@@ -50,8 +64,8 @@ async function fetchOmdbDetails(title: string, releaseDate: string | null, apiKe
       title
     )}${year ? `&y=${encodeURIComponent(year)}` : ""}`,
     {
-      cache: "no-store",
-      next: { revalidate: 0 },
+      cache: "force-cache",
+      next: { revalidate: 900 },
     }
   );
 
@@ -79,6 +93,15 @@ export async function GET() {
   const tmdbApiKey = process.env.TMDB_API_KEY?.trim();
   const omdbApiKey = process.env.OMDB_API_KEY?.trim() ?? "";
 
+  if (moviesRouteCache && Date.now() - moviesRouteCache.savedAt < MOVIES_CACHE_TTL_MS) {
+    return NextResponse.json(moviesRouteCache.payload, {
+      status: 200,
+      headers: {
+        "Cache-Control": "s-maxage=900, stale-while-revalidate=300",
+      },
+    });
+  }
+
   if (!tmdbApiKey) {
     return NextResponse.json({ movies: [] as MovieSliderItem[], source: "no-tmdb-key" }, { status: 200 });
   }
@@ -89,8 +112,8 @@ export async function GET() {
         tmdbApiKey
       )}&language=en-US&page=1`,
       {
-        cache: "no-store",
-        next: { revalidate: 0 },
+        cache: "force-cache",
+        next: { revalidate: 900 },
       }
     );
 
@@ -160,13 +183,22 @@ export async function GET() {
       } satisfies MovieSliderItem;
     });
 
-    return NextResponse.json(
-      {
-        movies,
-        source: omdbApiKey ? "tmdb+omdb" : "tmdb",
+    const responsePayload = {
+      movies,
+      source: omdbApiKey ? "tmdb+omdb" : "tmdb",
+    };
+
+    moviesRouteCache = {
+      savedAt: Date.now(),
+      payload: responsePayload,
+    };
+
+    return NextResponse.json(responsePayload, {
+      status: 200,
+      headers: {
+        "Cache-Control": "s-maxage=900, stale-while-revalidate=300",
       },
-      { status: 200 }
-    );
+    });
   } catch (error) {
     console.error("Movies API load failed", error);
     return NextResponse.json({ movies: [] as MovieSliderItem[], source: "error" }, { status: 200 });

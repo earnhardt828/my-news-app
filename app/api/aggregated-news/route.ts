@@ -1,5 +1,4 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 600;
 
 import { fetchArticles as fetchCurrentProviderArticles } from "../../../lib/news/providers/current";
 
@@ -144,14 +143,30 @@ const CURRENTS_PAGE_SIZE = 50;
 const CURRENTS_MAX_PAGES = 3;
 const GNEWS_CACHE_TTL_MS = 45 * 60 * 1000;
 const PROVIDER_TIMEOUT_MS = 8000;
+const AGGREGATED_NEWS_CACHE_TTL_MS = 10 * 60 * 1000;
 const ENABLE_GUARDIAN = false;
 const ENABLE_GNEWS = false;
+
+type AggregatedNewsRouteResponse = {
+  articles: AggregatedNewsArticle[];
+  nextPage: number | null;
+  hasMore: boolean;
+  page: number;
+  pageSize: number;
+};
 
 let gnewsCache: {
   savedAt: number;
   articles: AggregatedNewsArticle[];
   rawCount: number;
 } | null = null;
+let aggregatedNewsRouteCache = new Map<
+  string,
+  {
+    savedAt: number;
+    payload: AggregatedNewsRouteResponse;
+  }
+>();
 
 function createProviderTimeoutError(providerName: string, timeoutMs: number) {
   return new Error(`${providerName} timed out after ${timeoutMs}ms`);
@@ -1208,6 +1223,23 @@ export async function GET(request: Request) {
   const normalizedRequestedCategory = requestedCategory
     ? normalizeCategoryValue(requestedCategory, requestedCategory)
     : "";
+  const cacheKey = JSON.stringify({
+    mode,
+    requestedCategory,
+    query,
+    page,
+    pageSize,
+  });
+  const cachedEntry = aggregatedNewsRouteCache.get(cacheKey);
+
+  if (cachedEntry && Date.now() - cachedEntry.savedAt < AGGREGATED_NEWS_CACHE_TTL_MS) {
+    return Response.json(cachedEntry.payload, {
+      headers: {
+        "Cache-Control": "s-maxage=600, stale-while-revalidate=300",
+      },
+    });
+  }
+
   console.log("PROVIDER START", "current");
   console.log("PROVIDER START", "nyt");
   console.log("PROVIDER START", "currents");
@@ -1324,11 +1356,29 @@ export async function GET(request: Request) {
   const articles = prioritizedArticles.slice(startIndex, endIndex);
   const hasMore = endIndex < prioritizedArticles.length;
 
-  return Response.json({
+  const responsePayload: AggregatedNewsRouteResponse = {
     articles,
     nextPage: hasMore ? page + 1 : null,
     hasMore,
     page,
     pageSize,
+  };
+
+  aggregatedNewsRouteCache.set(cacheKey, {
+    savedAt: Date.now(),
+    payload: responsePayload,
+  });
+
+  if (aggregatedNewsRouteCache.size > 30) {
+    const oldestKey = aggregatedNewsRouteCache.keys().next().value;
+    if (oldestKey) {
+      aggregatedNewsRouteCache.delete(oldestKey);
+    }
+  }
+
+  return Response.json(responsePayload, {
+    headers: {
+      "Cache-Control": "s-maxage=600, stale-while-revalidate=300",
+    },
   });
 }

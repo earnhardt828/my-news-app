@@ -7159,6 +7159,8 @@ export default function Home() {
     null
   );
   const [isNationalWeatherMapLoading, setIsNationalWeatherMapLoading] = useState(false);
+  const hasTrendingArticlesReady =
+    sortMode === "trending" && articles.length > 0 && !isInitialFeedLoading;
 
   useEffect(() => {
     console.log(
@@ -7174,6 +7176,10 @@ export default function Home() {
       if (sortMode !== "celebrity" && sortMode !== "trending") {
         setTheaterMovies([]);
         setIsTheaterMoviesLoading(false);
+        return;
+      }
+
+      if (sortMode === "trending" && !hasTrendingArticlesReady) {
         return;
       }
 
@@ -7212,7 +7218,7 @@ export default function Home() {
     return () => {
       isCancelled = true;
     };
-  }, [sortMode]);
+  }, [hasTrendingArticlesReady, sortMode]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -7403,6 +7409,10 @@ export default function Home() {
       return;
     }
 
+    if (!hasTrendingArticlesReady) {
+      return;
+    }
+
     console.log("TRENDING_FEATURED_PODCASTS_RENDERED", featuredTrendingPodcasts.length);
 
     let isCancelled = false;
@@ -7453,7 +7463,7 @@ export default function Home() {
     return () => {
       isCancelled = true;
     };
-  }, [featuredTrendingPodcasts.length, sortMode]);
+  }, [featuredTrendingPodcasts.length, hasTrendingArticlesReady, sortMode]);
   const [myNewsCategoryVideoStatus, setMyNewsCategoryVideoStatus] = useState<
     Record<string, { loading: boolean; error: boolean }>
   >({});
@@ -8500,6 +8510,10 @@ export default function Home() {
 
   useEffect(() => {
     async function loadTrendingVideos() {
+      if (sortMode === "trending" && !hasTrendingArticlesReady) {
+        return;
+      }
+
       try {
         const [newsResponse, sportsResponse, celebrityResponse, weatherResponse] = await Promise.all([
           apiFetch("/api/videos?tab=news"),
@@ -8616,7 +8630,7 @@ export default function Home() {
     }
 
     void loadTrendingVideos();
-  }, []);
+  }, [hasTrendingArticlesReady, sortMode]);
 
   useEffect(() => {
     async function loadLocalVideos() {
@@ -8719,6 +8733,13 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
 
+    if (sortMode === "trending" && !hasTrendingArticlesReady) {
+      setNationalWeatherMapEmbedHtml(null);
+      setNationalWeatherMapFullscreenHtml(null);
+      setIsNationalWeatherMapLoading(false);
+      return;
+    }
+
     async function loadNationalWeatherMap() {
       setIsNationalWeatherMapLoading(true);
 
@@ -8784,7 +8805,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hasTrendingArticlesReady, sortMode]);
 
   useEffect(() => {
     const fallbackLocation =
@@ -9048,6 +9069,11 @@ export default function Home() {
     let isCancelled = false;
 
     async function loadHomeSourceRankings() {
+      if (sortMode === "trending" && !hasTrendingArticlesReady) {
+        setIsHomeSourceRankingsLoading(false);
+        return;
+      }
+
       setIsHomeSourceRankingsLoading(true);
 
       try {
@@ -9121,7 +9147,7 @@ export default function Home() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [hasTrendingArticlesReady, sortMode]);
 
   const handlePromptSourceHeart = useCallback(
     (event: MouseEvent<HTMLButtonElement>, sourceName: string) => {
@@ -9144,6 +9170,11 @@ export default function Home() {
     let isCancelled = false;
 
     async function loadWeatherCard() {
+      if (sortMode === "trending" && !hasTrendingArticlesReady) {
+        setIsWeatherLoading(false);
+        return;
+      }
+
       const weatherLocation = city;
       console.log("LOCAL WEATHER LOCATION", weatherLocation);
       const coords = LOCAL_CITY_COORDINATES[city];
@@ -9223,10 +9254,15 @@ export default function Home() {
     return () => {
       isCancelled = true;
     };
-  }, [selectedLocalCity]);
+  }, [hasTrendingArticlesReady, selectedLocalCity, sortMode]);
 
   useEffect(() => {
     let isCancelled = false;
+    if (sortMode === "trending" && !hasTrendingArticlesReady) {
+      setIsWeatherNewsLoading(false);
+      return;
+    }
+
     const timeoutId =
       typeof window !== "undefined"
         ? window.setTimeout(() => {
@@ -10611,7 +10647,7 @@ export default function Home() {
     } catch (error) {
       console.error("ARTICLE SHARE FAILED", error);
     }
-  }, []);
+  }, [hasTrendingArticlesReady, sortMode]);
 
   const openLongPressMenu = useCallback((article: Article) => {
     setLongPressMenuArticle(article);
