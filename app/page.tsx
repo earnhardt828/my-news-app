@@ -4932,15 +4932,53 @@ function hydrateFeedArticles(feedArticles: FeedArticlePayload[]) {
   })) as Article[];
 }
 
+const NON_ENGLISH_SOURCE_PATTERN =
+  /\b(el pa[ií]s|univision|telemundo|la naci[oó]n|el universal|marca|as\.com|infobae(?: espanol| español)?|mundo deportivo)\b/i;
+const SPANISH_STRONG_SIGNAL_PATTERN =
+  /[¿¡]|(?:\b(?:el|la|los|las|del|para|por|como|tras|desde|entre|contra|seg[uú]n|gobierno|presidente|elecci[oó]n|partido|f[tú]tbol|equipo|mercado|huelga|ataque|guerra|mundo|noticias|hoy|ayer|ma[nñ]ana)\b)/gi;
+const ENGLISH_SIGNAL_PATTERN =
+  /\b(the|and|for|with|from|after|over|into|about|amid|says|news|latest|today|report|reports|update|updates)\b/i;
+
+function isLikelyEnglishHomepageArticle(article: Pick<Article, "title" | "description" | "source" | "url">) {
+  const title = cleanDisplayText(article.title);
+  const description = cleanDisplayText(article.description ?? "");
+  const source = cleanDisplayText(article.source ?? "");
+  const url = cleanDisplayText(article.url ?? "");
+  const haystack = `${title} ${description}`.trim();
+
+  if (!title) {
+    return false;
+  }
+
+  if (NON_ENGLISH_SOURCE_PATTERN.test(`${source} ${url}`)) {
+    return false;
+  }
+
+  const spanishMatches = haystack.match(SPANISH_STRONG_SIGNAL_PATTERN) ?? [];
+  const hasEnglishSignal = ENGLISH_SIGNAL_PATTERN.test(haystack);
+
+  if (/[¿¡]/.test(haystack)) {
+    return false;
+  }
+
+  if (spanishMatches.length >= 3 && !hasEnglishSignal) {
+    return false;
+  }
+
+  return true;
+}
+
 function normalizeHomepageArticles(feedArticles: FeedArticlePayload[]) {
   return hydrateFeedArticles(
-    feedArticles.map((article, index) => ({
+    feedArticles
+      .map((article, index) => ({
       ...article,
       id:
         typeof article.id === "number" && Number.isFinite(article.id) && article.id > 0
           ? article.id
           : 900000000 + index,
-    }))
+      }))
+      .filter((article) => isLikelyEnglishHomepageArticle(article))
   );
 }
 
@@ -7089,6 +7127,8 @@ export default function Home() {
   const [sportsVideos, setSportsVideos] = useState<VideoItem[]>([]);
   const [celebrityVideos, setCelebrityVideos] = useState<VideoItem[]>([]);
   const [weatherVideos, setWeatherVideos] = useState<VideoItem[]>([]);
+  const [isTrendingVideosLoading, setIsTrendingVideosLoading] = useState(false);
+  const [trendingVideosError, setTrendingVideosError] = useState<string | null>(null);
   const [localVideos, setLocalVideos] = useState<VideoItem[]>([]);
   const [mlbSectionArticles, setMlbSectionArticles] = useState<Article[]>([]);
   const [mlbSectionVideos, setMlbSectionVideos] = useState<VideoItem[]>([]);
@@ -8510,17 +8550,48 @@ export default function Home() {
   }, [userId]);
 
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadTrendingVideos() {
       if (sortMode === "trending" && !hasTrendingArticlesReady) {
+        if (!isCancelled) {
+          setIsTrendingVideosLoading(false);
+          setTrendingVideosError(null);
+        }
         return;
       }
 
+      setIsTrendingVideosLoading(true);
+      setTrendingVideosError(null);
+
+      const withTimeout = async (path: string, timeoutMs = 8000) => {
+        const requestUrl = buildApiUrl(path);
+        console.log("VIDEO_REQUEST_URL", requestUrl);
+
+        const response = await Promise.race([
+          apiFetch(path),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => {
+              reject(new Error(`Video request timed out after ${timeoutMs}ms`));
+            }, timeoutMs);
+          }),
+        ]);
+
+        console.log("VIDEO_RESPONSE_STATUS", {
+          url: requestUrl,
+          status: response.status,
+          ok: response.ok,
+        });
+
+        return response;
+      };
+
       try {
         const [newsResponse, sportsResponse, celebrityResponse, weatherResponse] = await Promise.all([
-          apiFetch("/api/videos?tab=news"),
-          apiFetch("/api/videos?tab=sports"),
-          apiFetch("/api/videos?tab=celebrity"),
-          apiFetch("/api/videos?tab=weather"),
+          withTimeout("/api/videos?tab=news"),
+          withTimeout("/api/videos?tab=sports"),
+          withTimeout("/api/videos?tab=celebrity"),
+          withTimeout("/api/videos?tab=weather"),
         ]);
         if (!newsResponse.ok) {
           const responseText = await newsResponse.text();
@@ -8609,28 +8680,48 @@ export default function Home() {
         const normalizedSportsVideos = sortVerticalFirst(normalizeVideoFeedItems(sportsData.videos));
         const normalizedCelebrityVideos = sortVerticalFirst(normalizeVideoFeedItems(celebrityData.videos));
         const normalizedWeatherVideos = sortVerticalFirst(normalizeVideoFeedItems(weatherData.videos));
+        const totalVideoCount =
+          normalizedNewsVideos.length +
+          normalizedSportsVideos.length +
+          normalizedCelebrityVideos.length +
+          normalizedWeatherVideos.length;
 
-        console.log("VIDEO FETCH COUNT", {
+        console.log("VIDEO_COUNT", {
           news: normalizedNewsVideos.length,
           sports: normalizedSportsVideos.length,
           celebrity: normalizedCelebrityVideos.length,
           weather: normalizedWeatherVideos.length,
+          total: totalVideoCount,
         });
 
-        setVideos(normalizedNewsVideos);
-        setSportsVideos(normalizedSportsVideos);
-        setCelebrityVideos(normalizedCelebrityVideos);
-        setWeatherVideos(normalizedWeatherVideos);
+        if (!isCancelled) {
+          setVideos(normalizedNewsVideos);
+          setSportsVideos(normalizedSportsVideos);
+          setCelebrityVideos(normalizedCelebrityVideos);
+          setWeatherVideos(normalizedWeatherVideos);
+          setTrendingVideosError(totalVideoCount > 0 ? null : "Videos unavailable");
+        }
       } catch (error) {
-        console.error("Error loading trending videos:", error);
-        setVideos(normalizeVideoFeedItems());
-        setSportsVideos(normalizeVideoFeedItems());
-        setCelebrityVideos(normalizeVideoFeedItems());
-        setWeatherVideos(normalizeVideoFeedItems());
+        console.error("VIDEO_ERROR", error);
+        if (!isCancelled) {
+          setVideos(normalizeVideoFeedItems());
+          setSportsVideos(normalizeVideoFeedItems());
+          setCelebrityVideos(normalizeVideoFeedItems());
+          setWeatherVideos(normalizeVideoFeedItems());
+          setTrendingVideosError("Videos unavailable");
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsTrendingVideosLoading(false);
+        }
       }
     }
 
     void loadTrendingVideos();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [hasTrendingArticlesReady, sortMode]);
 
   useEffect(() => {
@@ -9382,7 +9473,7 @@ export default function Home() {
           scienceResponse,
         ] = await Promise.all([
           sortMode === "trending"
-            ? fetch(
+            ? apiFetch(
                 `/api/news?mode=search&query=${encodeURIComponent(
                   BREAKING_NEWS_FEED_QUERY
                 )}&pageSize=20`,
@@ -9397,25 +9488,25 @@ export default function Home() {
             headers: { Accept: "application/json" },
           }),
           sortMode === "trending"
-            ? fetch("/api/news?mode=celebrity&pageSize=25", {
+            ? apiFetch("/api/news?mode=celebrity&pageSize=25", {
                 cache: "no-store",
                 headers: { Accept: "application/json" },
               })
             : Promise.resolve(null),
           sortMode === "trending"
-            ? fetch("/api/news?mode=technology&pageSize=25", {
+            ? apiFetch("/api/news?mode=technology&pageSize=25", {
                 cache: "no-store",
                 headers: { Accept: "application/json" },
               })
             : Promise.resolve(null),
           sortMode === "trending"
-            ? fetch("/api/news?mode=business&pageSize=25", {
+            ? apiFetch("/api/news?mode=business&pageSize=25", {
                 cache: "no-store",
                 headers: { Accept: "application/json" },
               })
             : Promise.resolve(null),
           sortMode === "trending"
-            ? fetch(
+            ? apiFetch(
                 `/api/news?mode=search&query=${encodeURIComponent(AUTO_FEED_QUERY)}&pageSize=25`,
                 {
                   cache: "no-store",
@@ -9424,7 +9515,7 @@ export default function Home() {
               )
             : Promise.resolve(null),
           sortMode === "trending"
-            ? fetch(
+            ? apiFetch(
                 `/api/news?mode=search&query=${encodeURIComponent(OPINION_FEED_QUERY)}&pageSize=25`,
                 {
                   cache: "no-store",
@@ -9433,7 +9524,7 @@ export default function Home() {
               )
             : Promise.resolve(null),
           sortMode === "trending"
-            ? fetch(
+            ? apiFetch(
                 `/api/news?mode=search&query=${encodeURIComponent(CRIME_FEED_QUERY)}&pageSize=25`,
                 {
                   cache: "no-store",
@@ -9442,7 +9533,7 @@ export default function Home() {
               )
             : Promise.resolve(null),
           sortMode === "trending"
-            ? fetch(
+            ? apiFetch(
                 `/api/news?mode=search&query=${encodeURIComponent(ART_FEED_QUERY)}&pageSize=25`,
                 {
                   cache: "no-store",
@@ -9451,13 +9542,13 @@ export default function Home() {
               )
             : Promise.resolve(null),
           sortMode === "trending"
-            ? fetch("/api/news?mode=food&pageSize=25", {
+            ? apiFetch("/api/news?mode=food&pageSize=25", {
               cache: "no-store",
               headers: { Accept: "application/json" },
             })
             : Promise.resolve(null),
           sortMode === "trending"
-            ? fetch(
+            ? apiFetch(
                 `/api/news?mode=search&query=${encodeURIComponent(SCIENCE_FEED_QUERY)}&pageSize=25`,
                 {
                   cache: "no-store",
@@ -9524,35 +9615,35 @@ export default function Home() {
               normalizeNewsPayload(
                 breakingPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
-            )
+            ).filter((article) => isLikelyEnglishHomepageArticle(article))
           : [];
         const nextSportsArticles = sportsPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
                 sportsPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
-            )
+            ).filter((article) => isLikelyEnglishHomepageArticle(article))
           : [];
         const nextCelebrityArticles = celebrityPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
                 celebrityPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
-            )
+            ).filter((article) => isLikelyEnglishHomepageArticle(article))
           : [];
         const nextTechnologyArticles = technologyPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
                 technologyPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
-            )
+            ).filter((article) => isLikelyEnglishHomepageArticle(article))
           : [];
         const nextBusinessArticles = businessPayload
           ? hydrateFeedArticles(
               normalizeNewsPayload(
                 businessPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
-            )
+            ).filter((article) => isLikelyEnglishHomepageArticle(article))
           : [];
         const nextCarsArticles = carsPayload
           ? hydrateFeedArticles(
@@ -9567,7 +9658,10 @@ export default function Home() {
                 opinionPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
             ).filter(
-              (article) => isStrictOpinionArticle(article) && !isLowInformationLiveStreamArticle(article)
+              (article) =>
+                isLikelyEnglishHomepageArticle(article) &&
+                isStrictOpinionArticle(article) &&
+                !isLowInformationLiveStreamArticle(article)
             )
           : [];
         const nextCrimeArticles = crimePayload
@@ -9576,7 +9670,10 @@ export default function Home() {
                 crimePayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
             ).filter(
-              (article) => isStrictCrimeArticle(article) && !isLowInformationLiveStreamArticle(article)
+              (article) =>
+                isLikelyEnglishHomepageArticle(article) &&
+                isStrictCrimeArticle(article) &&
+                !isLowInformationLiveStreamArticle(article)
             )
           : [];
         const nextArtArticles = artPayload
@@ -9585,7 +9682,10 @@ export default function Home() {
                 artPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
             ).filter(
-              (article) => isStrictArtArticle(article) && !isLowInformationLiveStreamArticle(article)
+              (article) =>
+                isLikelyEnglishHomepageArticle(article) &&
+                isStrictArtArticle(article) &&
+                !isLowInformationLiveStreamArticle(article)
             )
           : [];
         const nextFoodArticles = foodPayload
@@ -9593,7 +9693,7 @@ export default function Home() {
               normalizeNewsPayload(
                 foodPayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
-            )
+            ).filter((article) => isLikelyEnglishHomepageArticle(article))
           : [];
         const nextScienceArticles = sciencePayload
           ? hydrateFeedArticles(
@@ -9601,7 +9701,10 @@ export default function Home() {
                 sciencePayload as FeedArticlePayload[] | PaginatedNewsResponse
               ).articles
             ).filter(
-              (article) => isStrictScienceArticle(article) && !isLowInformationLiveStreamArticle(article)
+              (article) =>
+                isLikelyEnglishHomepageArticle(article) &&
+                isStrictScienceArticle(article) &&
+                !isLowInformationLiveStreamArticle(article)
             )
           : [];
 
@@ -18544,6 +18647,7 @@ export default function Home() {
     const tickerItems = businessTickerItems.filter(
       (item) => item.price !== null && Number.isFinite(item.price)
     );
+    const stockCount = tickerItems.length;
 
     console.log("BUSINESS STOCK TICKER_ITEM_COUNT", tickerItems.length);
     console.log("BUSINESS TICKER FINAL COUNT", tickerItems.length);
@@ -18554,9 +18658,15 @@ export default function Home() {
     });
     console.log("BUSINESS STOCK RENDER SUCCESS", tickerItems.length > 0);
     console.log("STOCK TICKER ITEMS COUNT", tickerItems.length);
+    console.log("STOCK_SLIDER_RENDERED", tickerItems.length > 0 || businessTickerSource !== "loading");
+    console.log("STOCK_COUNT", stockCount);
 
     if (tickerItems.length === 0) {
-      return null;
+      return (
+        <div className="muted" style={{ fontSize: "0.85rem", marginBottom: "10px" }}>
+          {businessTickerSource === "loading" ? "Loading stock market..." : "Stock market unavailable"}
+        </div>
+      );
     }
 
     return (
@@ -19099,6 +19209,17 @@ export default function Home() {
 
   const dedupedVisibleTrendingNewsSections = useMemo(() => {
     const usedArticleKeys = new Set<string>();
+    const protectedTopTrendingKeys = new Set<string>(
+      [
+        ...visibleTrendingNewsSections.world,
+        ...visibleTrendingNewsSections.politics,
+        ...visibleTrendingNewsSections.entertainment,
+        ...visibleTrendingNewsSections.sports,
+        ...visibleTrendingNewsSections.technology,
+        ...visibleTrendingNewsSections.crime,
+        ...visibleTrendingNewsSections.business,
+      ].map((article) => getArticleDeduplicationKey(article))
+    );
     const takeUnusedArticles = (articles: Article[]) => {
       const uniqueArticles: Article[] = [];
 
@@ -19118,7 +19239,11 @@ export default function Home() {
 
     return {
       breaking: takeUnusedArticles(visibleTrendingNewsSections.breaking),
-      topTrending: takeUnusedArticles(visibleTrendingNewsSections.topTrending),
+      topTrending: takeUnusedArticles(
+        visibleTrendingNewsSections.topTrending.filter(
+          (article) => !protectedTopTrendingKeys.has(getArticleDeduplicationKey(article))
+        )
+      ),
       world: takeUnusedArticles(visibleTrendingNewsSections.world),
       politics: takeUnusedArticles(visibleTrendingNewsSections.politics),
       entertainment: takeUnusedArticles(visibleTrendingNewsSections.entertainment),
@@ -19510,7 +19635,10 @@ export default function Home() {
             </div>
           </div>
           <div className="empty-state compact-empty-state">
-            <strong>Videos loading…</strong>
+            <strong>
+              {title === "Videos" && !isTrendingVideosLoading ? "Videos unavailable" : "Videos loading…"}
+            </strong>
+            {title === "Videos" && trendingVideosError ? <span>{trendingVideosError}</span> : null}
           </div>
         </section>
       );
@@ -20795,13 +20923,11 @@ export default function Home() {
           </section>
         ) : null}
 
-        {trendingTallQuickWatchSections.featuredSources.length > 0
-          ? renderTallTrendingQuickWatchRow(
-              "Videos",
-              trendingTallQuickWatchSections.featuredSources,
-              "featured-sources-quickwatch"
-            )
-          : null}
+        {renderTallTrendingQuickWatchRow(
+          "Videos",
+          trendingTallQuickWatchSections.featuredSources,
+          "featured-sources-quickwatch"
+        )}
 
         {dedupedVisibleTrendingNewsSections.world.length > 0 ? (
           <section className="home-section-block home-section-plain">

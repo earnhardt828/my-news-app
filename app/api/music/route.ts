@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  Vary: "Origin",
+} as const;
+
 type AppleRssAlbum = {
   id?: string;
   name?: string;
@@ -161,6 +168,13 @@ async function fetchItunesSearchAlbums() {
   );
 }
 
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 export async function GET() {
   try {
     const chartAlbums = await fetchAppleChartAlbums().catch(() => [] as MusicAlbumItem[]);
@@ -169,6 +183,8 @@ export async function GET() {
       return NextResponse.json({
         albums: dedupeAlbums(chartAlbums).slice(0, 10),
         source: "apple-chart",
+      }, {
+        headers: CORS_HEADERS,
       });
     }
 
@@ -178,6 +194,8 @@ export async function GET() {
     return NextResponse.json({
       albums: combinedAlbums,
       source: chartAlbums.length > 0 ? "apple-chart+itunes-search" : "itunes-search",
+    }, {
+      headers: CORS_HEADERS,
     });
   } catch (error) {
     console.error("Music API load failed", error);
@@ -186,7 +204,7 @@ export async function GET() {
         albums: [] as MusicAlbumItem[],
         source: "error",
       },
-      { status: 200 }
+      { status: 200, headers: CORS_HEADERS }
     );
   }
 }

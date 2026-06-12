@@ -71,6 +71,13 @@ type VideoFeedTab =
   | "celebrity"
   | "technology";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  Vary: "Origin",
+} as const;
+
 const WORLD_TAB_SEARCH_QUERIES = [
   "world news latest",
   "international news latest",
@@ -1191,6 +1198,23 @@ function filterAndSortVideos(
   return finalVideos;
 }
 
+function jsonResponse(payload: unknown, init?: ResponseInit) {
+  return Response.json(payload, {
+    ...init,
+    headers: {
+      ...CORS_HEADERS,
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const searchTerm = requestUrl.searchParams.get("q")?.trim() ?? "";
@@ -1292,7 +1316,7 @@ export async function GET(request: Request) {
 
       console.log("WORLD FINAL COUNT", filteredWorldVideos.length);
 
-      return Response.json({
+      return jsonResponse({
         videos: filteredWorldVideos,
         fallback: false,
         fetchFailed: false,
@@ -1337,7 +1361,7 @@ export async function GET(request: Request) {
         .sort((left, right) => getPoliticsVideoScore(right) - getPoliticsVideoScore(left))
         .slice(0, 10);
 
-      return Response.json({
+      return jsonResponse({
         videos: filteredPoliticsVideos,
         fallback: false,
         fetchFailed: false,
@@ -1390,7 +1414,7 @@ export async function GET(request: Request) {
         filteredBusinessVideos.map((video) => video.title)
       );
 
-      return Response.json({
+      return jsonResponse({
         videos: filteredBusinessVideos,
         fallback: false,
         fetchFailed: false,
@@ -1449,7 +1473,7 @@ export async function GET(request: Request) {
           .map((video) => video.title)
       );
 
-      return Response.json({
+      return jsonResponse({
         videos: filteredCelebrityVideos,
         fallback: false,
         fetchFailed: false,
@@ -1514,7 +1538,7 @@ export async function GET(request: Request) {
       );
       console.log("TECH FINAL COUNT", filteredTechnologyVideos.length);
 
-      return Response.json({
+      return jsonResponse({
         videos: filteredTechnologyVideos,
         fallback: false,
         fetchFailed: false,
@@ -1526,7 +1550,7 @@ export async function GET(request: Request) {
     }
 
     if (allEntries.length === 0) {
-      return Response.json({
+      return jsonResponse({
         videos: buildFallbackVideosForTab(tab),
         fallback: true,
         message: "Falling back to placeholder videos because the YouTube RSS feeds failed.",
@@ -1545,14 +1569,14 @@ export async function GET(request: Request) {
     });
 
     if (videos.length === 0) {
-      return Response.json({
+      return jsonResponse({
         videos: buildFallbackVideosForTab(tab),
         fallback: true,
         message: "No recent videos were returned by the trusted channel feeds.",
       });
     }
 
-    return Response.json({
+    return jsonResponse({
       videos,
       fallback: false,
       fetchFailed: false,
@@ -1561,7 +1585,7 @@ export async function GET(request: Request) {
     console.error("Error loading RSS news videos:", error);
 
     if (tab === "technology" || tab === "politics" || tab === "world" || tab === "business") {
-      return Response.json({
+      return jsonResponse({
         videos: [],
         fallback: false,
         fetchFailed: true,
@@ -1574,7 +1598,7 @@ export async function GET(request: Request) {
       });
     }
 
-    return Response.json({
+    return jsonResponse({
       videos: buildFallbackVideosForTab(tab),
       fallback: true,
       message: "Falling back to placeholder videos because the RSS feeds failed.",

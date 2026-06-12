@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  Vary: "Origin",
+} as const;
+
 const STOCK_QUOTE_CONFIGS = [
   { symbol: "AAPL", label: "Apple" },
   { symbol: "MSFT", label: "Microsoft" },
@@ -27,6 +34,13 @@ type StockTickerItem = {
   change: number;
   percentChange: number;
 };
+
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
 
 export async function GET() {
   console.log(
@@ -58,5 +72,8 @@ export async function GET() {
   console.log("STOCK API RESPONSE", finalPayload);
   console.log("STOCK API ITEMS RETURNED", items);
   console.log("STOCK API FINAL JSON", finalPayload);
-  return NextResponse.json(finalPayload, { status: 200 });
+  return NextResponse.json(finalPayload, {
+    status: 200,
+    headers: CORS_HEADERS,
+  });
 }
