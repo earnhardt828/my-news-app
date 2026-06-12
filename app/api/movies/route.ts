@@ -11,6 +11,7 @@ type TmdbMovie = {
 
 type OmdbMovie = {
   imdbRating?: string | null;
+  BoxOffice?: string | null;
   Ratings?: Array<{
     Source?: string | null;
     Value?: string | null;
@@ -26,6 +27,7 @@ type MovieSliderItem = {
   tmdbScore: number | null;
   rottenTomatoesScore: string | null;
   imdbRating: string | null;
+  boxOffice: string | null;
   sourceLabel: string;
 };
 
@@ -69,6 +71,7 @@ async function fetchOmdbDetails(title: string, releaseDate: string | null, apiKe
   return {
     rottenTomatoesScore,
     imdbRating: payload.imdbRating?.trim() ?? null,
+    boxOffice: payload.BoxOffice?.trim() ?? null,
   };
 }
 
@@ -120,6 +123,7 @@ export async function GET() {
               : null,
           rottenTomatoesScore: null,
           imdbRating: null,
+          boxOffice: null,
           sourceLabel: "TMDb",
           popularity: typeof movie.popularity === "number" ? movie.popularity : 0,
         };
@@ -151,7 +155,8 @@ export async function GET() {
         tmdbScore: movie.tmdbScore,
         rottenTomatoesScore: omdbDetails?.rottenTomatoesScore ?? null,
         imdbRating: omdbDetails?.imdbRating ?? null,
-        sourceLabel: movie.sourceLabel,
+        boxOffice: omdbDetails?.boxOffice ?? null,
+        sourceLabel: omdbApiKey ? "TMDb + OMDb" : movie.sourceLabel,
       } satisfies MovieSliderItem;
     });
 

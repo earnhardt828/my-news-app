@@ -863,10 +863,11 @@ function buildSummaryParagraphs(
 }
 
 export default function ArticleDetailPage() {
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ id?: string }>();
   const searchParams = useSearchParams();
-  const articleId = Number(params.id);
-  const commentsOnly = searchParams.get("comments") === "1";
+  const articleIdParam = params?.id;
+  const articleId = articleIdParam ? Number(articleIdParam) : Number.NaN;
+  const commentsOnly = searchParams?.get("comments") === "1";
   const [article, setArticle] = useState<ArticleRecord | null>(null);
   const [comments, setComments] = useState<ArticleComment[]>([]);
   const [likesCount, setLikesCount] = useState(0);
@@ -905,7 +906,7 @@ export default function ArticleDetailPage() {
 
   useEffect(() => {
     async function loadArticle() {
-      console.log("ARTICLE PAGE ROUTE ID", params.id);
+      console.log("ARTICLE PAGE ROUTE ID", articleIdParam ?? null);
 
       if (!articleId || Number.isNaN(articleId)) {
         setIsLoading(false);
@@ -1318,7 +1319,7 @@ export default function ArticleDetailPage() {
     }
 
     loadArticle();
-  }, [articleId, params.id]);
+  }, [articleId, articleIdParam]);
 
   useEffect(() => {
     if (typeof window === "undefined" || comments.length === 0) {

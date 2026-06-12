@@ -16,10 +16,10 @@ const MAX_OPTIONS = 4;
 export default function CreatePollPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const relatedArticleId = searchParams.get("articleId");
-  const relatedArticleTitle = searchParams.get("articleTitle");
-  const relatedSource = searchParams.get("source");
-  const initialCategory = searchParams.get("category") ?? "";
+  const relatedArticleId = searchParams?.get("articleId") ?? "";
+  const relatedArticleTitle = searchParams?.get("articleTitle") ?? "";
+  const relatedSource = searchParams?.get("source") ?? "";
+  const initialCategory = searchParams?.get("category") ?? "";
   const [question, setQuestion] = useState("");
   const [category, setCategory] = useState(initialCategory);
   const [options, setOptions] = useState(["", ""]);

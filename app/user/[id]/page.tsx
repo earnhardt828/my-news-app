@@ -24,8 +24,8 @@ type ProfileRecord = {
 };
 
 export default function UserProfilePage() {
-  const params = useParams<{ id: string }>();
-  const routeUsername = decodeURIComponent(params.id ?? "");
+  const params = useParams<{ id?: string }>();
+  const routeUsername = decodeURIComponent(params?.id ?? "");
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [polls, setPolls] = useState<PollWithResults[]>([]);

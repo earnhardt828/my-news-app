@@ -11,7 +11,8 @@ import {
 
 export default function NativeRouteBridge() {
   const router = useRouter();
-  const pathname = normalizeAppPath(usePathname());
+  const rawPathname = usePathname();
+  const pathname = normalizeAppPath(rawPathname ?? "/");
 
   useEffect(() => {
     if (!isNativeCapacitorRuntime() || typeof window === "undefined") {

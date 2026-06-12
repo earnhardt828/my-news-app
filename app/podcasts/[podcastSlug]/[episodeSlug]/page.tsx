@@ -37,7 +37,9 @@ type PodcastResponse = {
 };
 
 export default function PodcastEpisodePage() {
-  const params = useParams<{ podcastSlug: string; episodeSlug: string }>();
+  const params = useParams<{ podcastSlug?: string; episodeSlug?: string }>();
+  const podcastSlug = params?.podcastSlug;
+  const episodeSlug = params?.episodeSlug;
   const [payload, setPayload] = useState<PodcastResponse["podcast"]>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -47,11 +49,17 @@ export default function PodcastEpisodePage() {
     async function loadEpisode() {
       setIsLoading(true);
 
+      if (!podcastSlug || !episodeSlug) {
+        if (isMounted) {
+          setPayload(null);
+          setIsLoading(false);
+        }
+        return;
+      }
+
       try {
         const response = await apiFetch(
-          `/api/podcasts?podcastSlug=${encodeURIComponent(params.podcastSlug)}&episodeSlug=${encodeURIComponent(
-            params.episodeSlug
-          )}`
+          `/api/podcasts?podcastSlug=${encodeURIComponent(podcastSlug)}&episodeSlug=${encodeURIComponent(episodeSlug)}`
         );
         const data = (await response.json()) as PodcastResponse;
 
@@ -78,7 +86,7 @@ export default function PodcastEpisodePage() {
     return () => {
       isMounted = false;
     };
-  }, [params.episodeSlug, params.podcastSlug]);
+  }, [episodeSlug, podcastSlug]);
 
   useEffect(() => {
     const headerTitle =

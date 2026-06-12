@@ -99,19 +99,20 @@ export default function VideosPage() {
       : displayedVideosRaw;
   const statusMessage = statusMessages[activeTab];
   const isCurrentTabLoading = tabLoading[activeTab];
+  const requestedTabValue = searchParams?.get("tab") ?? "";
+  const requestedVideoId = searchParams?.get("video") ?? "";
   const requestedTab =
-    searchParams.get("tab") === "sports"
+    requestedTabValue === "sports"
       ? "sports"
-      : searchParams.get("tab") === "world"
+      : requestedTabValue === "world"
         ? "world"
-      : searchParams.get("tab") === "politics"
+      : requestedTabValue === "politics"
         ? "politics"
-      : searchParams.get("tab") === "celebrity" && !CELEBRITY_VIDEOS_DISABLED
+      : requestedTabValue === "celebrity" && !CELEBRITY_VIDEOS_DISABLED
         ? "celebrity"
-        : searchParams.get("tab") === "technology" && !TECH_VIDEOS_DISABLED
+        : requestedTabValue === "technology" && !TECH_VIDEOS_DISABLED
           ? "technology"
         : "news";
-  const requestedVideoId = searchParams.get("video");
   const [returnState, setReturnState] = useState<VideoReturnState | null>(null);
 
   useEffect(() => {

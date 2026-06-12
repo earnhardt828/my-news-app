@@ -141,8 +141,8 @@ function isMissingCommentMetadataColumnError(message: string | null | undefined)
 }
 
 export default function VideoDetailPage() {
-  const params = useParams<{ id: string }>();
-  const videoId = decodeURIComponent(params.id);
+  const params = useParams<{ id?: string }>();
+  const videoId = decodeURIComponent(params?.id ?? "");
   const commentArticleId = getVideoCommentArticleId(videoId);
   const commentsSectionRef = useRef<HTMLElement | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);

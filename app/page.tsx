@@ -2820,6 +2820,7 @@ type TheaterMovieItem = {
   tmdbScore: number | null;
   rottenTomatoesScore: string | null;
   imdbRating: string | null;
+  boxOffice: string | null;
   sourceLabel: string;
 };
 
@@ -6637,6 +6638,16 @@ function getTheaterMovieScore(movie: TheaterMovieItem) {
   return null;
 }
 
+function formatMovieBoxOffice(value: string | null | undefined) {
+  const trimmedValue = value?.trim();
+
+  if (!trimmedValue || trimmedValue.toUpperCase() === "N/A") {
+    return "N/A";
+  }
+
+  return trimmedValue;
+}
+
 function isStrictMlsVideo(video: VideoItem) {
   const haystack = `${video.title} ${video.creator} ${video.category} ${video.watchUrl}`.toLowerCase();
   const hasMlsTerms =
@@ -7042,10 +7053,13 @@ export default function Home() {
     let isCancelled = false;
 
     async function loadTheaterMovies() {
-      if (sortMode !== "celebrity") {
+      if (sortMode !== "celebrity" && sortMode !== "trending") {
         setTheaterMovies([]);
+        setIsTheaterMoviesLoading(false);
         return;
       }
+
+      setIsTheaterMoviesLoading(true);
 
       try {
         const response = await apiFetch("/api/movies", {
@@ -7067,6 +7081,10 @@ export default function Home() {
         console.error("THEATER MOVIES LOAD FAILED", error);
         if (!isCancelled) {
           setTheaterMovies([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsTheaterMoviesLoading(false);
         }
       }
     }
@@ -7219,6 +7237,7 @@ export default function Home() {
   } | null>(null);
   const [popularMusicAlbums, setPopularMusicAlbums] = useState<PopularMusicAlbum[]>([]);
   const [theaterMovies, setTheaterMovies] = useState<TheaterMovieItem[]>([]);
+  const [isTheaterMoviesLoading, setIsTheaterMoviesLoading] = useState(false);
   const [businessTickerItems, setBusinessTickerItems] = useState<StockTickerItem[]>([]);
   const [businessTickerSource, setBusinessTickerSource] = useState<string>("loading");
   const [featuredTrendingPodcasts, setFeaturedTrendingPodcasts] = useState<TrendingPodcastCard[]>(
@@ -17998,6 +18017,72 @@ export default function Home() {
     );
   };
 
+  const renderPopularMoviesSlider = (movieItems: TheaterMovieItem[]) => {
+    if (movieItems.length === 0) {
+      return null;
+    }
+
+    return (
+      <section className="home-section-block home-section-plain">
+        <div className="home-section-header">
+          <div className="stack" style={{ gap: "4px" }}>
+            <strong className="profile-section-title home-section-title">Popular Movies</strong>
+          </div>
+        </div>
+        <div className="popular-music-scroll" role="list" aria-label="Popular movies">
+          {movieItems.map((movie) => {
+            const releaseYear = movie.releaseDate ? movie.releaseDate.slice(0, 4) : "Unknown";
+            const imdbRating = movie.imdbRating?.trim() || "N/A";
+            const rottenTomatoesScore = movie.rottenTomatoesScore?.trim() || "N/A";
+            const boxOffice = formatMovieBoxOffice(movie.boxOffice);
+            const fallbackScore = getTheaterMovieScore(movie);
+
+            return (
+              <div
+                key={`trending-popular-movies-${movie.id}`}
+                className="popular-music-card"
+                role="listitem"
+              >
+                <div className="popular-music-card-art-shell">
+                  <img
+                    src={movie.imageUrl}
+                    alt={movie.title}
+                    className="popular-music-card-art"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span className="popular-music-rank">#{movie.rank}</span>
+                </div>
+                <div className="popular-music-card-copy">
+                  <strong className="popular-music-card-title">{movie.title}</strong>
+                  <span className="popular-music-card-artist">
+                    {`${releaseYear} · ${movie.sourceLabel}`}
+                  </span>
+                  <div className="stack" style={{ gap: "6px", marginTop: "6px" }}>
+                    <span className="chip chip-accent" style={{ width: "fit-content" }}>
+                      {`IMDb: ${imdbRating}`}
+                    </span>
+                    <span className="chip chip-accent" style={{ width: "fit-content" }}>
+                      {`RT: ${rottenTomatoesScore}`}
+                    </span>
+                    <span className="chip chip-accent" style={{ width: "fit-content" }}>
+                      {`Box Office: ${boxOffice}`}
+                    </span>
+                    {fallbackScore && !movie.imdbRating && !movie.rottenTomatoesScore ? (
+                      <span className="chip chip-accent" style={{ width: "fit-content" }}>
+                        {`${fallbackScore.label}: ${fallbackScore.value}`}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
   const renderPopularMusicSlider = (
     albumItems: PopularMusicAlbum[],
     fallbackArticles: Article[]
@@ -18856,12 +18941,29 @@ export default function Home() {
 
   const dedupedVisibleTrendingNewsSections = useMemo(() => {
     const usedArticleKeys = new Set<string>();
+    const protectedCategoryKeys = new Set<string>();
 
-    const takeUnusedArticles = (articles: Article[]) => {
+    [
+      ...visibleTrendingNewsSections.world,
+      ...visibleTrendingNewsSections.politics,
+      ...visibleTrendingNewsSections.entertainment,
+      ...visibleTrendingNewsSections.sports,
+      ...visibleTrendingNewsSections.technology,
+      ...visibleTrendingNewsSections.crime,
+      ...visibleTrendingNewsSections.business,
+    ].forEach((article) => {
+      protectedCategoryKeys.add(getArticleDeduplicationKey(article));
+    });
+
+    const takeUnusedArticles = (articles: Article[], options?: { allowProtected?: boolean }) => {
       const uniqueArticles: Article[] = [];
 
       articles.forEach((article) => {
         const articleKey = getArticleDeduplicationKey(article);
+
+        if (!options?.allowProtected && protectedCategoryKeys.has(articleKey)) {
+          return;
+        }
 
         if (usedArticleKeys.has(articleKey)) {
           return;
@@ -18877,15 +18979,43 @@ export default function Home() {
     return {
       breaking: takeUnusedArticles(visibleTrendingNewsSections.breaking),
       topTrending: takeUnusedArticles(visibleTrendingNewsSections.topTrending),
-      world: takeUnusedArticles(visibleTrendingNewsSections.world),
-      politics: takeUnusedArticles(visibleTrendingNewsSections.politics),
-      entertainment: takeUnusedArticles(visibleTrendingNewsSections.entertainment),
-      sports: takeUnusedArticles(visibleTrendingNewsSections.sports),
-      technology: takeUnusedArticles(visibleTrendingNewsSections.technology),
-      crime: takeUnusedArticles(visibleTrendingNewsSections.crime),
-      business: takeUnusedArticles(visibleTrendingNewsSections.business),
+      world: takeUnusedArticles(visibleTrendingNewsSections.world, { allowProtected: true }),
+      politics: takeUnusedArticles(visibleTrendingNewsSections.politics, { allowProtected: true }),
+      entertainment: takeUnusedArticles(visibleTrendingNewsSections.entertainment, {
+        allowProtected: true,
+      }),
+      sports: takeUnusedArticles(visibleTrendingNewsSections.sports, { allowProtected: true }),
+      technology: takeUnusedArticles(visibleTrendingNewsSections.technology, {
+        allowProtected: true,
+      }),
+      crime: takeUnusedArticles(visibleTrendingNewsSections.crime, { allowProtected: true }),
+      business: takeUnusedArticles(visibleTrendingNewsSections.business, { allowProtected: true }),
     };
   }, [visibleTrendingNewsSections]);
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      return;
+    }
+
+    (
+      [
+        ["breaking", dedupedVisibleTrendingNewsSections.breaking],
+        ["top-trending", dedupedVisibleTrendingNewsSections.topTrending],
+        ["world", dedupedVisibleTrendingNewsSections.world],
+        ["politics", dedupedVisibleTrendingNewsSections.politics],
+        ["entertainment", dedupedVisibleTrendingNewsSections.entertainment],
+        ["sports", dedupedVisibleTrendingNewsSections.sports],
+        ["technology", dedupedVisibleTrendingNewsSections.technology],
+        ["crime", dedupedVisibleTrendingNewsSections.crime],
+        ["business", dedupedVisibleTrendingNewsSections.business],
+      ] as const
+    ).forEach(([sectionKey, sectionArticles]) => {
+      if (sectionArticles.length > 0) {
+        console.log("VISIBLE SECTION", sectionKey, sectionArticles.length);
+      }
+    });
+  }, [dedupedVisibleTrendingNewsSections, sortMode]);
 
   const renderBreakingFeaturedVideosRow = () => {
     if (trendingBreakingFeaturedVideos.length === 0) {
@@ -20594,6 +20724,19 @@ export default function Home() {
               categoryLabelOverride: "Sports",
             })}
           </section>
+        ) : null}
+
+        {isTheaterMoviesLoading && theaterMovies.length === 0 ? (
+          <section className="home-section-block home-section-plain">
+            <div className="home-section-header">
+              <div className="stack" style={{ gap: "4px" }}>
+                <strong className="profile-section-title home-section-title">Popular Movies</strong>
+              </div>
+            </div>
+            <div className="muted">Loading movies...</div>
+          </section>
+        ) : theaterMovies.length > 0 ? (
+          renderPopularMoviesSlider(theaterMovies)
         ) : null}
 
         {dedupedVisibleTrendingNewsSections.technology.length > 0 ? (

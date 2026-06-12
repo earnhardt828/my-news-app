@@ -85,16 +85,17 @@ type PodcastShowResponse = {
 };
 
 export default function PodcastShowPage() {
-  const params = useParams<{ podcastSlug: string }>();
+  const params = useParams<{ podcastSlug?: string }>();
+  const podcastSlug = params?.podcastSlug;
   const fallbackShow =
-    buildStaticFallbackPodcastDirectory().shows.find((entry) => entry.slug === params.podcastSlug) ?? null;
+    buildStaticFallbackPodcastDirectory().shows.find((entry) => entry.slug === podcastSlug) ?? null;
   const [show, setShow] = useState<PodcastShow | null>(fallbackShow);
   const [isLoadingEpisodes, setIsLoadingEpisodes] = useState(true);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    console.log("PODCAST DETAIL OPENED", { podcastSlug: params.podcastSlug });
-  }, [params.podcastSlug]);
+    console.log("PODCAST DETAIL OPENED", { podcastSlug });
+  }, [podcastSlug]);
 
   useEffect(() => {
     const headerTitle =
@@ -111,11 +112,19 @@ export default function PodcastShowPage() {
     let isMounted = true;
 
     async function loadPodcastShow() {
-      console.log("PODCAST EPISODES_FETCH_STARTED", { podcastSlug: params.podcastSlug });
+      console.log("PODCAST EPISODES_FETCH_STARTED", { podcastSlug });
       setIsLoadingEpisodes(true);
 
+      if (!podcastSlug) {
+        if (isMounted) {
+          setShow(null);
+          setIsLoadingEpisodes(false);
+        }
+        return;
+      }
+
       try {
-        const response = await apiFetch(`/api/podcasts?podcastSlug=${encodeURIComponent(params.podcastSlug)}`);
+        const response = await apiFetch(`/api/podcasts?podcastSlug=${encodeURIComponent(podcastSlug)}`);
         const data = (await response.json()) as PodcastShowResponse;
 
         if (!isMounted) {
@@ -139,7 +148,7 @@ export default function PodcastShowPage() {
     return () => {
       isMounted = false;
     };
-  }, [params.podcastSlug]);
+  }, [podcastSlug]);
 
   if (!show) {
     return (

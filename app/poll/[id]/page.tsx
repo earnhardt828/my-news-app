@@ -55,8 +55,8 @@ function formatRelativeTime(timestamp: string | null) {
 }
 
 export default function PollDetailPage() {
-  const params = useParams<{ id: string }>();
-  const pollId = decodeURIComponent(params.id ?? "");
+  const params = useParams<{ id?: string }>();
+  const pollId = decodeURIComponent(params?.id ?? "");
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [poll, setPoll] = useState<PollWithResults | null>(null);
   const [comments, setComments] = useState<PollComment[]>([]);

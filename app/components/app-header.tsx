@@ -113,7 +113,8 @@ function getPageTitle(pathname: string) {
 }
 
 export default function AppHeader() {
-  const pathname = normalizeAppPath(usePathname());
+  const rawPathname = usePathname();
+  const pathname = normalizeAppPath(rawPathname ?? "/");
   const router = useRouter();
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);

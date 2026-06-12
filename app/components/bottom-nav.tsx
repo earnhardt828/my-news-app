@@ -86,7 +86,8 @@ const navItems: NavItem[] = [
 ];
 
 export default function BottomNav() {
-  const pathname = normalizeAppPath(usePathname());
+  const rawPathname = usePathname();
+  const pathname = normalizeAppPath(rawPathname ?? "/");
 
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
