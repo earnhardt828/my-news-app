@@ -226,6 +226,112 @@ const MY_NEWS_GOLF_ARTICLE_QUERIES = [
   "AP Golf",
   "Reuters Golf",
 ] as const;
+const NATIVE_DEMO_FEED_ARTICLES: FeedArticlePayload[] = [
+  {
+    id: 990001,
+    title: "Global markets steady as investors watch central banks and oil prices",
+    source: "Graffiti Demo",
+    category: "business",
+    time: "Updated recently",
+    image: "/category-images/business.png",
+    imageUrl: "/category-images/business.png",
+    description: "Bundled fallback stories let the iOS app stay usable when the live API is unavailable.",
+    url: "https://graffiti.app/fallback/business/global-markets",
+    publishedAt: new Date().toISOString(),
+    provider: "fallback",
+  },
+  {
+    id: 990002,
+    title: "International leaders meet for new ceasefire talks in the Middle East",
+    source: "Graffiti Demo",
+    category: "world",
+    time: "Updated recently",
+    image: "/category-images/world.png",
+    imageUrl: "/category-images/world.png",
+    description: "World coverage fallback for bundled mobile builds.",
+    url: "https://graffiti.app/fallback/world/ceasefire-talks",
+    publishedAt: new Date().toISOString(),
+    provider: "fallback",
+  },
+  {
+    id: 990003,
+    title: "Campaign trail shifts as Congress debates the next spending package",
+    source: "Graffiti Demo",
+    category: "politics",
+    time: "Updated recently",
+    image: "/category-images/politics.png",
+    imageUrl: "/category-images/politics.png",
+    description: "Domestic politics fallback for bundled mobile builds.",
+    url: "https://graffiti.app/fallback/politics/campaign-congress",
+    publishedAt: new Date().toISOString(),
+    provider: "fallback",
+  },
+  {
+    id: 990004,
+    title: "Streaming releases and awards buzz lead today’s entertainment conversation",
+    source: "Graffiti Demo",
+    category: "entertainment",
+    time: "Updated recently",
+    image: "/branding/graffiti-name-logo-transparent.png",
+    imageUrl: "/branding/graffiti-name-logo-transparent.png",
+    description: "Entertainment fallback for bundled mobile builds.",
+    url: "https://graffiti.app/fallback/entertainment/streaming-awards",
+    publishedAt: new Date().toISOString(),
+    provider: "fallback",
+  },
+  {
+    id: 990005,
+    title: "Playoff race tightens as teams prepare for a critical weekend slate",
+    source: "Graffiti Demo",
+    category: "sports",
+    time: "Updated recently",
+    image: "/category-images/sports.png",
+    imageUrl: "/category-images/sports.png",
+    description: "Sports fallback for bundled mobile builds.",
+    url: "https://graffiti.app/fallback/sports/playoff-race",
+    publishedAt: new Date().toISOString(),
+    provider: "fallback",
+  },
+  {
+    id: 990006,
+    title: "Tech giants push new AI tools and device updates into the summer cycle",
+    source: "Graffiti Demo",
+    category: "tech",
+    time: "Updated recently",
+    image: "/category-images/tech.png",
+    imageUrl: "/category-images/tech.png",
+    description: "Technology fallback for bundled mobile builds.",
+    url: "https://graffiti.app/fallback/tech/ai-device-updates",
+    publishedAt: new Date().toISOString(),
+    provider: "fallback",
+  },
+  {
+    id: 990007,
+    title: "Investigators pursue new leads in a multi-state fraud case",
+    source: "Graffiti Demo",
+    category: "crime",
+    time: "Updated recently",
+    image: "/category-images/politics.png",
+    imageUrl: "/category-images/politics.png",
+    description: "Crime fallback for bundled mobile builds.",
+    url: "https://graffiti.app/fallback/crime/fraud-case",
+    publishedAt: new Date().toISOString(),
+    provider: "fallback",
+  },
+  {
+    id: 990008,
+    title: "Editors’ picks: the biggest stories people are following right now",
+    source: "Graffiti Demo",
+    category: "trending",
+    time: "Updated recently",
+    image: "/category-images/world.png",
+    imageUrl: "/category-images/world.png",
+    description: "Trending fallback for bundled mobile builds.",
+    url: "https://graffiti.app/fallback/trending/editors-picks",
+    publishedAt: new Date().toISOString(),
+    provider: "fallback",
+  },
+];
 const MY_NEWS_SCIENCE_ARTICLE_QUERIES = [
   "NASA",
   "Science Magazine",
@@ -3702,6 +3808,10 @@ function writeCachedFeedPayload(cacheKey: string, payload: CachedFeedPayload) {
   }
 }
 
+function getNativeStoryFallbackArticles() {
+  return normalizeHomepageArticles(NATIVE_DEMO_FEED_ARTICLES);
+}
+
 const NATIONAL_SOURCE_KEYWORDS = [
   "fox news",
   "cnn",
@@ -4832,6 +4942,14 @@ function normalizeHomepageArticles(feedArticles: FeedArticlePayload[]) {
           : 900000000 + index,
     }))
   );
+}
+
+function countArticlesByCategory(articles: Array<{ category?: string | null }>) {
+  return articles.reduce<Record<string, number>>((counts, article) => {
+    const category = (article.category ?? "uncategorized").trim().toLowerCase() || "uncategorized";
+    counts[category] = (counts[category] ?? 0) + 1;
+    return counts;
+  }, {});
 }
 
 function isFallbackFeedArticle(article: FeedArticlePayload) {
@@ -9237,7 +9355,7 @@ export default function Home() {
                 }
               )
             : Promise.resolve(null),
-          fetch("/api/aggregated-news?category=sports&pageSize=5", {
+          apiFetch("/api/aggregated-news?category=sports&pageSize=5", {
             cache: "no-store",
             headers: { Accept: "application/json" },
           }),
@@ -9758,6 +9876,10 @@ export default function Home() {
   }, [savedLocalCity, savedLocalState, sortMode, userEmail, userId]);
 
   useEffect(() => {
+    if (sortMode === "trending") {
+      return;
+    }
+
     if (isMyFeedWithoutCategories) {
       lastReplaceFeedRequestKeyRef.current = null;
       const timeoutId = window.setTimeout(() => {
@@ -9794,70 +9916,11 @@ export default function Home() {
         ? `local:${selectedLocalCityKey ?? localLocationLabel.trim()}:${savedLocalCity ?? ""}:${savedLocalState ?? ""}`
         : `${sortMode}:${categoryReloadKey}`;
 
-    if (sortMode !== "trending" && lastReplaceFeedRequestKeyRef.current === replaceRequestKey) {
+    if (lastReplaceFeedRequestKeyRef.current === replaceRequestKey) {
       return;
     }
 
     lastReplaceFeedRequestKeyRef.current = replaceRequestKey;
-
-    if (sortMode === "trending") {
-      let cancelled = false;
-
-      setIsLoading(true);
-      setIsInitialFeedLoading(true);
-      setFeedLoadError(null);
-      setDirectTrendingArticles([]);
-
-      void (async () => {
-        try {
-          const response = await fetch("/api/aggregated-news", {
-            cache: "no-store",
-          });
-
-          if (!response.ok) {
-            throw new Error(`Home feed request failed with status ${response.status}`);
-          }
-
-          const data = (await response.json()) as PaginatedNewsResponse | { articles?: FeedArticlePayload[] };
-
-          if (cancelled) {
-            return;
-          }
-
-          const nextArticles = normalizeHomepageArticles(data.articles ?? []);
-
-          setDirectTrendingArticles(nextArticles);
-          setArticles(nextArticles);
-          setHasMoreArticles(Boolean("hasMore" in data ? data.hasMore : false));
-          setFeedPage("page" in data && typeof data.page === "number" ? data.page : 1);
-          setFeedLoadError(nextArticles.length === 0 ? "Couldn’t load stories. Tap to retry." : null);
-        } catch (error) {
-          if (cancelled) {
-            return;
-          }
-
-          console.error("HOME FEED SIMPLE FETCH FAILED", error);
-          setDirectTrendingArticles([]);
-          setArticles([]);
-          setHasMoreArticles(false);
-          setFeedPage(1);
-          setFeedLoadError("Couldn’t load stories. Tap to retry.");
-        } finally {
-          if (cancelled) {
-            return;
-          }
-
-          setIsLoading(false);
-          setIsInitialFeedLoading(false);
-          setIsLoadingMoreArticles(false);
-        }
-      })();
-
-      return () => {
-        cancelled = true;
-        lastReplaceFeedRequestKeyRef.current = null;
-      };
-    }
 
     const timeoutId = window.setTimeout(() => {
       if (sortMode === "local") {
@@ -14271,16 +14334,14 @@ export default function Home() {
     }
 
     let isCancelled = false;
+    const trendingCacheKey = getFeedCacheKey("trending");
+    const cachedTrendingFeed = readCachedFeedPayload(trendingCacheKey);
 
     void (async () => {
       try {
-        const response = await fetch("/api/aggregated-news", {
+        const response = await apiFetch("/api/aggregated-news", {
           cache: "no-store",
         });
-
-        if (!response.ok) {
-          throw new Error(`Trending feed request failed with status ${response.status}`);
-        }
 
         const payload = (await response.json()) as PaginatedNewsResponse | { articles?: FeedArticlePayload[] };
         const nextArticles = normalizeHomepageArticles(payload.articles ?? []);
@@ -14289,21 +14350,61 @@ export default function Home() {
           return;
         }
 
-        console.log("EMERGENCY_TRENDING_FETCH_SUCCESS", nextArticles.length);
+        console.log("ARTICLES_FETCH_SUCCESS", true);
+        console.log("ARTICLES_COUNT", nextArticles.length);
+        console.log("FETCHED CATEGORY COUNTS", countArticlesByCategory(nextArticles));
         setDirectTrendingArticles(nextArticles);
         setArticles(nextArticles);
+        console.log("ARTICLES_SET_STATE", nextArticles.length);
         setHasMoreArticles(Boolean("hasMore" in payload ? payload.hasMore : false));
         setFeedPage("page" in payload && typeof payload.page === "number" ? payload.page : 1);
-        setFeedLoadError(nextArticles.length === 0 ? "Couldn’t load stories. Tap to retry." : null);
+        if (nextArticles.length > 0) {
+          writeCachedFeedPayload(trendingCacheKey, {
+            articles: nextArticles,
+            page: "page" in payload && typeof payload.page === "number" ? payload.page : 1,
+            hasMore: Boolean("hasMore" in payload ? payload.hasMore : false),
+            savedAt: new Date().toISOString(),
+          });
+          setFeedLoadError(null);
+        } else if (cachedTrendingFeed?.articles?.length) {
+          console.warn("ARTICLES_FETCH_EMPTY_USING_CACHE", cachedTrendingFeed.articles.length);
+          setDirectTrendingArticles(cachedTrendingFeed.articles);
+          setArticles(cachedTrendingFeed.articles);
+          setHasMoreArticles(cachedTrendingFeed.hasMore);
+          setFeedPage(cachedTrendingFeed.page);
+          setFeedLoadError("Showing the last loaded stories while we retry.");
+        } else {
+          const fallbackArticles = getNativeStoryFallbackArticles();
+          console.warn("ARTICLES_FETCH_EMPTY_USING_FALLBACK", fallbackArticles.length);
+          setDirectTrendingArticles(fallbackArticles);
+          setArticles(fallbackArticles);
+          setHasMoreArticles(false);
+          setFeedPage(1);
+          setFeedLoadError("Showing bundled stories while live news reconnects.");
+        }
       } catch (error) {
         if (isCancelled) {
           return;
         }
 
+        console.error("ARTICLES_FETCH_SUCCESS", false);
         console.error("EMERGENCY_TRENDING_FETCH_ERROR", error);
-        console.error("EMERGENCY TRENDING FETCH FAILED", error);
-        setDirectTrendingArticles([]);
-        setFeedLoadError("Couldn’t load stories. Tap to retry.");
+        if (cachedTrendingFeed?.articles?.length) {
+          console.warn("ARTICLES_FETCH_FALLBACK_CACHE", cachedTrendingFeed.articles.length);
+          setDirectTrendingArticles(cachedTrendingFeed.articles);
+          setArticles(cachedTrendingFeed.articles);
+          setHasMoreArticles(cachedTrendingFeed.hasMore);
+          setFeedPage(cachedTrendingFeed.page);
+          setFeedLoadError("Showing the last loaded stories while we retry.");
+        } else {
+          const fallbackArticles = getNativeStoryFallbackArticles();
+          console.warn("ARTICLES_FETCH_FALLBACK_DEMO", fallbackArticles.length);
+          setDirectTrendingArticles(fallbackArticles);
+          setArticles(fallbackArticles);
+          setHasMoreArticles(false);
+          setFeedPage(1);
+          setFeedLoadError("Showing bundled stories while live news reconnects.");
+        }
       } finally {
         if (isCancelled) {
           return;
@@ -18858,19 +18959,19 @@ export default function Home() {
         case "trending":
           return article.category === "trending" || isArticleValidForTrendingSection(article, "trending");
         case "world":
-          return article.category === "world";
+          return article.category === "world" || isArticleValidForTrendingSection(article, "world");
         case "politics":
-          return article.category === "politics";
+          return article.category === "politics" || isArticleValidForTrendingSection(article, "politics");
         case "entertainment":
-          return article.category === "entertainment";
+          return article.category === "entertainment" || isArticleValidForTrendingSection(article, "entertainment");
         case "sports":
-          return article.category === "sports";
+          return article.category === "sports" || isArticleValidForTrendingSection(article, "sports");
         case "technology":
-          return article.category === "tech";
+          return article.category === "tech" || isArticleValidForTrendingSection(article, "technology");
         case "crime":
-          return article.category === "crime";
+          return article.category === "crime" || isArticleValidForTrendingSection(article, "crime");
         case "business":
-          return article.category === "business";
+          return article.category === "business" || isArticleValidForTrendingSection(article, "business");
         default:
           return false;
       }
@@ -18938,6 +19039,24 @@ export default function Home() {
     }),
     [emergencyTrendingPageSections, trendingSectionArticles]
   );
+
+  useEffect(() => {
+    if (sortMode !== "trending") {
+      return;
+    }
+
+    console.log("TRENDING SECTION SOURCE COUNTS", {
+      breaking: visibleTrendingNewsSections.breaking.length,
+      topTrending: visibleTrendingNewsSections.topTrending.length,
+      world: visibleTrendingNewsSections.world.length,
+      politics: visibleTrendingNewsSections.politics.length,
+      entertainment: visibleTrendingNewsSections.entertainment.length,
+      sports: visibleTrendingNewsSections.sports.length,
+      technology: visibleTrendingNewsSections.technology.length,
+      crime: visibleTrendingNewsSections.crime.length,
+      business: visibleTrendingNewsSections.business.length,
+    });
+  }, [sortMode, visibleTrendingNewsSections]);
 
   const dedupedVisibleTrendingNewsSections = useMemo(() => {
     const usedArticleKeys = new Set<string>();
@@ -20620,6 +20739,10 @@ export default function Home() {
     return (
       <section className="page-shell home-sections-shell">
         {renderHomeTopNavigation("trending")}
+
+        <section className="home-section-block home-section-plain">
+          <div className="muted">Graffiti app loaded</div>
+        </section>
 
         {isInitialFeedLoading && directTrendingArticles.length === 0 && articles.length === 0 ? (
           <section className="home-section-block home-section-plain">

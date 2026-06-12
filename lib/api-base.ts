@@ -1,6 +1,5 @@
 import { Capacitor } from "@capacitor/core";
 
-const GRAFFITI_PRODUCTION_ORIGIN = "https://graffiti.news";
 const NEWS_API_BASE_URL = (process.env.NEXT_PUBLIC_NEWS_API_BASE_URL ?? "").trim();
 
 type ApiFetchErrorDetails = {
@@ -66,26 +65,30 @@ export function getApiBaseOrigin() {
     return "";
   }
 
-  return isNativeCapacitorRuntime() ? GRAFFITI_PRODUCTION_ORIGIN : "";
+  if (!isNativeCapacitorRuntime()) {
+    return "";
+  }
+
+  if (NEWS_API_BASE_URL) {
+    return NEWS_API_BASE_URL.replace(/\/+$/, "");
+  }
+
+  if (/^https?:/i.test(window.location.origin)) {
+    return window.location.origin.replace(/\/+$/, "");
+  }
+
+  return "";
 }
 
 export function buildApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-
-  if (normalizedPath.startsWith("/api/aggregated-news")) {
-    if (NEWS_API_BASE_URL) {
-      return `${NEWS_API_BASE_URL.replace(/\/+$/, "")}${normalizedPath}`;
-    }
-
-    return normalizedPath;
-  }
-
-  return `${getApiBaseOrigin()}${normalizedPath}`;
+  const baseOrigin = getApiBaseOrigin();
+  return baseOrigin ? `${baseOrigin}${normalizedPath}` : normalizedPath;
 }
 
 export async function apiFetch(path: string, init?: RequestInit) {
   const url = buildApiUrl(path);
-  const isNative = getApiBaseOrigin() === GRAFFITI_PRODUCTION_ORIGIN;
+  const isNative = isNativeCapacitorRuntime();
 
   try {
     const response = await fetch(url, {

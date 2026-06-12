@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   PODCAST_CATEGORY_SEARCH_TERMS,
   PODCAST_FEEDS,
@@ -162,8 +161,36 @@ function stripHtml(value: string | null) {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash.toString(16).padStart(8, "0");
+}
+
+async function sha1Hex(value: string) {
+  const cryptoObject = globalThis.crypto;
+
+  if (!cryptoObject?.subtle) {
+    return `${hashString(value)}${hashString(`sha1:${value}`)}`;
+  }
+
+  const buffer = await cryptoObject.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(value)
+  );
+
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function buildPodcastId(parts: Array<string | null | undefined>) {
-  return createHash("sha1").update(parts.filter(Boolean).join("|")).digest("hex").slice(0, 16);
+  const normalized = parts.filter(Boolean).join("|");
+  return `${hashString(normalized)}${hashString(normalized.split("").reverse().join(""))}`;
 }
 
 function normalizePodcastText(value: string | null | undefined) {
@@ -449,9 +476,7 @@ async function fetchPodcastIndexPodcasts(
   }
 
   const authDate = Math.floor(Date.now() / 1000).toString();
-  const authorization = createHash("sha1")
-    .update(apiKey + apiSecret + authDate)
-    .digest("hex");
+  const authorization = await sha1Hex(apiKey + apiSecret + authDate);
   const requestUrl = new URL("https://api.podcastindex.org/api/1.0/search/byterm");
   requestUrl.searchParams.set("q", term);
   requestUrl.searchParams.set("max", "8");

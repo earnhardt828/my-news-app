@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   trailingSlash: true,
   skipTrailingSlashRedirect: true,
+  allowedDevOrigins: ["192.168.0.65", "localhost"],
   images: {
     unoptimized: true,
     remotePatterns: [
