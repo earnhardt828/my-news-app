@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const CORS_HEADERS = {
+const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -35,10 +35,10 @@ type StockTickerItem = {
   percentChange: number;
 };
 
-export function OPTIONS() {
+export async function OPTIONS() {
   return new Response(null, {
     status: 204,
-    headers: CORS_HEADERS,
+    headers: corsHeaders,
   });
 }
 
@@ -74,6 +74,6 @@ export async function GET() {
   console.log("STOCK API FINAL JSON", finalPayload);
   return NextResponse.json(finalPayload, {
     status: 200,
-    headers: CORS_HEADERS,
+    headers: corsHeaders,
   });
 }

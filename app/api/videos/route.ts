@@ -71,7 +71,7 @@ type VideoFeedTab =
   | "celebrity"
   | "technology";
 type WeatherCapableVideoFeedTab = VideoFeedTab | "weather";
-const CORS_HEADERS = {
+const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -1202,16 +1202,16 @@ function jsonResponse(payload: unknown, init?: ResponseInit) {
   return Response.json(payload, {
     ...init,
     headers: {
-      ...CORS_HEADERS,
+      ...corsHeaders,
       ...(init?.headers ?? {}),
     },
   });
 }
 
-export function OPTIONS() {
+export async function OPTIONS() {
   return new Response(null, {
     status: 204,
-    headers: CORS_HEADERS,
+    headers: corsHeaders,
   });
 }
 
