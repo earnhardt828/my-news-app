@@ -3808,6 +3808,70 @@ function writeCachedFeedPayload(cacheKey: string, payload: CachedFeedPayload) {
   }
 }
 
+type TimedCachePayload<T> = {
+  value: T;
+  savedAt: string;
+};
+
+function readTimedCachePayload<T>(cacheKey: string, maxAgeMs: number): T | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(cacheKey);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as TimedCachePayload<T> | null;
+    const savedAt = parsed?.savedAt ? new Date(parsed.savedAt).getTime() : Number.NaN;
+
+    if (!parsed || Number.isNaN(savedAt) || Date.now() - savedAt > maxAgeMs) {
+      return null;
+    }
+
+    return parsed.value ?? null;
+  } catch (error) {
+    console.error("Error reading timed cache payload:", error);
+    return null;
+  }
+}
+
+function writeTimedCachePayload<T>(cacheKey: string, value: T) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      cacheKey,
+      JSON.stringify({
+        value,
+        savedAt: new Date().toISOString(),
+      } satisfies TimedCachePayload<T>)
+    );
+  } catch (error) {
+    console.error("Error writing timed cache payload:", error);
+  }
+}
+
+async function withSoftTimeout<T>(
+  promiseFactory: () => Promise<T>,
+  timeoutMs: number,
+  onTimeout: () => T | Promise<T>
+) {
+  return Promise.race([
+    promiseFactory(),
+    new Promise<T>((resolve) => {
+      window.setTimeout(async () => {
+        resolve(await onTimeout());
+      }, timeoutMs);
+    }),
+  ]);
+}
+
 function getNativeStoryFallbackArticles() {
   return normalizeHomepageArticles(NATIVE_DEMO_FEED_ARTICLES);
 }
@@ -7019,7 +7083,10 @@ function getSafeSourceLabel(value: unknown) {
     return "Unknown source";
   }
 
-  const cleaned = cleanDisplayText(value).replace(/\s+\d+(?:\.\d+)?$/, "").trim();
+  const cleaned = cleanDisplayText(value)
+    .replace(/\s+\d+(?:\.\d+)?$/, "")
+    .replace(/\bfeedloaderapi\b/gi, " ")
+    .trim();
 
   if (
     !cleaned ||
@@ -7028,7 +7095,26 @@ function getSafeSourceLabel(value: unknown) {
     return "News source";
   }
 
-  return cleaned;
+  const normalizedCandidates = cleaned
+    .split(/[;,]+/)
+    .map((segment) => segment.split("/").pop() ?? segment)
+    .map((segment) => cleanDisplayText(segment).trim())
+    .filter(Boolean)
+    .filter((segment) => !/^feedloaderapi$/i.test(segment))
+    .filter((segment, index, all) => all.findIndex((candidate) => candidate.toLowerCase() === segment.toLowerCase()) === index);
+
+  const preferredCandidate =
+    normalizedCandidates.find((segment) => hasMappedSourceLogo(segment)) ??
+    normalizedCandidates.find((segment) =>
+      /\b(news|post|times|mirror|journal|press|associated press|reuters|cnn|abc|nbc|cbs|fox|bbc|npr|guardian|bloomberg|politico|axios|chronicle|observer|herald|wire|today)\b/i.test(
+        segment
+      )
+    ) ??
+    normalizedCandidates.find((segment) => segment.split(/\s+/).length >= 2) ??
+    normalizedCandidates[0] ??
+    cleaned;
+
+  return preferredCandidate.slice(0, 35).trim() || "News source";
 }
 
 function getDisplaySourceLabel(
@@ -7212,6 +7298,8 @@ export default function Home() {
 
   useEffect(() => {
     let isCancelled = false;
+    const moviesCacheKey = "graffiti:trending:movies";
+    const cachedMovies = readTimedCachePayload<TheaterMovieItem[]>(moviesCacheKey, 15 * 60 * 1000);
 
     async function loadTheaterMovies() {
       if (sortMode !== "celebrity" && sortMode !== "trending") {
@@ -7224,12 +7312,34 @@ export default function Home() {
         return;
       }
 
+      if (cachedMovies?.length && !isCancelled) {
+        setTheaterMovies(cachedMovies);
+      }
+
       setIsTheaterMoviesLoading(true);
+      const moviesFetchStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
 
       try {
-        const response = await apiFetch("/api/movies", {
-          cache: "no-store",
-        });
+        const response = await withSoftTimeout(
+          () =>
+            apiFetch("/api/movies", {
+              cache: "no-store",
+            }),
+          5000,
+          () => null
+        );
+
+        console.log(
+          "MOVIES_FETCH_MS",
+          Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - moviesFetchStartedAt)
+        );
+
+        if (!response) {
+          if (!isCancelled) {
+            setTheaterMovies(cachedMovies ?? []);
+          }
+          return;
+        }
 
         if (!response.ok) {
           throw new Error(`Movies request failed (${response.status})`);
@@ -7240,12 +7350,16 @@ export default function Home() {
         };
 
         if (!isCancelled) {
-          setTheaterMovies(Array.isArray(payload.movies) ? payload.movies : []);
+          const nextMovies = Array.isArray(payload.movies) ? payload.movies : [];
+          setTheaterMovies(nextMovies);
+          if (nextMovies.length > 0) {
+            writeTimedCachePayload(moviesCacheKey, nextMovies);
+          }
         }
       } catch (error) {
-        console.error("THEATER MOVIES LOAD FAILED", error);
+        console.warn("THEATER MOVIES LOAD FAILED", error);
         if (!isCancelled) {
-          setTheaterMovies([]);
+          setTheaterMovies(cachedMovies ?? []);
         }
       } finally {
         if (!isCancelled) {
@@ -7263,6 +7377,8 @@ export default function Home() {
 
   useEffect(() => {
     let isCancelled = false;
+    const stocksCacheKey = "graffiti:trending:stocks";
+    const cachedStocks = readTimedCachePayload<StockTickerItem[]>(stocksCacheKey, 10 * 60 * 1000);
 
     async function loadBusinessTicker() {
       if (sortMode !== "business" && sortMode !== "trending") {
@@ -7271,10 +7387,20 @@ export default function Home() {
         return;
       }
 
+      if (cachedStocks?.length && !isCancelled) {
+        setBusinessTickerItems(cachedStocks);
+        setBusinessTickerSource("cache");
+      }
+
       try {
-        const response = await apiFetch("/api/stocks", {
-          cache: "no-store",
-        });
+        const response = await Promise.race([
+          apiFetch("/api/stocks", {
+            cache: "no-store",
+          }),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => reject(new Error("Stocks request timed out")), 5000);
+          }),
+        ]);
 
         const payload = (await response.json().catch(() => ({ items: [] }))) as {
           items?: StockTickerItem[];
@@ -7319,6 +7445,9 @@ export default function Home() {
         if (!isCancelled) {
           setBusinessTickerItems(orderedItems);
           setBusinessTickerSource(apiItems.length > 0 ? "api" : "empty");
+          if (orderedItems.length > 0) {
+            writeTimedCachePayload(stocksCacheKey, orderedItems);
+          }
         }
       } catch (error) {
         console.error("BUSINESS STOCK FETCH FAILED", error);
@@ -7336,8 +7465,8 @@ export default function Home() {
         console.log("BUSINESS STOCK ITEMS LENGTH", 0);
 
         if (!isCancelled) {
-          setBusinessTickerItems([]);
-          setBusinessTickerSource("error");
+          setBusinessTickerItems(cachedStocks ?? []);
+          setBusinessTickerSource(cachedStocks?.length ? "cache" : "error");
         }
       }
     }
@@ -7457,10 +7586,37 @@ export default function Home() {
     console.log("TRENDING_FEATURED_PODCASTS_RENDERED", featuredTrendingPodcasts.length);
 
     let isCancelled = false;
+    const podcastsCacheKey = "graffiti:trending:featured-podcasts";
+    const cachedPodcasts = readTimedCachePayload<TrendingPodcastCard[]>(
+      podcastsCacheKey,
+      15 * 60 * 1000
+    );
 
     async function loadTrendingPodcasts() {
+      if (cachedPodcasts?.length && !isCancelled) {
+        setFeaturedTrendingPodcasts(cachedPodcasts);
+      }
+
+      const podcastsFetchStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+
       try {
-        const response = await apiFetch("/api/podcasts");
+        const response = await withSoftTimeout(
+          () => apiFetch("/api/podcasts"),
+          5000,
+          () => null
+        );
+
+        console.log(
+          "PODCASTS_FETCH_MS",
+          Math.round(
+            (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+              podcastsFetchStartedAt
+          )
+        );
+
+        if (!response) {
+          return;
+        }
 
         if (!response.ok) {
           return;
@@ -7493,9 +7649,10 @@ export default function Home() {
 
         if (nextFeatured.length > 0) {
           setFeaturedTrendingPodcasts(nextFeatured);
+          writeTimedCachePayload(podcastsCacheKey, nextFeatured);
         }
       } catch (error) {
-        console.error("Trending featured podcasts enrichment failed", error);
+        console.warn("Trending featured podcasts enrichment failed", error);
       }
     }
 
@@ -9260,6 +9417,8 @@ export default function Home() {
   useEffect(() => {
     const city = selectedLocalCity ?? DEFAULT_LOCAL_CITY;
     let isCancelled = false;
+    const weatherCacheKey = `graffiti:trending:weather:${city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+    const cachedWeatherCard = readTimedCachePayload<WeatherCardData>(weatherCacheKey, 15 * 60 * 1000);
 
     async function loadWeatherCard() {
       if (sortMode === "trending" && !hasTrendingArticlesReady) {
@@ -9279,17 +9438,26 @@ export default function Home() {
         return;
       }
 
+      if (cachedWeatherCard && !isCancelled) {
+        setWeatherCard(cachedWeatherCard);
+      }
+
       setIsWeatherLoading(true);
 
       try {
-        const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weather_code,wind_speed_10m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=1`,
-          {
-            headers: {
-              Accept: "application/json",
-            },
-          }
-        );
+        const response = await Promise.race([
+          fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weather_code,wind_speed_10m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=1`,
+            {
+              headers: {
+                Accept: "application/json",
+              },
+            }
+          ),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => reject(new Error("Weather request timed out")), 5000);
+          }),
+        ]);
 
         if (!response.ok) {
           throw new Error(`Weather request failed (${response.status})`);
@@ -9316,7 +9484,7 @@ export default function Home() {
           return;
         }
 
-        setWeatherCard({
+        const nextWeatherCard = {
           temperature: payload.current.temperature_2m,
           weatherLabel: getWeatherLabel(payload.current.weather_code),
           windMph: payload.current.wind_speed_10m ?? null,
@@ -9328,11 +9496,14 @@ export default function Home() {
           highTemp: payload.daily?.temperature_2m_max?.[0] ?? null,
           lowTemp: payload.daily?.temperature_2m_min?.[0] ?? null,
           cityLabel: city,
-        });
+        };
+
+        setWeatherCard(nextWeatherCard);
+        writeTimedCachePayload(weatherCacheKey, nextWeatherCard);
       } catch (error) {
         console.error("LOCAL WEATHER ERROR", error);
         if (!isCancelled) {
-          setWeatherCard(null);
+          setWeatherCard(cachedWeatherCard ?? null);
         }
       } finally {
         if (!isCancelled) {
@@ -14477,9 +14648,20 @@ export default function Home() {
     const trendingCacheKey = getFeedCacheKey("trending");
     const cachedTrendingFeed = readCachedFeedPayload(trendingCacheKey);
 
+    if (cachedTrendingFeed?.articles?.length) {
+      setDirectTrendingArticles(cachedTrendingFeed.articles);
+      setArticles(cachedTrendingFeed.articles);
+      setHasMoreArticles(cachedTrendingFeed.hasMore);
+      setFeedPage(cachedTrendingFeed.page);
+      setFeedLoadError(null);
+      setIsInitialFeedLoading(false);
+      setIsLoading(false);
+    }
+
     void (async () => {
       const apiRequestUrl = buildApiUrl("/api/aggregated-news");
       const apiBaseUrl = apiRequestUrl.replace(/\/api\/aggregated-news\/?$/, "");
+      const articlesFetchStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
 
       try {
         setLastApiRequestUrl(apiRequestUrl);
@@ -14509,6 +14691,10 @@ export default function Home() {
             ? payload.articles
             : [];
         const nextArticles = normalizeHomepageArticles(payloadArticles);
+        console.log(
+          "ARTICLES_FETCH_MS",
+          Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - articlesFetchStartedAt)
+        );
 
         if (isCancelled) {
           return;
@@ -14566,6 +14752,11 @@ export default function Home() {
         if (isCancelled) {
           return;
         }
+
+        console.log(
+          "ARTICLES_FETCH_MS",
+          Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - articlesFetchStartedAt)
+        );
 
         console.error("ARTICLES_FETCH_SUCCESS", false);
         console.error("ARTICLE_FETCH_ERROR", error);

@@ -3,10 +3,11 @@
 import { type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { apiFetch } from "../../lib/api-base";
+import { apiFetch, isNativeCapacitorRuntime } from "../../lib/api-base";
 import HeartIcon from "../components/heart-icon";
 import ShareButton from "../components/share-button";
 import SourceBadge from "../components/source-badge";
+import { openOriginalArticleUrl } from "../../lib/open-article";
 import {
   CELEBRITY_VIDEOS_DISABLED,
   readVideoReturnState,
@@ -54,9 +55,11 @@ export default function VideosPage() {
     null
   );
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [activeVideoEmbedLoaded, setActiveVideoEmbedLoaded] = useState(false);
+  const [activeVideoEmbedFailed, setActiveVideoEmbedFailed] = useState(false);
   const [autoplayVideoId, setAutoplayVideoId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(true);
   const [tabLoading, setTabLoading] = useState<Record<VideoTab, boolean>>({
     news: true,
     world: false,
@@ -89,6 +92,7 @@ export default function VideosPage() {
     () => SHARED_VIDEO_CATEGORIES.filter((tab) => tab.value === "news"),
     []
   );
+  const isNativeCapacitor = isNativeCapacitorRuntime();
 
   const displayedVideosRaw = videosByTab[activeTab];
   const displayedVideos =
@@ -142,9 +146,26 @@ export default function VideosPage() {
       return;
     }
 
-    const shouldBlockScreen = !hasLoadedOnceRef.current && tab === "news";
-    if (shouldBlockScreen) {
-      setIsLoading(true);
+    const cacheKey = `graffiti:videos:${tab}`;
+    const shouldBlockScreen = false;
+    const cachedVideos =
+      typeof window !== "undefined"
+        ? (() => {
+            try {
+              const raw = window.localStorage.getItem(cacheKey);
+              return raw ? (JSON.parse(raw) as VideoItem[]) : null;
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+
+    if (cachedVideos?.length) {
+      setVideosByTab((prev) => ({
+        ...prev,
+        [tab]: cachedVideos,
+      }));
+      loadedTabsRef.current[tab] = true;
     }
 
     setTabLoading((prev) => ({ ...prev, [tab]: true }));
@@ -152,7 +173,12 @@ export default function VideosPage() {
     try {
       const fetchUrl = `/api/videos?tab=${tab}`;
       console.log("VIDEO PAGE FETCH URL", fetchUrl);
-      const response = await apiFetch(fetchUrl);
+      const response = await Promise.race([
+        apiFetch(fetchUrl),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => reject(new Error("Video page request timed out")), 6000);
+        }),
+      ]);
       const data = (await response.json()) as {
         videos?: VideoApiItem[];
         fallback?: boolean;
@@ -168,6 +194,9 @@ export default function VideosPage() {
         ...prev,
         [tab]: normalizedVideos,
       }));
+      if (typeof window !== "undefined" && normalizedVideos.length > 0) {
+        window.localStorage.setItem(cacheKey, JSON.stringify(normalizedVideos));
+      }
       setStatusMessages((prev) => ({
         ...prev,
         [tab]: data.fallback || data.fetchFailed ? data.message ?? "" : "",
@@ -215,6 +244,27 @@ export default function VideosPage() {
     setActiveCommentsVideoId(null);
     setAutoplayVideoId(null);
   }, [activeTab]);
+
+  useEffect(() => {
+    setActiveVideoEmbedLoaded(false);
+    setActiveVideoEmbedFailed(false);
+  }, [activeVideoId]);
+
+  useEffect(() => {
+    if (!activeVideoId || displayedVideos.length === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (!activeVideoEmbedLoaded) {
+        setActiveVideoEmbedFailed(true);
+      }
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeVideoEmbedLoaded, activeVideoId, displayedVideos.length]);
 
   useEffect(() => {
     const playableVideos = displayedVideos.filter(
@@ -302,6 +352,20 @@ export default function VideosPage() {
     [activeVideoId, displayedVideos]
   );
 
+  const activeVideoEmbedUrl = useMemo(
+    () =>
+      activeVideo
+        ? buildVideoEmbedUrl(activeVideo.youtubeId, true, {
+            mute: false,
+            controls: true,
+            loop: false,
+            enableJsApi: true,
+            origin: "https://my-news-app-git-main-earnhardt828s-projects.vercel.app",
+          })
+        : null,
+    [activeVideo]
+  );
+
   const activeCommentsVideo = useMemo(
     () =>
       activeCommentsVideoId === null
@@ -369,6 +433,17 @@ export default function VideosPage() {
     router.push(returnState.path || "/");
   }, [returnState, router]);
 
+  const handleOpenExternalVideo = useCallback(async (video: VideoItem) => {
+    if (video.watchUrl) {
+      await openOriginalArticleUrl(video.watchUrl);
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.open(`https://www.youtube.com/watch?v=${video.youtubeId}`, "_blank", "noopener,noreferrer");
+    }
+  }, []);
+
   return (
     <section
       className="reels-shell videos-page-shell"
@@ -433,6 +508,7 @@ export default function VideosPage() {
       <div className="reels-feed">
         {displayedVideos.map((video) => {
             const isAutoplaying = autoplayVideoId === video.id && !video.fallback;
+            const shouldRenderEmbed = isAutoplaying && !isNativeCapacitor;
 
             return (
               <article key={video.id} id={`video-${video.id}`} className="reel-card">
@@ -454,7 +530,7 @@ export default function VideosPage() {
                     />
                   ) : null}
 
-                  {isAutoplaying ? (
+                  {shouldRenderEmbed ? (
                     <iframe
                       src={buildVideoEmbedUrl(video.youtubeId, true)}
                       title={video.title}
@@ -465,11 +541,18 @@ export default function VideosPage() {
                   ) : (
                     <button
                       className="reel-media-button"
-                      onClick={() => setActiveVideoId(video.id)}
-                      aria-label={`Play ${video.title}`}
+                      onClick={() =>
+                        isNativeCapacitor
+                          ? void handleOpenExternalVideo(video)
+                          : setActiveVideoId(video.id)
+                      }
+                      aria-label={isNativeCapacitor ? `Watch ${video.title}` : `Play ${video.title}`}
                     >
                       <div className="reel-play-overlay">
                         <span className="video-play-badge" aria-hidden="true" />
+                        <span className="video-live-pill">
+                          {isNativeCapacitor ? "Watch Video" : "Tap to play"}
+                        </span>
                       </div>
                     </button>
                   )}
@@ -594,7 +677,7 @@ export default function VideosPage() {
         </div>
       ) : null}
 
-      {activeVideo ? (
+      {activeVideo && !isNativeCapacitor ? (
         <div
           className="modal-backdrop"
           role="dialog"
@@ -617,23 +700,59 @@ export default function VideosPage() {
               </button>
             </div>
 
-            {activeVideo.embedUrl ? (
-              <div className="video-player-shell">
-                <iframe
-                  src={buildVideoEmbedUrl(activeVideo.youtubeId, true)}
-                  title={activeVideo.title}
-                  className="video-player-frame"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
+            {activeVideoEmbedUrl && !activeVideoEmbedFailed ? (
+              <div className="stack" style={{ gap: "14px" }}>
+                <div className="video-player-shell">
+                  <iframe
+                    src={activeVideoEmbedUrl}
+                    title={activeVideo.title}
+                    className="video-player-frame"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    onLoad={() => setActiveVideoEmbedLoaded(true)}
+                    onError={() => setActiveVideoEmbedFailed(true)}
+                  />
+                </div>
+                {!activeVideoEmbedLoaded ? (
+                  <div className="muted" style={{ textAlign: "center" }}>
+                    Loading video...
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="empty-state">
-                <strong>Placeholder video</strong>
+                {activeVideo.thumbnailUrl ? (
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      aspectRatio: "16 / 9",
+                      borderRadius: "20px",
+                      overflow: "hidden",
+                      marginBottom: "14px",
+                    }}
+                  >
+                    <Image
+                      src={activeVideo.thumbnailUrl}
+                      alt={activeVideo.title}
+                      fill
+                      sizes="100vw"
+                      className="reel-thumbnail"
+                      unoptimized
+                    />
+                  </div>
+                ) : null}
+                <strong>Watch on YouTube</strong>
                 <span>
-                  Add `NEXT_PUBLIC_YOUTUBE_API_KEY` to `.env.local` to load real
-                  video embeds.
+                  This video could not be played in the in-app player. Open it in YouTube or Safari instead.
                 </span>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => void handleOpenExternalVideo(activeVideo)}
+                >
+                  Watch on YouTube
+                </button>
               </div>
             )}
           </div>

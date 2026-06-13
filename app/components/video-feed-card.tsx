@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import HeartIcon from "./heart-icon";
 import ShareButton from "./share-button";
 import SourceBadge from "./source-badge";
+import { isNativeCapacitorRuntime } from "../../lib/api-base";
+import { openOriginalArticleUrl } from "../../lib/open-article";
 import { formatRelativeTimestamp } from "../../lib/relative-time";
 import {
   buildVideoEmbedUrl,
@@ -80,6 +82,8 @@ export default function VideoFeedCard({
     value: null,
   });
   const [isPreviewActive, setIsPreviewActive] = useState(true);
+  const [previewEmbedLoaded, setPreviewEmbedLoaded] = useState(false);
+  const [previewEmbedFailed, setPreviewEmbedFailed] = useState(false);
 
   useEffect(() => {
     if (!previewDurationMs) {
@@ -164,6 +168,40 @@ export default function VideoFeedCard({
     video.orientation,
     video.thumbnailUrl,
   ]);
+
+  useEffect(() => {
+    setPreviewEmbedLoaded(false);
+    setPreviewEmbedFailed(false);
+  }, [video.id, isAutoplaying, previewDurationMs]);
+
+  useEffect(() => {
+    if (
+      !isAutoplaying ||
+      !isPreviewActive ||
+      video.fallback ||
+      !video.youtubeId
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setPreviewEmbedFailed(true);
+    }, 4500);
+
+    if (previewEmbedLoaded) {
+      window.clearTimeout(timeoutId);
+    }
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    isAutoplaying,
+    isPreviewActive,
+    previewEmbedLoaded,
+    video.fallback,
+    video.youtubeId,
+  ]);
   const resolvedOrientation =
     probedOrientation.thumbnailUrl === video.thumbnailUrl && probedOrientation.value
       ? probedOrientation.value
@@ -203,12 +241,13 @@ export default function VideoFeedCard({
     resolvedOrientation === "vertical"
       ? "video-card-article-vertical"
       : "video-card-article-horizontal";
-  const shouldAutoplayFrame = isAutoplaying && (!previewDurationMs || isPreviewActive);
+  const shouldAutoplayFrame =
+    isAutoplaying && (!previewDurationMs || isPreviewActive) && !previewEmbedFailed;
   const publishedLabel = useRelativeTime
     ? formatRelativeTimestamp(video.publishedAt)
     : formatVideoPublishedDate(video.publishedAt);
   const shouldShowTopRightTimePill = isArticleVariant && Boolean(publishedLabel);
-
+  const shouldUseExternalPlayback = isNativeCapacitorRuntime();
   if (shouldShowTopRightTimePill) {
     console.log("TRENDING_VIDEO_TIME_TOP_RIGHT", {
       videoId: video.id,
@@ -223,12 +262,13 @@ export default function VideoFeedCard({
     });
   }
   const handleOpenVideo = () => {
-    if (
-      video.fallback &&
-      video.watchUrl &&
-      typeof window !== "undefined"
-    ) {
-      window.open(video.watchUrl, "_blank", "noopener,noreferrer");
+    if (shouldUseExternalPlayback && video.watchUrl) {
+      void openOriginalArticleUrl(video.watchUrl);
+      return;
+    }
+
+    if (video.fallback && video.watchUrl && typeof window !== "undefined") {
+      void openOriginalArticleUrl(video.watchUrl);
       return;
     }
 
@@ -288,7 +328,7 @@ export default function VideoFeedCard({
             video.theme ?? "video-card-theme-rose"
           }`}
         >
-          {shouldAutoplayFrame && !video.fallback && previewEmbedUrl ? (
+          {shouldAutoplayFrame && !shouldUseExternalPlayback && !video.fallback && previewEmbedUrl ? (
             <>
               {console.log("TRENDING_VIDEO_AUTOPLAY_ENABLED", {
                 videoId: video.id,
@@ -300,6 +340,8 @@ export default function VideoFeedCard({
                 className="video-player-frame"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
+                onLoad={() => setPreviewEmbedLoaded(true)}
+                onError={() => setPreviewEmbedFailed(true)}
               />
               <button
                 type="button"
@@ -338,10 +380,20 @@ export default function VideoFeedCard({
               </div>
               <div className="video-card-title-overlay">
                 <h3 className="video-card-title-overlay-text">{video.title}</h3>
+                {shouldUseExternalPlayback ? (
+                  <span className="chip chip-accent" style={{ marginTop: "8px" }}>
+                    Watch Video
+                  </span>
+                ) : null}
               </div>
-              {!video.thumbnailUrl ? (
+              {!video.thumbnailUrl || previewEmbedFailed ? (
                 <div className="video-frame-fallback-copy">
                   <h3 className="video-card-title-overlay-text">{video.title}</h3>
+                  {video.watchUrl ? (
+                    <span className="chip chip-accent" style={{ marginTop: "8px" }}>
+                      Watch Video
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
             </button>
@@ -423,13 +475,15 @@ export default function VideoFeedCard({
             isAutoplaying ? "video-frame-live" : ""
           }`}
         >
-          {shouldAutoplayFrame && !video.fallback && previewEmbedUrl ? (
+          {shouldAutoplayFrame && !shouldUseExternalPlayback && !video.fallback && previewEmbedUrl ? (
             <iframe
               src={previewEmbedUrl}
               title={video.title}
               className="video-player-frame"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
+              onLoad={() => setPreviewEmbedLoaded(true)}
+              onError={() => setPreviewEmbedFailed(true)}
             />
           ) : (
             <button
@@ -450,7 +504,11 @@ export default function VideoFeedCard({
               <div className="video-frame-overlay">
                 <span className="video-play-badge" aria-hidden="true" />
                 <span className="video-live-pill">
-                  {video.fallback ? "Placeholder video" : "Tap to play"}
+                  {shouldUseExternalPlayback
+                    ? "Watch Video"
+                    : video.fallback
+                      ? "Placeholder video"
+                      : "Tap to play"}
                 </span>
               </div>
             </button>

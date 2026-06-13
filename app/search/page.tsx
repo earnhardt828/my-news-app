@@ -603,6 +603,7 @@ export default function Search() {
   const loadMoreSearchSentinelRef = useRef<HTMLDivElement | null>(null);
   const resultsAreaRef = useRef<HTMLDivElement | null>(null);
   const isFetchingNextSearchPageRef = useRef(false);
+  const searchBootstrapCacheKey = "graffiti:search:bootstrap";
 
   useEffect(() => {
     console.log("SEARCH_TRENDING_TAB_REMOVED", true);
@@ -634,15 +635,39 @@ export default function Search() {
 
   useEffect(() => {
     async function loadSearchData() {
+      if (typeof window !== "undefined") {
+        try {
+          const raw = window.localStorage.getItem(searchBootstrapCacheKey);
+          if (raw) {
+            const cached = JSON.parse(raw) as {
+              articles?: NewsArticle[];
+              trendingTerms?: string[];
+            };
+            if (Array.isArray(cached.articles) && cached.articles.length > 0) {
+              setArticles(cached.articles);
+            }
+            if (Array.isArray(cached.trendingTerms) && cached.trendingTerms.length > 0) {
+              setTrendingTerms(cached.trendingTerms);
+            }
+            setIsLoading(false);
+          }
+        } catch (error) {
+          console.error("SEARCH CACHE READ FAILED", error);
+        }
+      }
+
       setIsLoading(true);
 
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        const response = await apiFetch(
-          `/api/news?mode=trending&page=1&pageSize=${SEARCH_PAGE_SIZE}`
-        );
+        const response = await Promise.race([
+          apiFetch(`/api/news?mode=trending&page=1&pageSize=${SEARCH_PAGE_SIZE}`),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => reject(new Error("Search bootstrap request timed out")), 6000);
+          }),
+        ]);
         const payload = normalizeSearchPayload(
           (await response.json()) as NewsArticle[] | SearchNewsResponse
         );
@@ -653,6 +678,16 @@ export default function Search() {
 
         if (derivedTerms.length > 0) {
           setTrendingTerms(derivedTerms);
+        }
+
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            searchBootstrapCacheKey,
+            JSON.stringify({
+              articles: news,
+              trendingTerms: derivedTerms.length > 0 ? derivedTerms : fallbackTrendingTerms,
+            })
+          );
         }
 
         setCurrentUserId(user?.id ?? null);
@@ -1340,6 +1375,9 @@ export default function Search() {
 
   return (
     <section className="page-shell search-shell">
+      <div className="muted" style={{ padding: "8px 16px", textAlign: "center" }}>
+        Search page loaded
+      </div>
       <section className="search-bar-shell">
         <label className="search-input-shell" htmlFor="search-input">
           <input

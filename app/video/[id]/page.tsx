@@ -8,8 +8,9 @@ import HeartIcon from "../../components/heart-icon";
 import LoadingScreen from "../../components/loading-screen";
 import ShareButton from "../../components/share-button";
 import SourceBadge from "../../components/source-badge";
-import { apiFetch } from "../../../lib/api-base";
+import { apiFetch, isNativeCapacitorRuntime } from "../../../lib/api-base";
 import { listMutuallyHiddenUserIds } from "../../../lib/blocked-users";
+import { openOriginalArticleUrl } from "../../../lib/open-article";
 import {
   buildVideoEmbedUrl,
   formatVideoPublishedDate,
@@ -142,6 +143,9 @@ function isMissingCommentMetadataColumnError(message: string | null | undefined)
 
 export default function VideoDetailPage() {
   const params = useParams<{ id?: string }>();
+  const [embedLoaded, setEmbedLoaded] = useState(false);
+  const [embedFailed, setEmbedFailed] = useState(false);
+  const isNativeCapacitor = isNativeCapacitorRuntime();
   const videoId = decodeURIComponent(params?.id ?? "");
   const commentArticleId = getVideoCommentArticleId(videoId);
   const commentsSectionRef = useRef<HTMLElement | null>(null);
@@ -169,6 +173,27 @@ export default function VideoDetailPage() {
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
+
+  useEffect(() => {
+    setEmbedLoaded(false);
+    setEmbedFailed(false);
+  }, [video?.id]);
+
+  useEffect(() => {
+    if (!video || video.fallback) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (!embedLoaded) {
+        setEmbedFailed(true);
+      }
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [embedLoaded, video]);
 
   useEffect(() => {
     let isMounted = true;
@@ -705,13 +730,19 @@ export default function VideoDetailPage() {
         </div>
 
         <div className="video-detail-player-shell">
-          {!video.fallback ? (
+          {!video.fallback && !embedFailed && !isNativeCapacitor ? (
             <iframe
-              src={buildVideoEmbedUrl(video.youtubeId, true)}
+              src={buildVideoEmbedUrl(video.youtubeId, true, {
+                mute: false,
+                controls: true,
+                loop: false,
+              })}
               title={video.title}
               className="video-player-frame"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
+              onLoad={() => setEmbedLoaded(true)}
+              onError={() => setEmbedFailed(true)}
             />
           ) : (
             <div className="video-detail-placeholder">
@@ -725,6 +756,23 @@ export default function VideoDetailPage() {
                   unoptimized
                 />
               ) : null}
+              <div
+                className="stack"
+                style={{
+                  position: "absolute",
+                  inset: "auto 16px 16px 16px",
+                  gap: "10px",
+                  zIndex: 2,
+                }}
+              >
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => void openOriginalArticleUrl(video.watchUrl)}
+                >
+                  Watch Video
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import LoadingScreen from "../components/loading-screen";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -1070,9 +1069,15 @@ export default function Profile() {
 
   return (
     <section className="page-shell profile-page-root">
+      <div className="muted" style={{ padding: "8px 16px", textAlign: "center" }}>
+        Profile page loaded
+      </div>
       {isLoading ? (
-        <LoadingScreen label="Loading profile" message="Checking your account and saved activity." />
-      ) : !isSignedIn ? (
+        <div className="muted" style={{ padding: "8px 16px", textAlign: "center" }}>
+          Checking your account and saved activity.
+        </div>
+      ) : null}
+      {!isSignedIn ? (
         <div className="profile-auth-shell">
           <section className="section-card stack profile-auth-card">
             <div className="stack profile-auth-brand">

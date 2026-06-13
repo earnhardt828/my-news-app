@@ -2,13 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isNativeCapacitorRuntime } from "../../lib/api-base";
 
 function normalizeAppPath(pathname: string) {
-  if (!pathname || pathname === "/") {
+  if (!pathname || pathname === "/" || pathname === "/index.html") {
     return "/";
   }
 
-  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  const withoutIndex = pathname.replace(/\/index\.html$/i, "");
+  return withoutIndex.endsWith("/") ? withoutIndex.slice(0, -1) : withoutIndex;
+}
+
+function buildNativeStaticRouteHref(pathname: string) {
+  if (!pathname || pathname === "/") {
+    return "/index.html";
+  }
+
+  const normalized = pathname.endsWith("/") ? pathname : `${pathname}/`;
+  return `${normalized}index.html`;
 }
 
 type NavItem = {
@@ -42,12 +53,13 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: "/videos/",
-    label: "Videos",
+    href: "/polls/",
+    label: "Polls",
     icon: (
       <svg {...iconProps}>
-        <rect x="3.5" y="5" width="13" height="14" rx="3" />
-        <path d="m16.5 10 4-2.5v9L16.5 14" />
+        <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
+        <path d="M8 9h8" />
+        <path d="M8 12h5" />
       </svg>
     ),
   },
@@ -88,19 +100,29 @@ const navItems: NavItem[] = [
 export default function BottomNav() {
   const rawPathname = usePathname();
   const pathname = normalizeAppPath(rawPathname ?? "/");
+  const isNative = isNativeCapacitorRuntime();
 
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
       {navItems.map((item) => {
         const normalizedHref = normalizeAppPath(item.href);
         const isActive = pathname === normalizedHref;
+        const nativeTargetHref = buildNativeStaticRouteHref(item.href);
 
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={isNative ? nativeTargetHref : item.href}
             className={`nav-link ${isActive ? "nav-link-active" : ""}`}
             aria-current={isActive ? "page" : undefined}
+            onClick={(event) => {
+              if (!isNative || typeof window === "undefined") {
+                return;
+              }
+
+              event.preventDefault();
+              window.location.assign(nativeTargetHref);
+            }}
           >
             <span className="nav-icon">{item.icon}</span>
             <span>{item.label}</span>

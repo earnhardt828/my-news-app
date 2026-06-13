@@ -175,22 +175,37 @@ export function cleanVideoTitle(title: string | null | undefined) {
 export function buildVideoEmbedUrl(
   youtubeId: string,
   autoplay: boolean,
-  options?: { startSeconds?: number }
+  options?: {
+    startSeconds?: number;
+    mute?: boolean;
+    controls?: boolean;
+    loop?: boolean;
+    enableJsApi?: boolean;
+    origin?: string | null;
+  }
 ) {
-  const url = new URL(`https://www.youtube-nocookie.com/embed/${youtubeId}`);
+  const url = new URL(`https://www.youtube.com/embed/${youtubeId}`);
   url.searchParams.set("autoplay", autoplay ? "1" : "0");
-  url.searchParams.set("mute", "1");
+  url.searchParams.set("mute", options?.mute === false ? "0" : "1");
   url.searchParams.set("playsinline", "1");
-  url.searchParams.set("controls", "0");
+  url.searchParams.set("controls", options?.controls ? "1" : "0");
   url.searchParams.set("rel", "0");
   url.searchParams.set("modestbranding", "1");
+  if (options?.enableJsApi ?? true) {
+    url.searchParams.set("enablejsapi", "1");
+  }
+  const origin = options?.origin ?? "https://my-news-app-git-main-earnhardt828s-projects.vercel.app";
+  if (origin) {
+    url.searchParams.set("origin", origin);
+  }
   const previewStartSeconds = Math.max(0, Math.floor(options?.startSeconds ?? 0));
-  if (autoplay) {
+  const shouldLoop = options?.loop ?? autoplay;
+  if (shouldLoop) {
     url.searchParams.set("loop", "1");
     url.searchParams.set("playlist", youtubeId);
-    if (previewStartSeconds > 0) {
-      url.searchParams.set("start", String(previewStartSeconds));
-    }
+  }
+  if (previewStartSeconds > 0) {
+    url.searchParams.set("start", String(previewStartSeconds));
   }
   return url.toString();
 }

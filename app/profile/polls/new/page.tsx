@@ -9,6 +9,7 @@ import {
   isPollSchemaMissingError,
   validatePollDraft,
 } from "../../../../lib/polls";
+import { savePollArticleImageReferences } from "../../../../lib/poll-images";
 import { supabase } from "../../../../lib/supabase";
 
 const MAX_OPTIONS = 4;
@@ -19,6 +20,7 @@ export default function CreatePollPage() {
   const relatedArticleId = searchParams?.get("articleId") ?? "";
   const relatedArticleTitle = searchParams?.get("articleTitle") ?? "";
   const relatedSource = searchParams?.get("source") ?? "";
+  const relatedArticleImage = searchParams?.get("articleImage") ?? "";
   const initialCategory = searchParams?.get("category") ?? "";
   const [question, setQuestion] = useState("");
   const [category, setCategory] = useState(initialCategory);
@@ -133,6 +135,13 @@ export default function CreatePollPage() {
       return;
     }
 
+    savePollArticleImageReferences({
+      pollId: pollData.id,
+      relatedArticleId,
+      relatedArticleTitle,
+      imageUrl: relatedArticleImage,
+    });
+
     router.push("/profile");
   };
 
@@ -148,6 +157,9 @@ export default function CreatePollPage() {
             <strong>Related article</strong>
             <span>{relatedArticleLabel}</span>
             {relatedSource ? <span className="muted">{relatedSource}</span> : null}
+            {relatedArticleImage ? (
+              <span className="muted">The linked article image will be used for this poll.</span>
+            ) : null}
           </div>
         ) : null}
 

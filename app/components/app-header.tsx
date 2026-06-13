@@ -13,16 +13,17 @@ import { getSourceNameFromSlug } from "../../lib/source-logos";
 import { supabase } from "../../lib/supabase";
 
 function normalizeAppPath(pathname: string) {
-  if (!pathname || pathname === "/") {
+  if (!pathname || pathname === "/" || pathname === "/index.html") {
     return "/";
   }
 
-  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  const withoutIndex = pathname.replace(/\/index\.html$/i, "");
+  return withoutIndex.endsWith("/") ? withoutIndex.slice(0, -1) : withoutIndex;
 }
 
 function getPageTitle(pathname: string) {
-  if (pathname === "/videos") {
-    return "Videos";
+  if (!POLLS_DISABLED && pathname === "/polls") {
+    return "Polls";
   }
 
   if (pathname === "/search") {
@@ -827,6 +828,16 @@ export default function AppHeader() {
   }
 
   if (pathname !== "/") {
+    if (!POLLS_DISABLED && pathname === "/polls") {
+      return (
+        <div className="app-header-title-wrap app-header-title-wrap-center">
+          <span className="app-header-side-spacer" aria-hidden="true" />
+          <h1 className="brand-title">Polls</h1>
+          <span className="app-header-side-spacer" aria-hidden="true" />
+        </div>
+      );
+    }
+
     if (pathname === "/videos") {
       return null;
     }
