@@ -1,52 +1,112 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import PollCard from "../components/poll-card";
 import {
   applyPollVoteUpdate,
+  getPollReportsSetupMessage,
   getPollTrendingScore,
   hydratePolls,
+  isPollReportsSchemaMissingError,
+  POLL_HIDDEN_REPORT_THRESHOLD,
+  POLL_PUBLIC_STATUSES,
+  POLL_SELECT_BASE,
+  POLL_SELECT_WITH_IMAGE,
+  withPollImageColumnFallback,
   type PollRecord,
   type PollWithResults,
 } from "../../lib/polls";
-import { getCategoryLabel } from "../../lib/categories";
-import { getStoredPollArticleImage, readPollArticleImageMap } from "../../lib/poll-images";
 import { supabase } from "../../lib/supabase";
 
-const ALL_POLLS_FILTER = "all";
+const POLL_SECTION_ORDER = [
+  "Politics",
+  "World",
+  "Sports",
+  "Movies",
+  "Business",
+  "Technology",
+  "Local",
+] as const;
 
-function getPollHeroAccent(category: string) {
-  switch (category.toLowerCase()) {
-    case "politics":
-      return "linear-gradient(135deg, rgba(16, 40, 80, 0.88), rgba(33, 73, 130, 0.7))";
-    case "business":
-      return "linear-gradient(135deg, rgba(29, 51, 42, 0.9), rgba(56, 114, 91, 0.72))";
-    case "sports":
-      return "linear-gradient(135deg, rgba(69, 24, 24, 0.9), rgba(161, 58, 58, 0.72))";
-    case "entertainment":
-      return "linear-gradient(135deg, rgba(77, 34, 20, 0.9), rgba(201, 103, 60, 0.72))";
-    case "technology":
-      return "linear-gradient(135deg, rgba(25, 31, 58, 0.92), rgba(77, 90, 164, 0.74))";
-    default:
-      return "linear-gradient(135deg, rgba(24, 30, 45, 0.92), rgba(68, 82, 119, 0.72))";
+const POLL_FILTER_TABS = [
+  "All Polls",
+  "Following",
+  ...POLL_SECTION_ORDER,
+] as const;
+
+type PollSectionName = (typeof POLL_SECTION_ORDER)[number];
+type PollFilterTab = (typeof POLL_FILTER_TABS)[number];
+
+type PollEntry = {
+  poll: PollWithResults;
+  sectionCategory: PollSectionName | null;
+};
+
+function getNormalizedPollSection(poll: PollWithResults): PollSectionName | null {
+  const haystack = `${poll.category ?? ""} ${poll.question ?? ""} ${poll.related_article_title ?? ""} ${poll.related_source ?? ""}`.toLowerCase();
+
+  if (/\b(local|city hall|county|school board|mayor|neighborhood|statehouse|state legislature)\b/.test(haystack)) {
+    return "Local";
   }
+
+  if (/\b(movie|movies|film|box office|hollywood|streaming|series finale|season premiere|oscar|emmy)\b/.test(haystack)) {
+    return "Movies";
+  }
+
+  if (/\b(tech|technology|ai|software|app|cyber|apple|google|microsoft|chip|startup|robot)\b/.test(haystack)) {
+    return "Technology";
+  }
+
+  if (/\b(sport|sports|game|playoff|final|match|team|player|mlb|nba|nfl|nhl|wnba|soccer|golf)\b/.test(haystack)) {
+    return "Sports";
+  }
+
+  if (/\b(business|market|stock|economy|earnings|company|tariff|trade|inflation|wall street|finance)\b/.test(haystack)) {
+    return "Business";
+  }
+
+  if (/\b(world|international|foreign|europe|asia|africa|latin america|middle east|ukraine|russia|china|israel|gaza|iran|nato|un)\b/.test(haystack)) {
+    return "World";
+  }
+
+  if (/\b(politic|election|congress|senate|house|white house|president|campaign|democrat|republican|governor|policy)\b/.test(haystack)) {
+    return "Politics";
+  }
+
+  return null;
+}
+
+function buildSectionEntries(entries: PollEntry[]) {
+  const sections = new Map<PollSectionName, PollEntry[]>();
+  POLL_SECTION_ORDER.forEach((name) => sections.set(name, []));
+
+  entries.forEach((entry) => {
+    if (entry.sectionCategory) {
+      sections.get(entry.sectionCategory)?.push(entry);
+    }
+  });
+
+  return POLL_SECTION_ORDER.map((name) => ({
+    key: name.toLowerCase(),
+    title: name,
+    entries: [...(sections.get(name) ?? [])]
+      .sort((left, right) => getPollTrendingScore(right.poll) - getPollTrendingScore(left.poll))
+      .slice(0, 10),
+  })).filter((section) => section.entries.length > 0);
 }
 
 export default function PollsPage() {
+  const router = useRouter();
   const [polls, setPolls] = useState<PollWithResults[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewerId, setViewerId] = useState<string | null>(null);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [activeFilter, setActiveFilter] = useState<PollFilterTab>("All Polls");
   const [activeVotePollId, setActiveVotePollId] = useState<string | null>(null);
   const [activeHeartPollId, setActiveHeartPollId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>(ALL_POLLS_FILTER);
-  const [pollImageRefreshKey, setPollImageRefreshKey] = useState(0);
-
-  useEffect(() => {
-    setPollImageRefreshKey((current) => current + 1);
-  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -65,14 +125,46 @@ export default function PollsPage() {
 
       setViewerId(user?.id ?? null);
 
-      const { data, error } = await supabase
-        .from("polls")
-        .select(
-          "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
-        )
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(80);
+      if (user?.id) {
+        const { data: followRowsData, error: followRowsError } = await supabase
+          .from("user_follows")
+          .select("following_id")
+          .eq("follower_id", user.id);
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (followRowsError) {
+          console.error("Error loading followed users for polls:", followRowsError);
+          setFollowingIds([]);
+        } else {
+          setFollowingIds(
+            (((followRowsData ?? []) as { following_id: string | null }[]) ?? [])
+              .map((row) => row.following_id)
+              .filter((value): value is string => Boolean(value))
+          );
+        }
+      } else {
+        setFollowingIds([]);
+      }
+
+      const { data, error } = await withPollImageColumnFallback(
+        () =>
+          supabase
+            .from("polls")
+            .select(POLL_SELECT_WITH_IMAGE)
+            .in("status", [...POLL_PUBLIC_STATUSES])
+            .order("created_at", { ascending: false })
+            .limit(80),
+        () =>
+          supabase
+            .from("polls")
+            .select(POLL_SELECT_BASE)
+            .in("status", [...POLL_PUBLIC_STATUSES])
+            .order("created_at", { ascending: false })
+            .limit(80)
+      );
 
       if (!isMounted) {
         return;
@@ -92,11 +184,41 @@ export default function PollsPage() {
         user?.id ?? null
       );
 
+      const pollIds = hydrated.map((poll) => poll.id);
+      let hiddenPollIds = new Set<string>();
+
+      if (pollIds.length > 0) {
+        const { data: reportRows, error: reportsError } = await supabase
+          .from("poll_reports")
+          .select("poll_id")
+          .in("poll_id", pollIds);
+
+        if (reportsError && !isPollReportsSchemaMissingError(reportsError.message)) {
+          console.error("Error loading poll reports:", reportsError);
+        } else if (reportsError && isPollReportsSchemaMissingError(reportsError.message)) {
+          console.warn(getPollReportsSetupMessage());
+        } else {
+          const reportCounts = (((reportRows ?? []) as { poll_id: string }[]) ?? []).reduce(
+            (map, report) => {
+              map.set(report.poll_id, (map.get(report.poll_id) ?? 0) + 1);
+              return map;
+            },
+            new Map<string, number>()
+          );
+
+          hiddenPollIds = new Set(
+            Array.from(reportCounts.entries())
+              .filter(([, count]) => count >= POLL_HIDDEN_REPORT_THRESHOLD)
+              .map(([pollId]) => pollId)
+          );
+        }
+      }
+
       if (!isMounted) {
         return;
       }
 
-      setPolls(hydrated);
+      setPolls(hydrated.filter((poll) => !hiddenPollIds.has(poll.id)));
       setIsLoading(false);
     }
 
@@ -107,86 +229,42 @@ export default function PollsPage() {
     };
   }, []);
 
-  const pollImageMap = useMemo(() => {
-    pollImageRefreshKey;
-    return readPollArticleImageMap();
-  }, [pollImageRefreshKey]);
-
-  const pollsWithImages = useMemo(
+  const pollEntries = useMemo<PollEntry[]>(
     () =>
       polls.map((poll) => ({
         poll,
-        articleImage:
-          pollImageMap[`poll:${poll.id}`] ??
-          getStoredPollArticleImage(poll) ??
-          null,
+        sectionCategory: getNormalizedPollSection(poll),
       })),
-    [pollImageMap, polls]
+    [polls]
   );
 
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    polls.forEach((poll) => {
-      const category = poll.category || "General";
-      counts.set(category, (counts.get(category) ?? 0) + 1);
-    });
-    return counts;
-  }, [polls]);
-
-  const availableCategories = useMemo(
+  const mostPopularEntries = useMemo(
     () =>
-      [ALL_POLLS_FILTER, ...Array.from(categoryCounts.keys()).sort((left, right) => left.localeCompare(right))],
-    [categoryCounts]
+      [...pollEntries]
+        .sort((left, right) => getPollTrendingScore(right.poll) - getPollTrendingScore(left.poll))
+        .slice(0, 5),
+    [pollEntries]
   );
 
-  const filteredPollEntries = useMemo(
+  const allSections = useMemo(() => buildSectionEntries(pollEntries), [pollEntries]);
+
+  const followingEntries = useMemo(
     () =>
-      pollsWithImages.filter(({ poll }) =>
-        selectedCategory === ALL_POLLS_FILTER ? true : poll.category === selectedCategory
-      ),
-    [pollsWithImages, selectedCategory]
+      pollEntries
+        .filter(({ poll }) => followingIds.includes(poll.user_id))
+        .sort((left, right) => getPollTrendingScore(right.poll) - getPollTrendingScore(left.poll)),
+    [pollEntries, followingIds]
   );
 
-  const pollOfTheDay = useMemo(
-    () =>
-      [...filteredPollEntries].sort(
-        (left, right) => getPollTrendingScore(right.poll) - getPollTrendingScore(left.poll)
-      )[0] ?? null,
-    [filteredPollEntries]
-  );
+  const activeCategoryEntries = useMemo(() => {
+    if (activeFilter === "All Polls" || activeFilter === "Following") {
+      return [] as PollEntry[];
+    }
 
-  const linkedStoryPolls = useMemo(
-    () =>
-      filteredPollEntries
-        .filter(({ poll }) => Boolean(poll.related_article_title))
-        .sort(
-          (left, right) => getPollTrendingScore(right.poll) - getPollTrendingScore(left.poll)
-        )
-        .slice(0, 8),
-    [filteredPollEntries]
-  );
-
-  const newestPolls = useMemo(
-    () =>
-      [...filteredPollEntries]
-        .sort(
-          (left, right) =>
-            new Date(right.poll.created_at ?? 0).getTime() -
-            new Date(left.poll.created_at ?? 0).getTime()
-        )
-        .slice(0, 18),
-    [filteredPollEntries]
-  );
-
-  const hotPredictions = useMemo(
-    () =>
-      [...filteredPollEntries]
-        .sort(
-          (left, right) => getPollTrendingScore(right.poll) - getPollTrendingScore(left.poll)
-        )
-        .slice(0, 10),
-    [filteredPollEntries]
-  );
+    return pollEntries
+      .filter((entry) => entry.sectionCategory === activeFilter)
+      .sort((left, right) => getPollTrendingScore(right.poll) - getPollTrendingScore(left.poll));
+  }, [activeFilter, pollEntries]);
 
   const handleVote = async (pollId: string, optionId: string) => {
     if (!viewerId) {
@@ -284,155 +362,176 @@ export default function PollsPage() {
     );
   };
 
+  const handleCreatePollClick = () => {
+    if (viewerId) {
+      router.push("/profile/polls/new/");
+      return;
+    }
+
+    router.push("/profile#create-poll-login");
+  };
+
   return (
     <section className="page-shell home-sections-shell polls-hub-shell">
+      <div className="polls-page-topbar">
+        <strong className="profile-section-title home-section-title">Polls</strong>
+        <button
+          type="button"
+          className="button button-accent polls-create-button"
+          onClick={handleCreatePollClick}
+          aria-label="Create poll"
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      </div>
+
+      <div className="polls-filter-tabs" role="tablist" aria-label="Poll filters">
+        {POLL_FILTER_TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeFilter === tab}
+            className={`polls-filter-tab ${activeFilter === tab ? "polls-filter-tab-active" : ""}`}
+            onClick={() => setActiveFilter(tab)}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="loading-state">
           <span className="loading-screen-spinner" aria-hidden="true" />
           <strong>Loading polls...</strong>
-          <span>Gathering the latest community picks and predictions.</span>
+          <span>Pulling together the latest community voting.</span>
         </div>
       ) : null}
 
       {status ? <div className="muted">{status}</div> : null}
 
-      {!isLoading && pollOfTheDay ? (
-        <section
-          className="poll-hub-hero"
-          style={{
-            backgroundImage: pollOfTheDay.articleImage
-              ? `${getPollHeroAccent(pollOfTheDay.poll.category)}, url(${pollOfTheDay.articleImage})`
-              : getPollHeroAccent(pollOfTheDay.poll.category),
-          }}
-        >
-          <div className="poll-hub-hero-overlay">
-            <span className="chip chip-accent">Poll of the Day</span>
-            <strong className="poll-hub-hero-title">{pollOfTheDay.poll.question}</strong>
-            <div className="poll-hub-hero-meta">
-              <span>{getCategoryLabel(pollOfTheDay.poll.category)}</span>
-              <span>{pollOfTheDay.poll.totalVotes} votes</span>
-              <span>{pollOfTheDay.poll.commentCount} comments</span>
-            </div>
-            {pollOfTheDay.poll.related_article_title ? (
-              <span className="poll-hub-hero-context">
-                Linked to: {pollOfTheDay.poll.related_article_title}
-              </span>
-            ) : null}
-            <Link href={`/poll/${pollOfTheDay.poll.id}/`} className="button">
-              Open Poll
-            </Link>
-          </div>
-        </section>
-      ) : null}
-
-      {!isLoading ? (
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Poll Categories</strong>
-            </div>
-          </div>
-          <div className="poll-hub-category-row">
-            {availableCategories.map((category) => {
-              const isActive = selectedCategory === category;
-              const count =
-                category === ALL_POLLS_FILTER
-                  ? polls.length
-                  : (categoryCounts.get(category) ?? 0);
-
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  className={`toolbar-pill ${isActive ? "toolbar-pill-active" : ""}`}
-                  onClick={() => setSelectedCategory(category)}
-                >
-                  {category === ALL_POLLS_FILTER ? "All Polls" : getCategoryLabel(category)} ({count})
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      {!isLoading && linkedStoryPolls.length > 0 ? (
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Linked to Stories</strong>
-              <span className="muted">News-focused polls tied to active reporting and live debates.</span>
-            </div>
-          </div>
-          <div className="polls-carousel" role="list" aria-label="Linked story polls">
-            {linkedStoryPolls.map(({ poll }) => (
-              <div key={poll.id} className="polls-carousel-item" role="listitem">
-                <PollCard
-                  poll={poll}
-                  onVote={handleVote}
-                  isVoting={activeVotePollId === poll.id}
-                  showHeartAction
-                  onToggleHeart={handleToggleHeart}
-                  isHeartLoading={activeHeartPollId === poll.id}
-                  onAuthRequired={() => setStatus("Log in to vote in polls.")}
-                  className="poll-card-featured"
-                />
+      {!isLoading && activeFilter === "All Polls" ? (
+        <>
+          {mostPopularEntries.length > 0 ? (
+            <section className="home-section-block home-section-plain poll-section-block">
+              <div className="home-section-header">
+                <strong className="profile-section-title home-section-title">Most Popular Polls</strong>
+                <Link href="/profile/polls/new/" className="button button-secondary">
+                  Create Poll
+                </Link>
               </div>
-            ))}
+              <div className="polls-card-stack" role="list" aria-label="Most popular polls">
+                {mostPopularEntries.map(({ poll }, index) => (
+                  <div key={poll.id} className="polls-card-stack-item" role="listitem">
+                    <PollCard
+                      poll={poll}
+                      onVote={handleVote}
+                      isVoting={activeVotePollId === poll.id}
+                      showHeartAction
+                      onToggleHeart={handleToggleHeart}
+                      isHeartLoading={activeHeartPollId === poll.id}
+                      onAuthRequired={() => setStatus("Log in to vote in polls.")}
+                      rankLabel={`${index + 1}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {allSections.map((section) => (
+            <section key={section.key} className="home-section-block home-section-plain poll-section-block">
+              <div className="home-section-header">
+                <strong className="profile-section-title home-section-title">{section.title}</strong>
+              </div>
+              <div className="polls-carousel" role="list" aria-label={`${section.title} polls`}>
+                {section.entries.map(({ poll }) => (
+                  <div key={poll.id} className="polls-carousel-item" role="listitem">
+                    <PollCard
+                      poll={poll}
+                      onVote={handleVote}
+                      isVoting={activeVotePollId === poll.id}
+                      showHeartAction
+                      onToggleHeart={handleToggleHeart}
+                      isHeartLoading={activeHeartPollId === poll.id}
+                      onAuthRequired={() => setStatus("Log in to vote in polls.")}
+                      className="poll-card-featured"
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </>
+      ) : null}
+
+      {!isLoading && activeFilter === "Following" ? (
+        <section className="home-section-block home-section-plain poll-section-block">
+          <div className="home-section-header">
+            <strong className="profile-section-title home-section-title">Following</strong>
           </div>
+          {!viewerId ? (
+            <div className="empty-state compact-empty-state">
+              <strong>Log in to see followed polls</strong>
+              <span>Polls from the people you follow will show up here.</span>
+            </div>
+          ) : followingIds.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>You are not following anyone yet</strong>
+              <span>Follow users from their public profiles to build this tab.</span>
+            </div>
+          ) : followingEntries.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No followed polls yet</strong>
+              <span>The people you follow have not posted any live polls yet.</span>
+            </div>
+          ) : (
+            <div className="polls-card-stack" role="list" aria-label="Followed polls">
+              {followingEntries.map(({ poll }) => (
+                <div key={poll.id} className="polls-card-stack-item" role="listitem">
+                  <PollCard
+                    poll={poll}
+                    onVote={handleVote}
+                    isVoting={activeVotePollId === poll.id}
+                    showHeartAction
+                    onToggleHeart={handleToggleHeart}
+                    isHeartLoading={activeHeartPollId === poll.id}
+                    onAuthRequired={() => setStatus("Log in to vote in polls.")}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       ) : null}
 
-      {!isLoading && hotPredictions.length > 0 ? (
-        <section className="home-section-block home-section-plain">
+      {!isLoading && activeFilter !== "All Polls" && activeFilter !== "Following" ? (
+        <section className="home-section-block home-section-plain poll-section-block">
           <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Hot Predictions</strong>
-              <span className="muted">The polls getting the strongest mix of votes, likes, and conversation.</span>
+            <strong className="profile-section-title home-section-title">{activeFilter}</strong>
+          </div>
+          {activeCategoryEntries.length === 0 ? (
+            <div className="empty-state compact-empty-state">
+              <strong>No {activeFilter.toLowerCase()} polls yet</strong>
+              <span>New community polls in this category will show up here.</span>
             </div>
-          </div>
-          <div className="stack home-section-list">
-            {hotPredictions.slice(0, 3).map(({ poll }, index) => (
-              <PollCard
-                key={poll.id}
-                poll={poll}
-                rankLabel={`#${index + 1}`}
-                onVote={handleVote}
-                isVoting={activeVotePollId === poll.id}
-                showHeartAction
-                onToggleHeart={handleToggleHeart}
-                isHeartLoading={activeHeartPollId === poll.id}
-                onAuthRequired={() => setStatus("Log in to vote in polls.")}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {!isLoading && newestPolls.length > 0 ? (
-        <section className="home-section-block home-section-plain">
-          <div className="home-section-header">
-            <div className="stack" style={{ gap: "4px" }}>
-              <strong className="profile-section-title home-section-title">Latest Polls</strong>
-              <span className="muted">Fast-moving community takes across news, policy, business, sports, and culture.</span>
+          ) : (
+            <div className="polls-card-stack" role="list" aria-label={`${activeFilter} polls`}>
+              {activeCategoryEntries.map(({ poll }) => (
+                <div key={poll.id} className="polls-card-stack-item" role="listitem">
+                  <PollCard
+                    poll={poll}
+                    onVote={handleVote}
+                    isVoting={activeVotePollId === poll.id}
+                    showHeartAction
+                    onToggleHeart={handleToggleHeart}
+                    isHeartLoading={activeHeartPollId === poll.id}
+                    onAuthRequired={() => setStatus("Log in to vote in polls.")}
+                  />
+                </div>
+              ))}
             </div>
-            <Link href="/profile/polls/new/" className="button button-secondary">
-              Create Poll
-            </Link>
-          </div>
-          <div className="stack home-section-list">
-            {newestPolls.map(({ poll }) => (
-              <PollCard
-                key={poll.id}
-                poll={poll}
-                onVote={handleVote}
-                isVoting={activeVotePollId === poll.id}
-                showHeartAction
-                onToggleHeart={handleToggleHeart}
-                isHeartLoading={activeHeartPollId === poll.id}
-                onAuthRequired={() => setStatus("Log in to vote in polls.")}
-              />
-            ))}
-          </div>
+          )}
         </section>
       ) : null}
 

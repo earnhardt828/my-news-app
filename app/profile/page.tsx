@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -18,7 +19,15 @@ import {
   saveProfilePatch,
   type AppProfileRecord,
 } from "../../lib/profile-store";
-import { hydratePolls, type PollRecord, type PollWithResults } from "../../lib/polls";
+import {
+  hydratePolls,
+  POLL_PUBLIC_STATUSES,
+  POLL_SELECT_BASE,
+  POLL_SELECT_WITH_IMAGE,
+  withPollImageColumnFallback,
+  type PollRecord,
+  type PollWithResults,
+} from "../../lib/polls";
 import { cleanDisplayText } from "../../lib/display-text";
 import { SUPPORTED_LOCAL_CITIES } from "../../lib/local-news";
 import { isUsernameAllowed } from "../../lib/moderation";
@@ -157,6 +166,8 @@ export default function Profile() {
         ? "Logged out."
         : window.location.hash === "#account-deleted"
           ? "Your account has been deleted."
+          : window.location.hash === "#create-poll-login"
+            ? "Log in to create a poll."
           : ""
       : "";
 
@@ -336,15 +347,24 @@ export default function Profile() {
 
         return response;
       })(),
-      supabase
-        .from("polls")
-        .select(
-          "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
-        )
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(6),
+      withPollImageColumnFallback(
+        () =>
+          supabase
+            .from("polls")
+            .select(POLL_SELECT_WITH_IMAGE)
+            .eq("user_id", user.id)
+            .in("status", [...POLL_PUBLIC_STATUSES])
+            .order("created_at", { ascending: false })
+            .limit(6),
+        () =>
+          supabase
+            .from("polls")
+            .select(POLL_SELECT_BASE)
+            .eq("user_id", user.id)
+            .in("status", [...POLL_PUBLIC_STATUSES])
+            .order("created_at", { ascending: false })
+            .limit(6)
+      ),
       supabase
         .from("comment_reactions")
         .select("comment_id, reaction_type"),
@@ -1066,6 +1086,15 @@ export default function Profile() {
   const initials = username.trim().charAt(0).toUpperCase() || "N";
   const isSignedIn = Boolean(currentUser?.id);
   const currentUserId = currentUser?.id ?? "";
+  const totalPollLikesReceived = useMemo(
+    () => myPolls.reduce((sum, poll) => sum + Math.max(0, poll.heartCount ?? 0), 0),
+    [myPolls]
+  );
+  const totalCommentLikesReceived = useMemo(
+    () => myComments.reduce((sum, comment) => sum + Math.max(0, comment.hearts ?? 0), 0),
+    [myComments]
+  );
+  const totalLikesReceived = totalPollLikesReceived + totalCommentLikesReceived;
 
   return (
     <section className="page-shell profile-page-root">
@@ -1260,6 +1289,20 @@ export default function Profile() {
                   <Link href={`/user/${currentUserId}/`} className="chip chip-accent">
                     View public profile
                   </Link>
+                </div>
+                <div className="profile-stats-row" aria-label="Profile stats">
+                  <div className="profile-stat-block">
+                    <span className="profile-stat-value">{myPolls.length}</span>
+                    <span className="profile-stat-label">Polls</span>
+                  </div>
+                  <div className="profile-stat-block">
+                    <span className="profile-stat-value">{myComments.length}</span>
+                    <span className="profile-stat-label">Comments</span>
+                  </div>
+                  <div className="profile-stat-block">
+                    <span className="profile-stat-value">{totalLikesReceived}</span>
+                    <span className="profile-stat-label">Likes Received</span>
+                  </div>
                 </div>
                 {isUploadingAvatar ? (
                   <span className="muted">Uploading image...</span>

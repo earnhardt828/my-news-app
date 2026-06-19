@@ -10,6 +10,7 @@ export type PollRecord = {
   related_article_id: string | null;
   related_article_title: string | null;
   related_source: string | null;
+  image_url: string | null;
   status: string;
   created_at: string | null;
 };
@@ -45,6 +46,34 @@ export type PollWithResults = PollRecord & {
   userHasHearted: boolean;
   commentCount: number;
 };
+
+export const POLL_SELECT_BASE =
+  "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at";
+export const POLL_SELECT_WITH_IMAGE = `${POLL_SELECT_BASE}, image_url`;
+
+export const POLL_ALLOWED_CATEGORIES = [
+  "Politics",
+  "World",
+  "Business",
+  "Technology",
+  "Sports",
+  "Movies",
+  "Local",
+  "Entertainment",
+] as const;
+
+export type PollAllowedCategory = (typeof POLL_ALLOWED_CATEGORIES)[number];
+
+export const POLL_PUBLIC_STATUSES = ["active", "published", "approved"] as const;
+export const POLL_HIDDEN_REPORT_THRESHOLD = 3;
+export const POLL_REPORT_REASONS = [
+  "Off-topic",
+  "Spam",
+  "Harassment",
+  "Misinformation",
+  "Duplicate",
+  "Inappropriate image",
+] as const;
 
 const POLL_STOP_WORDS = new Set([
   "a",
@@ -125,7 +154,32 @@ const POLL_NEWS_KEYWORDS = [
   "white house",
 ];
 
+const POLL_SPAM_PATTERNS = [
+  /\bfree money\b/i,
+  /\bwork from home\b/i,
+  /\bbuy now\b/i,
+  /\bclick here\b/i,
+  /\bsubscribe now\b/i,
+  /\bcheck out my channel\b/i,
+  /\bfollow me\b/i,
+  /\bviral prank\b/i,
+  /\brandom question\b/i,
+  /\bwhat(?:'| i)s your favorite color\b/i,
+  /\bfirst one wins\b/i,
+] as const;
+
 export function normalizePollQuestion(value: string) {
+  return cleanDisplayText(value).replace(/\s+/g, " ").trim();
+}
+
+export function normalizePollCategory(value: string) {
+  const cleaned = cleanDisplayText(value).trim().toLowerCase();
+  return (
+    POLL_ALLOWED_CATEGORIES.find((category) => category.toLowerCase() === cleaned) ?? null
+  );
+}
+
+export function normalizePollStoryReference(value: string) {
   return cleanDisplayText(value).replace(/\s+/g, " ").trim();
 }
 
@@ -155,9 +209,10 @@ export function getPollFeedScore(poll: PollWithResults) {
 export function isNewsRelatedPoll(
   question: string,
   category: string,
-  relatedArticleTitle?: string | null
+  relatedArticleTitle?: string | null,
+  storyReference?: string | null
 ) {
-  if (relatedArticleTitle?.trim()) {
+  if (relatedArticleTitle?.trim() || storyReference?.trim()) {
     return true;
   }
 
@@ -177,19 +232,29 @@ export function validatePollDraft(input: {
   options: string[];
   category: string;
   relatedArticleTitle?: string | null;
+  storyReference?: string | null;
 }) {
   const question = normalizePollQuestion(input.question);
-  const category = input.category.trim();
+  const category = normalizePollCategory(input.category);
   const options = input.options
     .map((option) => cleanDisplayText(option).replace(/\s+/g, " ").trim())
     .filter(Boolean);
+  const storyReference = normalizePollStoryReference(input.storyReference ?? "");
 
   if (!category) {
-    return "Choose a category for your poll.";
+    return "Choose one of the approved poll categories.";
   }
 
   if (question.length < 12) {
     return "Write a fuller question for your poll.";
+  }
+
+  if (POLL_SPAM_PATTERNS.some((pattern) => pattern.test(question))) {
+    return "This poll question looks off-topic or spammy. Rewrite it to focus on a real news topic.";
+  }
+
+  if (!storyReference && !input.relatedArticleTitle?.trim()) {
+    return "Add the news story your poll is about by pasting a link or selecting a current article.";
   }
 
   if (options.length < 2) {
@@ -200,7 +265,7 @@ export function validatePollDraft(input: {
     return "Use between two and four answer options.";
   }
 
-  if (!isNewsRelatedPoll(question, category, input.relatedArticleTitle)) {
+  if (!isNewsRelatedPoll(question, category, input.relatedArticleTitle, storyReference)) {
     return "Polls should be related to news, current events, or public issues.";
   }
 
@@ -219,6 +284,60 @@ export function isPollSchemaMissingError(message: string | null | undefined) {
 
 export function getPollSchemaSetupMessage() {
   return "Polls are not set up in Supabase yet. Run the polls migration, then try again.";
+}
+
+export function isPollReportsSchemaMissingError(message: string | null | undefined) {
+  if (!message) {
+    return false;
+  }
+
+  return /relation .*poll_reports.* does not exist|Could not find the table .*poll_reports|column .*poll_id.* does not exist|status.*violates check constraint/i.test(
+    message
+  );
+}
+
+export function isPollImageSchemaMissingError(message: string | null | undefined) {
+  if (!message) {
+    return false;
+  }
+
+  return /column .*image_url.* does not exist|Could not find the column .*image_url/i.test(message);
+}
+
+export function getPollImageSchemaSetupMessage() {
+  return "Poll image uploads are not set up in Supabase yet. Run the poll image migration to enable them.";
+}
+
+export async function withPollImageColumnFallback<
+  T extends { error?: { message?: string | null } | null }
+>(primary: () => PromiseLike<T>, fallback: () => PromiseLike<T>) {
+  const result = await primary();
+
+  if (result.error && isPollImageSchemaMissingError(result.error.message)) {
+    console.warn(getPollImageSchemaSetupMessage());
+    return fallback();
+  }
+
+  return result;
+}
+
+export function getPollReportsSetupMessage() {
+  return "Poll moderation is not set up in Supabase yet. Run the poll moderation migration, then try again.";
+}
+
+export function getInitialPollModerationStatus(input: {
+  category: string;
+  relatedArticleTitle?: string | null;
+  storyReference?: string | null;
+}) {
+  const category = normalizePollCategory(input.category);
+  const storyReference = normalizePollStoryReference(input.storyReference ?? "");
+
+  if (category && (input.relatedArticleTitle?.trim() || storyReference)) {
+    return "published";
+  }
+
+  return "pending";
 }
 
 export async function hydratePolls(

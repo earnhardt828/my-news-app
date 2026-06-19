@@ -7,7 +7,19 @@ import { useEffect, useMemo, useState } from "react";
 import HeartIcon from "../../components/heart-icon";
 import LoadingScreen from "../../components/loading-screen";
 import PollCard from "../../components/poll-card";
-import { hydratePolls, type PollRecord, type PollWithResults } from "../../../lib/polls";
+import {
+  getPollReportsSetupMessage,
+  hydratePolls,
+  isPollReportsSchemaMissingError,
+  POLL_HIDDEN_REPORT_THRESHOLD,
+  POLL_PUBLIC_STATUSES,
+  POLL_REPORT_REASONS,
+  POLL_SELECT_BASE,
+  POLL_SELECT_WITH_IMAGE,
+  withPollImageColumnFallback,
+  type PollRecord,
+  type PollWithResults,
+} from "../../../lib/polls";
 import { cleanDisplayText } from "../../../lib/display-text";
 import { supabase } from "../../../lib/supabase";
 
@@ -65,6 +77,9 @@ export default function PollDetailPage() {
   const [isVoting, setIsVoting] = useState(false);
   const [isHeartLoading, setIsHeartLoading] = useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isReportingPoll, setIsReportingPoll] = useState(false);
+  const [reportReason, setReportReason] = useState<(typeof POLL_REPORT_REASONS)[number]>("Off-topic");
+  const [pollReportCount, setPollReportCount] = useState(0);
   const [status, setStatus] = useState<{
     type: "success" | "error";
     text: string;
@@ -85,14 +100,22 @@ export default function PollDetailPage() {
       } = await supabase.auth.getUser();
       setViewerId(user?.id ?? null);
 
-      const { data: pollRow, error: pollError } = await supabase
-        .from("polls")
-        .select(
-          "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
-        )
-        .eq("id", pollId)
-        .eq("status", "active")
-        .maybeSingle();
+      const { data: pollRow, error: pollError } = await withPollImageColumnFallback(
+        () =>
+          supabase
+            .from("polls")
+            .select(POLL_SELECT_WITH_IMAGE)
+            .eq("id", pollId)
+            .in("status", [...POLL_PUBLIC_STATUSES])
+            .maybeSingle(),
+        () =>
+          supabase
+            .from("polls")
+            .select(POLL_SELECT_BASE)
+            .eq("id", pollId)
+            .in("status", [...POLL_PUBLIC_STATUSES])
+            .maybeSingle()
+      );
 
       if (pollError) {
         console.error("Error loading poll:", pollError);
@@ -103,6 +126,25 @@ export default function PollDetailPage() {
       }
 
       if (!pollRow) {
+        setPoll(null);
+        setComments([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: reportRows, error: reportsError } = await supabase
+        .from("poll_reports")
+        .select("poll_id")
+        .eq("poll_id", pollId);
+
+      if (reportsError && !isPollReportsSchemaMissingError(reportsError.message)) {
+        console.error("Error loading poll reports:", reportsError);
+      }
+
+      const reportCount = (((reportRows ?? []) as { poll_id: string }[]) ?? []).length;
+      setPollReportCount(reportCount);
+
+      if (reportCount >= POLL_HIDDEN_REPORT_THRESHOLD) {
         setPoll(null);
         setComments([]);
         setIsLoading(false);
@@ -324,6 +366,44 @@ export default function PollDetailPage() {
     setCommentInput("");
   };
 
+  const handleReportPoll = async () => {
+    if (!viewerId || !poll) {
+      setStatus({ type: "error", text: "Log in to report polls." });
+      return;
+    }
+
+    setIsReportingPoll(true);
+    setStatus(null);
+
+    const { error } = await supabase.from("poll_reports").insert({
+      poll_id: poll.id,
+      user_id: viewerId,
+      reason: reportReason,
+    });
+
+    setIsReportingPoll(false);
+
+    if (error) {
+      console.error("Error reporting poll:", error);
+      setStatus({
+        type: "error",
+        text: isPollReportsSchemaMissingError(error.message)
+          ? getPollReportsSetupMessage()
+          : error.message ?? "Could not submit your report.",
+      });
+      return;
+    }
+
+    const nextCount = pollReportCount + 1;
+    setPollReportCount(nextCount);
+    setStatus({ type: "success", text: "Poll report submitted." });
+
+    if (nextCount >= POLL_HIDDEN_REPORT_THRESHOLD) {
+      setPoll(null);
+      setComments([]);
+    }
+  };
+
   if (isLoading) {
     return (
       <section className="page-shell article-page-shell">
@@ -391,6 +471,7 @@ export default function PollDetailPage() {
         <div className="trending-meta-row poll-detail-meta">
           <span className="trending-published-date">{poll.totalVotes} vote{poll.totalVotes === 1 ? "" : "s"}</span>
           <span>{poll.commentCount} comment{poll.commentCount === 1 ? "" : "s"}</span>
+          <span>Status: {poll.status}</span>
         </div>
 
         {poll.related_article_title && relatedArticleHref ? (
@@ -411,6 +492,31 @@ export default function PollDetailPage() {
           isHeartLoading={isHeartLoading}
           className="poll-detail-embedded-card"
         />
+
+        <div className="stack" style={{ gap: "10px" }}>
+          <strong className="profile-section-title-sm">Report poll</strong>
+          <select
+            className="input"
+            value={reportReason}
+            onChange={(event) =>
+              setReportReason(event.target.value as (typeof POLL_REPORT_REASONS)[number])
+            }
+          >
+            {POLL_REPORT_REASONS.map((reason) => (
+              <option key={reason} value={reason}>
+                {reason}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => void handleReportPoll()}
+            disabled={isReportingPoll}
+          >
+            {isReportingPoll ? "Reporting..." : "Report poll"}
+          </button>
+        </div>
 
         {status ? (
           <div

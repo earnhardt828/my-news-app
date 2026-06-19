@@ -6,6 +6,7 @@ import HeartIcon from "../../components/heart-icon";
 import LoadingScreen from "../../components/loading-screen";
 import { apiFetch } from "../../../lib/api-base";
 import { cleanDisplayText } from "../../../lib/display-text";
+import { POLL_PUBLIC_STATUSES } from "../../../lib/polls";
 import { supabase } from "../../../lib/supabase";
 import { extractVideoIdFromUrl } from "../../../lib/video-feed";
 
@@ -221,7 +222,7 @@ export default function ProfileCommentsPage() {
         supabase
           .from("polls")
           .select("id, question")
-          .eq("status", "active"),
+          .in("status", [...POLL_PUBLIC_STATUSES]),
       ]);
 
       if (!isMounted) {

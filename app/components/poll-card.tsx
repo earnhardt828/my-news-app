@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { getCategoryLabel } from "../../lib/categories";
 import { formatPollTimestamp, type PollWithResults } from "../../lib/polls";
 import HeartIcon from "./heart-icon";
@@ -17,6 +17,7 @@ type PollCardProps = {
   onToggleHeart?: (pollId: string) => void;
   isHeartLoading?: boolean;
   onAuthRequired?: () => void;
+  featured?: boolean;
 };
 
 export default function PollCard({
@@ -30,14 +31,24 @@ export default function PollCard({
   onToggleHeart,
   isHeartLoading = false,
   onAuthRequired,
+  featured = false,
 }: PollCardProps) {
   const router = useRouter();
+  const [hasRenderableImage, setHasRenderableImage] = useState(Boolean(poll.image_url));
   const hasVoted = Boolean(poll.userVoteOptionId);
   const showResults = hasVoted || !onVote;
-  const rootClassName = `news-card poll-card ${rankLabel ? "news-card-has-rank" : ""} ${className}`.trim();
+  const rootClassName = `news-card poll-card ${rankLabel ? "news-card-has-rank" : ""} ${
+    featured ? "poll-card-featured-surface" : ""
+  } ${className}`.trim();
+
+  useEffect(() => {
+    setHasRenderableImage(Boolean(poll.image_url));
+  }, [poll.id, poll.image_url]);
+
   const handleOpenPoll = () => {
     router.push(`/poll/${poll.id}/`);
   };
+
   const handleVoteAttempt = (optionId: string) => {
     if (!onVote) {
       onAuthRequired?.();
@@ -60,32 +71,34 @@ export default function PollCard({
         }
       }}
     >
+      {hasRenderableImage && poll.image_url ? (
+        <div className="poll-card-image-wrap">
+          <img
+            src={poll.image_url}
+            alt={poll.question}
+            className="poll-card-image"
+            loading="lazy"
+            onError={() => setHasRenderableImage(false)}
+          />
+        </div>
+      ) : null}
+
       <div className="news-card-top-row">
         <div className="trending-source-brand poll-card-brand poll-card-brand-top">
-          {poll.creatorAvatarUrl ? (
-            <span className="poll-card-avatar" aria-hidden="true">
-              <Image
-                src={poll.creatorAvatarUrl}
-                alt=""
-                width={22}
-                height={22}
-                unoptimized
-              />
-            </span>
-          ) : (
-            <span className="poll-card-brand-mark" aria-hidden="true">
-              ●
-            </span>
-          )}
-          <span className="trending-source-name">
-            {showAuthor && poll.username ? `@${poll.username}` : "Graffiti Poll"}
-          </span>
-          <span className="trending-source-category-separator" aria-hidden="true">
-            ·
-          </span>
-          <span className="trending-source-category-inline">
+          <span className="poll-card-category-marker" aria-hidden="true" />
+          <span className="chip poll-card-inline-category-badge">
             {getCategoryLabel(poll.category)}
           </span>
+          {showAuthor ? (
+            <>
+              <span className="trending-source-category-separator" aria-hidden="true">
+                ·
+              </span>
+              <span className="trending-source-name">
+                {poll.username ? `@${poll.username}` : "Graffiti Poll"}
+              </span>
+            </>
+          ) : null}
         </div>
         {rankLabel ? (
           <span className="chip trending-rank-badge news-card-rank-badge">{rankLabel}</span>

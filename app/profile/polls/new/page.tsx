@@ -1,18 +1,56 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
-import { CATEGORY_OPTIONS, getCategoryLabel } from "../../../../lib/categories";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { getCategoryLabel } from "../../../../lib/categories";
+import { apiFetch } from "../../../../lib/api-base";
 import { cleanDisplayText } from "../../../../lib/display-text";
 import {
+  getInitialPollModerationStatus,
+  getPollImageSchemaSetupMessage,
+  getPollReportsSetupMessage,
+  isPollReportsSchemaMissingError,
+  POLL_ALLOWED_CATEGORIES,
   getPollSchemaSetupMessage,
+  isPollImageSchemaMissingError,
   isPollSchemaMissingError,
+  normalizePollCategory,
+  normalizePollStoryReference,
   validatePollDraft,
 } from "../../../../lib/polls";
 import { savePollArticleImageReferences } from "../../../../lib/poll-images";
 import { supabase } from "../../../../lib/supabase";
 
 const MAX_OPTIONS = 4;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const POLL_RULES = [
+  "Must be related to news, culture, sports, business, technology, movies, or local issues.",
+  "No spam.",
+  "No personal attacks.",
+  "No random or off-topic polls.",
+] as const;
+
+type StoryOption = {
+  id: string;
+  title: string;
+  source: string;
+  image: string | null;
+  category: string | null;
+  url: string | null;
+};
+
+function getPollImageError(file: File) {
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    return "Upload a JPG, PNG, or WebP image.";
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    return "Poll images must be 5MB or smaller.";
+  }
+
+  return null;
+}
 
 export default function CreatePollPage() {
   const router = useRouter();
@@ -22,18 +60,95 @@ export default function CreatePollPage() {
   const relatedSource = searchParams?.get("source") ?? "";
   const relatedArticleImage = searchParams?.get("articleImage") ?? "";
   const initialCategory = searchParams?.get("category") ?? "";
+  const initialStoryReference = searchParams?.get("articleUrl") ?? relatedArticleTitle;
   const [question, setQuestion] = useState("");
-  const [category, setCategory] = useState(initialCategory);
+  const [category, setCategory] = useState(normalizePollCategory(initialCategory) ?? "");
   const [options, setOptions] = useState(["", ""]);
+  const [storyReference, setStoryReference] = useState(initialStoryReference);
+  const [storyOptions, setStoryOptions] = useState<StoryOption[]>([]);
+  const [selectedStoryId, setSelectedStoryId] = useState("");
+  const [isLoadingStoryOptions, setIsLoadingStoryOptions] = useState(false);
   const [status, setStatus] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [pollImageFile, setPollImageFile] = useState<File | null>(null);
+  const [pollImagePreviewUrl, setPollImagePreviewUrl] = useState<string | null>(null);
 
   const relatedArticleLabel = useMemo(
     () => cleanDisplayText(relatedArticleTitle),
     [relatedArticleTitle]
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadStoryOptions() {
+      setIsLoadingStoryOptions(true);
+
+      try {
+        const response = await apiFetch("/api/aggregated-news?pageSize=24");
+        const payload = (await response.json().catch(() => ({}))) as {
+          articles?: Array<{
+            id?: string | number | null;
+            title?: string | null;
+            source?: string | null;
+            image?: string | null;
+            category?: string | null;
+            url?: string | null;
+          }>;
+        };
+
+        if (!isMounted) {
+          return;
+        }
+
+        const nextOptions = (payload.articles ?? [])
+          .map((article, index) => ({
+            id:
+              String(article.id ?? "").trim() ||
+              String(article.url ?? "").trim() ||
+              `story-${index}`,
+            title: cleanDisplayText(article.title ?? "").trim(),
+            source: cleanDisplayText(article.source ?? "").trim(),
+            image: typeof article.image === "string" && article.image.trim() ? article.image.trim() : null,
+            category: typeof article.category === "string" && article.category.trim() ? article.category.trim() : null,
+            url: typeof article.url === "string" && article.url.trim() ? article.url.trim() : null,
+          }))
+          .filter((article) => article.title);
+
+        setStoryOptions(nextOptions);
+      } catch (error) {
+        console.warn("Could not load current articles for poll creation:", error);
+        if (isMounted) {
+          setStoryOptions([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingStoryOptions(false);
+        }
+      }
+    }
+
+    void loadStoryOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pollImagePreviewUrl) {
+        URL.revokeObjectURL(pollImagePreviewUrl);
+      }
+    };
+  }, [pollImagePreviewUrl]);
+
+  const selectedStory = useMemo(
+    () => storyOptions.find((story) => story.id === selectedStoryId) ?? null,
+    [selectedStoryId, storyOptions]
   );
 
   const handleOptionChange = (index: number, value: string) => {
@@ -46,14 +161,52 @@ export default function CreatePollPage() {
     setOptions((prev) => (prev.length >= MAX_OPTIONS ? prev : [...prev, ""]));
   };
 
+  const handlePollImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      setPollImageFile(null);
+      if (pollImagePreviewUrl) {
+        URL.revokeObjectURL(pollImagePreviewUrl);
+      }
+      setPollImagePreviewUrl(null);
+      return;
+    }
+
+    const imageError = getPollImageError(file);
+    if (imageError) {
+      setStatus({ type: "error", text: imageError });
+      event.target.value = "";
+      setPollImageFile(null);
+      if (pollImagePreviewUrl) {
+        URL.revokeObjectURL(pollImagePreviewUrl);
+      }
+      setPollImagePreviewUrl(null);
+      return;
+    }
+
+    if (pollImagePreviewUrl) {
+      URL.revokeObjectURL(pollImagePreviewUrl);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setPollImageFile(file);
+    setPollImagePreviewUrl(previewUrl);
+    setStatus(null);
+  };
+
   const handleSubmit = async () => {
     setStatus(null);
+
+    const normalizedStoryReference = normalizePollStoryReference(storyReference);
+    const linkedArticleTitle = selectedStory?.title || relatedArticleTitle || normalizedStoryReference;
 
     const validationError = validatePollDraft({
       question,
       options,
       category,
-      relatedArticleTitle,
+      relatedArticleTitle: linkedArticleTitle,
+      storyReference: normalizedStoryReference,
     });
 
     if (validationError) {
@@ -62,6 +215,14 @@ export default function CreatePollPage() {
         text: validationError,
       });
       return;
+    }
+
+    if (pollImageFile) {
+      const imageError = getPollImageError(pollImageFile);
+      if (imageError) {
+        setStatus({ type: "error", text: imageError });
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -85,25 +246,126 @@ export default function CreatePollPage() {
       .filter(Boolean)
       .slice(0, MAX_OPTIONS);
 
+    let uploadedImageUrl: string | null = null;
+
+    if (pollImageFile) {
+      const safeFilename = pollImageFile.name.replace(/[^a-zA-Z0-9.-]/g, "-");
+      const fileStamp = `${Date.now()}-${pollImageFile.size}`;
+      const filePath = `${user.id}/poll-${fileStamp}-${safeFilename}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("poll-images")
+        .upload(filePath, pollImageFile, { upsert: false });
+
+      if (uploadError) {
+        console.error("Error uploading poll image:", uploadError);
+        setIsSaving(false);
+        setStatus({
+          type: "error",
+          text: "Could not upload your poll image. Please try a different file.",
+        });
+        return;
+      }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("poll-images").getPublicUrl(filePath);
+
+      uploadedImageUrl = publicUrl;
+    }
+
+    const statusToInsert = getInitialPollModerationStatus({
+      category,
+      relatedArticleTitle: linkedArticleTitle,
+      storyReference: normalizedStoryReference,
+    });
+
     const { data: profileData } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", user.id)
       .maybeSingle();
 
-    const { data: pollData, error: pollError } = await supabase
+    let pollInsertResult = await supabase
       .from("polls")
       .insert({
         user_id: user.id,
         username: profileData?.username ?? null,
         question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
-        category,
-        related_article_id: relatedArticleId,
-        related_article_title: relatedArticleTitle,
-        related_source: relatedSource,
+        category: normalizePollCategory(category) ?? category,
+        related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
+        related_article_title: linkedArticleTitle,
+        related_source: selectedStory?.source || relatedSource || null,
+        image_url: uploadedImageUrl,
+        status: statusToInsert,
       })
       .select("id")
       .single();
+
+    if (
+      pollInsertResult.error &&
+      isPollImageSchemaMissingError(pollInsertResult.error.message)
+    ) {
+      console.warn(getPollImageSchemaSetupMessage());
+      pollInsertResult = await supabase
+        .from("polls")
+        .insert({
+          user_id: user.id,
+          username: profileData?.username ?? null,
+          question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
+          category: normalizePollCategory(category) ?? category,
+          related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
+          related_article_title: linkedArticleTitle,
+          related_source: selectedStory?.source || relatedSource || null,
+          status: statusToInsert,
+        })
+        .select("id")
+        .single();
+    }
+
+    if (
+      pollInsertResult.error &&
+      isPollReportsSchemaMissingError(pollInsertResult.error.message)
+    ) {
+      pollInsertResult = await supabase
+        .from("polls")
+        .insert({
+          user_id: user.id,
+          username: profileData?.username ?? null,
+          question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
+          category: normalizePollCategory(category) ?? category,
+          related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
+          related_article_title: linkedArticleTitle,
+          related_source: selectedStory?.source || relatedSource || null,
+          image_url: uploadedImageUrl,
+          status: "active",
+        })
+        .select("id")
+        .single();
+
+      if (
+        pollInsertResult.error &&
+        isPollImageSchemaMissingError(pollInsertResult.error.message)
+      ) {
+        console.warn(getPollImageSchemaSetupMessage());
+        pollInsertResult = await supabase
+          .from("polls")
+          .insert({
+            user_id: user.id,
+            username: profileData?.username ?? null,
+            question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
+            category: normalizePollCategory(category) ?? category,
+            related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
+            related_article_title: linkedArticleTitle,
+            related_source: selectedStory?.source || relatedSource || null,
+            status: "active",
+          })
+          .select("id")
+          .single();
+      }
+    }
+
+    const { data: pollData, error: pollError } = pollInsertResult;
 
     if (pollError || !pollData?.id) {
       setIsSaving(false);
@@ -111,7 +373,11 @@ export default function CreatePollPage() {
         type: "error",
         text: isPollSchemaMissingError(pollError?.message)
           ? getPollSchemaSetupMessage()
-          : pollError?.message ?? "Could not create your poll.",
+          : isPollReportsSchemaMissingError(pollError?.message)
+            ? getPollReportsSetupMessage()
+            : isPollImageSchemaMissingError(pollError?.message)
+              ? getPollImageSchemaSetupMessage()
+            : pollError?.message ?? "Could not create your poll.",
       });
       return;
     }
@@ -137,9 +403,9 @@ export default function CreatePollPage() {
 
     savePollArticleImageReferences({
       pollId: pollData.id,
-      relatedArticleId,
-      relatedArticleTitle,
-      imageUrl: relatedArticleImage,
+      relatedArticleId: selectedStory?.id || relatedArticleId,
+      relatedArticleTitle: linkedArticleTitle,
+      imageUrl: selectedStory?.image || relatedArticleImage,
     });
 
     router.push("/profile");
@@ -152,13 +418,22 @@ export default function CreatePollPage() {
           Polls should be related to news, current events, or public issues.
         </span>
 
+        <div className="stack" style={{ gap: "8px" }}>
+          <strong className="profile-section-title-sm">Poll rules</strong>
+          <ul className="muted" style={{ margin: 0, paddingLeft: "18px" }}>
+            {POLL_RULES.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </div>
+
         {relatedArticleLabel ? (
           <div className="poll-related-article">
             <strong>Related article</strong>
             <span>{relatedArticleLabel}</span>
             {relatedSource ? <span className="muted">{relatedSource}</span> : null}
             {relatedArticleImage ? (
-              <span className="muted">The linked article image will be used for this poll.</span>
+              <span className="muted">The linked article image can still be referenced for this poll.</span>
             ) : null}
           </div>
         ) : null}
@@ -181,15 +456,76 @@ export default function CreatePollPage() {
             className="input"
             value={category}
             onChange={(event) => setCategory(event.target.value)}
+            required
           >
             <option value="">Choose a category</option>
-            {CATEGORY_OPTIONS.map((option) => (
+            {POLL_ALLOWED_CATEGORIES.map((option) => (
               <option key={option} value={option}>
                 {getCategoryLabel(option)}
               </option>
             ))}
           </select>
         </label>
+
+        <label className="stack" style={{ gap: "8px" }}>
+          <span className="profile-section-title-sm">What news story is this about?</span>
+          <input
+            className="input"
+            type="text"
+            value={storyReference}
+            onChange={(event) => setStoryReference(event.target.value)}
+            placeholder="Paste the article URL or describe the exact story"
+            required
+          />
+        </label>
+
+        <label className="stack" style={{ gap: "8px" }}>
+          <span className="profile-section-title-sm">Or select from current articles</span>
+          <select
+            className="input"
+            value={selectedStoryId}
+            onChange={(event) => {
+              const nextId = event.target.value;
+              setSelectedStoryId(nextId);
+              const nextStory = storyOptions.find((story) => story.id === nextId);
+              if (nextStory) {
+                setStoryReference(nextStory.url || nextStory.title);
+                if (!category) {
+                  const normalizedCategory = normalizePollCategory(nextStory.category ?? "");
+                  if (normalizedCategory) {
+                    setCategory(normalizedCategory);
+                  }
+                }
+              }
+            }}
+          >
+            <option value="">
+              {isLoadingStoryOptions ? "Loading current articles..." : "Choose a current article"}
+            </option>
+            {storyOptions.map((story) => (
+              <option key={story.id} value={story.id}>
+                {story.title} {story.source ? `- ${story.source}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="stack" style={{ gap: "8px" }}>
+          <span className="profile-section-title-sm">Optional image upload</span>
+          <input
+            className="input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handlePollImageChange}
+          />
+          <span className="muted">Upload one JPG, PNG, or WebP image up to 5MB.</span>
+        </label>
+
+        {pollImagePreviewUrl ? (
+          <div className="poll-upload-preview">
+            <img src={pollImagePreviewUrl} alt="Poll upload preview" className="poll-upload-preview-image" />
+          </div>
+        ) : null}
 
         <div className="stack" style={{ gap: "10px" }}>
           <span className="profile-section-title-sm">Answer options</span>

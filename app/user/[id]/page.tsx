@@ -12,7 +12,15 @@ import {
   removeBlockedUser,
 } from "../../../lib/blocked-users";
 import { getProfileIdentity } from "../../../lib/profile-identities";
-import { hydratePolls, type PollRecord, type PollWithResults } from "../../../lib/polls";
+import {
+  hydratePolls,
+  POLL_PUBLIC_STATUSES,
+  POLL_SELECT_BASE,
+  POLL_SELECT_WITH_IMAGE,
+  withPollImageColumnFallback,
+  type PollRecord,
+  type PollWithResults,
+} from "../../../lib/polls";
 import { supabase } from "../../../lib/supabase";
 
 type ProfileRecord = {
@@ -106,15 +114,24 @@ export default function UserProfilePage() {
         user?.id
           ? listMutuallyHiddenUserIds(supabase, user.id)
           : Promise.resolve({ data: [], error: null }),
-        supabase
-          .from("polls")
-          .select(
-            "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
-          )
-          .eq("user_id", profileAuthUserId)
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(12),
+        withPollImageColumnFallback(
+          () =>
+            supabase
+              .from("polls")
+              .select(POLL_SELECT_WITH_IMAGE)
+              .eq("user_id", profileAuthUserId)
+              .in("status", [...POLL_PUBLIC_STATUSES])
+              .order("created_at", { ascending: false })
+              .limit(12),
+          () =>
+            supabase
+              .from("polls")
+              .select(POLL_SELECT_BASE)
+              .eq("user_id", profileAuthUserId)
+              .in("status", [...POLL_PUBLIC_STATUSES])
+              .order("created_at", { ascending: false })
+              .limit(12)
+        ),
         user?.id
           ? supabase
               .from("user_follows")

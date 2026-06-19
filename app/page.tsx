@@ -63,6 +63,10 @@ import {
   applyPollVoteUpdate,
   getPollFeedScore,
   hydratePolls,
+  POLL_PUBLIC_STATUSES,
+  POLL_SELECT_BASE,
+  POLL_SELECT_WITH_IMAGE,
+  withPollImageColumnFallback,
   type PollRecord,
   type PollWithResults,
 } from "../lib/polls";
@@ -8663,24 +8667,41 @@ export default function Home() {
 
       const [followedPollsResult, recentPollsResult] = await Promise.all([
         pollUserIds.length
-          ? supabase
-              .from("polls")
-              .select(
-                "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
-              )
-              .eq("status", "active")
-              .in("user_id", pollUserIds)
-              .order("created_at", { ascending: false })
-              .limit(30)
+          ? withPollImageColumnFallback(
+              () =>
+                supabase
+                  .from("polls")
+                  .select(POLL_SELECT_WITH_IMAGE)
+                  .in("status", [...POLL_PUBLIC_STATUSES])
+                  .in("user_id", pollUserIds)
+                  .order("created_at", { ascending: false })
+                  .limit(30),
+              () =>
+                supabase
+                  .from("polls")
+                  .select(POLL_SELECT_BASE)
+                  .in("status", [...POLL_PUBLIC_STATUSES])
+                  .in("user_id", pollUserIds)
+                  .order("created_at", { ascending: false })
+                  .limit(30)
+            )
           : Promise.resolve({ data: [] as PollRecord[], error: null }),
-        supabase
-          .from("polls")
-          .select(
-            "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at"
-          )
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(40),
+        withPollImageColumnFallback(
+          () =>
+            supabase
+              .from("polls")
+              .select(POLL_SELECT_WITH_IMAGE)
+              .in("status", [...POLL_PUBLIC_STATUSES])
+              .order("created_at", { ascending: false })
+              .limit(40),
+          () =>
+            supabase
+              .from("polls")
+              .select(POLL_SELECT_BASE)
+              .in("status", [...POLL_PUBLIC_STATUSES])
+              .order("created_at", { ascending: false })
+              .limit(40)
+        ),
       ]);
 
       if (followedPollsResult.error) {
