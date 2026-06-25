@@ -48,6 +48,8 @@ type ArticleRecord = {
 
 type ArticleComment = {
   id: number;
+  article_id: number;
+  parent_comment_id: number | null;
   text: string;
   username: string | null;
   user_id: string | null;
@@ -56,24 +58,13 @@ type ArticleComment = {
   likes: number;
   dislikes: number;
   currentUserReaction: "like" | "dislike" | null;
-  replies: CommentReply[];
-};
-
-type CommentReply = {
-  id: number;
-  comment_id: number;
-  article_id: number;
-  text: string;
-  username: string | null;
-  user_id: string | null;
-  created_at: string | null;
-  avatar_url: string | null;
+  replies: ArticleComment[];
 };
 
 type DbComment = {
   id: number;
   article_id: number | string | null;
-  article_key?: string | null;
+  parent_comment_id?: number | null;
   article_title?: string | null;
   article_source?: string | null;
   article_image?: string | null;
@@ -119,7 +110,7 @@ type DbCommentReaction = {
 
 type DbCommentReply = {
   id: number;
-  comment_id: number;
+  parent_comment_id: number | null;
   article_id: number | string | null;
   text: string;
   username: string | null;
@@ -734,6 +725,132 @@ function sortComments(
   });
 }
 
+function normalizeCommentArticleUrl(url: string | null | undefined) {
+  return url?.trim() || null;
+}
+
+function isDuplicateCommentReactionError(error: {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+}) {
+  return (
+    error.code === "23505" ||
+    /duplicate key|comment_reactions_unique/i.test(
+      `${error.message ?? ""} ${error.details ?? ""}`
+    )
+  );
+}
+
+function countCommentTree(comments: ArticleComment[]): number {
+  return comments.reduce(
+    (total, comment) => total + 1 + countCommentTree(comment.replies),
+    0
+  );
+}
+
+function findCommentInTree(
+  comments: ArticleComment[],
+  commentId: number
+): ArticleComment | null {
+  for (const comment of comments) {
+    if (comment.id === commentId) {
+      return comment;
+    }
+
+    const nestedMatch = findCommentInTree(comment.replies, commentId);
+    if (nestedMatch) {
+      return nestedMatch;
+    }
+  }
+
+  return null;
+}
+
+function appendReplyToCommentTree(
+  comments: ArticleComment[],
+  parentCommentId: number,
+  reply: ArticleComment
+): ArticleComment[] {
+  return comments.map((comment) => {
+    if (comment.id === parentCommentId) {
+      return {
+        ...comment,
+        replies: [...comment.replies, reply],
+      };
+    }
+
+    if (comment.replies.length === 0) {
+      return comment;
+    }
+
+    return {
+      ...comment,
+      replies: appendReplyToCommentTree(comment.replies, parentCommentId, reply),
+    };
+  });
+}
+
+function updateCommentInTree(
+  comments: ArticleComment[],
+  commentId: number,
+  updater: (comment: ArticleComment) => ArticleComment
+): ArticleComment[] {
+  return comments.map((comment) => {
+    if (comment.id === commentId) {
+      return updater(comment);
+    }
+
+    if (comment.replies.length === 0) {
+      return comment;
+    }
+
+    return {
+      ...comment,
+      replies: updateCommentInTree(comment.replies, commentId, updater),
+    };
+  });
+}
+
+function removeCommentFromTree(comments: ArticleComment[], commentId: number): ArticleComment[] {
+  return comments
+    .filter((comment) => comment.id !== commentId)
+    .map((comment) => ({
+      ...comment,
+      replies: removeCommentFromTree(comment.replies, commentId),
+    }));
+}
+
+function buildCommentTree(comments: ArticleComment[]) {
+  const commentById = new Map<number, ArticleComment>();
+  const roots: ArticleComment[] = [];
+
+  comments.forEach((comment) => {
+    commentById.set(comment.id, {
+      ...comment,
+      replies: [],
+    });
+  });
+
+  comments.forEach((comment) => {
+    const nextComment = commentById.get(comment.id);
+    if (!nextComment) {
+      return;
+    }
+
+    const parentId = comment.parent_comment_id;
+    const parentComment = parentId ? commentById.get(parentId) : null;
+
+    if (parentComment) {
+      parentComment.replies.push(nextComment);
+    } else {
+      roots.push(nextComment);
+    }
+  });
+
+  return roots;
+}
+
 function buildSummaryParagraphs(
   title: string,
   source?: string | null,
@@ -889,6 +1006,8 @@ export default function ArticleDetailPage() {
     commentId: number;
     username: string | null;
   } | null>(null);
+  const [collapsedCommentIds, setCollapsedCommentIds] = useState<Set<number>>(() => new Set());
+  const [commentStatusMessage, setCommentStatusMessage] = useState<string | null>(null);
   const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [reportStatus, setReportStatus] = useState<{
@@ -1000,10 +1119,9 @@ export default function ArticleDetailPage() {
       targetArticle = targetArticle ?? newsData.find((item) => item.id === articleId) ?? null;
       const clientStoredArticle = readStoredArticleMetadata(articleId);
       targetArticle = mergeArticleImageMetadata(targetArticle, clientStoredArticle);
-      const resolvedArticleKey =
-        targetArticle || clientStoredArticle
-          ? getStableArticleKey((targetArticle ?? clientStoredArticle) as ArticleRecord)
-          : `id:${articleId}`;
+      const resolvedArticleUrl = normalizeCommentArticleUrl(
+        targetArticle?.url ?? clientStoredArticle?.url ?? null
+      );
       console.log("COMPARE TOTAL CANDIDATES", newsData.length);
       console.log("ARTICLE LIVE MATCH", targetArticle);
       console.log("ARTICLE CLIENT CACHE MATCH", clientStoredArticle);
@@ -1048,28 +1166,38 @@ export default function ArticleDetailPage() {
 
       let commentsRes: {
         data: DbComment[] | null;
-        error: { message?: string } | null;
+        error: { message?: string | null; code?: string | null; details?: string | null; hint?: string | null } | null;
       };
 
       const commentSelectFields =
-        "id, article_id, article_key, article_title, article_source, article_image, article_url, user_id, username, text, created_at";
+        "id, article_id, parent_comment_id, article_title, article_source, article_image, article_url, user_id, username, text, created_at";
 
-      let commentsUseArticleKeyOnly = true;
-      commentsRes = await supabase
-        .from("comments")
-        .select(commentSelectFields)
-        .eq("article_key", resolvedArticleKey);
+      commentsRes = resolvedArticleUrl
+        ? await supabase
+            .from("comments")
+            .select(commentSelectFields)
+            .eq("article_url", resolvedArticleUrl)
+            .order("created_at", { ascending: true })
+        : await supabase
+            .from("comments")
+            .select(commentSelectFields)
+            .in("article_id", articleIdCandidates)
+            .order("created_at", { ascending: true });
 
-      if (commentsRes.error && isMissingCommentKeyColumnError(commentsRes.error.message)) {
-        commentsUseArticleKeyOnly = false;
+      if (resolvedArticleUrl && commentsRes.error && articleIdCandidates.length > 0) {
+        console.warn("ARTICLE_COMMENTS_FETCH_ERROR", {
+          message: commentsRes.error.message ?? null,
+          code: commentsRes.error.code ?? null,
+          details: commentsRes.error.details ?? null,
+          hint: commentsRes.error.hint ?? null,
+        });
         commentsRes = await supabase
           .from("comments")
-          .select(
-            "id, article_id, article_title, article_source, article_image, article_url, user_id, username, text, created_at"
-          )
-          .in("article_id", articleIdCandidates);
+          .select(commentSelectFields)
+          .in("article_id", articleIdCandidates)
+          .order("created_at", { ascending: true });
       }
-      console.log("ARTICLE COMMENT KEY", resolvedArticleKey);
+      console.log("ARTICLE COMMENT URL", resolvedArticleUrl);
 
       if (
         commentsRes.error &&
@@ -1077,8 +1205,9 @@ export default function ArticleDetailPage() {
       ) {
         commentsRes = await supabase
           .from("comments")
-          .select("id, article_id, user_id, username, text, created_at")
-          .in("article_id", articleIdCandidates);
+          .select("id, article_id, parent_comment_id, user_id, username, text, created_at")
+          .in("article_id", articleIdCandidates)
+          .order("created_at", { ascending: true });
       }
 
       const [likesRes, profilesRes, storedBookmarksRes] = await Promise.all([
@@ -1102,11 +1231,11 @@ export default function ArticleDetailPage() {
       }
 
       if (commentsRes.error) {
-        console.error("[Article detail] Failed to fetch comments", {
-          articleId,
-          articleIdType: typeof articleId,
-          articleIdCandidates,
-          error: commentsRes.error,
+        console.warn("ARTICLE_COMMENTS_FETCH_ERROR", {
+          message: commentsRes.error.message ?? null,
+          code: commentsRes.error.code ?? null,
+          details: commentsRes.error.details ?? null,
+          hint: commentsRes.error.hint ?? null,
         });
       }
 
@@ -1128,10 +1257,10 @@ export default function ArticleDetailPage() {
       const rawComments = (commentsRes.data ?? []) as DbComment[];
       console.log(
         "COMMENTS FETCHED FOR KEY",
-        resolvedArticleKey,
+        resolvedArticleUrl ?? articleIdCandidates.join(","),
         rawComments.filter((comment) =>
-          commentsUseArticleKeyOnly
-            ? comment.article_key === resolvedArticleKey
+          resolvedArticleUrl
+            ? normalizeCommentArticleUrl(comment.article_url) === resolvedArticleUrl
             : articleIdCandidates.includes(normalizeArticleId(comment.article_id) ?? Number.NaN)
         ).length
       );
@@ -1190,36 +1319,18 @@ export default function ArticleDetailPage() {
         targetArticle ?? mergeArticleImageMetadata(bookmarkFallbackArticle, clientStoredArticle);
       console.log("ARTICLE STORED FALLBACK", storedArticle);
       const commentIds = rawComments.map((comment) => comment.id);
-      const [reactionsRes, repliesRes] = commentIds.length
-        ? await Promise.all([
-            supabase
-              .from("comment_reactions")
-              .select("id, comment_id, user_id, reaction_type")
-              .in("comment_id", commentIds),
-            supabase
-              .from("comment_replies")
-              .select("id, comment_id, article_id, text, username, user_id, created_at")
-              .in("comment_id", commentIds),
-          ])
-        : [
-            { data: [], error: null },
-            { data: [], error: null },
-          ];
+      const reactionsRes = commentIds.length
+        ? await supabase
+            .from("comment_reactions")
+            .select("id, comment_id, user_id, reaction_type")
+            .in("comment_id", commentIds)
+        : { data: [], error: null };
 
       if (reactionsRes.error) {
-        console.error("[Article detail] Failed to fetch comment reactions", {
-          articleId,
-          commentIds,
-          error: reactionsRes.error,
-        });
-      }
-
-      if (repliesRes.error) {
-        console.error("[Article detail] Failed to fetch comment replies", {
-          articleId,
-          articleIdCandidates,
-          commentIds,
-          error: repliesRes.error,
+        console.warn("ARTICLE_COMMENT_REACTIONS_WARNING", {
+          message: reactionsRes.error.message ?? null,
+          code: reactionsRes.error.code ?? null,
+          details: reactionsRes.error.details ?? null,
         });
       }
 
@@ -1239,8 +1350,9 @@ export default function ArticleDetailPage() {
         console.error("Error loading blocked users:", blockedUsersError);
       }
       const likes = (likesRes.data ?? []) as DbLike[];
-      const commentReactions = (reactionsRes.data ?? []) as DbCommentReaction[];
-      const commentReplies = (repliesRes.data ?? []) as DbCommentReply[];
+      const commentReactions = reactionsRes.error
+        ? []
+        : ((reactionsRes.data ?? []) as DbCommentReaction[]);
       const profiles = (profilesRes.data ?? []) as DbProfile[];
       const blockedIds = new Set(
         (blockedUsersData ?? []) as string[]
@@ -1254,49 +1366,29 @@ export default function ArticleDetailPage() {
         likes.some((like) => like.user_id && like.user_id === currentUserId)
       );
       setIsSaved(Boolean(savedArticlesData));
-      setComments(
-        rawComments
-          .filter(
-            (comment) => {
-              const normalizedCommentArticleId = normalizeArticleId(comment.article_id);
+      const articleCommentNodes = rawComments
+        .filter(
+          (comment) => {
+            const normalizedCommentArticleId = normalizeArticleId(comment.article_id);
 
-              return (
-                (commentsUseArticleKeyOnly
-                  ? comment.article_key?.trim() === resolvedArticleKey
-                  : normalizedCommentArticleId !== null &&
-                    articleIdCandidates.includes(normalizedCommentArticleId)) &&
-                (!comment.user_id || !blockedIds.has(comment.user_id))
-              );
-            }
-          )
-          .map((comment) => {
+            return (
+              (resolvedArticleUrl
+                ? normalizeCommentArticleUrl(comment.article_url) === resolvedArticleUrl
+                : normalizedCommentArticleId !== null &&
+                  articleIdCandidates.includes(normalizedCommentArticleId)) &&
+              (!comment.user_id || !blockedIds.has(comment.user_id))
+            );
+          }
+        )
+        .map((comment) => {
             const reactions = commentReactions.filter(
               (reaction) => reaction.comment_id === comment.id
             );
-            const replies = commentReplies
-              .filter(
-                (reply) =>
-                  reply.comment_id === comment.id &&
-                  articleIdCandidates.includes(
-                    normalizeArticleId(reply.article_id) ?? Number.NaN
-                  ) &&
-                  (!reply.user_id || !blockedIds.has(reply.user_id))
-              )
-              .map((reply) => ({
-                id: reply.id,
-                comment_id: reply.comment_id,
-                article_id: normalizeArticleId(reply.article_id) ?? articleId,
-                text: reply.text,
-                username: reply.username,
-                user_id: reply.user_id,
-                created_at: reply.created_at,
-                avatar_url: reply.user_id
-                  ? avatarLookup.get(reply.user_id) ?? null
-                  : null,
-              }));
 
             return {
               id: comment.id,
+              article_id: normalizeArticleId(comment.article_id) ?? articleId,
+              parent_comment_id: comment.parent_comment_id ?? null,
               text: comment.text,
               username: comment.username,
               user_id: comment.user_id,
@@ -1311,10 +1403,11 @@ export default function ArticleDetailPage() {
               currentUserReaction:
                 reactions.find((reaction) => reaction.user_id === currentUserId)
                   ?.reaction_type ?? null,
-              replies,
+              replies: [],
             };
-          })
-      );
+          });
+
+      setComments(buildCommentTree(articleCommentNodes));
       setIsLoading(false);
     }
 
@@ -1412,6 +1505,7 @@ export default function ArticleDetailPage() {
     () => sortComments(comments, commentSortMode),
     [commentSortMode, comments]
   );
+  const totalCommentCount = useMemo(() => countCommentTree(comments), [comments]);
 
   const createNotification = async ({
     recipientUserId,
@@ -1438,7 +1532,12 @@ export default function ArticleDetailPage() {
     });
 
     if (error) {
-      console.error("Error creating notification:", error);
+      console.warn("NOTIFICATION_CREATE_WARNING", {
+        message: error.message ?? null,
+        code: error.code ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+      });
     }
   };
 
@@ -1553,13 +1652,14 @@ export default function ArticleDetailPage() {
 
   const handleAddComment = async () => {
     const text = commentInput.trim();
+    setCommentStatusMessage(null);
 
     if (!text) {
       return;
     }
 
     if (!userId) {
-      alert("Log in to comment");
+      setCommentStatusMessage("Log in to comment.");
       return;
     }
 
@@ -1574,52 +1674,65 @@ export default function ArticleDetailPage() {
     }
 
     if (replyTarget) {
-      const parentComment = comments.find((comment) => comment.id === replyTarget.commentId);
+      const parentComment = findCommentInTree(comments, replyTarget.commentId);
 
       if (!parentComment) {
         setReplyTarget(null);
         return;
       }
 
+      const currentReplyArticle = compareArticle ?? article;
+      const currentReplyArticleImage = currentReplyArticle
+        ? getArticleDisplayImage(currentReplyArticle).src
+        : null;
+      const replyInsertPayload = {
+        article_id: articleId,
+        article_title: cleanDisplayText(currentReplyArticle?.title ?? null) || null,
+        article_source: currentReplyArticle?.source ?? null,
+        article_image: currentReplyArticleImage,
+        article_url: currentReplyArticle?.url ?? null,
+        parent_comment_id: replyTarget.commentId,
+        text,
+        user_id: userId,
+        username,
+      };
+
+      console.log("REPLY_INSERT_PAYLOAD", JSON.stringify(replyInsertPayload, null, 2));
+
       const { data, error } = await supabase
-        .from("comment_replies")
-        .insert({
-          comment_id: replyTarget.commentId,
-          article_id: articleId,
-          text,
-          user_id: userId,
-          username,
-        })
+        .from("comments")
+        .insert(replyInsertPayload)
         .select()
         .single();
 
       if (error) {
-        console.error("Error saving reply:", error);
+        console.log("REPLY_SAVE_ERROR_JSON", JSON.stringify(error, null, 2));
+        console.error("REPLY_SAVE_ERROR", {
+          message: error.message ?? null,
+          code: error.code ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        });
+        setCommentStatusMessage(error.message ?? "Could not save reply. Please try again.");
         return;
       }
 
-      setComments((prev) =>
-        prev.map((comment) =>
-          comment.id === replyTarget.commentId
-            ? {
-                ...comment,
-                replies: [
-                  ...comment.replies,
-                  {
-                    id: data.id,
-                    comment_id: data.comment_id,
-                    article_id: data.article_id,
-                    text: data.text,
-                    username: data.username,
-                    user_id: data.user_id,
-                    created_at: data.created_at,
-                    avatar_url: null,
-                  },
-                ],
-              }
-            : comment
-        )
-      );
+      const nextReply: ArticleComment = {
+        id: data.id,
+        article_id: normalizeArticleId(data.article_id) ?? articleId,
+        parent_comment_id: data.parent_comment_id ?? replyTarget.commentId,
+        text: data.text,
+        username: data.username,
+        user_id: data.user_id,
+        created_at: data.created_at,
+        avatar_url: null,
+        likes: 0,
+        dislikes: 0,
+        currentUserReaction: null,
+        replies: [],
+      };
+
+      setComments((prev) => appendReplyToCommentTree(prev, replyTarget.commentId, nextReply));
 
       void createNotification({
         recipientUserId: parentComment.user_id,
@@ -1637,15 +1750,13 @@ export default function ArticleDetailPage() {
     const currentCommentArticleImage = currentCommentArticle
       ? getArticleDisplayImage(currentCommentArticle).src
       : null;
-    const commentInsertPayload = {
-      article_id: articleId,
-      article_key: currentCommentArticle
-        ? getStableArticleKey(currentCommentArticle)
-        : `id:${articleId}`,
-      article_title: cleanDisplayText(currentCommentArticle?.title ?? null) || null,
+      const commentInsertPayload = {
+        article_id: articleId,
+        article_title: cleanDisplayText(currentCommentArticle?.title ?? null) || null,
       article_source: currentCommentArticle?.source ?? null,
       article_image: currentCommentArticleImage,
       article_url: currentCommentArticle?.url ?? null,
+      parent_comment_id: null,
       text,
       user_id: userId,
       username,
@@ -1664,15 +1775,17 @@ export default function ArticleDetailPage() {
       (isMissingCommentMetadataColumnError(insertResponse.error.message) ||
         isMissingCommentKeyColumnError(insertResponse.error.message))
     ) {
-      console.error(
-        "Article comment insert failed with article metadata payload, retrying without optional columns:",
-        insertResponse.error
-      );
+      console.warn("ARTICLE_COMMENT_METADATA_INSERT_WARNING", {
+        message: insertResponse.error.message ?? null,
+        code: insertResponse.error.code ?? null,
+        details: insertResponse.error.details ?? null,
+      });
 
       insertResponse = await supabase
         .from("comments")
         .insert({
           article_id: articleId,
+          parent_comment_id: null,
           text,
           user_id: userId,
           username,
@@ -1700,6 +1813,8 @@ export default function ArticleDetailPage() {
       ...prev,
       {
         id: data.id,
+        article_id: normalizeArticleId(data.article_id) ?? articleId,
+        parent_comment_id: data.parent_comment_id ?? null,
         text: data.text,
         username: data.username,
         user_id: data.user_id,
@@ -1715,14 +1830,31 @@ export default function ArticleDetailPage() {
   };
 
   const handleCommentReaction = async (commentId: number) => {
-    if (!userId) {
-      alert("Log in to react to comments");
+    const targetComment = findCommentInTree(comments, commentId);
+
+    if (!targetComment) {
       return;
     }
 
-    const targetComment = comments.find((comment) => comment.id === commentId);
+    const { data: reactionAuthData } = await supabase.auth.getUser();
+    const commentReactionUser = reactionAuthData.user ?? null;
+    const commentReactionUserId = commentReactionUser?.id ?? null;
+    const commentReactionCommentId = targetComment.id;
 
-    if (!targetComment) {
+    console.log("COMMENT_REACTION_USER_ID", commentReactionUserId);
+    console.log("COMMENT_REACTION_IS_LOGGED_IN", Boolean(commentReactionUserId));
+    console.log("COMMENT_REACTION_COMMENT_ID", commentReactionCommentId);
+
+    if (!commentReactionUser) {
+      alert("Log in to react.");
+      return;
+    }
+
+    if (!Number.isFinite(commentReactionCommentId)) {
+      console.warn("COMMENT_REACTION_INVALID_COMMENT_ID", {
+        comment_id: commentReactionCommentId,
+        type: typeof commentReactionCommentId,
+      });
       return;
     }
 
@@ -1732,7 +1864,7 @@ export default function ArticleDetailPage() {
       .from("comment_reactions")
       .select("id, reaction_type")
       .eq("comment_id", commentId)
-      .eq("user_id", userId)
+      .eq("user_id", commentReactionUserId)
       .maybeSingle();
 
     if (existingReaction?.reaction_type === "like") {
@@ -1740,7 +1872,7 @@ export default function ArticleDetailPage() {
         .from("comment_reactions")
         .delete()
         .eq("id", existingReaction.id)
-        .eq("user_id", userId);
+        .eq("user_id", commentReactionUserId);
 
       setActiveCommentAction(null);
 
@@ -1750,15 +1882,11 @@ export default function ArticleDetailPage() {
       }
 
       setComments((prev) =>
-        prev.map((comment) =>
-          comment.id === commentId
-            ? {
-                ...comment,
-                likes: Math.max(0, comment.likes - 1),
-                currentUserReaction: null,
-              }
-            : comment
-        )
+        updateCommentInTree(prev, commentId, (comment) => ({
+          ...comment,
+          likes: Math.max(0, comment.likes - 1),
+          currentUserReaction: null,
+        }))
       );
       return;
     }
@@ -1768,7 +1896,7 @@ export default function ArticleDetailPage() {
         .from("comment_reactions")
         .update({ reaction_type: "like" })
         .eq("id", existingReaction.id)
-        .eq("user_id", userId);
+        .eq("user_id", commentReactionUserId);
 
       setActiveCommentAction(null);
 
@@ -1778,19 +1906,15 @@ export default function ArticleDetailPage() {
       }
 
       setComments((prev) =>
-        prev.map((comment) =>
-          comment.id === commentId
-            ? {
-                ...comment,
-                likes: comment.likes + (existingReaction.reaction_type === "like" ? 0 : 1),
-                dislikes:
-                  existingReaction.reaction_type === "dislike"
-                    ? Math.max(0, comment.dislikes - 1)
-                    : comment.dislikes,
-                currentUserReaction: "like",
-              }
-            : comment
-        )
+        updateCommentInTree(prev, commentId, (comment) => ({
+          ...comment,
+          likes: comment.likes + (existingReaction.reaction_type === "like" ? 0 : 1),
+          dislikes:
+            existingReaction.reaction_type === "dislike"
+              ? Math.max(0, comment.dislikes - 1)
+              : comment.dislikes,
+          currentUserReaction: "like",
+        }))
       );
 
       if (existingReaction.reaction_type !== "like") {
@@ -1803,29 +1927,54 @@ export default function ArticleDetailPage() {
       return;
     }
 
-    const { error } = await supabase.from("comment_reactions").insert({
-      comment_id: commentId,
-      user_id: userId,
+    const commentReactionInsertPayload = {
+      comment_id: commentReactionCommentId,
+      user_id: commentReactionUser.id,
       reaction_type: "like",
-    });
+    };
+
+    console.log(
+      "COMMENT_REACTION_INSERT_PAYLOAD",
+      JSON.stringify(commentReactionInsertPayload, null, 2)
+    );
+
+    const { error } = await supabase.from("comment_reactions").insert(commentReactionInsertPayload);
 
     setActiveCommentAction(null);
 
     if (error) {
-      console.error("Error creating comment reaction:", error);
+      if (isDuplicateCommentReactionError(error)) {
+        console.warn("COMMENT_REACTION_DUPLICATE_HANDLED", {
+          message: error.message ?? null,
+          code: error.code ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        });
+        setComments((prev) =>
+          updateCommentInTree(prev, commentId, (comment) => ({
+            ...comment,
+            currentUserReaction: "like",
+          }))
+        );
+        return;
+      }
+
+      console.log("COMMENT_REACTION_CREATE_ERROR_JSON", JSON.stringify(error, null, 2));
+      console.error("COMMENT_REACTION_CREATE_ERROR", JSON.stringify({
+        message: error.message ?? null,
+        code: error.code ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+      }, null, 2));
       return;
     }
 
     setComments((prev) =>
-      prev.map((comment) =>
-        comment.id === commentId
-          ? {
-              ...comment,
-              likes: comment.likes + 1,
-              currentUserReaction: "like",
-            }
-          : comment
-      )
+      updateCommentInTree(prev, commentId, (comment) => ({
+        ...comment,
+        likes: comment.likes + 1,
+        currentUserReaction: "like",
+      }))
     );
 
     void createNotification({
@@ -1900,7 +2049,7 @@ export default function ArticleDetailPage() {
       return;
     }
 
-    setComments((prev) => prev.filter((comment) => comment.id !== deleteCommentId));
+    setComments((prev) => removeCommentFromTree(prev, deleteCommentId));
     setDeleteCommentId(null);
   };
 
@@ -2027,6 +2176,126 @@ export default function ArticleDetailPage() {
     .trim();
   const articleSnippet =
     rawSnippet.length > 360 ? `${rawSnippet.slice(0, 357).trimEnd()}...` : rawSnippet;
+  const toggleCommentCollapsed = (commentId: number) => {
+    setCollapsedCommentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(commentId)) {
+        next.delete(commentId);
+      } else {
+        next.add(commentId);
+      }
+      return next;
+    });
+  };
+
+  const renderCommentThread = (comment: ArticleComment, depth = 0) => {
+    const isCollapsed = collapsedCommentIds.has(comment.id);
+    const hasReplies = comment.replies.length > 0;
+
+    return (
+      <div
+        key={comment.id}
+        id={`comment-${comment.id}`}
+        className={`comment-thread-row ${depth > 0 ? "comment-thread-row-nested" : ""}`}
+        style={{ ["--comment-depth" as string]: Math.min(depth, 6) }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openCommentActionSheet(comment);
+        }}
+        onMouseDown={() => startCommentLongPress(comment)}
+        onMouseUp={clearCommentLongPress}
+        onMouseLeave={clearCommentLongPress}
+        onTouchStart={() => startCommentLongPress(comment)}
+        onTouchEnd={clearCommentLongPress}
+      >
+        <div className="comment-thread-main">
+          <div className="comment-thread-copy">
+            <div className="comment-header">
+              <div className="comment-user-heading">
+                {comment.user_id ? (
+                  <Link href={`/user/${comment.user_id}`} className="comment-user-link">
+                    <span className="comment-user-avatar">
+                      {comment.avatar_url ? (
+                        <Image
+                          src={comment.avatar_url}
+                          alt={comment.username ?? "User avatar"}
+                          width={34}
+                          height={34}
+                          unoptimized
+                        />
+                      ) : (
+                        (comment.username ?? "U").charAt(0).toUpperCase()
+                      )}
+                    </span>
+                    <span className="comment-username">{comment.username ?? "Unknown"}</span>
+                  </Link>
+                ) : (
+                  <strong className="comment-username">{comment.username ?? "Unknown"}</strong>
+                )}
+                <span className="comment-header-time">
+                  · {formatRelativeTime(comment.created_at)}
+                </span>
+              </div>
+            </div>
+            <div className="comment-body">{comment.text}</div>
+            <div className="comment-thread-actions">
+              <button
+                className="comment-action article-comment-reply-action"
+                type="button"
+                onClick={() =>
+                  setReplyTarget({
+                    commentId: comment.id,
+                    username: comment.username,
+                  })
+                }
+              >
+                Reply
+              </button>
+              {hasReplies ? (
+                <button
+                  className="comment-action article-comment-collapse-action"
+                  type="button"
+                  onClick={() => toggleCommentCollapsed(comment.id)}
+                  aria-expanded={!isCollapsed}
+                >
+                  {isCollapsed
+                    ? `Expand ${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"}`
+                    : "Collapse"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="comment-thread-reactions">
+            <button
+              className={`comment-reaction-pill ${
+                comment.currentUserReaction === "like" ? "comment-reaction-pill-active" : ""
+              }`}
+              onClick={() => handleCommentReaction(comment.id)}
+              disabled={activeCommentAction === `reaction-${comment.id}`}
+              aria-label={comment.currentUserReaction === "like" ? "Remove heart" : "Heart comment"}
+            >
+              <span className="comment-reaction-glyph" aria-hidden="true">
+                <HeartIcon
+                  filled={comment.currentUserReaction === "like"}
+                  size={20}
+                  strokeWidth={1.9}
+                />
+              </span>
+              <span>{comment.likes}</span>
+            </button>
+          </div>
+        </div>
+
+        {hasReplies && !isCollapsed ? (
+          <div className="comment-replies comment-thread-children">
+            {comment.replies.map((reply) => renderCommentThread(reply, depth + 1))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderCommentsContent = () => (
     <>
       <div className="article-comments-thread article-comments-inline-thread">
@@ -2037,125 +2306,7 @@ export default function ArticleDetailPage() {
           </div>
         ) : (
           <div className="comment-list article-comment-list">
-            {displayedComments.map((comment) => (
-              <div
-                key={comment.id}
-                id={`comment-${comment.id}`}
-                className="comment-thread-row"
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  openCommentActionSheet(comment);
-                }}
-                onMouseDown={() => startCommentLongPress(comment)}
-                onMouseUp={clearCommentLongPress}
-                onMouseLeave={clearCommentLongPress}
-                onTouchStart={() => startCommentLongPress(comment)}
-                onTouchEnd={clearCommentLongPress}
-              >
-                <div className="comment-thread-main">
-                  <div className="comment-thread-copy">
-                    <div className="comment-header">
-                      <div className="comment-user-heading">
-                        {comment.user_id ? (
-                          <Link href={`/user/${comment.user_id}`} className="comment-user-link">
-                            <span className="comment-user-avatar">
-                              {comment.avatar_url ? (
-                                <Image
-                                  src={comment.avatar_url}
-                                  alt={comment.username ?? "User avatar"}
-                                  width={34}
-                                  height={34}
-                                  unoptimized
-                                />
-                              ) : (
-                                (comment.username ?? "U").charAt(0).toUpperCase()
-                              )}
-                            </span>
-                            <span className="comment-username">{comment.username ?? "Unknown"}</span>
-                          </Link>
-                        ) : (
-                          <strong className="comment-username">{comment.username ?? "Unknown"}</strong>
-                        )}
-                        <span className="comment-header-time">
-                          · {formatRelativeTime(comment.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="comment-body">{comment.text}</div>
-                    <button
-                      className="comment-action article-comment-reply-action"
-                      type="button"
-                      onClick={() =>
-                        setReplyTarget({
-                          commentId: comment.id,
-                          username: comment.username,
-                        })
-                      }
-                    >
-                      Reply
-                    </button>
-                    {comment.replies.length > 0 ? (
-                      <div className="comment-replies">
-                        {comment.replies.map((reply) => (
-                          <div key={reply.id} className="comment-reply-card">
-                            <div className="comment-header">
-                              <div className="comment-user-heading">
-                                {reply.user_id ? (
-                                  <Link href={`/user/${reply.user_id}`} className="comment-user-link">
-                                    <span className="comment-user-avatar">
-                                      {reply.avatar_url ? (
-                                        <Image
-                                          src={reply.avatar_url}
-                                          alt={reply.username ?? "User avatar"}
-                                          width={34}
-                                          height={34}
-                                          unoptimized
-                                        />
-                                      ) : (
-                                        (reply.username ?? "U").charAt(0).toUpperCase()
-                                      )}
-                                    </span>
-                                    <span className="comment-username">
-                                      {reply.username ?? "Unknown"}
-                                    </span>
-                                  </Link>
-                                ) : (
-                                  <strong className="comment-username">{reply.username ?? "Unknown"}</strong>
-                                )}
-                                <span className="comment-header-time">
-                                  · {formatRelativeTime(reply.created_at)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="comment-body">{reply.text}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="comment-thread-reactions">
-                    <button
-                      className={`comment-reaction-pill ${
-                        comment.currentUserReaction === "like" ? "comment-reaction-pill-active" : ""
-                      }`}
-                      onClick={() => handleCommentReaction(comment.id)}
-                      disabled={activeCommentAction === `reaction-${comment.id}`}
-                      aria-label={comment.currentUserReaction === "like" ? "Remove heart" : "Heart comment"}
-                    >
-                      <span className="comment-reaction-glyph" aria-hidden="true">
-                        <HeartIcon
-                          filled={comment.currentUserReaction === "like"}
-                          size={20}
-                          strokeWidth={1.9}
-                        />
-                      </span>
-                      <span>{comment.likes}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {displayedComments.map((comment) => renderCommentThread(comment))}
           </div>
         )}
       </div>
@@ -2179,7 +2330,10 @@ export default function ArticleDetailPage() {
             type="text"
             placeholder={replyTarget ? "Write a reply..." : "Write a comment..."}
             value={commentInput}
-            onChange={(event) => setCommentInput(event.target.value)}
+            onChange={(event) => {
+              setCommentInput(event.target.value);
+              setCommentStatusMessage(null);
+            }}
           />
           <button
             className="button button-secondary article-comment-send-button"
@@ -2194,6 +2348,7 @@ export default function ArticleDetailPage() {
             </span>
           </button>
         </div>
+        {commentStatusMessage ? <div className="status-error">{commentStatusMessage}</div> : null}
       </div>
     </>
   );
@@ -2381,7 +2536,7 @@ export default function ArticleDetailPage() {
                 <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
               </svg>
             </span>
-            <span>{comments.length}</span>
+            <span>{totalCommentCount}</span>
           </button>
           {compareArticle.url ? (
             <button

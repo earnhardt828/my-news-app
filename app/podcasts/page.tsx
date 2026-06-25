@@ -119,6 +119,16 @@ function PodcastSectionRow({
 
       <div className="podcast-scroll-row" role="list" aria-label={title}>
         {shows.map((show) => {
+          if (show.slug === "the-journal" && show.episodes.length === 0) {
+            console.warn("PODCAST_CARD_HIDDEN_NO_EPISODES", {
+              id: show.id,
+              slug: show.slug,
+              title: show.title,
+              episodeCount: show.episodes.length,
+            });
+            return null;
+          }
+
           const latestEpisode = show.latestEpisode;
           const imageCandidates = getPodcastCardImageCandidates(show);
           const imageUrl =
@@ -200,8 +210,11 @@ function PodcastSectionRow({
 
           const clickTarget = `/podcasts/${show.slug}/`;
           console.log("PODCAST CARD CLICK_TARGET", {
+            id: show.id,
             slug: show.slug,
+            title: show.title,
             href: clickTarget,
+            episodeCount: show.episodes.length,
           });
 
           return (
@@ -212,8 +225,11 @@ function PodcastSectionRow({
               role="listitem"
               onClick={() => {
                 console.log("PODCAST CARD CLICKED", {
+                  id: show.id,
                   slug: show.slug,
+                  title: show.title,
                   href: clickTarget,
+                  episodeCount: show.episodes.length,
                 });
               }}
             >
@@ -257,7 +273,7 @@ export default function PodcastsPage() {
             }
           }
         } catch (error) {
-          console.error("PODCAST CACHE READ FAILED", error);
+          console.warn("PODCAST CACHE READ FAILED", error);
         }
       }
       if (isMounted) {
@@ -269,13 +285,36 @@ export default function PodcastsPage() {
         setLoadError(null);
       }
 
+      const fetchStartedAt = Date.now();
+
       try {
+        const timeoutMs = 6000;
+        const podcastRequestUrl = "/api/podcasts";
+        let timeoutId: number | null = null;
+        console.log("PODCAST_REQUEST_URL", podcastRequestUrl);
         const response = await Promise.race([
-          apiFetch("/api/podcasts"),
-          new Promise<never>((_, reject) => {
-            window.setTimeout(() => reject(new Error("Podcasts request timed out")), 6000);
+          apiFetch(podcastRequestUrl),
+          new Promise<null>((resolve) => {
+            timeoutId = window.setTimeout(() => resolve(null), timeoutMs);
           }),
         ]);
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        const elapsedMs = Date.now() - fetchStartedAt;
+        console.log("PODCASTS_FETCH_MS", elapsedMs);
+
+        if (!response) {
+          console.warn("PODCASTS_FETCH_WARNING", {
+            message: `Podcasts request timed out after ${timeoutMs}ms`,
+          });
+          console.log("PODCASTS_FALLBACK_USED", true);
+          if (isMounted) {
+            setDirectory(baseDirectory);
+          }
+          return;
+        }
+
         const payload = (await response.json()) as PodcastDirectory;
 
         if (!isMounted) {
@@ -287,15 +326,21 @@ export default function PodcastsPage() {
           if (typeof window !== "undefined") {
             window.localStorage.setItem(podcastDirectoryCacheKey, JSON.stringify(payload));
           }
+          console.log("PODCASTS_FALLBACK_USED", false);
         } else {
           setDirectory(baseDirectory);
+          console.log("PODCASTS_FALLBACK_USED", true);
         }
       } catch (error) {
-        console.error("PODCAST DIRECTORY LOAD FAILED", error);
+        console.log("PODCASTS_FETCH_MS", Date.now() - fetchStartedAt);
+        console.warn("PODCASTS_FETCH_WARNING", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        console.log("PODCASTS_FALLBACK_USED", true);
 
         if (isMounted) {
           setDirectory(baseDirectory);
-          setLoadError("Could not refresh podcasts right now. Showing the latest available picks.");
+          setLoadError(null);
         }
       } finally {
         if (isMounted) {

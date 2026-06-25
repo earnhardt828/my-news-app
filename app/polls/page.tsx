@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import PollCard from "../components/poll-card";
 import {
@@ -98,7 +97,6 @@ function buildSectionEntries(entries: PollEntry[]) {
 }
 
 export default function PollsPage() {
-  const router = useRouter();
   const [polls, setPolls] = useState<PollWithResults[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewerId, setViewerId] = useState<string | null>(null);
@@ -362,27 +360,17 @@ export default function PollsPage() {
     );
   };
 
-  const handleCreatePollClick = () => {
-    if (viewerId) {
-      router.push("/profile/polls/new/");
-      return;
-    }
-
-    router.push("/profile#create-poll-login");
-  };
-
   return (
     <section className="page-shell home-sections-shell polls-hub-shell">
       <div className="polls-page-topbar">
         <strong className="profile-section-title home-section-title">Polls</strong>
-        <button
-          type="button"
+        <Link
+          href="/profile/polls/new/"
           className="button button-accent polls-create-button"
-          onClick={handleCreatePollClick}
           aria-label="Create poll"
         >
           <span aria-hidden="true">+</span>
-        </button>
+        </Link>
       </div>
 
       <div className="polls-filter-tabs" role="tablist" aria-label="Poll filters">

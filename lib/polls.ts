@@ -7,6 +7,7 @@ export type PollRecord = {
   username: string | null;
   question: string;
   category: string;
+  poll_type: "news" | "community" | null;
   related_article_id: string | null;
   related_article_title: string | null;
   related_source: string | null;
@@ -49,7 +50,7 @@ export type PollWithResults = PollRecord & {
 
 export const POLL_SELECT_BASE =
   "id, user_id, username, question, category, related_article_id, related_article_title, related_source, status, created_at";
-export const POLL_SELECT_WITH_IMAGE = `${POLL_SELECT_BASE}, image_url`;
+export const POLL_SELECT_WITH_IMAGE = `${POLL_SELECT_BASE}, image_url, poll_type`;
 
 export const POLL_ALLOWED_CATEGORIES = [
   "Politics",
@@ -63,6 +64,7 @@ export const POLL_ALLOWED_CATEGORIES = [
 ] as const;
 
 export type PollAllowedCategory = (typeof POLL_ALLOWED_CATEGORIES)[number];
+export type PollType = "news" | "community";
 
 export const POLL_PUBLIC_STATUSES = ["active", "published", "approved"] as const;
 export const POLL_HIDDEN_REPORT_THRESHOLD = 3;
@@ -231,6 +233,7 @@ export function validatePollDraft(input: {
   question: string;
   options: string[];
   category: string;
+  pollType?: PollType;
   relatedArticleTitle?: string | null;
   storyReference?: string | null;
 }) {
@@ -240,6 +243,7 @@ export function validatePollDraft(input: {
     .map((option) => cleanDisplayText(option).replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const storyReference = normalizePollStoryReference(input.storyReference ?? "");
+  const pollType = input.pollType ?? "news";
 
   if (!category) {
     return "Choose one of the approved poll categories.";
@@ -253,7 +257,7 @@ export function validatePollDraft(input: {
     return "This poll question looks off-topic or spammy. Rewrite it to focus on a real news topic.";
   }
 
-  if (!storyReference && !input.relatedArticleTitle?.trim()) {
+  if (pollType === "news" && !storyReference && !input.relatedArticleTitle?.trim()) {
     return "Add the news story your poll is about by pasting a link or selecting a current article.";
   }
 
@@ -304,8 +308,24 @@ export function isPollImageSchemaMissingError(message: string | null | undefined
   return /column .*image_url.* does not exist|Could not find the column .*image_url/i.test(message);
 }
 
+export function isPollTypeSchemaMissingError(message: string | null | undefined) {
+  if (!message) {
+    return false;
+  }
+
+  return /column .*poll_type.* does not exist|Could not find the column .*poll_type/i.test(message);
+}
+
+export function isPollOptionalMetadataSchemaMissingError(message: string | null | undefined) {
+  return isPollImageSchemaMissingError(message) || isPollTypeSchemaMissingError(message);
+}
+
 export function getPollImageSchemaSetupMessage() {
   return "Poll image uploads are not set up in Supabase yet. Run the poll image migration to enable them.";
+}
+
+export function getPollOptionalMetadataSchemaSetupMessage() {
+  return "Poll optional metadata is not fully set up in Supabase yet. Run the poll image/type migrations to enable all fields.";
 }
 
 export async function withPollImageColumnFallback<
@@ -313,8 +333,8 @@ export async function withPollImageColumnFallback<
 >(primary: () => PromiseLike<T>, fallback: () => PromiseLike<T>) {
   const result = await primary();
 
-  if (result.error && isPollImageSchemaMissingError(result.error.message)) {
-    console.warn(getPollImageSchemaSetupMessage());
+  if (result.error && isPollOptionalMetadataSchemaMissingError(result.error.message)) {
+    console.warn(getPollOptionalMetadataSchemaSetupMessage());
     return fallback();
   }
 
@@ -327,13 +347,15 @@ export function getPollReportsSetupMessage() {
 
 export function getInitialPollModerationStatus(input: {
   category: string;
+  pollType?: PollType;
   relatedArticleTitle?: string | null;
   storyReference?: string | null;
 }) {
   const category = normalizePollCategory(input.category);
   const storyReference = normalizePollStoryReference(input.storyReference ?? "");
+  const pollType = input.pollType ?? "news";
 
-  if (category && (input.relatedArticleTitle?.trim() || storyReference)) {
+  if (category && (pollType === "community" || input.relatedArticleTitle?.trim() || storyReference)) {
     return "published";
   }
 
@@ -474,6 +496,8 @@ export async function hydratePolls(
     return {
       ...poll,
       question: normalizePollQuestion(poll.question),
+      poll_type:
+        poll.poll_type === "news" || poll.poll_type === "community" ? poll.poll_type : null,
       creatorAvatarUrl: avatarByUserId.get(poll.user_id) ?? null,
       heartCount,
       userHasHearted,

@@ -2856,12 +2856,14 @@ type Comment = {
 type Reply = {
   id: number;
   comment_id: number;
+  parent_comment_id: number | null;
   article_id: number;
   text: string;
   username: string | null;
   user_id: string | null;
   avatar_url: string | null;
   created_at: string | null;
+  replies: Reply[];
 };
 
 type Article = {
@@ -2894,6 +2896,30 @@ type LikeUser = {
   user_id: string | null;
   username: string | null;
 };
+
+function normalizeCommentArticleUrl(url: string | null | undefined) {
+  return url?.trim() || null;
+}
+
+function isDuplicateCommentReactionError(error: {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+}) {
+  return (
+    error.code === "23505" ||
+    /duplicate key|comment_reactions_unique/i.test(
+      `${error.message ?? ""} ${error.details ?? ""}`
+    )
+  );
+}
+
+function countArticleComments(comments: Comment[]): number {
+  const countReplies = (replies: Reply[]): number =>
+    replies.reduce((total, reply) => total + 1 + countReplies(reply.replies), 0);
+
+  return comments.reduce((total, comment) => total + 1 + countReplies(comment.replies), 0);
+}
 
 type EntertainmentSectionKey = "gossip" | "music" | "tv" | "celebrity" | "movies";
 type TrendingPodcastCard = {
@@ -2973,6 +2999,8 @@ type DbComment = {
   id: number;
   article_id: number;
   article_key?: string | null;
+  parent_comment_id?: number | null;
+  article_url?: string | null;
   text: string;
   username: string | null;
   user_id: string | null;
@@ -3010,8 +3038,9 @@ type DbCommentReaction = {
 
 type DbCommentReply = {
   id: number;
-  comment_id: number;
+  parent_comment_id: number | null;
   article_id: number;
+  article_url?: string | null;
   text: string;
   username: string | null;
   user_id: string | null;
@@ -7396,35 +7425,68 @@ export default function Home() {
         setBusinessTickerSource("cache");
       }
 
+      const fetchStartedAt = Date.now();
+
       try {
+        const stockRequestUrl = buildApiUrl("/api/stocks");
+        console.log("STOCK_REQUEST_URL", stockRequestUrl);
+        const timeoutMs = 20000;
+        let timeoutId: number | null = null;
         const response = await Promise.race([
           apiFetch("/api/stocks", {
             cache: "no-store",
           }),
-          new Promise<never>((_, reject) => {
-            window.setTimeout(() => reject(new Error("Stocks request timed out")), 5000);
+          new Promise<null>((resolve) => {
+            timeoutId = window.setTimeout(() => resolve(null), timeoutMs);
           }),
         ]);
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        const elapsedMs = Date.now() - fetchStartedAt;
+        console.log("STOCKS_FETCH_MS", elapsedMs);
+
+        if (!response) {
+          console.warn("BUSINESS STOCK FETCH TIMED OUT", { elapsedMs });
+          console.log("STOCKS_FALLBACK_USED", true);
+          console.log("STOCK_RESPONSE_STATUS", "timeout");
+          console.log("STOCK_ITEMS_COUNT", 0);
+
+          if (!isCancelled) {
+            setBusinessTickerItems(cachedStocks ?? []);
+            setBusinessTickerSource(cachedStocks?.length ? "cache" : "error");
+          }
+          return;
+        }
 
         const payload = (await response.json().catch(() => ({ items: [] }))) as {
           items?: StockTickerItem[];
           debugFallback?: boolean;
         };
+        const rawItemsCount = Array.isArray(payload.items) ? payload.items.length : 0;
 
         console.log("BUSINESS STOCK JSON RECEIVED", payload);
+        console.log("STOCK_RESPONSE_STATUS", response.status);
+        console.log("STOCK_ITEMS_COUNT", rawItemsCount);
         console.log("BUSINESS STOCK FETCH RESPONSE", {
           ok: response.ok,
           status: response.status,
-          count: Array.isArray(payload.items) ? payload.items.length : 0,
+          count: rawItemsCount,
         });
 
         const apiItems = Array.isArray(payload.items)
-          ? payload.items.filter(
-              (item) =>
-                Boolean(item?.symbol) &&
-                item.price !== null &&
-                Number.isFinite(item.price)
-            )
+          ? payload.items
+              .map((item) => ({
+                ...item,
+                symbol: String(item?.symbol ?? "").trim().toUpperCase(),
+                source: item?.source ?? "Stock API",
+              }))
+              .filter(
+                (item) =>
+                  Boolean(item.symbol) &&
+                  item.price !== null &&
+                  Number.isFinite(item.price)
+              )
           : [];
 
         console.log("STOCK TICKER API ITEMS RECEIVED", apiItems);
@@ -7433,34 +7495,45 @@ export default function Home() {
         console.log("BUSINESS STOCK ITEMS LENGTH", apiItems.length);
         console.log("BUSINESS STOCK USING_API_ITEMS", apiItems.length > 0);
         console.log("BUSINESS STOCK USING_FALLBACK_ITEMS", false);
+        console.log("STOCKS_FALLBACK_USED", apiItems.length === 0);
 
         const itemBySymbol = new Map<string, StockTickerItem>();
         apiItems.forEach((item) => {
-          itemBySymbol.set(item.symbol, {
-            ...item,
-            source: item.source ?? "Stock API",
-          });
+          itemBySymbol.set(item.symbol, item);
         });
 
+        const usedSymbols = new Set<string>();
         const orderedItems = BUSINESS_STOCK_TICKER_ORDER.map((symbol) => itemBySymbol.get(symbol))
           .filter((item): item is StockTickerItem => Boolean(item))
-          .filter((item) => item.price !== null && Number.isFinite(item.price));
+          .filter((item) => item.price !== null && Number.isFinite(item.price))
+          .map((item) => {
+            usedSymbols.add(item.symbol);
+            return item;
+          });
+        const unorderedItems = apiItems.filter((item) => !usedSymbols.has(item.symbol));
+        const displayItems = [...orderedItems, ...unorderedItems];
+
+        console.log("STOCK_DISPLAY_ITEMS_COUNT", displayItems.length);
 
         if (!isCancelled) {
-          setBusinessTickerItems(orderedItems);
-          setBusinessTickerSource(apiItems.length > 0 ? "api" : "empty");
-          if (orderedItems.length > 0) {
-            writeTimedCachePayload(stocksCacheKey, orderedItems);
+          setBusinessTickerItems(displayItems);
+          setBusinessTickerSource(displayItems.length > 0 ? "api" : "empty");
+          if (displayItems.length > 0) {
+            writeTimedCachePayload(stocksCacheKey, displayItems);
           }
         }
       } catch (error) {
-        console.error("BUSINESS STOCK FETCH FAILED", error);
+        console.log("STOCKS_FETCH_MS", Date.now() - fetchStartedAt);
+        console.warn("BUSINESS STOCK FETCH FAILED", error);
+        console.log("STOCKS_FALLBACK_USED", true);
         console.log("BUSINESS STOCK JSON RECEIVED", { items: [] });
         console.log("BUSINESS STOCK FETCH RESPONSE", {
           ok: false,
           status: "fetch-error",
           count: 0,
         });
+        console.log("STOCK_RESPONSE_STATUS", "fetch-error");
+        console.log("STOCK_ITEMS_COUNT", 0);
         console.log("BUSINESS STOCK USING_API_ITEMS", false);
         console.log("BUSINESS STOCK USING_FALLBACK_ITEMS", false);
         console.log("STOCK TICKER API ITEMS RECEIVED", []);
@@ -8360,13 +8433,15 @@ export default function Home() {
         supabase.from("likes").select("id, article_id, user_id"),
         supabase
           .from("comments")
-          .select("id, article_id, article_key, text, username, user_id, created_at"),
+          .select("id, article_id, article_key, parent_comment_id, article_url, text, username, user_id, created_at")
+          .is("parent_comment_id", null),
         supabase
           .from("comment_reactions")
           .select("id, comment_id, user_id, reaction_type"),
         supabase
-          .from("comment_replies")
-          .select("id, comment_id, article_id, text, username, user_id, created_at"),
+          .from("comments")
+          .select("id, parent_comment_id, article_id, article_url, text, username, user_id, created_at")
+          .not("parent_comment_id", "is", null),
         supabase.from("profiles").select("id, avatar_url, username"),
         userData.user?.id
           ? supabase
@@ -8415,7 +8490,8 @@ export default function Home() {
         commentsUseArticleKeyOnly = false;
         const legacyCommentsResult = await supabase
           .from("comments")
-          .select("id, article_id, text, username, user_id, created_at");
+          .select("id, article_id, parent_comment_id, article_url, text, username, user_id, created_at")
+          .is("parent_comment_id", null);
         comments = ((legacyCommentsResult.data ?? []) as DbComment[]) ?? [];
       }
       const commentReactions = (readSettledData(
@@ -8448,6 +8524,7 @@ export default function Home() {
 
       const mergedArticles: Article[] = newsData.map((item) => {
         const stableArticleKey = getStableArticleKey(item);
+        const articleCommentUrl = normalizeCommentArticleUrl(item.url);
         const articleLikes = likes.filter((like) => like.article_id === item.id).length;
         const articleLikeUsers = likes
           .filter((like) => like.article_id === item.id)
@@ -8458,31 +8535,41 @@ export default function Home() {
         const articleComments = comments
           .filter(
             (comment) =>
-              (commentsUseArticleKeyOnly
-                ? comment.article_key?.trim() === stableArticleKey
-                : comment.article_id === item.id) &&
+              (articleCommentUrl
+                ? normalizeCommentArticleUrl(comment.article_url) === articleCommentUrl
+                : commentsUseArticleKeyOnly
+                  ? comment.article_key?.trim() === stableArticleKey
+                  : comment.article_id === item.id) &&
               (!comment.user_id || !blockedIds.has(comment.user_id))
           )
           .map((comment) => {
             const reactions = commentReactions.filter(
               (reaction) => reaction.comment_id === comment.id
             );
-            const replies = commentReplies
-              .filter(
-                (reply) =>
-                  reply.comment_id === comment.id &&
-                  (!reply.user_id || !blockedIds.has(reply.user_id))
-              )
-              .map((reply) => ({
+
+            const buildReplies = (parentCommentId: number): Reply[] =>
+              commentReplies
+                .filter(
+                  (reply) =>
+                    reply.parent_comment_id === parentCommentId &&
+                    (articleCommentUrl
+                      ? normalizeCommentArticleUrl(reply.article_url) === articleCommentUrl
+                      : reply.article_id === item.id) &&
+                    (!reply.user_id || !blockedIds.has(reply.user_id))
+                )
+                .map((reply) => ({
                 id: reply.id,
-                comment_id: reply.comment_id,
+                comment_id: reply.parent_comment_id ?? comment.id,
+                parent_comment_id: reply.parent_comment_id,
                 article_id: reply.article_id,
                 text: reply.text,
                 username: reply.username,
                 user_id: reply.user_id,
                 created_at: reply.created_at,
                 avatar_url: reply.user_id ? avatarLookup.get(reply.user_id) ?? null : null,
+                replies: buildReplies(reply.id),
               }));
+            const replies = buildReplies(comment.id);
 
             return {
               id: comment.id,
@@ -10743,7 +10830,12 @@ export default function Home() {
       });
 
       if (error) {
-        console.error("Error creating notification:", error);
+        console.warn("NOTIFICATION_CREATE_WARNING", {
+          message: error.message ?? null,
+          code: error.code ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        });
       }
     },
     [userId]
@@ -11070,6 +11162,8 @@ export default function Home() {
       return;
     }
 
+    const targetArticle = articles.find((article) => article.id === articleId);
+
     if (replyTarget && replyTarget.articleId === articleId) {
       const parentComment = articles
         .find((article) => article.id === articleId)
@@ -11084,20 +11178,34 @@ export default function Home() {
         return;
       }
 
+      const replyInsertPayload = {
+        article_id: articleId,
+        article_title: cleanDisplayText(targetArticle?.title ?? null) || null,
+        article_source: targetArticle?.source ?? null,
+        article_image: targetArticle ? getBestArticleImage(targetArticle).src : null,
+        article_url: targetArticle?.url ?? null,
+        parent_comment_id: replyTarget.commentId,
+        text,
+        user_id: userId,
+        username,
+      };
+
+      console.log("REPLY_INSERT_PAYLOAD", JSON.stringify(replyInsertPayload, null, 2));
+
       const { data, error } = await supabase
-        .from("comment_replies")
-        .insert({
-          comment_id: replyTarget.commentId,
-          article_id: articleId,
-          text,
-          user_id: userId,
-          username,
-        })
+        .from("comments")
+        .insert(replyInsertPayload)
         .select()
         .single();
 
       if (error) {
-        console.error("Error saving reply:", error);
+        console.log("REPLY_SAVE_ERROR_JSON", JSON.stringify(error, null, 2));
+        console.error("REPLY_SAVE_ERROR", {
+          message: error.message ?? null,
+          code: error.code ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        });
         setCommentComposerStatus({
           type: "error",
           text: error.message ?? "Could not save reply.",
@@ -11118,13 +11226,15 @@ export default function Home() {
                           ...comment.replies,
                           {
                             id: data.id,
-                            comment_id: data.comment_id,
+                            comment_id: data.parent_comment_id ?? replyTarget.commentId,
+                            parent_comment_id: data.parent_comment_id ?? replyTarget.commentId,
                             article_id: data.article_id,
                             text: data.text,
                             username: data.username,
                             user_id: data.user_id,
                             avatar_url: null,
                             created_at: data.created_at,
+                            replies: [],
                           },
                         ],
                       }
@@ -11152,7 +11262,6 @@ export default function Home() {
       return;
     }
 
-    const targetArticle = articles.find((article) => article.id === articleId);
     const stableArticleKey = targetArticle ? getStableArticleKey(targetArticle) : `id:${articleId}`;
 
     const fullCommentPayload = {
@@ -11162,6 +11271,7 @@ export default function Home() {
       article_source: targetArticle?.source ?? null,
       article_image: targetArticle ? getBestArticleImage(targetArticle).src : null,
       article_url: targetArticle?.url ?? null,
+      parent_comment_id: null,
       text,
       user_id: userId,
       username,
@@ -11187,6 +11297,7 @@ export default function Home() {
         .from("comments")
         .insert({
           article_id: articleId,
+          parent_comment_id: null,
           text,
           user_id: userId,
           username,
@@ -11343,16 +11454,34 @@ export default function Home() {
     commentId: number,
     reactionType: "like" | "dislike"
   ) => {
-    if (!userId) {
-      alert("Log in to react to comments");
-      return;
-    }
-
     const targetComment = articles
       .find((article) => article.id === articleId)
       ?.comments.find((comment) => comment.id === commentId);
 
     if (!targetComment) {
+      return;
+    }
+
+    const { data: reactionAuthData } = await supabase.auth.getUser();
+    const commentReactionUser = reactionAuthData.user ?? null;
+    const commentReactionUserId = commentReactionUser?.id ?? null;
+    const commentReactionCommentId = targetComment.id;
+    const nextReactionType = "like";
+
+    console.log("COMMENT_REACTION_USER_ID", commentReactionUserId);
+    console.log("COMMENT_REACTION_IS_LOGGED_IN", Boolean(commentReactionUserId));
+    console.log("COMMENT_REACTION_COMMENT_ID", commentReactionCommentId);
+
+    if (!commentReactionUser) {
+      alert("Log in to react.");
+      return;
+    }
+
+    if (!Number.isFinite(commentReactionCommentId)) {
+      console.warn("COMMENT_REACTION_INVALID_COMMENT_ID", {
+        comment_id: commentReactionCommentId,
+        type: typeof commentReactionCommentId,
+      });
       return;
     }
 
@@ -11362,15 +11491,15 @@ export default function Home() {
       .from("comment_reactions")
       .select("id, reaction_type")
       .eq("comment_id", commentId)
-      .eq("user_id", userId)
+      .eq("user_id", commentReactionUserId)
       .maybeSingle();
 
-    if (existingReaction?.reaction_type === reactionType) {
+    if (existingReaction?.reaction_type === nextReactionType) {
       const { error } = await supabase
         .from("comment_reactions")
         .delete()
         .eq("id", existingReaction.id)
-        .eq("user_id", userId);
+        .eq("user_id", commentReactionUserId);
 
       setActiveCommentAction(null);
 
@@ -11389,13 +11518,10 @@ export default function Home() {
                     ? {
                         ...comment,
                         likes:
-                          reactionType === "like"
+                          nextReactionType === "like"
                             ? Math.max(0, comment.likes - 1)
                             : comment.likes,
-                        dislikes:
-                          reactionType === "dislike"
-                            ? Math.max(0, comment.dislikes - 1)
-                            : comment.dislikes,
+                        dislikes: comment.dislikes,
                         currentUserReaction: null,
                       }
                     : comment
@@ -11404,7 +11530,7 @@ export default function Home() {
             : article
         )
       );
-      if (reactionType === "like" && existingReaction.reaction_type !== "like") {
+      if (nextReactionType === "like" && existingReaction.reaction_type !== "like") {
         void createNotification({
           recipientUserId: targetComment.user_id,
           type: "comment_like",
@@ -11418,9 +11544,9 @@ export default function Home() {
     if (existingReaction) {
       const { error } = await supabase
         .from("comment_reactions")
-        .update({ reaction_type: reactionType })
+        .update({ reaction_type: nextReactionType })
         .eq("id", existingReaction.id)
-        .eq("user_id", userId);
+        .eq("user_id", commentReactionUserId);
 
       setActiveCommentAction(null);
 
@@ -11438,15 +11564,9 @@ export default function Home() {
                   comment.id === commentId
                     ? {
                         ...comment,
-                        likes:
-                          reactionType === "like"
-                            ? comment.likes + 1
-                            : Math.max(0, comment.likes - 1),
-                        dislikes:
-                          reactionType === "dislike"
-                            ? comment.dislikes + 1
-                            : Math.max(0, comment.dislikes - 1),
-                        currentUserReaction: reactionType,
+                        likes: comment.likes + 1,
+                        dislikes: Math.max(0, comment.dislikes - 1),
+                        currentUserReaction: nextReactionType,
                       }
                     : comment
                 ),
@@ -11457,16 +11577,56 @@ export default function Home() {
       return;
     }
 
-    const { error } = await supabase.from("comment_reactions").insert({
-      comment_id: commentId,
-      user_id: userId,
-      reaction_type: reactionType,
-    });
+    const commentReactionInsertPayload = {
+      comment_id: commentReactionCommentId,
+      user_id: commentReactionUser.id,
+      reaction_type: "like",
+    };
+
+    console.log(
+      "COMMENT_REACTION_INSERT_PAYLOAD",
+      JSON.stringify(commentReactionInsertPayload, null, 2)
+    );
+
+    const { error } = await supabase.from("comment_reactions").insert(commentReactionInsertPayload);
 
     setActiveCommentAction(null);
 
     if (error) {
-      console.error("Error creating comment reaction:", error);
+      if (isDuplicateCommentReactionError(error)) {
+        console.warn("COMMENT_REACTION_DUPLICATE_HANDLED", {
+          message: error.message ?? null,
+          code: error.code ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        });
+        setArticles((prev) =>
+          prev.map((article) =>
+            article.id === articleId
+              ? {
+                  ...article,
+                  comments: article.comments.map((comment) =>
+                    comment.id === commentId
+                      ? {
+                          ...comment,
+                          currentUserReaction: nextReactionType,
+                        }
+                      : comment
+                  ),
+                }
+              : article
+          )
+        );
+        return;
+      }
+
+      console.log("COMMENT_REACTION_CREATE_ERROR_JSON", JSON.stringify(error, null, 2));
+      console.error("COMMENT_REACTION_CREATE_ERROR", JSON.stringify({
+        message: error.message ?? null,
+        code: error.code ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+      }, null, 2));
       return;
     }
 
@@ -11479,12 +11639,9 @@ export default function Home() {
                 comment.id === commentId
                   ? {
                       ...comment,
-                      likes: reactionType === "like" ? comment.likes + 1 : comment.likes,
-                      dislikes:
-                        reactionType === "dislike"
-                          ? comment.dislikes + 1
-                          : comment.dislikes,
-                      currentUserReaction: reactionType,
+                      likes: comment.likes + 1,
+                      dislikes: comment.dislikes,
+                      currentUserReaction: nextReactionType,
                     }
                   : comment
               ),
@@ -11493,14 +11650,12 @@ export default function Home() {
       )
     );
 
-    if (reactionType === "like") {
-      void createNotification({
-        recipientUserId: targetComment.user_id,
-        type: "comment_like",
-        articleId,
-        commentId,
-      });
-    }
+    void createNotification({
+      recipientUserId: targetComment.user_id,
+      type: "comment_like",
+      articleId,
+      commentId,
+    });
   };
 
   const openDeleteModal = (articleId: number, commentId: number) => {
@@ -17378,7 +17533,7 @@ export default function Home() {
             </span>
             <span className="feed-meta-inline-group">
               <CommentIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
-              <span>{article.comments.length}</span>
+              <span>{countArticleComments(article.comments)}</span>
             </span>
             <span className="feed-meta-inline-group">
               <svg {...FEED_META_ICON_PROPS} className="feed-meta-inline-icon">
@@ -17524,7 +17679,7 @@ export default function Home() {
           imageSrc={imageSrc}
           imageAlt={cleanDisplayText(article.title)}
           likes={article.likes}
-          commentsCount={article.comments.length}
+          commentsCount={countArticleComments(article.comments)}
           topRightContent={
             options?.rankLabel ? (
               <span className="chip trending-rank-badge news-card-rank-badge">
@@ -17611,7 +17766,7 @@ export default function Home() {
               </span>
               <span className="feed-meta-inline-group">
                 <CommentIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
-                <span>{article.comments.length}</span>
+                <span>{countArticleComments(article.comments)}</span>
               </span>
             </span>
           </div>
@@ -17695,7 +17850,7 @@ export default function Home() {
         imageSrc={realImage.src}
         imageAlt={cleanDisplayText(article.title)}
         likes={article.likes}
-        commentsCount={article.comments.length}
+        commentsCount={countArticleComments(article.comments)}
         onOpen={(event) => {
           void handlePrimaryArticleOpen(event, article);
         }}
@@ -18876,7 +19031,7 @@ export default function Home() {
     if (tickerItems.length === 0) {
       return (
         <div className="muted" style={{ fontSize: "0.85rem", marginBottom: "10px" }}>
-          {businessTickerSource === "loading" ? "Loading stock market..." : "Stock market unavailable"}
+          {businessTickerSource === "loading" ? "Loading stock market..." : "Market data unavailable"}
         </div>
       );
     }
@@ -20873,7 +21028,7 @@ export default function Home() {
               <span className="top-trending-list-date">
                 <span className="feed-meta-inline-group">
                   <CommentIcon className="feed-meta-inline-icon" size={18} strokeWidth={1.9} />
-                  <span>{article.comments.length}</span>
+                  <span>{countArticleComments(article.comments)}</span>
                 </span>
               </span>
             </div>
@@ -20982,7 +21137,7 @@ export default function Home() {
         imageSrc={displayImage.src}
         imageAlt={cleanDisplayText(article.title)}
         likes={article.likes}
-        commentsCount={article.comments.length}
+        commentsCount={countArticleComments(article.comments)}
         topRightContent={
           typeof options?.showRank === "number" ? (
             <span className="chip trending-rank-badge news-card-rank-badge">
@@ -21134,12 +21289,6 @@ export default function Home() {
             })}
           </section>
         ) : null}
-
-        {renderTallTrendingQuickWatchRow(
-          "Videos",
-          trendingTallQuickWatchSections.featuredSources,
-          "featured-sources-quickwatch"
-        )}
 
         {dedupedVisibleTrendingNewsSections.world.length > 0 ? (
           <section className="home-section-block home-section-plain">

@@ -68,6 +68,20 @@ function isMissingCommentMetadataColumnError(message: string | null | undefined)
   return /article_title|article_source|article_image|article_url/i.test(message);
 }
 
+function warnCommentReactionsLoad(error: unknown) {
+  const reactionError = (error ?? {}) as {
+    message?: string | null;
+    code?: string | null;
+    details?: string | null;
+  };
+
+  console.warn("COMMENT_REACTIONS_LOAD_WARNING", {
+    message: reactionError.message ?? null,
+    code: reactionError.code ?? null,
+    details: reactionError.details ?? null,
+  });
+}
+
 function resolveCommentArticleTitle(
   comment: {
     article_id: number | string;
@@ -251,9 +265,9 @@ export default function ProfileCommentsPage() {
           : [];
 
       if (reactionsRes.status === "rejected") {
-        console.error("Error loading comment reactions:", reactionsRes.reason);
+        warnCommentReactionsLoad(reactionsRes.reason);
       } else if (reactionsRes.value.error) {
-        console.error("Error loading comment reactions:", reactionsRes.value.error);
+        warnCommentReactionsLoad(reactionsRes.value.error);
       }
 
       const newsArticles =

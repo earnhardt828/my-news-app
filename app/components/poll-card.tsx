@@ -37,6 +37,12 @@ export default function PollCard({
   const [hasRenderableImage, setHasRenderableImage] = useState(Boolean(poll.image_url));
   const hasVoted = Boolean(poll.userVoteOptionId);
   const showResults = hasVoted || !onVote;
+  const pollType =
+    poll.poll_type === "news" || poll.poll_type === "community"
+      ? poll.poll_type
+      : poll.related_article_id || poll.related_article_title
+        ? "news"
+        : "community";
   const rootClassName = `news-card poll-card ${rankLabel ? "news-card-has-rank" : ""} ${
     featured ? "poll-card-featured-surface" : ""
   } ${className}`.trim();
@@ -88,6 +94,9 @@ export default function PollCard({
           <span className="poll-card-category-marker" aria-hidden="true" />
           <span className="chip poll-card-inline-category-badge">
             {getCategoryLabel(poll.category)}
+          </span>
+          <span className={`chip poll-card-type-badge poll-card-type-badge-${pollType}`}>
+            {pollType === "news" ? "NEWS" : "COMMUNITY"}
           </span>
           {showAuthor ? (
             <>

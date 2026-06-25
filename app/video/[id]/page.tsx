@@ -49,6 +49,7 @@ type VideoCommentReply = {
 type DbComment = {
   id: number;
   article_id: number | string | null;
+  parent_comment_id?: number | null;
   text: string;
   username: string | null;
   user_id: string | null;
@@ -64,7 +65,7 @@ type DbCommentReaction = {
 
 type DbCommentReply = {
   id: number;
-  comment_id: number;
+  parent_comment_id: number | null;
   article_id: number | string | null;
   text: string;
   username: string | null;
@@ -139,6 +140,19 @@ function isMissingCommentMetadataColumnError(message: string | null | undefined)
   }
 
   return /article_title|article_source|article_image|article_url/i.test(message);
+}
+
+function isDuplicateCommentReactionError(error: {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+}) {
+  return (
+    error.code === "23505" ||
+    /duplicate key|comment_reactions_unique/i.test(
+      `${error.message ?? ""} ${error.details ?? ""}`
+    )
+  );
 }
 
 export default function VideoDetailPage() {
@@ -217,16 +231,18 @@ export default function VideoDetailPage() {
           apiFetch("/api/videos"),
           supabase
             .from("comments")
-            .select("id, article_id, user_id, username, text, created_at")
+            .select("id, article_id, parent_comment_id, user_id, username, text, created_at")
             .eq("article_id", commentArticleId)
+            .is("parent_comment_id", null)
             .order("created_at", { ascending: false }),
           supabase
             .from("comment_reactions")
             .select("id, comment_id, user_id, reaction_type"),
           supabase
-            .from("comment_replies")
-            .select("id, comment_id, article_id, text, username, user_id, created_at")
+            .from("comments")
+            .select("id, parent_comment_id, article_id, text, username, user_id, created_at")
             .eq("article_id", commentArticleId)
+            .not("parent_comment_id", "is", null)
             .order("created_at", { ascending: true }),
           supabase.from("profiles").select("id, avatar_url"),
         ]);
@@ -294,13 +310,13 @@ export default function VideoDetailPage() {
           const commentReplies = replyRows
             .filter(
               (reply) =>
-                reply.comment_id === comment.id &&
+                reply.parent_comment_id === comment.id &&
                 normalizeArticleId(reply.article_id) === commentArticleId &&
                 (!reply.user_id || !hiddenIds.has(reply.user_id))
             )
             .map((reply) => ({
               id: reply.id,
-              comment_id: reply.comment_id,
+              comment_id: reply.parent_comment_id ?? comment.id,
               article_id: normalizeArticleId(reply.article_id) ?? commentArticleId,
               text: reply.text,
               username: reply.username,
@@ -392,14 +408,31 @@ export default function VideoDetailPage() {
   );
 
   const handleToggleCommentReaction = async (commentId: number) => {
-    if (!userId) {
-      alert("Log in to react to comments");
-      return;
-    }
-
     const comment = comments.find((entry) => entry.id === commentId);
 
     if (!comment) {
+      return;
+    }
+
+    const { data: reactionAuthData } = await supabase.auth.getUser();
+    const commentReactionUser = reactionAuthData.user ?? null;
+    const commentReactionUserId = commentReactionUser?.id ?? null;
+    const commentReactionCommentId = comment.id;
+
+    console.log("COMMENT_REACTION_USER_ID", commentReactionUserId);
+    console.log("COMMENT_REACTION_IS_LOGGED_IN", Boolean(commentReactionUserId));
+    console.log("COMMENT_REACTION_COMMENT_ID", commentReactionCommentId);
+
+    if (!commentReactionUser) {
+      alert("Log in to react.");
+      return;
+    }
+
+    if (!Number.isFinite(commentReactionCommentId)) {
+      console.warn("COMMENT_REACTION_INVALID_COMMENT_ID", {
+        comment_id: commentReactionCommentId,
+        type: typeof commentReactionCommentId,
+      });
       return;
     }
 
@@ -409,7 +442,7 @@ export default function VideoDetailPage() {
       .from("comment_reactions")
       .select("id, reaction_type")
       .eq("comment_id", commentId)
-      .eq("user_id", userId)
+      .eq("user_id", commentReactionUserId)
       .maybeSingle();
 
     if (existing?.reaction_type === "like") {
@@ -417,7 +450,7 @@ export default function VideoDetailPage() {
         .from("comment_reactions")
         .delete()
         .eq("id", existing.id)
-        .eq("user_id", userId);
+        .eq("user_id", commentReactionUserId);
 
       setActiveCommentAction(null);
 
@@ -445,7 +478,7 @@ export default function VideoDetailPage() {
         .from("comment_reactions")
         .update({ reaction_type: "like" })
         .eq("id", existing.id)
-        .eq("user_id", userId);
+        .eq("user_id", commentReactionUserId);
 
       setActiveCommentAction(null);
 
@@ -454,16 +487,49 @@ export default function VideoDetailPage() {
         return;
       }
     } else {
-      const { error } = await supabase.from("comment_reactions").insert({
-        comment_id: commentId,
-        user_id: userId,
+      const commentReactionInsertPayload = {
+        comment_id: commentReactionCommentId,
+        user_id: commentReactionUser.id,
         reaction_type: "like",
-      });
+      };
+
+      console.log(
+        "COMMENT_REACTION_INSERT_PAYLOAD",
+        JSON.stringify(commentReactionInsertPayload, null, 2)
+      );
+
+      const { error } = await supabase.from("comment_reactions").insert(commentReactionInsertPayload);
 
       setActiveCommentAction(null);
 
       if (error) {
-        console.error("Error saving video comment reaction:", error);
+        if (isDuplicateCommentReactionError(error)) {
+          console.warn("COMMENT_REACTION_DUPLICATE_HANDLED", {
+            message: error.message ?? null,
+            code: error.code ?? null,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+          });
+          setComments((prev) =>
+            prev.map((entry) =>
+              entry.id === commentId
+                ? {
+                    ...entry,
+                    currentUserReaction: "like",
+                  }
+                : entry
+            )
+          );
+          return;
+        }
+
+        console.log("COMMENT_REACTION_CREATE_ERROR_JSON", JSON.stringify(error, null, 2));
+        console.error("COMMENT_REACTION_CREATE_ERROR", JSON.stringify({
+          message: error.message ?? null,
+          code: error.code ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        }, null, 2));
         return;
       }
     }
@@ -503,20 +569,34 @@ export default function VideoDetailPage() {
     }
 
     if (replyTarget) {
+      const replyInsertPayload = {
+        article_id: commentArticleId,
+        article_title: video.title,
+        article_source: video.creator,
+        article_image: video.thumbnailUrl ?? null,
+        article_url: video.watchUrl,
+        parent_comment_id: replyTarget.commentId,
+        text,
+        user_id: userId,
+        username,
+      };
+
+      console.log("REPLY_INSERT_PAYLOAD", JSON.stringify(replyInsertPayload, null, 2));
+
       const { data, error } = await supabase
-        .from("comment_replies")
-        .insert({
-          comment_id: replyTarget.commentId,
-          article_id: commentArticleId,
-          text,
-          user_id: userId,
-          username,
-        })
+        .from("comments")
+        .insert(replyInsertPayload)
         .select()
         .single();
 
       if (error) {
-        console.error("Error saving video reply:", error);
+        console.log("REPLY_SAVE_ERROR_JSON", JSON.stringify(error, null, 2));
+        console.error("REPLY_SAVE_ERROR", {
+          message: error.message ?? null,
+          code: error.code ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        });
         return;
       }
 
@@ -529,7 +609,7 @@ export default function VideoDetailPage() {
                   ...comment.replies,
                   {
                     id: data.id,
-                    comment_id: data.comment_id,
+                    comment_id: data.parent_comment_id ?? replyTarget.commentId,
                     article_id: normalizeArticleId(data.article_id) ?? commentArticleId,
                     text: data.text,
                     username: data.username,
@@ -553,6 +633,7 @@ export default function VideoDetailPage() {
       article_source: video.creator,
       article_image: video.thumbnailUrl ?? null,
       article_url: video.watchUrl,
+      parent_comment_id: null,
       text,
       user_id: userId,
       username,
@@ -573,6 +654,7 @@ export default function VideoDetailPage() {
         .from("comments")
         .insert({
           article_id: commentArticleId,
+          parent_comment_id: null,
           text,
           user_id: userId,
           username,

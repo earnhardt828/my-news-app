@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../../lib/api-base";
 import {
   buildStaticFallbackPodcastDirectory,
@@ -84,18 +84,55 @@ type PodcastShowResponse = {
   } | null;
 };
 
+function rememberClickedPodcastEpisode(show: PodcastShow, episode: PodcastEpisode) {
+  console.log("PODCAST_EPISODE_CLICKED_PODCAST", {
+    id: show.id,
+    slug: show.slug,
+  });
+  console.log("PODCAST_EPISODE_CLICKED_EPISODE", {
+    id: episode.id,
+    slug: episode.slug,
+  });
+  console.log(
+    "PODCAST_EPISODE_AVAILABLE_IDS",
+    show.episodes.map((entry) => ({
+      id: entry.id,
+      slug: entry.slug,
+    }))
+  );
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.setItem(
+    "graffiti:selected-podcast-episode",
+    JSON.stringify({ show, episode })
+  );
+}
+
 export default function PodcastShowPage() {
   const params = useParams<{ podcastSlug?: string }>();
   const podcastSlug = params?.podcastSlug;
-  const fallbackShow =
-    buildStaticFallbackPodcastDirectory().shows.find((entry) => entry.slug === podcastSlug) ?? null;
+  const fallbackShow = useMemo(
+    () =>
+      buildStaticFallbackPodcastDirectory().shows.find((entry) => entry.slug === podcastSlug) ??
+      null,
+    [podcastSlug]
+  );
   const [show, setShow] = useState<PodcastShow | null>(fallbackShow);
   const [isLoadingEpisodes, setIsLoadingEpisodes] = useState(true);
+  const [episodesUnavailable, setEpisodesUnavailable] = useState(false);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    console.log("PODCAST DETAIL OPENED", { podcastSlug });
-  }, [podcastSlug]);
+    console.log("PODCAST DETAIL OPENED", {
+      podcastSlug,
+      fallbackId: fallbackShow?.id ?? null,
+      fallbackTitle: fallbackShow?.title ?? null,
+      fallbackEpisodeCount: fallbackShow?.episodes.length ?? 0,
+    });
+  }, [fallbackShow, podcastSlug]);
 
   useEffect(() => {
     const headerTitle =
@@ -112,8 +149,14 @@ export default function PodcastShowPage() {
     let isMounted = true;
 
     async function loadPodcastShow() {
-      console.log("PODCAST EPISODES_FETCH_STARTED", { podcastSlug });
+      console.log("PODCAST EPISODES_FETCH_STARTED", {
+        podcastSlug,
+        fallbackId: fallbackShow?.id ?? null,
+        fallbackTitle: fallbackShow?.title ?? null,
+        fallbackEpisodeCount: fallbackShow?.episodes.length ?? 0,
+      });
       setIsLoadingEpisodes(true);
+      setEpisodesUnavailable(false);
 
       if (!podcastSlug) {
         if (isMounted) {
@@ -124,7 +167,32 @@ export default function PodcastShowPage() {
       }
 
       try {
-        const response = await apiFetch(`/api/podcasts?podcastSlug=${encodeURIComponent(podcastSlug)}`);
+        const requestPath = `/api/podcasts?podcastSlug=${encodeURIComponent(podcastSlug)}`;
+        const timeoutMs = 6000;
+        let timeoutId: number | null = null;
+        console.log("PODCAST_EPISODES_REQUEST_URL", requestPath);
+        const response = await Promise.race([
+          apiFetch(requestPath),
+          new Promise<null>((resolve) => {
+            timeoutId = window.setTimeout(() => resolve(null), timeoutMs);
+          }),
+        ]);
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+
+        if (!response) {
+          console.warn("PODCAST_EPISODES_FETCH_WARNING", {
+            podcastSlug,
+            message: `Podcast episodes request timed out after ${timeoutMs}ms`,
+          });
+          if (isMounted) {
+            setShow(fallbackShow);
+            setEpisodesUnavailable(true);
+          }
+          return;
+        }
+
         const data = (await response.json()) as PodcastShowResponse;
 
         if (!isMounted) {
@@ -132,10 +200,31 @@ export default function PodcastShowPage() {
         }
 
         if (data.podcast?.show) {
+          console.log("PODCAST_DETAIL_SHOW_LOADED", {
+            id: data.podcast.show.id,
+            slug: data.podcast.show.slug,
+            title: data.podcast.show.title,
+            episodeCount: data.podcast.show.episodes.length,
+          });
           setShow(data.podcast.show);
+          setEpisodesUnavailable(data.podcast.show.episodes.length === 0);
+        } else {
+          console.warn("PODCAST_EPISODES_FETCH_WARNING", {
+            podcastSlug,
+            message: "Podcast API returned no show",
+          });
+          setShow(fallbackShow);
+          setEpisodesUnavailable(true);
         }
       } catch (error) {
-        console.error("PODCAST SHOW PAGE LOAD FAILED", error);
+        console.warn("PODCAST_EPISODES_FETCH_WARNING", {
+          podcastSlug,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        if (isMounted) {
+          setShow(fallbackShow);
+          setEpisodesUnavailable(true);
+        }
       } finally {
         if (isMounted) {
           setIsLoadingEpisodes(false);
@@ -148,7 +237,7 @@ export default function PodcastShowPage() {
     return () => {
       isMounted = false;
     };
-  }, [podcastSlug]);
+  }, [fallbackShow, podcastSlug]);
 
   if (!show) {
     return (
@@ -240,6 +329,7 @@ export default function PodcastShowPage() {
                   key={episode.id}
                   href={`/podcasts/${show.slug}/${episode.slug}/`}
                   className="section-card stack"
+                  onClick={() => rememberClickedPodcastEpisode(show, episode)}
                 >
                   <strong className="profile-section-title-sm">{episode.title}</strong>
                   {formatPodcastDate(episode.publishedAt) || episode.duration ? (
@@ -252,8 +342,13 @@ export default function PodcastShowPage() {
                 </Link>
               ))}
             </div>
-          ) : !isLoadingEpisodes ? (
-            <div className="muted">Loading episodes...</div>
+          ) : !isLoadingEpisodes || episodesUnavailable ? (
+            <div className="empty-state compact-empty-state">
+              <strong>Episodes unavailable.</strong>
+              <span>
+                We could not load episodes for this podcast right now. Try another show or check back after the feed refreshes.
+              </span>
+            </div>
           ) : null}
         </div>
       </section>

@@ -49,7 +49,7 @@ type UserProfileSearchResult = {
   user_id?: string | null;
   username: string | null;
   avatar_url: string | null;
-  bio: string | null;
+  bio?: string | null;
   display_name?: string | null;
 };
 
@@ -563,7 +563,18 @@ function dedupeSearchArticles(articles: NewsArticle[]) {
     keys.forEach((key) => bestByKey.set(key, bestArticle));
   });
 
-  return Array.from(bestByKey.values());
+  return Array.from(new Set(bestByKey.values()));
+}
+
+function getSearchArticleRenderKey(article: NewsArticle, index: number) {
+  const sourceKey = sanitizeSourceName(article.source) || "unknown";
+  const normalizedUrl = article.url?.trim() ?? "";
+
+  if (normalizedUrl) {
+    return `${article.id}-${normalizedUrl}`;
+  }
+
+  return `${article.id}-${sourceKey}-${index}`;
 }
 
 function normalizeSearchPayload(payload: NewsArticle[] | SearchNewsResponse) {
@@ -728,7 +739,7 @@ export default function Search() {
   const normalizedQuery = query.trim().toLowerCase();
 
   useEffect(() => {
-    if (!normalizedQuery) {
+    if (!normalizedQuery || activeTab !== "articles") {
       return;
     }
 
@@ -774,10 +785,10 @@ export default function Search() {
       isCancelled = true;
       window.clearTimeout(timer);
     };
-  }, [normalizedQuery, query]);
+  }, [activeTab, normalizedQuery]);
 
   useEffect(() => {
-    if (normalizedQuery) {
+    if (normalizedQuery || activeTab !== "articles") {
       return;
     }
 
@@ -791,13 +802,12 @@ export default function Search() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [normalizedQuery]);
+  }, [activeTab, normalizedQuery, query]);
 
   useEffect(() => {
-    if (!normalizedQuery) {
-      setActiveTab("articles");
-    }
-  }, [normalizedQuery]);
+    console.log("SEARCH_ACTIVE_TAB", activeTab);
+    console.log("SEARCH_QUERY", normalizedQuery);
+  }, [activeTab, normalizedQuery, query]);
 
   useEffect(() => {
     if (!normalizedQuery) {
@@ -808,6 +818,8 @@ export default function Search() {
       query: normalizedQuery,
       tab: activeTab,
     });
+    console.log("SEARCH_ACTIVE_TAB", activeTab);
+    console.log("SEARCH_QUERY", normalizedQuery);
 
     if (resultsAreaRef.current && typeof window !== "undefined") {
       const top = resultsAreaRef.current.getBoundingClientRect().top + window.scrollY - 12;
@@ -827,6 +839,7 @@ export default function Search() {
     if (
       !sentinel ||
       !normalizedQuery ||
+      activeTab !== "articles" ||
       isSearchLoading ||
       isLoadingMoreSearchResults ||
       !hasMoreSearchResults
@@ -840,6 +853,7 @@ export default function Search() {
 
         if (
           !entry?.isIntersecting ||
+          activeTab !== "articles" ||
           isSearchLoading ||
           isLoadingMoreSearchResults ||
           !hasMoreSearchResults ||
@@ -893,6 +907,7 @@ export default function Search() {
     };
   }, [
     hasMoreSearchResults,
+    activeTab,
     isLoadingMoreSearchResults,
     isSearchLoading,
     normalizedQuery,
@@ -907,29 +922,27 @@ export default function Search() {
         return;
       }
 
-      const initialResult = await supabase
+      if (activeTab !== "users") {
+        return;
+      }
+
+      console.log("USER_SEARCH_STARTED", normalizedQuery);
+
+      const { data, error } = await supabase
         .from("profiles")
-        .select("id, user_id, username, avatar_url, bio, display_name")
-        .or(`username.ilike.%${normalizedQuery}%,display_name.ilike.%${normalizedQuery}%`)
-        .not("username", "is", null)
-        .limit(8);
-
-      const fallbackResult =
-        initialResult.error?.code === "42703"
-          ? await supabase
-              .from("profiles")
-              .select("id, user_id, username, avatar_url, bio")
-              .ilike("username", `%${normalizedQuery}%`)
-              .not("username", "is", null)
-              .limit(8)
-          : null;
-
-      const data = (fallbackResult?.data ?? initialResult.data) as UserProfileSearchResult[] | null;
-      const error = fallbackResult?.error ?? initialResult.error;
+        .select("id, username, avatar_url")
+        .ilike("username", `%${query.trim()}%`)
+        .limit(20);
 
       if (error) {
-        console.error("Error loading user search results:", error);
+        console.warn("USER_SEARCH_WARNING", {
+          message: error.message ?? null,
+          code: error.code ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        });
         setUserResults([]);
+        console.log("USER_SEARCH_RESULTS_COUNT", 0);
         return;
       }
 
@@ -1009,14 +1022,15 @@ export default function Search() {
         });
 
       console.log("USER SEARCH FILTERED RESULTS", filteredUsers);
+      console.log("USER_SEARCH_RESULTS_COUNT", filteredUsers.length);
       setUserResults(filteredUsers);
     }
 
     void loadUserResults();
-  }, [normalizedQuery]);
+  }, [activeTab, normalizedQuery]);
 
   const matchedSourceName = useMemo(() => {
-    if (!normalizedQuery) {
+    if (!normalizedQuery || activeTab !== "articles") {
       return null;
     }
 
@@ -1056,7 +1070,7 @@ export default function Search() {
           normalizedQuery.includes(source.toLowerCase())
       ) ?? null
     );
-  }, [articles, normalizedQuery, searchArticles]);
+  }, [activeTab, articles, normalizedQuery, searchArticles]);
 
   useEffect(() => {
     if (!matchedSourceName) {
@@ -1603,11 +1617,12 @@ export default function Search() {
             <div className="search-results-section">
               <p className="search-results-section-heading">Articles</p>
               <div className="search-results-list">
-                {filteredResults.map((article) => (
+                {filteredResults.map((article, index) => (
                   (() => {
                     const displayImage = getArticleDisplayImage(article);
                     const imageSrc = displayImage.src;
                     const imageFailureKey = displayImage.failureKey ?? `${article.id}:none`;
+                    const articleKey = getSearchArticleRenderKey(article, index);
 
                     if (!imageSrc || failedSearchImages[imageFailureKey]) {
                       console.log("ARTICLE HIDDEN_NO_REAL_IMAGE", {
@@ -1625,7 +1640,7 @@ export default function Search() {
 
                     return (
                       <Link
-                        key={article.id}
+                        key={articleKey}
                         href={`/article/${article.id}/`}
                         className="section-card search-result-card"
                         onClick={(event) => {

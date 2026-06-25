@@ -93,6 +93,20 @@ function isMissingCommentMetadataColumnError(message: string | null | undefined)
   return /article_title|article_source|article_image|article_url/i.test(message);
 }
 
+function warnCommentReactionsLoad(error: unknown) {
+  const reactionError = (error ?? {}) as {
+    message?: string | null;
+    code?: string | null;
+    details?: string | null;
+  };
+
+  console.warn("COMMENT_REACTIONS_LOAD_WARNING", {
+    message: reactionError.message ?? null,
+    code: reactionError.code ?? null,
+    details: reactionError.details ?? null,
+  });
+}
+
 function resolveCommentArticleTitle(
   comment: {
     article_id: number | string;
@@ -162,7 +176,9 @@ export default function Profile() {
   });
   const authFlashMessage =
     typeof window !== "undefined"
-      ? window.location.hash === "#signed-out"
+      ? new URLSearchParams(window.location.search).get("message") === "create-poll-login"
+        ? "Log in to create a poll."
+        : window.location.hash === "#signed-out"
         ? "Logged out."
         : window.location.hash === "#account-deleted"
           ? "Your account has been deleted."
@@ -398,34 +414,14 @@ export default function Profile() {
       return;
     }
 
-    if (reactionsRes.status === "rejected") {
-      console.error("Error loading comment reactions:", reactionsRes.reason);
-      setMyComments(
-        ((commentsRes.value.data ?? []) as Omit<
-          RawProfileComment,
-          never
-        >[]).map((comment) => ({
-          ...comment,
-          article_title: resolveCommentArticleTitle(comment, new Map(), new Map()),
-          hearts: 0,
-        }))
-      );
-      return;
-    }
+    let commentReactions: { comment_id: number; reaction_type: string }[] = [];
 
-    if (reactionsRes.value.error) {
-      console.error("Error loading comment reactions:", reactionsRes.value.error);
-      setMyComments(
-        ((commentsRes.value.data ?? []) as Omit<
-          RawProfileComment,
-          never
-        >[]).map((comment) => ({
-          ...comment,
-          article_title: resolveCommentArticleTitle(comment, new Map(), new Map()),
-          hearts: 0,
-        }))
-      );
-      return;
+    if (reactionsRes.status === "rejected") {
+      warnCommentReactionsLoad(reactionsRes.reason);
+    } else if (reactionsRes.value.error) {
+      warnCommentReactionsLoad(reactionsRes.value.error);
+    } else {
+      commentReactions = reactionsRes.value.data ?? [];
     }
 
     const newsArticles =
@@ -459,7 +455,7 @@ export default function Profile() {
         )
         .map((article) => [article.url.trim(), article.title])
     );
-    const reactions = reactionsRes.value.data ?? [];
+    const reactions = commentReactions;
 
     const enrichedComments = ((commentsRes.value.data ?? []) as RawProfileComment[])
       .map((comment) => {
@@ -1454,7 +1450,7 @@ export default function Profile() {
                   <div className="profile-section-row">
                     <h3 className="profile-section-title">Your Polls</h3>
                     <Link
-                      href="/profile/polls/new"
+                      href="/profile/polls/new/"
                       className="profile-section-icon-button"
                       aria-label="Create a poll"
                     >

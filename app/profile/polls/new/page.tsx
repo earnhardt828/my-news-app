@@ -1,22 +1,22 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { getCategoryLabel } from "../../../../lib/categories";
 import { apiFetch } from "../../../../lib/api-base";
 import { cleanDisplayText } from "../../../../lib/display-text";
 import {
-  getInitialPollModerationStatus,
-  getPollImageSchemaSetupMessage,
+  getPollOptionalMetadataSchemaSetupMessage,
   getPollReportsSetupMessage,
   isPollReportsSchemaMissingError,
   POLL_ALLOWED_CATEGORIES,
   getPollSchemaSetupMessage,
-  isPollImageSchemaMissingError,
+  isPollOptionalMetadataSchemaMissingError,
   isPollSchemaMissingError,
   normalizePollCategory,
   normalizePollStoryReference,
   validatePollDraft,
+  type PollType,
 } from "../../../../lib/polls";
 import { savePollArticleImageReferences } from "../../../../lib/poll-images";
 import { supabase } from "../../../../lib/supabase";
@@ -61,7 +61,9 @@ export default function CreatePollPage() {
   const relatedArticleImage = searchParams?.get("articleImage") ?? "";
   const initialCategory = searchParams?.get("category") ?? "";
   const initialStoryReference = searchParams?.get("articleUrl") ?? relatedArticleTitle;
+  const initialPollType: PollType = initialStoryReference || relatedArticleTitle ? "news" : "community";
   const [question, setQuestion] = useState("");
+  const [pollType, setPollType] = useState<PollType>(initialPollType);
   const [category, setCategory] = useState(normalizePollCategory(initialCategory) ?? "");
   const [options, setOptions] = useState(["", ""]);
   const [storyReference, setStoryReference] = useState(initialStoryReference);
@@ -75,6 +77,7 @@ export default function CreatePollPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [pollImageFile, setPollImageFile] = useState<File | null>(null);
   const [pollImagePreviewUrl, setPollImagePreviewUrl] = useState<string | null>(null);
+  const pollImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const relatedArticleLabel = useMemo(
     () => cleanDisplayText(relatedArticleTitle),
@@ -199,12 +202,14 @@ export default function CreatePollPage() {
     setStatus(null);
 
     const normalizedStoryReference = normalizePollStoryReference(storyReference);
-    const linkedArticleTitle = selectedStory?.title || relatedArticleTitle || normalizedStoryReference;
+    const linkedArticleTitle =
+      selectedStory?.title || relatedArticleTitle || normalizedStoryReference || null;
 
     const validationError = validatePollDraft({
       question,
       options,
       category,
+      pollType,
       relatedArticleTitle: linkedArticleTitle,
       storyReference: normalizedStoryReference,
     });
@@ -233,11 +238,13 @@ export default function CreatePollPage() {
     } = await supabase.auth.getUser();
 
     if (userError || !user?.id) {
+      console.log("CREATE_POLL_AUTH_USER", user?.id);
       setIsSaving(false);
       setStatus({
         type: "error",
         text: "Log in to create a poll.",
       });
+      router.push("/profile/?message=create-poll-login");
       return;
     }
 
@@ -274,94 +281,55 @@ export default function CreatePollPage() {
       uploadedImageUrl = publicUrl;
     }
 
-    const statusToInsert = getInitialPollModerationStatus({
-      category,
-      relatedArticleTitle: linkedArticleTitle,
-      storyReference: normalizedStoryReference,
-    });
-
     const { data: profileData } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", user.id)
       .maybeSingle();
 
+    const basePollInsertPayload = {
+      user_id: user.id,
+      username: profileData?.username ?? null,
+      question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
+      category: normalizePollCategory(category) ?? category,
+      related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
+      related_article_title: linkedArticleTitle,
+      related_source: selectedStory?.source || relatedSource || null,
+      status: "active",
+    };
+    const pollInsertPayload = {
+      ...basePollInsertPayload,
+      poll_type: pollType,
+      image_url: uploadedImageUrl,
+    };
+
+    console.log("CREATE_POLL_AUTH_USER", user?.id);
+    console.log("CREATE_POLL_INSERT_PAYLOAD", pollInsertPayload);
+
     let pollInsertResult = await supabase
       .from("polls")
-      .insert({
-        user_id: user.id,
-        username: profileData?.username ?? null,
-        question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
-        category: normalizePollCategory(category) ?? category,
-        related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
-        related_article_title: linkedArticleTitle,
-        related_source: selectedStory?.source || relatedSource || null,
-        image_url: uploadedImageUrl,
-        status: statusToInsert,
-      })
+      .insert(pollInsertPayload)
       .select("id")
       .single();
 
-    if (
-      pollInsertResult.error &&
-      isPollImageSchemaMissingError(pollInsertResult.error.message)
-    ) {
-      console.warn(getPollImageSchemaSetupMessage());
-      pollInsertResult = await supabase
-        .from("polls")
-        .insert({
-          user_id: user.id,
-          username: profileData?.username ?? null,
-          question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
-          category: normalizePollCategory(category) ?? category,
-          related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
-          related_article_title: linkedArticleTitle,
-          related_source: selectedStory?.source || relatedSource || null,
-          status: statusToInsert,
-        })
-        .select("id")
-        .single();
+    if (pollInsertResult.error) {
+      console.error("CREATE_POLL_INSERT_ERROR", pollInsertResult.error);
     }
 
     if (
       pollInsertResult.error &&
-      isPollReportsSchemaMissingError(pollInsertResult.error.message)
+      isPollOptionalMetadataSchemaMissingError(pollInsertResult.error.message)
     ) {
+      console.warn(getPollOptionalMetadataSchemaSetupMessage());
+      console.log("CREATE_POLL_INSERT_PAYLOAD_FALLBACK_BASE", basePollInsertPayload);
       pollInsertResult = await supabase
         .from("polls")
-        .insert({
-          user_id: user.id,
-          username: profileData?.username ?? null,
-          question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
-          category: normalizePollCategory(category) ?? category,
-          related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
-          related_article_title: linkedArticleTitle,
-          related_source: selectedStory?.source || relatedSource || null,
-          image_url: uploadedImageUrl,
-          status: "active",
-        })
+        .insert(basePollInsertPayload)
         .select("id")
         .single();
 
-      if (
-        pollInsertResult.error &&
-        isPollImageSchemaMissingError(pollInsertResult.error.message)
-      ) {
-        console.warn(getPollImageSchemaSetupMessage());
-        pollInsertResult = await supabase
-          .from("polls")
-          .insert({
-            user_id: user.id,
-            username: profileData?.username ?? null,
-            question: cleanDisplayText(question).replace(/\s+/g, " ").trim(),
-            category: normalizePollCategory(category) ?? category,
-            related_article_id: selectedStory?.id || relatedArticleId || normalizedStoryReference || null,
-            related_article_title: linkedArticleTitle,
-            related_source: selectedStory?.source || relatedSource || null,
-            status: "active",
-          })
-          .select("id")
-          .single();
+      if (pollInsertResult.error) {
+        console.error("CREATE_POLL_INSERT_ERROR_FALLBACK_BASE", pollInsertResult.error);
       }
     }
 
@@ -375,8 +343,8 @@ export default function CreatePollPage() {
           ? getPollSchemaSetupMessage()
           : isPollReportsSchemaMissingError(pollError?.message)
             ? getPollReportsSetupMessage()
-            : isPollImageSchemaMissingError(pollError?.message)
-              ? getPollImageSchemaSetupMessage()
+            : isPollOptionalMetadataSchemaMissingError(pollError?.message)
+              ? getPollOptionalMetadataSchemaSetupMessage()
             : pollError?.message ?? "Could not create your poll.",
       });
       return;
@@ -418,15 +386,6 @@ export default function CreatePollPage() {
           Polls should be related to news, current events, or public issues.
         </span>
 
-        <div className="stack" style={{ gap: "8px" }}>
-          <strong className="profile-section-title-sm">Poll rules</strong>
-          <ul className="muted" style={{ margin: 0, paddingLeft: "18px" }}>
-            {POLL_RULES.map((rule) => (
-              <li key={rule}>{rule}</li>
-            ))}
-          </ul>
-        </div>
-
         {relatedArticleLabel ? (
           <div className="poll-related-article">
             <strong>Related article</strong>
@@ -450,6 +409,32 @@ export default function CreatePollPage() {
           />
         </label>
 
+        <div className="stack" style={{ gap: "8px" }}>
+          <span className="profile-section-title-sm">Poll Type</span>
+          <div className="poll-type-toggle" role="radiogroup" aria-label="Poll type">
+            <button
+              type="button"
+              className={`poll-type-toggle-button ${pollType === "news" ? "poll-type-toggle-button-active" : ""}`}
+              onClick={() => setPollType("news")}
+              role="radio"
+              aria-checked={pollType === "news"}
+            >
+              <span>News Poll</span>
+              <small>Article required</small>
+            </button>
+            <button
+              type="button"
+              className={`poll-type-toggle-button ${pollType === "community" ? "poll-type-toggle-button-active" : ""}`}
+              onClick={() => setPollType("community")}
+              role="radio"
+              aria-checked={pollType === "community"}
+            >
+              <span>Community Poll</span>
+              <small>Article optional</small>
+            </button>
+          </div>
+        </div>
+
         <label className="stack" style={{ gap: "8px" }}>
           <span className="profile-section-title-sm">Category</span>
           <select
@@ -468,14 +453,18 @@ export default function CreatePollPage() {
         </label>
 
         <label className="stack" style={{ gap: "8px" }}>
-          <span className="profile-section-title-sm">What news story is this about?</span>
+          <span className="profile-section-title-sm">
+            {pollType === "news"
+              ? "What news story is this about?"
+              : "What news story is this about? Optional"}
+          </span>
           <input
             className="input"
             type="text"
             value={storyReference}
             onChange={(event) => setStoryReference(event.target.value)}
             placeholder="Paste the article URL or describe the exact story"
-            required
+            required={pollType === "news"}
           />
         </label>
 
@@ -510,22 +499,38 @@ export default function CreatePollPage() {
           </select>
         </label>
 
-        <label className="stack" style={{ gap: "8px" }}>
+        <div className="stack" style={{ gap: "8px" }}>
           <span className="profile-section-title-sm">Optional image upload</span>
           <input
-            className="input"
+            ref={pollImageInputRef}
+            className="profile-hidden-input-row"
             type="file"
             accept="image/jpeg,image/png,image/webp"
             onChange={handlePollImageChange}
           />
+          <button
+            type="button"
+            className={`poll-upload-card ${pollImagePreviewUrl ? "poll-upload-card-has-preview" : ""}`}
+            onClick={() => pollImageInputRef.current?.click()}
+            aria-label={pollImagePreviewUrl ? "Change poll image" : "Add image"}
+          >
+            {pollImagePreviewUrl ? (
+              <img
+                src={pollImagePreviewUrl}
+                alt="Poll upload preview"
+                className="poll-upload-card-image"
+              />
+            ) : (
+              <span className="poll-upload-card-empty">
+                <span className="poll-upload-card-plus" aria-hidden="true">
+                  +
+                </span>
+                <span>Add image</span>
+              </span>
+            )}
+          </button>
           <span className="muted">Upload one JPG, PNG, or WebP image up to 5MB.</span>
-        </label>
-
-        {pollImagePreviewUrl ? (
-          <div className="poll-upload-preview">
-            <img src={pollImagePreviewUrl} alt="Poll upload preview" className="poll-upload-preview-image" />
-          </div>
-        ) : null}
+        </div>
 
         <div className="stack" style={{ gap: "10px" }}>
           <span className="profile-section-title-sm">Answer options</span>
@@ -556,6 +561,15 @@ export default function CreatePollPage() {
             {status.text}
           </div>
         ) : null}
+
+        <div className="poll-form-rules stack">
+          <strong className="profile-section-title-sm">Poll rules</strong>
+          <ul className="muted" style={{ margin: 0, paddingLeft: "18px" }}>
+            {POLL_RULES.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </div>
 
         <div className="toolbar">
           <button

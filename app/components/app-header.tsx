@@ -338,35 +338,50 @@ export default function AppHeader() {
     let isMounted = true;
 
     async function loadUnreadState() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      if (!user?.id || !isMounted) {
+        if (!user?.id || !isMounted) {
+          if (isMounted) {
+            setHasUnreadNotifications(false);
+          }
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("notifications")
+          .select("id")
+          .eq("recipient_user_id", user.id)
+          .is("read_at", null)
+          .limit(1);
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (error) {
+          console.warn("NOTIFICATIONS_UNREAD_ERROR", {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+          setHasUnreadNotifications(false);
+          return;
+        }
+
+        setHasUnreadNotifications((data ?? []).length > 0);
+      } catch (error) {
+        console.warn("NOTIFICATIONS_UNREAD_ERROR", {
+          message: error instanceof Error ? error.message : String(error),
+          code: null,
+          details: null,
+        });
         if (isMounted) {
           setHasUnreadNotifications(false);
         }
-        return;
       }
-
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("id")
-        .eq("recipient_user_id", user.id)
-        .is("read_at", null)
-        .limit(1);
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (error) {
-        console.error("Error loading unread notifications:", error);
-        setHasUnreadNotifications(false);
-        return;
-      }
-
-      setHasUnreadNotifications((data ?? []).length > 0);
     }
 
     void loadUnreadState();
