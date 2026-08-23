@@ -53,35 +53,12 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: "/polls/",
-    label: "Polls",
+    href: "/local/",
+    label: "Local",
     icon: (
       <svg {...iconProps}>
-        <path d="M4 6.8A2.8 2.8 0 0 1 6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v6.4a2.8 2.8 0 0 1-2.8 2.8H11l-4.4 4v-4H6.8A2.8 2.8 0 0 1 4 13.2Z" />
-        <path d="M8 9h8" />
-        <path d="M8 12h5" />
-      </svg>
-    ),
-  },
-  {
-    href: "/search/",
-    label: "Search",
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="11" cy="11" r="6.5" />
-        <path d="m16 16 4 4" />
-      </svg>
-    ),
-  },
-  {
-    href: "/podcasts/",
-    label: "Podcasts",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M6 5.2a2.2 2.2 0 0 1 2.2-2.2h7.6A2.2 2.2 0 0 1 18 5.2v13.6A2.2 2.2 0 0 1 15.8 21H8.2A2.2 2.2 0 0 1 6 18.8Z" />
-        <path d="M9.2 8.2h5.6" />
-        <path d="M9.2 11.2h5.6" />
-        <path d="M9.2 14.2h3.2" />
+        <path d="M12 21s6-5.35 6-11a6 6 0 0 0-12 0c0 5.65 6 11 6 11Z" />
+        <circle cx="12" cy="10" r="2.2" />
       </svg>
     ),
   },

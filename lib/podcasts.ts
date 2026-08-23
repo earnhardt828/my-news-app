@@ -297,6 +297,10 @@ function createFallbackShowFromCandidate(candidate: DiscoveryCandidate): Podcast
   };
 }
 
+function hasPlayablePodcastEpisode(show: PodcastShow) {
+  return show.episodes.some((episode) => Boolean(episode.audioUrl));
+}
+
 async function fetchPodcastShow(candidate: DiscoveryCandidate): Promise<PodcastShow> {
   const response = await fetch(candidate.feedUrl, {
     next: { revalidate: 1800 },
@@ -851,15 +855,33 @@ export async function fetchPodcastDirectory(searchQuery?: string): Promise<Podca
   );
 
   const playableShows = hydratedShows
-    .flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))
-    .filter((show) => Boolean(show.latestEpisode?.audioUrl));
+    .flatMap((result, index) => {
+      const candidate = mergedCandidates[index];
 
-  const hydratedSlugs = new Set(playableShows.map((show) => show.slug));
-  const fallbackShows = mergedCandidates
-    .filter((candidate) => candidate.sourceProvider === "curated" && !hydratedSlugs.has(candidate.slug))
-    .map(createFallbackShowFromCandidate);
+      if (result.status === "rejected") {
+        console.warn("PODCAST_FEED_FAILED", {
+          slug: candidate?.slug ?? null,
+          title: candidate?.title ?? null,
+          feedUrl: candidate?.feedUrl ?? null,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+        return [];
+      }
 
-  const allShows = [...playableShows, ...fallbackShows];
+      if (!hasPlayablePodcastEpisode(result.value)) {
+        console.warn("PODCAST_REMOVED_FROM_DIRECTORY", {
+          slug: result.value.slug,
+          title: result.value.title,
+          feedUrl: result.value.feedUrl,
+          episodeCount: result.value.episodes.length,
+        });
+        return [];
+      }
+
+      return [result.value];
+    });
+
+  const allShows = playableShows;
 
   const sections = buildPodcastSections(allShows);
 
@@ -920,29 +942,50 @@ export async function fetchPodcastShowBySlug(podcastSlug: string) {
   const fallbackShow =
     buildStaticFallbackPodcastDirectory().shows.find((entry) => entry.slug === podcastSlug) ?? null;
 
-  if (!fallbackShow) {
+  const configuredFeed = PODCAST_FEEDS.find((entry) => entry.slug === podcastSlug) ?? null;
+
+  if (!fallbackShow && !configuredFeed) {
     return null;
   }
 
-  const candidate = createCandidateFromFeed(
-    PODCAST_FEEDS.find((entry) => entry.slug === podcastSlug) ?? {
-      slug: fallbackShow.slug,
-      title: fallbackShow.title,
-      publisher: fallbackShow.publisher,
-      category: fallbackShow.category,
-      featured: fallbackShow.featured,
-      feedUrl: fallbackShow.feedUrl,
-    }
-  );
+  const fallbackFeedConfig = fallbackShow
+    ? {
+        slug: fallbackShow.slug,
+        title: fallbackShow.title,
+        publisher: fallbackShow.publisher,
+        category: fallbackShow.category,
+        featured: fallbackShow.featured,
+        feedUrl: fallbackShow.feedUrl,
+      }
+    : null;
+  const feedConfig = configuredFeed ?? fallbackFeedConfig;
+
+  if (!feedConfig) {
+    return null;
+  }
+
+  const candidate = createCandidateFromFeed(feedConfig);
 
   try {
     const hydratedShow = await fetchPodcastShow(candidate);
+    if (!hasPlayablePodcastEpisode(hydratedShow)) {
+      console.warn("PODCAST_REMOVED_FROM_DIRECTORY", {
+        slug: hydratedShow.slug,
+        title: hydratedShow.title,
+        feedUrl: hydratedShow.feedUrl,
+        episodeCount: hydratedShow.episodes.length,
+      });
+      return null;
+    }
+
     return hydratedShow;
   } catch (error) {
-    console.error("PODCAST SHOW LOAD FAILED", {
-      podcastSlug,
+    console.warn("PODCAST_FEED_FAILED", {
+      slug: candidate.slug,
+      title: candidate.title,
+      feedUrl: candidate.feedUrl,
       error: error instanceof Error ? error.message : String(error),
     });
-    return fallbackShow;
+    return null;
   }
 }

@@ -131,9 +131,14 @@ function resolveCommentArticleTitle(
 }
 
 export default function Profile() {
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [signUpUsername, setSignUpUsername] = useState("");
+  const [signUpAvatarUrl, setSignUpAvatarUrl] = useState("");
+  const [signUpBio, setSignUpBio] = useState("");
   const [currentUser, setCurrentUser] = useState<UserState>(null);
   const [message, setMessage] = useState("");
   const [signUpNotice, setSignUpNotice] = useState("");
@@ -498,6 +503,18 @@ export default function Profile() {
       email: user.email ?? null,
     });
 
+    const metadataUsername =
+      typeof user.user_metadata?.username === "string"
+        ? user.user_metadata.username.trim()
+        : "";
+    const metadataAvatarUrl =
+      typeof user.user_metadata?.avatar_url === "string"
+        ? user.user_metadata.avatar_url.trim()
+        : "";
+    const metadataBio =
+      typeof user.user_metadata?.bio === "string"
+        ? user.user_metadata.bio.trim()
+        : "";
     const metadataCity =
       typeof user.user_metadata?.local_city === "string"
         ? user.user_metadata.local_city.trim()
@@ -506,6 +523,41 @@ export default function Profile() {
       typeof user.user_metadata?.local_state === "string"
         ? user.user_metadata.local_state.trim()
         : "";
+
+    if (!profileRef.current.username && metadataUsername) {
+      const persistedProfile = await saveProfilePatch(
+        {
+          id: user.id,
+          email: user.email ?? null,
+        },
+        {
+          username: metadataUsername,
+          avatar_url: metadataAvatarUrl || profileRef.current.avatar_url,
+          bio: metadataBio || profileRef.current.bio,
+        }
+      );
+
+      if (!persistedProfile.error && persistedProfile.data) {
+        const profile = persistedProfile.data;
+        setUsername(profile.username ?? "");
+        setDraftUsername(profile.username ?? "");
+        setAvatarUrl(profile.avatar_url ?? "");
+        setBio(profile.bio ?? "");
+        setDraftBio(profile.bio ?? "");
+        profileRef.current = {
+          username: profile.username,
+          contact_email: profile.contact_email,
+          local_city: profile.local_city,
+          local_state: profile.local_state,
+          bio: profile.bio,
+          categories: profile.categories ?? [],
+          avatar_url: profile.avatar_url,
+          username_last_changed_at: profile.username_last_changed_at,
+          preferred_sources: profile.preferred_sources ?? [],
+          show_less_sources: profile.show_less_sources ?? [],
+        };
+      }
+    }
 
     if (
       metadataCity &&
@@ -638,26 +690,69 @@ export default function Profile() {
     setResendStatus(null);
 
     const trimmedIdentifier = email.trim();
+    const trimmedUsername = signUpUsername.trim();
+    const trimmedAvatarUrl = signUpAvatarUrl.trim();
+    const trimmedBio = signUpBio.trim();
+
+    if (!trimmedUsername) {
+      setMessage("Choose a username to create your account.");
+      return;
+    }
+
+    if (!isUsernameAllowed(trimmedUsername)) {
+      setMessage("That username is not available. Please choose another.");
+      return;
+    }
 
     if (!trimmedIdentifier || !trimmedIdentifier.includes("@")) {
       setMessage("Enter a valid email to sign up.");
       return;
     }
 
-    if (!selectedSignUpCity) {
-      setMessage("Choose your city to finish signing up.");
+    if (password.length < 6) {
+      setMessage("Use at least 6 characters for your password.");
       return;
     }
 
-    const { city: localCity, state: localState } = splitSupportedCity(selectedSignUpCity);
+    if (password !== confirmPassword) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+
+    if (trimmedAvatarUrl && !/^https?:\/\//i.test(trimmedAvatarUrl)) {
+      setMessage("Profile image must be a valid image URL.");
+      return;
+    }
+
+    const { data: matchingProfiles, error: availabilityError } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("username", trimmedUsername);
+
+    if (availabilityError) {
+      setMessage(availabilityError.message ?? "Could not check username availability.");
+      return;
+    }
+
+    if ((matchingProfiles ?? []).length > 0) {
+      setMessage("Username already taken.");
+      return;
+    }
+
+    const { city: localCity, state: localState } = selectedSignUpCity
+      ? splitSupportedCity(selectedSignUpCity)
+      : { city: "", state: "" };
 
     const { data, error } = await supabase.auth.signUp({
       email: trimmedIdentifier,
       password,
       options: {
         data: {
-          local_city: localCity,
-          local_state: localState,
+          username: trimmedUsername,
+          avatar_url: trimmedAvatarUrl || null,
+          bio: trimmedBio || null,
+          local_city: localCity || null,
+          local_state: localState || null,
         },
       },
     });
@@ -667,16 +762,46 @@ export default function Profile() {
       return;
     }
 
+    setPassword("");
+    setConfirmPassword("");
+    setSelectedSignUpCity("");
+
     if (data.session) {
-      await supabase.auth.signOut();
+      if (data.user?.id) {
+        await saveProfilePatch(
+          {
+            id: data.user.id,
+            email: data.user.email ?? trimmedIdentifier,
+          },
+          {
+            id: data.user.id,
+            email: data.user.email ?? trimmedIdentifier,
+            username: trimmedUsername,
+            avatar_url: trimmedAvatarUrl || null,
+            bio: trimmedBio || null,
+            local_city: localCity || null,
+            local_state: localState || null,
+          }
+        );
+      }
+
+      setIsLoading(true);
+      try {
+        await refreshCurrentUserSession();
+        setMessage("Account created.");
+      } finally {
+        setIsLoading(false);
+      }
+      return;
     }
 
     clearProfileState();
     setCurrentUser(null);
-    setPassword("");
-    setSelectedSignUpCity("");
     setPendingConfirmationEmail(trimmedIdentifier);
     setResendCooldown(45);
+    setSignUpUsername("");
+    setSignUpAvatarUrl("");
+    setSignUpBio("");
     setSignUpNotice("Check your email to confirm your account.");
   };
 
@@ -687,45 +812,18 @@ export default function Profile() {
 
     const trimmedIdentifier = email.trim();
 
-    if (!trimmedIdentifier) {
-      setMessage("Enter your email or username.");
+    if (!trimmedIdentifier || !trimmedIdentifier.includes("@")) {
+      setMessage("Enter your email address.");
       return;
     }
 
-    let resolvedEmail = trimmedIdentifier;
-
-    if (!trimmedIdentifier.includes("@")) {
-      const { data: matchingProfiles, error: lookupError } = await supabase
-        .from("profiles")
-        .select("id, email, username")
-        .ilike("username", trimmedIdentifier);
-
-      if (lookupError) {
-        setMessage(lookupError.message ?? "Could not look up that username.");
-        return;
-      }
-
-      const matchedProfile = (matchingProfiles ?? []).find(
-        (profile) =>
-          (profile.username ?? "").trim().toLowerCase() ===
-          trimmedIdentifier.toLowerCase()
-      );
-
-      if (!matchedProfile) {
-        setMessage("Username not found.");
-        return;
-      }
-
-      if (!matchedProfile.email) {
-        setMessage("This username does not have a valid email on file.");
-        return;
-      }
-
-      resolvedEmail = matchedProfile.email;
+    if (!password) {
+      setMessage("Enter your password.");
+      return;
     }
 
     const { error } = await supabase.auth.signInWithPassword({
-      email: resolvedEmail,
+      email: trimmedIdentifier,
       password,
     });
 
@@ -1123,15 +1221,29 @@ export default function Profile() {
                 priority
               />
               <p className="muted profile-auth-helper">
-                Create an account to save your profile, comments, and feed.
+                {authMode === "login"
+                  ? "Log in to save your profile, comments, and feed."
+                  : "Create your profile before entering Graffiti."}
               </p>
             </div>
+
+            {authMode === "signup" ? (
+              <div className="input-row">
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Username"
+                  value={signUpUsername}
+                  onChange={(e) => setSignUpUsername(e.target.value)}
+                />
+              </div>
+            ) : null}
 
             <div className="input-row">
               <input
                 className="input"
-                type="text"
-                placeholder="Email or username"
+                type="email"
+                placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -1145,29 +1257,93 @@ export default function Profile() {
               />
             </div>
 
-            <div className="input-row">
-              <select
-                className="input"
-                value={selectedSignUpCity}
-                onChange={(event) => setSelectedSignUpCity(event.target.value)}
-              >
-                <option value="">Choose your city</option>
-                {SUPPORTED_LOCAL_CITIES.map((city) => (
-                  <option key={city.displayName} value={city.displayName}>
-                    {city.displayName}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {authMode === "signup" ? (
+              <>
+                <div className="input-row">
+                  <input
+                    className="input"
+                    type="password"
+                    placeholder="Confirm password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+
+                <div className="input-row">
+                  <input
+                    className="input"
+                    type="url"
+                    placeholder="Profile image URL (optional)"
+                    value={signUpAvatarUrl}
+                    onChange={(e) => setSignUpAvatarUrl(e.target.value)}
+                  />
+                </div>
+
+                <div className="input-row">
+                  <textarea
+                    className="input profile-bio-input"
+                    placeholder="Short bio (optional)"
+                    value={signUpBio}
+                    onChange={(e) => setSignUpBio(e.target.value)}
+                  />
+                </div>
+
+                <div className="input-row">
+                  <select
+                    className="input"
+                    value={selectedSignUpCity}
+                    onChange={(event) => setSelectedSignUpCity(event.target.value)}
+                  >
+                    <option value="">Choose your city (optional)</option>
+                    {SUPPORTED_LOCAL_CITIES.map((city) => (
+                      <option key={city.displayName} value={city.displayName}>
+                        {city.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : null}
 
             <div className="toolbar profile-auth-actions">
-              <button className="button button-accent" onClick={handleSignUp}>
-                Sign Up
-              </button>
-              <button className="button button-secondary" onClick={handleSignIn}>
-                Log In
-              </button>
+              {authMode === "login" ? (
+                <>
+                  <button className="button button-accent" onClick={handleSignIn}>
+                    Log In
+                  </button>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => {
+                      setAuthMode("signup");
+                      setMessage("");
+                    }}
+                    type="button"
+                  >
+                    Create an account
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="button button-accent" onClick={handleSignUp}>
+                    Create account
+                  </button>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => {
+                      setAuthMode("login");
+                      setMessage("");
+                      setSignUpNotice("");
+                    }}
+                    type="button"
+                  >
+                    I already have an account
+                  </button>
+                </>
+              )}
             </div>
+            <p className="muted profile-auth-helper">
+              Your account email is used for login. Your profile username is separate and can be changed in Settings.
+            </p>
 
             {message || authFlashMessage ? (
               <div
@@ -1277,7 +1453,7 @@ export default function Profile() {
                     className="profile-name-button"
                     onClick={startUsernameEdit}
                   >
-                    <h3 className="profile-name">{username || "News Reader"}</h3>
+                    <h3 className="profile-name">{username || "Set your username"}</h3>
                   </button>
                 )}
                 <div className="profile-meta-row">

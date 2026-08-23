@@ -126,6 +126,22 @@ async function selectProfileRow(user: ProfileUserRef) {
 }
 
 export async function ensureProfileRow(user: ProfileUserRef) {
+  const existing = await selectProfileRow(user);
+
+  if (existing.error) {
+    return {
+      data: null as AppProfileRecord | null,
+      error: existing.error,
+    };
+  }
+
+  if (existing.data) {
+    return {
+      data: existing.data as AppProfileRecord,
+      error: null,
+    };
+  }
+
   const seed = {
     id: user.id,
     email: user.email ?? null,

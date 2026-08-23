@@ -124,6 +124,7 @@ export default function PodcastShowPage() {
   const [isLoadingEpisodes, setIsLoadingEpisodes] = useState(true);
   const [episodesUnavailable, setEpisodesUnavailable] = useState(false);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const isBloombergBusinessweek = podcastSlug === "bloomberg-businessweek";
 
   useEffect(() => {
     console.log("PODCAST DETAIL OPENED", {
@@ -132,7 +133,13 @@ export default function PodcastShowPage() {
       fallbackTitle: fallbackShow?.title ?? null,
       fallbackEpisodeCount: fallbackShow?.episodes.length ?? 0,
     });
-  }, [fallbackShow, podcastSlug]);
+    if (isBloombergBusinessweek) {
+      console.log("PODCAST_SELECTED_SLUG", podcastSlug);
+      console.log("PODCAST_SELECTED_TITLE", fallbackShow?.title ?? null);
+      console.log("PODCAST_EPISODE_SOURCE_URL", fallbackShow?.feedUrl ?? null);
+      console.log("PODCAST_EPISODE_COUNT", fallbackShow?.episodes.length ?? 0);
+    }
+  }, [fallbackShow, isBloombergBusinessweek, podcastSlug]);
 
   useEffect(() => {
     const headerTitle =
@@ -182,6 +189,9 @@ export default function PodcastShowPage() {
         }
 
         if (!response) {
+          if (isBloombergBusinessweek) {
+            console.log("PODCAST_EPISODE_ERROR", `Podcast episodes request timed out after ${timeoutMs}ms`);
+          }
           console.warn("PODCAST_EPISODES_FETCH_WARNING", {
             podcastSlug,
             message: `Podcast episodes request timed out after ${timeoutMs}ms`,
@@ -200,6 +210,12 @@ export default function PodcastShowPage() {
         }
 
         if (data.podcast?.show) {
+          if (isBloombergBusinessweek) {
+            console.log("PODCAST_SELECTED_SLUG", data.podcast.show.slug);
+            console.log("PODCAST_SELECTED_TITLE", data.podcast.show.title);
+            console.log("PODCAST_EPISODE_SOURCE_URL", data.podcast.show.feedUrl ?? null);
+            console.log("PODCAST_EPISODE_COUNT", data.podcast.show.episodes.length);
+          }
           console.log("PODCAST_DETAIL_SHOW_LOADED", {
             id: data.podcast.show.id,
             slug: data.podcast.show.slug,
@@ -209,6 +225,9 @@ export default function PodcastShowPage() {
           setShow(data.podcast.show);
           setEpisodesUnavailable(data.podcast.show.episodes.length === 0);
         } else {
+          if (isBloombergBusinessweek) {
+            console.log("PODCAST_EPISODE_ERROR", "Podcast API returned no show");
+          }
           console.warn("PODCAST_EPISODES_FETCH_WARNING", {
             podcastSlug,
             message: "Podcast API returned no show",
@@ -217,6 +236,9 @@ export default function PodcastShowPage() {
           setEpisodesUnavailable(true);
         }
       } catch (error) {
+        if (isBloombergBusinessweek) {
+          console.log("PODCAST_EPISODE_ERROR", error instanceof Error ? error.message : String(error));
+        }
         console.warn("PODCAST_EPISODES_FETCH_WARNING", {
           podcastSlug,
           message: error instanceof Error ? error.message : String(error),
@@ -237,7 +259,7 @@ export default function PodcastShowPage() {
     return () => {
       isMounted = false;
     };
-  }, [fallbackShow, podcastSlug]);
+  }, [fallbackShow, isBloombergBusinessweek, podcastSlug]);
 
   if (!show) {
     return (

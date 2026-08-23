@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { apiFetch } from "../../lib/api-base";
+import { apiFetch, buildApiUrl } from "../../lib/api-base";
 import {
   buildStaticFallbackPodcastDirectory,
   PODCAST_INDEX_BACKGROUND_ONLY,
@@ -96,6 +96,51 @@ function getPodcastCardEyebrow(show: PodcastShow) {
   return uniqueParts.join(" • ");
 }
 
+function hasPlayablePodcastEpisode(show: PodcastShow) {
+  return show.episodes.some((episode) => Boolean(episode.audioUrl));
+}
+
+function shouldHidePodcastCard(show: PodcastShow) {
+  if (show.slug === "bloomberg-businessweek") {
+    return !hasPlayablePodcastEpisode(show);
+  }
+
+  return show.episodes.length > 0 && !hasPlayablePodcastEpisode(show);
+}
+
+function filterPlayablePodcastDirectory(directory: PodcastDirectory): PodcastDirectory {
+  const playableShows = directory.shows.filter((show) => {
+    const keepShow = !shouldHidePodcastCard(show);
+
+    if (!keepShow) {
+      console.warn("PODCAST_REMOVED_FROM_DIRECTORY", {
+        id: show.id,
+        slug: show.slug,
+        title: show.title,
+        feedUrl: show.feedUrl,
+        episodeCount: show.episodes.length,
+      });
+    }
+
+    return keepShow;
+  });
+
+  const playableSlugs = new Set(playableShows.map((show) => show.slug));
+
+  return {
+    shows: playableShows,
+    sections: {
+      featured: directory.sections.featured.filter((show) => playableSlugs.has(show.slug)),
+      science: directory.sections.science.filter((show) => playableSlugs.has(show.slug)),
+      trueCrime: directory.sections.trueCrime.filter((show) => playableSlugs.has(show.slug)),
+      arts: directory.sections.arts.filter((show) => playableSlugs.has(show.slug)),
+      business: directory.sections.business.filter((show) => playableSlugs.has(show.slug)),
+      sports: directory.sections.sports.filter((show) => playableSlugs.has(show.slug)),
+      politics: directory.sections.politics.filter((show) => playableSlugs.has(show.slug)),
+    },
+  };
+}
+
 function PodcastSectionRow({
   title,
   shows,
@@ -119,11 +164,12 @@ function PodcastSectionRow({
 
       <div className="podcast-scroll-row" role="list" aria-label={title}>
         {shows.map((show) => {
-          if (show.slug === "the-journal" && show.episodes.length === 0) {
-            console.warn("PODCAST_CARD_HIDDEN_NO_EPISODES", {
+          if (shouldHidePodcastCard(show)) {
+            console.warn("PODCAST_REMOVED_FROM_DIRECTORY", {
               id: show.id,
               slug: show.slug,
               title: show.title,
+              feedUrl: show.feedUrl,
               episodeCount: show.episodes.length,
             });
             return null;
@@ -268,8 +314,9 @@ export default function PodcastsPage() {
           const raw = window.localStorage.getItem(podcastDirectoryCacheKey);
           if (raw) {
             const cachedDirectory = JSON.parse(raw) as PodcastDirectory;
-            if (cachedDirectory?.shows?.length) {
-              setDirectory(cachedDirectory);
+            const playableCachedDirectory = filterPlayablePodcastDirectory(cachedDirectory);
+            if (playableCachedDirectory.shows.length) {
+              setDirectory(playableCachedDirectory);
             }
           }
         } catch (error) {
@@ -290,8 +337,10 @@ export default function PodcastsPage() {
       try {
         const timeoutMs = 6000;
         const podcastRequestUrl = "/api/podcasts";
+        const resolvedPodcastRequestUrl = buildApiUrl(podcastRequestUrl);
         let timeoutId: number | null = null;
         console.log("PODCAST_REQUEST_URL", podcastRequestUrl);
+        console.log("PODCAST_DIRECTORY_REQUEST_URL", resolvedPodcastRequestUrl);
         const response = await Promise.race([
           apiFetch(podcastRequestUrl),
           new Promise<null>((resolve) => {
@@ -315,7 +364,7 @@ export default function PodcastsPage() {
           return;
         }
 
-        const payload = (await response.json()) as PodcastDirectory;
+        const payload = filterPlayablePodcastDirectory((await response.json()) as PodcastDirectory);
 
         if (!isMounted) {
           return;

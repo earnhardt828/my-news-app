@@ -7,7 +7,7 @@ import { supabase } from "../../../lib/supabase";
 
 type UserState = {
   id: string;
-  email: string | null;
+  loginIdentity: string | null;
 };
 
 export default function SettingsContactPage() {
@@ -36,7 +36,7 @@ export default function SettingsContactPage() {
 
       setCurrentUser({
         id: user.id,
-        email: user.email ?? null,
+        loginIdentity: user.email ?? user.phone ?? null,
       });
 
       const { data, error } = await ensureProfileRow({
@@ -53,7 +53,7 @@ export default function SettingsContactPage() {
         return;
       }
 
-      setContactEmail(data.contact_email ?? "");
+      setContactEmail(data.email ?? data.contact_email ?? "");
       setIsLoading(false);
     }
 
@@ -114,15 +114,24 @@ export default function SettingsContactPage() {
       }
     }
 
+    if (!trimmedContactEmail) {
+      setIsSaving(false);
+      setMessage({
+        type: "error",
+        text: "Enter a valid email address.",
+      });
+      return;
+    }
+
     const { error } = await saveProfilePatch(
       {
         id: currentUser.id,
-        email: currentUser.email,
+        email: trimmedContactEmail,
       },
       {
         id: currentUser.id,
-        email: currentUser.email,
-        contact_email: trimmedContactEmail || null,
+        email: trimmedContactEmail,
+        contact_email: trimmedContactEmail,
       }
     );
 
@@ -131,7 +140,7 @@ export default function SettingsContactPage() {
     if (error) {
       setMessage({
         type: "error",
-        text: error.message ?? "Could not save your contact info.",
+        text: error.message ?? "Could not save your contact email.",
       });
       return;
     }
@@ -139,7 +148,7 @@ export default function SettingsContactPage() {
     setContactEmail(trimmedContactEmail);
     setMessage({
       type: "success",
-      text: "Contact info updated.",
+      text: "Contact email updated. This updates your contact email, not your login method.",
     });
   };
 
@@ -157,7 +166,11 @@ export default function SettingsContactPage() {
             ) : (
               <>
                 <p className="settings-detail-note">
-                  Current account email: {currentUser.email ?? "No email on file"}
+                  Contact email: {contactEmail || "No contact email on file"}
+                  <br />
+                  Login identity: {currentUser.loginIdentity ?? "Managed by your sign-in provider"}
+                  <br />
+                  This updates your contact email, not your login method.
                 </p>
                 <div className="stack settings-contact-fields">
                   <input

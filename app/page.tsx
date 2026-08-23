@@ -58,7 +58,7 @@ import {
   type FavoriteLeagueKey,
   type FavoriteTeamOption,
 } from "../lib/favorite-teams";
-import { PODCAST_FEEDS, type PodcastFeedCategory } from "../lib/podcast-feeds";
+import type { PodcastFeedCategory } from "../lib/podcast-feeds";
 import {
   applyPollVoteUpdate,
   getPollFeedScore,
@@ -2922,12 +2922,27 @@ function countArticleComments(comments: Comment[]): number {
 }
 
 type EntertainmentSectionKey = "gossip" | "music" | "tv" | "celebrity" | "movies";
+export type HomeSortMode =
+  | "trending"
+  | "mynews"
+  | "polls"
+  | "latest"
+  | "local"
+  | "sports"
+  | "celebrity"
+  | "weather"
+  | "technology"
+  | "travel"
+  | "food"
+  | "business";
 type TrendingPodcastCard = {
   id: string;
   slug: string;
   title: string;
   publisher: string;
   category: PodcastFeedCategory;
+  feedUrl?: string | null;
+  episodes?: Array<{ audioUrl?: string | null }>;
   image?: string | null;
   artworkUrl600?: string | null;
   artworkUrl100?: string | null;
@@ -2936,6 +2951,10 @@ type TrendingPodcastCard = {
   feedImage?: string | null;
   itunesImage?: string | null;
 };
+
+function hasPlayableTrendingPodcastEpisode(show: TrendingPodcastCard) {
+  return Boolean(show.episodes?.some((episode) => Boolean(episode.audioUrl)));
+}
 
 type PopularMusicAlbum = {
   id: string;
@@ -7180,29 +7199,18 @@ function getSafeCategoryLabel(value: unknown, article?: Pick<Article, "source" |
   });
 }
 
-export default function Home() {
+export default function Home({
+  initialSortMode = "trending",
+}: {
+  initialSortMode?: HomeSortMode;
+}) {
   const router = useRouter();
   const topTabsRef = useRef<HTMLDivElement | null>(null);
   const cityOptions = SUPPORTED_LOCAL_CITIES;
   const [articles, setArticles] = useState<Article[]>([]);
   const [directTrendingArticles, setDirectTrendingArticles] = useState<Article[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-  const [sortMode, setSortMode] = useState<
-    | "trending"
-    | "mynews"
-    | "polls"
-    | "latest"
-    | "local"
-    | "sports"
-    | "celebrity"
-    | "weather"
-    | "technology"
-    | "travel"
-    | "food"
-    | "business"
-  >(
-    "trending"
-  );
+  const [sortMode, setSortMode] = useState<HomeSortMode>(initialSortMode);
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -7611,18 +7619,7 @@ export default function Home() {
   const [isTheaterMoviesLoading, setIsTheaterMoviesLoading] = useState(false);
   const [businessTickerItems, setBusinessTickerItems] = useState<StockTickerItem[]>([]);
   const [businessTickerSource, setBusinessTickerSource] = useState<string>("loading");
-  const [featuredTrendingPodcasts, setFeaturedTrendingPodcasts] = useState<TrendingPodcastCard[]>(
-    PODCAST_FEEDS.filter((show) => show.featured)
-      .slice(0, 10)
-      .map((show) => ({
-        id: show.slug,
-        slug: show.slug,
-        title: show.title,
-        publisher: show.publisher,
-        category: show.category,
-        image: null,
-      }))
-  );
+  const [featuredTrendingPodcasts, setFeaturedTrendingPodcasts] = useState<TrendingPodcastCard[]>([]);
   const [failedTrendingPodcastImages, setFailedTrendingPodcastImages] = useState<Record<string, boolean>>({});
   const [isEntertainmentSectionLoading, setIsEntertainmentSectionLoading] = useState(false);
   const [technologyPreviewArticles, setTechnologyPreviewArticles] = useState<Article[]>([]);
@@ -7671,7 +7668,25 @@ export default function Home() {
 
     async function loadTrendingPodcasts() {
       if (cachedPodcasts?.length && !isCancelled) {
-        setFeaturedTrendingPodcasts(cachedPodcasts);
+        const playableCachedPodcasts = cachedPodcasts.filter((show) => {
+          const keepShow = hasPlayableTrendingPodcastEpisode(show);
+
+          if (!keepShow) {
+            console.warn("PODCAST_REMOVED_FROM_DIRECTORY", {
+              id: show.id,
+              slug: show.slug,
+              title: show.title,
+              feedUrl: show.feedUrl ?? null,
+              episodeCount: show.episodes?.length ?? 0,
+            });
+          }
+
+          return keepShow;
+        });
+
+        if (playableCachedPodcasts.length > 0) {
+          setFeaturedTrendingPodcasts(playableCachedPodcasts);
+        }
       }
 
       const podcastsFetchStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -7708,6 +7723,21 @@ export default function Home() {
         }
 
         const nextFeatured = (payload.sections?.featured ?? [])
+          .filter((show) => {
+            const keepShow = hasPlayableTrendingPodcastEpisode(show);
+
+            if (!keepShow) {
+              console.warn("PODCAST_REMOVED_FROM_DIRECTORY", {
+                id: show.id,
+                slug: show.slug,
+                title: show.title,
+                feedUrl: show.feedUrl ?? null,
+                episodeCount: show.episodes?.length ?? 0,
+              });
+            }
+
+            return keepShow;
+          })
           .slice(0, 10)
           .map((show) => ({
             id: show.id,
@@ -7715,6 +7745,8 @@ export default function Home() {
             title: show.title,
             publisher: show.publisher,
             category: show.category,
+            feedUrl: show.feedUrl ?? null,
+            episodes: show.episodes ?? [],
             image: show.image ?? null,
             artworkUrl600: show.artworkUrl600 ?? null,
             artworkUrl100: show.artworkUrl100 ?? null,

@@ -232,10 +232,20 @@ export default function SettingsPage() {
                 </span>
               </Link>
 
+              <Link href="/settings/account" className="settings-list-row">
+                <div className="settings-list-copy">
+                  <strong>Account email & password</strong>
+                  <span>Update the email and password used to log in.</span>
+                </div>
+                <span className="settings-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Link>
+
               <Link href="/settings/contact" className="settings-list-row">
                 <div className="settings-list-copy">
                   <strong>Update contact info</strong>
-                  <span>Save a contact email without changing your sign-in address.</span>
+                  <span>Save a profile contact email separate from your login method.</span>
                 </div>
                 <span className="settings-chevron" aria-hidden="true">
                   ›
