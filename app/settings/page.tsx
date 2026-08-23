@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LoadingScreen from "../components/loading-screen";
-import ThemeToggle from "../components/theme-toggle";
 import { listBlockedUsers } from "../../lib/blocked-users";
 import { fetchProfilesByIdentity, getProfileIdentity } from "../../lib/profile-identities";
 import { ensureProfileRow } from "../../lib/profile-store";
@@ -278,19 +277,6 @@ export default function SettingsPage() {
                   ›
                 </span>
               </button>
-            </div>
-          </section>
-
-          <section className="settings-list-section">
-            <p className="settings-section-title">Appearance</p>
-            <div className="settings-list-card">
-              <div className="settings-list-row settings-list-row-toggle">
-                <div className="settings-list-copy">
-                  <strong>Dark mode</strong>
-                  <span>Saved locally and applied across the entire app.</span>
-                </div>
-                <ThemeToggle />
-              </div>
             </div>
           </section>
 

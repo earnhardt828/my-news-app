@@ -1192,9 +1192,6 @@ export default function Profile() {
 
   return (
     <section className="page-shell profile-page-root">
-      <div className="muted" style={{ padding: "8px 16px", textAlign: "center" }}>
-        Profile page loaded
-      </div>
       {isLoading ? (
         <div className="muted" style={{ padding: "8px 16px", textAlign: "center" }}>
           Checking your account and saved activity.

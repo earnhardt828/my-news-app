@@ -21282,8 +21282,6 @@ export default function Home({
   if (sortMode === "trending") {
     return (
       <section className="page-shell home-sections-shell">
-        {renderHomeTopNavigation("trending")}
-
         {isInitialFeedLoading && directTrendingArticles.length === 0 && articles.length === 0 ? (
           <section className="home-section-block home-section-plain">
             <div className="muted">Loading stories...</div>

@@ -29,10 +29,7 @@ export default function RootLayout({
           strategy="beforeInteractive"
         >{`
           try {
-            var storedTheme = localStorage.getItem("graffiti-theme") || localStorage.getItem("reflekt-theme") || localStorage.getItem("mirur-theme");
-            var theme = storedTheme === "dark" || storedTheme === "light"
-              ? storedTheme
-              : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+            var theme = "dark";
             var weekdayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
             var weekday = weekdayNames[new Date().getDay()] || "monday";
             document.documentElement.dataset.theme = theme;

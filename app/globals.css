@@ -96,6 +96,49 @@
   );
 }
 
+:root {
+  --background: #0c1323;
+  --foreground: #edf2ff;
+  --surface: rgba(17, 25, 40, 0.9);
+  --surface-strong: #121a2b;
+  --surface-muted: #182235;
+  --border: rgba(186, 201, 231, 0.14);
+  --text-soft: #99a6c0;
+  --accent: #e86acc;
+  --accent-strong: #ffb1ef;
+  --accent-secondary: #45bfdc;
+  --accent-faint: rgba(232, 106, 204, 0.14);
+  --shadow-soft: 0 18px 46px rgba(0, 0, 0, 0.3);
+  --body-top: #14182a;
+  --body-mid: #0d1526;
+  --body-bottom: #09141f;
+  --topbar-bg: rgba(12, 19, 35, 0.84);
+  --topbar-border: rgba(186, 201, 231, 0.08);
+  --nav-bg: rgba(18, 26, 43, 0.96);
+  --nav-border: rgba(186, 201, 231, 0.08);
+  --nav-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  --nav-link-color: #99a6c0;
+  --nav-link-hover-bg: rgba(186, 201, 231, 0.08);
+  --nav-link-active-bg: rgba(255, 79, 216, 0.22);
+  --nav-link-active-text: #ff95ea;
+  --card-border-strong: rgba(186, 201, 231, 0.08);
+  --button-secondary-bg: #182235;
+  --input-bg: rgba(24, 34, 53, 0.92);
+  --input-placeholder: #7e8ba6;
+  --reader-bg: #101828;
+  --reader-frame-bg: #0b1220;
+  --ad-label-bg: rgba(24, 34, 53, 0.92);
+  --adsense-bg: rgba(24, 34, 53, 0.9);
+  --empty-bg: rgba(18, 26, 43, 0.88);
+  --skeleton-highlight: rgba(153, 166, 192, 0.18);
+  --success-color: #7ee0a1;
+  --error-color: #ff9d9d;
+  --theme-toggle-bg: rgba(24, 34, 53, 0.94);
+  --theme-toggle-border: rgba(186, 201, 231, 0.1);
+  --theme-toggle-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+  --theme-toggle-icon-bg: rgba(186, 201, 231, 0.1);
+}
+
 :root[data-weekday="monday"] {
   --daily-gradient: linear-gradient(
     180deg,
@@ -5775,7 +5818,10 @@ input {
 }
 
 .profile-auth-shell {
-  padding-top: 4px;
+  padding-top: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
 
 .profile-auth-card {
@@ -7954,10 +8000,12 @@ input {
   z-index: 30;
   width: 100%;
   margin: 0;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px max(12px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-right));
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: stretch;
+  align-items: center;
+  gap: 0;
   border-radius: 0;
   background: var(--nav-bg);
   border-top: 1px solid var(--nav-border);
@@ -7971,6 +8019,8 @@ input {
   display: grid;
   gap: 4px;
   justify-items: center;
+  align-content: center;
+  width: 100%;
   padding: 10px 4px;
   border-radius: 0;
   color: var(--nav-link-color);
@@ -8064,7 +8114,7 @@ input {
   }
 
   .profile-auth-shell {
-    padding-top: 12px;
+    padding-top: 0;
   }
 
   .settings-inline-form {
